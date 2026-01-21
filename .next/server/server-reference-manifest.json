@@ -1,0 +1,14 @@
+{
+  "node": {
+    "719ca915ea94b274ec3cfd10f74efe2f7a6a51c3": {
+      "workers": {
+        "app/register/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CLenovo%20-%20Distinct%5C%5CDesktop%5C%5CREST-Finance%5C%5Capp%5C%5Cregister%5C%5Cactions.ts%22%2C%5B%22registerUser%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/register/page": "action-browser"
+      }
+    }
+  },
+  "edge": {},
+  "encryptionKey": "GfOjwSgYkoNELTyAkWyxrz76RghbfjKhDZGnBK4cW9A="
+}

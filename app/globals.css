@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  text-rendering: optimizeLegibility;
+}
+
+.card {
+  @apply rounded-2xl bg-card/80 border border-border/70 shadow-[0_18px_40px_rgba(0,0,0,0.35)] backdrop-blur transition-all duration-300;
+}
+
+.card:hover {
+  @apply shadow-[0_24px_50px_rgba(0,0,0,0.5)] border-primary/30 transform translate-y-[-4px];
+}
+
+.kpi-chip {
+  @apply inline-flex items-center rounded-full bg-gradient-to-r from-primary/90 to-accent/90 px-3 py-1 text-xs font-medium text-primary-foreground shadow-sm;
+}
+
+.cta-button {
+  @apply px-8 py-4 bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-lg font-semibold text-lg shadow-lg transition-all duration-300 hover:shadow-xl hover:shadow-primary/50 hover:scale-105 active:scale-95;
+}
+
+.cta-button-secondary {
+  @apply px-8 py-4 border-2 border-primary/50 text-primary rounded-lg font-semibold text-lg transition-all duration-300 hover:bg-primary/10 hover:border-primary hover:scale-105 active:scale-95;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.float-animation {
+  animation: float 3s ease-in-out infinite;
+}
+

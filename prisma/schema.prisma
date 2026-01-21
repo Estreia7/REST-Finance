@@ -1,0 +1,148 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Plan {
+  TRIAL
+  MONTHLY
+  YEARLY
+}
+
+enum MembershipRole {
+  OWNER
+  STAFF
+  PLATFORM_ADMIN
+}
+
+enum CategoryType {
+  REVENUE
+  COGS
+  OPEX
+}
+
+enum CostType {
+  COGS
+  OPEX
+}
+
+model Restaurant {
+  id                 String    @id @default(uuid())
+  name               String
+  plan               Plan      @default(TRIAL)
+  trialEndsAt        DateTime? @map("trial_ends_at")
+  adminAccessEnabled Boolean   @default(false) @map("admin_access_enabled")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  memberships    Membership[]
+  categories     Category[]
+  dailySummaries DailySummary[]
+  costEntries    CostEntry[]
+  auditLogs      AuditLog[]
+
+  @@map("restaurants")
+}
+
+model User {
+  id        String   @id
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  memberships      Membership[]
+  createdSummaries DailySummary[] @relation("SummaryCreatedBy")
+  createdCosts     CostEntry[]    @relation("CostCreatedBy")
+  auditLogs        AuditLog[]     @relation("AuditActor")
+
+  @@map("users")
+}
+
+model Membership {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String @map("user_id")
+
+  role      MembershipRole @default(STAFF)
+  active    Boolean        @default(true)
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  @@unique([restaurantId, userId])
+  @@map("memberships")
+}
+
+model Category {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  type      CategoryType
+  name      String
+  sortOrder Int          @default(0) @map("sort_order")
+  isActive  Boolean      @default(true) @map("is_active")
+
+  costEntries CostEntry[]
+
+  @@map("categories")
+}
+
+model DailySummary {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  date            DateTime
+  dineInRevenue   Decimal  @default(0) @map("dine_in_revenue")
+  takeawayRevenue Decimal  @default(0) @map("takeaway_revenue")
+  revenueTotal    Decimal  @default(0) @map("revenue_total")
+  dineInTickets   Int      @default(0) @map("dine_in_tickets")
+  takeawayTickets Int      @default(0) @map("takeaway_tickets")
+  notes           String?
+
+  createdBy   User   @relation("SummaryCreatedBy", fields: [createdById], references: [id])
+  createdById String @map("created_by")
+
+  @@unique([restaurantId, date])
+  @@map("daily_summaries")
+}
+
+model CostEntry {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  date DateTime
+  type CostType
+
+  category   Category? @relation(fields: [categoryId], references: [id])
+  categoryId String?   @map("category_id")
+
+  amount      Decimal
+  description String?
+
+  createdBy   User     @relation("CostCreatedBy", fields: [createdById], references: [id])
+  createdById String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("cost_entries")
+}
+
+model AuditLog {
+  id           String      @id @default(uuid())
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
+  restaurantId String?     @map("restaurant_id")
+
+  actor       User?   @relation("AuditActor", fields: [actorUserId], references: [id])
+  actorUserId String? @map("actor_user_id")
+
+  action    String
+  metadata  Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+}
