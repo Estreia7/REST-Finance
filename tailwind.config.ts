@@ -20,21 +20,27 @@ const config: Config = {
         sans: ['system-ui', ...fontFamily.sans]
       },
       colors: {
-        background: 'rgb(23, 23, 28)',
-        foreground: 'hsl(0, 0%, 100%)',
-        muted: 'hsl(0, 0%, 30%)',
-        card: 'rgba(35, 35, 42, 0.8)',
-        border: 'rgba(255, 255, 255, 0.1)',
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        card: {
+          DEFAULT: 'hsl(var(--card))',
+          foreground: 'hsl(var(--card-foreground))'
+        },
+        border: 'hsl(var(--border))',
+        muted: {
+          DEFAULT: 'hsl(var(--muted))',
+          foreground: 'hsl(var(--muted-foreground))'
+        },
         primary: {
-          DEFAULT: 'hsl(222, 92%, 60%)',
-          foreground: 'hsl(0, 0%, 100%)'
+          DEFAULT: 'hsl(var(--primary))',
+          foreground: 'hsl(var(--primary-foreground))'
         },
         accent: {
-          DEFAULT: 'hsl(280, 80%, 60%)',
-          foreground: 'hsl(0, 0%, 100%)'
+          DEFAULT: 'hsl(var(--accent))',
+          foreground: 'hsl(var(--accent-foreground))'
         },
-        success: 'hsl(150, 62%, 51%)',
-        danger: 'hsl(0, 84%, 60%)'
+        success: 'hsl(var(--success))',
+        danger: 'hsl(var(--danger))'
       },
       animation: {
         'fade-in': 'fadeIn 0.6s ease-in-out',

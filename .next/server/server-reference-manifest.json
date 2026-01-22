@@ -1,14 +1,238 @@
 {
   "node": {
-    "719ca915ea94b274ec3cfd10f74efe2f7a6a51c3": {
+    "0aa39e778c9bf4d0bd40dd91f63cfbd952dd0c0d": {
       "workers": {
-        "app/register/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CLenovo%20-%20Distinct%5C%5CDesktop%5C%5CREST-Finance%5C%5Capp%5C%5Cregister%5C%5Cactions.ts%22%2C%5B%22registerUser%22%5D%5D%5D&__client_imported__=true!"
+        "app/login/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!",
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!",
+        "app/dashboard/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cdashboard%5C%5Cactions.ts%22%2C%5B%22addStaff%22%2C%22createCostEntry%22%2C%22getCategories%22%2C%22getDashboardStats%22%2C%22initializeDefaultCategories%22%2C%22getStaff%22%2C%22getCurrentUser%22%2C%22createDailySummary%22%2C%22getRestaurant%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
       },
       "layer": {
-        "app/register/page": "action-browser"
+        "app/login/page": "action-browser",
+        "app/admin/page": "action-browser",
+        "app/dashboard/page": "action-browser"
+      }
+    },
+    "c416fe2944348eae6d545ff10800f3c53c235193": {
+      "workers": {
+        "app/login/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!",
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!",
+        "app/dashboard/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cdashboard%5C%5Cactions.ts%22%2C%5B%22addStaff%22%2C%22createCostEntry%22%2C%22getCategories%22%2C%22getDashboardStats%22%2C%22initializeDefaultCategories%22%2C%22getStaff%22%2C%22getCurrentUser%22%2C%22createDailySummary%22%2C%22getRestaurant%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/login/page": "action-browser",
+        "app/admin/page": "action-browser",
+        "app/dashboard/page": "action-browser"
+      }
+    },
+    "296e4d65a8706ea53bab144c85223d1356df113e": {
+      "workers": {
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/admin/page": "action-browser"
+      }
+    },
+    "31abed57123ff551c2c63b89c240838a521c8470": {
+      "workers": {
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/admin/page": "action-browser"
+      }
+    },
+    "5ad6bca637575b59628c4a7e37b622dcef8699b4": {
+      "workers": {
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/admin/page": "action-browser"
+      }
+    },
+    "5c9dce52b6020d6a83fcb09f03edd0e4d6fdb37f": {
+      "workers": {
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/admin/page": "action-browser"
+      }
+    },
+    "6e45d93cd9e029553fc95108a0374c4ed160e47d": {
+      "workers": {
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/admin/page": "action-browser"
+      }
+    },
+    "7c1f54597027211d513222750409ed04da55a029": {
+      "workers": {
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/admin/page": "action-browser"
+      }
+    },
+    "cbff0144b78e992679fc0b836709e9aea3a29eff": {
+      "workers": {
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/admin/page": "action-browser"
+      }
+    },
+    "ce77ea285d6a0253072e0c7eb2427ca781b1895c": {
+      "workers": {
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/admin/page": "action-browser"
+      }
+    },
+    "f25ff66051d9325dd10ec23f6ff401c6d4f0a051": {
+      "workers": {
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/admin/page": "action-browser"
+      }
+    },
+    "f8c91c3a37db2e06c9e89f30afca2658f92a85a5": {
+      "workers": {
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/admin/page": "action-browser"
+      }
+    },
+    "c7d7446b91628a6af229767dac4d25919b9591c4": {
+      "workers": {
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/admin/page": "action-browser"
+      }
+    },
+    "4118cc650829d6fbb5e7f856b87f55ca7817838d": {
+      "workers": {
+        "app/login/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!",
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!",
+        "app/dashboard/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cdashboard%5C%5Cactions.ts%22%2C%5B%22addStaff%22%2C%22createCostEntry%22%2C%22getCategories%22%2C%22getDashboardStats%22%2C%22initializeDefaultCategories%22%2C%22getStaff%22%2C%22getCurrentUser%22%2C%22createDailySummary%22%2C%22getRestaurant%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/login/page": "action-browser",
+        "app/admin/page": "action-browser",
+        "app/dashboard/page": "action-browser"
+      }
+    },
+    "47f6de50dc9a5f38914c50192eaa294db2c61de3": {
+      "workers": {
+        "app/login/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!",
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!",
+        "app/dashboard/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cdashboard%5C%5Cactions.ts%22%2C%5B%22addStaff%22%2C%22createCostEntry%22%2C%22getCategories%22%2C%22getDashboardStats%22%2C%22initializeDefaultCategories%22%2C%22getStaff%22%2C%22getCurrentUser%22%2C%22createDailySummary%22%2C%22getRestaurant%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/login/page": "action-browser",
+        "app/admin/page": "action-browser",
+        "app/dashboard/page": "action-browser"
+      }
+    },
+    "97c821f42975ad61f14edcdc759bc50a7c188069": {
+      "workers": {
+        "app/login/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!",
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!",
+        "app/dashboard/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cdashboard%5C%5Cactions.ts%22%2C%5B%22addStaff%22%2C%22createCostEntry%22%2C%22getCategories%22%2C%22getDashboardStats%22%2C%22initializeDefaultCategories%22%2C%22getStaff%22%2C%22getCurrentUser%22%2C%22createDailySummary%22%2C%22getRestaurant%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/login/page": "action-browser",
+        "app/admin/page": "action-browser",
+        "app/dashboard/page": "action-browser"
+      }
+    },
+    "5c0c5b293a687138f287d66ff3a418c85cd16653": {
+      "workers": {
+        "app/login/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!",
+        "app/admin/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cadmin%5C%5Cactions.ts%22%2C%5B%22createAccount%22%2C%22updateClient%22%2C%22getMonthlyRevenue%22%2C%22getClientStats%22%2C%22changeUserPassword%22%2C%22updateUser%22%2C%22getCurrentUser%22%2C%22sendPasswordReset%22%2C%22getAllUsers%22%2C%22deleteAccount%22%2C%22getClients%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!",
+        "app/dashboard/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cdashboard%5C%5Cactions.ts%22%2C%5B%22addStaff%22%2C%22createCostEntry%22%2C%22getCategories%22%2C%22getDashboardStats%22%2C%22initializeDefaultCategories%22%2C%22getStaff%22%2C%22getCurrentUser%22%2C%22createDailySummary%22%2C%22getRestaurant%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/login/page": "action-browser",
+        "app/admin/page": "action-browser",
+        "app/dashboard/page": "action-browser"
+      }
+    },
+    "30cb788d656dbd0fafe50a15cf7c3cea6dfb2827": {
+      "workers": {
+        "app/dashboard/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cdashboard%5C%5Cactions.ts%22%2C%5B%22addStaff%22%2C%22createCostEntry%22%2C%22getCategories%22%2C%22getDashboardStats%22%2C%22initializeDefaultCategories%22%2C%22getStaff%22%2C%22getCurrentUser%22%2C%22createDailySummary%22%2C%22getRestaurant%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/dashboard/page": "action-browser"
+      }
+    },
+    "32329deab50e0a5a67afd4c2662bce848602e95e": {
+      "workers": {
+        "app/dashboard/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cdashboard%5C%5Cactions.ts%22%2C%5B%22addStaff%22%2C%22createCostEntry%22%2C%22getCategories%22%2C%22getDashboardStats%22%2C%22initializeDefaultCategories%22%2C%22getStaff%22%2C%22getCurrentUser%22%2C%22createDailySummary%22%2C%22getRestaurant%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/dashboard/page": "action-browser"
+      }
+    },
+    "777939d1f325b8633b5126c8fffa0e5d5db4971d": {
+      "workers": {
+        "app/dashboard/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cdashboard%5C%5Cactions.ts%22%2C%5B%22addStaff%22%2C%22createCostEntry%22%2C%22getCategories%22%2C%22getDashboardStats%22%2C%22initializeDefaultCategories%22%2C%22getStaff%22%2C%22getCurrentUser%22%2C%22createDailySummary%22%2C%22getRestaurant%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/dashboard/page": "action-browser"
+      }
+    },
+    "7eedf662cfcef0caa1cab03cc24b61e3f3fc9695": {
+      "workers": {
+        "app/dashboard/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cdashboard%5C%5Cactions.ts%22%2C%5B%22addStaff%22%2C%22createCostEntry%22%2C%22getCategories%22%2C%22getDashboardStats%22%2C%22initializeDefaultCategories%22%2C%22getStaff%22%2C%22getCurrentUser%22%2C%22createDailySummary%22%2C%22getRestaurant%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/dashboard/page": "action-browser"
+      }
+    },
+    "c2f76b860aff100646afbe890294c161c93af35a": {
+      "workers": {
+        "app/dashboard/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cdashboard%5C%5Cactions.ts%22%2C%5B%22addStaff%22%2C%22createCostEntry%22%2C%22getCategories%22%2C%22getDashboardStats%22%2C%22initializeDefaultCategories%22%2C%22getStaff%22%2C%22getCurrentUser%22%2C%22createDailySummary%22%2C%22getRestaurant%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/dashboard/page": "action-browser"
+      }
+    },
+    "ca465c0f0e6d9b398b7c5f627422e811ff5ae944": {
+      "workers": {
+        "app/dashboard/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cdashboard%5C%5Cactions.ts%22%2C%5B%22addStaff%22%2C%22createCostEntry%22%2C%22getCategories%22%2C%22getDashboardStats%22%2C%22initializeDefaultCategories%22%2C%22getStaff%22%2C%22getCurrentUser%22%2C%22createDailySummary%22%2C%22getRestaurant%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/dashboard/page": "action-browser"
+      }
+    },
+    "dbe13bb94c0b02c344561bc355405c9715d2e0bf": {
+      "workers": {
+        "app/dashboard/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cdashboard%5C%5Cactions.ts%22%2C%5B%22addStaff%22%2C%22createCostEntry%22%2C%22getCategories%22%2C%22getDashboardStats%22%2C%22initializeDefaultCategories%22%2C%22getStaff%22%2C%22getCurrentUser%22%2C%22createDailySummary%22%2C%22getRestaurant%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/dashboard/page": "action-browser"
+      }
+    },
+    "e926635b3d14384692c5387083c8466841798f38": {
+      "workers": {
+        "app/dashboard/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cdashboard%5C%5Cactions.ts%22%2C%5B%22addStaff%22%2C%22createCostEntry%22%2C%22getCategories%22%2C%22getDashboardStats%22%2C%22initializeDefaultCategories%22%2C%22getStaff%22%2C%22getCurrentUser%22%2C%22createDailySummary%22%2C%22getRestaurant%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/dashboard/page": "action-browser"
+      }
+    },
+    "993132c9f67eb502c8925f814ff434687ffada54": {
+      "workers": {
+        "app/dashboard/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Cdashboard%5C%5Cactions.ts%22%2C%5B%22addStaff%22%2C%22createCostEntry%22%2C%22getCategories%22%2C%22getDashboardStats%22%2C%22initializeDefaultCategories%22%2C%22getStaff%22%2C%22getCurrentUser%22%2C%22createDailySummary%22%2C%22getRestaurant%22%5D%5D%2C%5B%22C%3A%5C%5CUsers%5C%5CEstreia%5C%5CDesktop%5C%5CProjetos%5C%5CREST-Finance%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22getCurrentUserRole%22%2C%22checkEmailConfirmation%22%2C%22resendConfirmationEmail%22%2C%22autoConfirmEmail%22%2C%22loginWithPassword%22%2C%22checkUserRole%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/dashboard/page": "action-browser"
       }
     }
   },
   "edge": {},
-  "encryptionKey": "GfOjwSgYkoNELTyAkWyxrz76RghbfjKhDZGnBK4cW9A="
+  "encryptionKey": "d02HJvryomPmSGg9aE0fHg8RNtdCPO6wlxmN5NHbI3Q="
 }

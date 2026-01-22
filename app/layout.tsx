@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import './globals.css';
-import Navbar from './components/Navbar';
+import ConditionalNavbar from './components/ConditionalNavbar';
+import { LanguageProvider } from '@/lib/language-context';
 
 export const metadata = {
   title: 'REST Finance – Gerencie KPIs em 2 Minutos por Dia | Sem Planilhas',
@@ -9,12 +10,14 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="h-full">
+    <html lang="pt" className="h-full dark">
       <body className="min-h-screen bg-background text-foreground antialiased">
-        <div className="flex min-h-screen flex-col">
-          <Navbar />
-          {children}
-        </div>
+        <LanguageProvider>
+          <div className="flex min-h-screen flex-col">
+            <ConditionalNavbar />
+            {children}
+          </div>
+        </LanguageProvider>
       </body>
     </html>
   );

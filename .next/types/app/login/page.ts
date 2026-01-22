@@ -1,4 +1,4 @@
-// File: C:\Users\Lenovo - Distinct\Desktop\REST-Finance\app\login\page.tsx
+// File: C:\Users\Estreia\Desktop\Projetos\REST-Finance\app\login\page.tsx
 import * as entry from '../../../../app/login/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

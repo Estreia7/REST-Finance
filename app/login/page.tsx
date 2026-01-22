@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Mail, Lock, ArrowRight, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { checkUserRole, loginWithPassword } from './actions';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,22 +21,61 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const supabase = createClient();
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      // Use server action to handle login (can auto-confirm email if needed)
+      const result = await loginWithPassword(email, password);
 
-      if (signInError) {
-        setError(signInError.message || 'Erro ao fazer login. Verifique suas credenciais.');
+      // If email was just confirmed, retry login automatically
+      if (result.error === 'EMAIL_CONFIRMED_RETRY') {
+        const supabase = createClient();
+        const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (retryError || !retryData?.user) {
+          setError('Email confirmado, mas falha ao fazer login. Tente novamente.');
+          setIsLoading(false);
+          return;
+        }
+
+        // Wait a bit to ensure cookies are set
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Check if user has PLATFORM_ADMIN role
+        const roleCheck = await checkUserRole(retryData.user.id);
+        
+        // Refresh to update server-side cookies
+        router.refresh();
+        
+        // Redirect to admin dashboard if user is admin, otherwise to regular dashboard
+        if (roleCheck.isAdmin) {
+          router.push('/admin');
+        } else {
+          router.push('/dashboard');
+        }
+        return;
+      }
+
+      if (!result.success || !result.user) {
+        setError(result.error || 'Erro ao fazer login. Verifique suas credenciais.');
         setIsLoading(false);
         return;
       }
 
-      if (data.user) {
-        // Redirecionar para dashboard após login bem-sucedido
+      // Wait a bit to ensure cookies are set
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Check if user has PLATFORM_ADMIN role
+      const roleCheck = await checkUserRole(result.user.id);
+      
+      // Refresh to update server-side cookies
+      router.refresh();
+      
+      // Redirect to admin dashboard if user is admin, otherwise to regular dashboard
+      if (roleCheck.isAdmin) {
+        router.push('/admin');
+      } else {
         router.push('/dashboard');
-        router.refresh();
       }
     } catch (err: any) {
       const errorMessage = err?.message || 'Ocorreu um erro inesperado. Tente novamente.';

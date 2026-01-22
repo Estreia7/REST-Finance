@@ -11,7 +11,7 @@ export async function registerUser(data: {
   restaurantName: string;
 }) {
   // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/07bd29ab-3687-4c3d-8b94-97adc84478a7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/register/actions.ts:13',message:'registerUser called',data:{email:data.email,hasDatabaseUrl:!!process.env.DATABASE_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+  fetch('http://127.0.0.1:7243/ingest/167dfa8d-f908-443f-9592-ef5a733db0c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/register/actions.ts:13',message:'registerUser called',data:{email:data.email,hasDatabaseUrl:!!process.env.DATABASE_URL,typeofWindow:typeof window,isServer:typeof window==='undefined',prismaType:typeof prisma},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
   // #endregion
   try {
     // 1. Create Supabase auth user
@@ -42,11 +42,28 @@ export async function registerUser(data: {
       return { error: 'Falha ao criar conta de utilizador' };
     }
 
-    // 2. Create User record in database (using auth user ID)
+    // 2. Check if user already has a restaurant (one restaurant per owner)
+    const existingUser = await prisma.user.findUnique({
+      where: { id: authData.user.id },
+      include: {
+        memberships: {
+          where: {
+            role: MembershipRole.OWNER,
+            active: true,
+          },
+        },
+      },
+    });
+
+    if (existingUser && existingUser.memberships.length > 0) {
+      return { error: 'Você já possui um restaurante. Cada conta só pode ter um restaurante.' };
+    }
+
+    // 3. Create User record in database (using auth user ID)
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/07bd29ab-3687-4c3d-8b94-97adc84478a7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/register/actions.ts:43',message:'Before prisma.user.create',data:{userId:authData.user.id,prismaExists:!!prisma},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7243/ingest/167dfa8d-f908-443f-9592-ef5a733db0c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/register/actions.ts:47',message:'Before prisma.user.create',data:{userId:authData.user.id,prismaExists:!!prisma,prismaConstructor:prisma?.constructor?.name,hasDatabaseUrl:!!process.env.DATABASE_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
     // #endregion
-    const user = await prisma.user.create({
+    const user = existingUser || await prisma.user.create({
       data: {
         id: authData.user.id,
         email: data.email,
@@ -54,7 +71,7 @@ export async function registerUser(data: {
       },
     });
 
-    // 3. Create Restaurant with trial plan
+    // 4. Create Restaurant with trial plan
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 7); // 7 days trial
 
@@ -66,7 +83,7 @@ export async function registerUser(data: {
       },
     });
 
-    // 4. Create Membership with OWNER role
+    // 5. Create Membership with OWNER role
     await prisma.membership.create({
       data: {
         restaurantId: restaurant.id,
@@ -80,7 +97,7 @@ export async function registerUser(data: {
   } catch (error: any) {
     console.error('Registration error:', error);
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/07bd29ab-3687-4c3d-8b94-97adc84478a7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/register/actions.ts:75',message:'Registration error caught',data:{errorMessage:error.message,errorCode:error.code,errorName:error.name,hasDatabaseUrl:!!process.env.DATABASE_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7243/ingest/167dfa8d-f908-443f-9592-ef5a733db0c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/register/actions.ts:83',message:'Registration error caught',data:{errorMessage:error?.message,errorCode:error?.code,errorName:error?.name,errorStack:error?.stack?.substring(0,300),hasDatabaseUrl:!!process.env.DATABASE_URL,isEngineClientError:error?.message?.includes('engine type "client"')||false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
     // #endregion
     
     // Handle unique constraint violations
