@@ -37,7 +37,7 @@ export const translations = {
       title: 'Painel de Administração',
       dashboard: 'Dashboard',
       clients: 'Clientes',
-      settings: 'Configurações',
+      settingsLabel: 'Configurações',
       restaurants: 'Restaurantes',
       users: 'Utilizadores',
       stats: {
@@ -261,7 +261,7 @@ export const translations = {
       title: 'Administration Panel',
       dashboard: 'Dashboard',
       clients: 'Clients',
-      settings: 'Settings',
+      settingsLabel: 'Settings',
       restaurants: 'Restaurants',
       users: 'Users',
       stats: {

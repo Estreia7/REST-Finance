@@ -632,7 +632,7 @@ export default function AdminDashboardPage() {
               }`}
             >
               <Settings className="w-5 h-5" />
-              <span>{t('admin.settings')}</span>
+              <span>{t('admin.settingsLabel')}</span>
             </button>
           </nav>
 
@@ -704,7 +704,7 @@ export default function AdminDashboardPage() {
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold">
                 {activeTab === 'dashboard' && t('admin.title')}
                 {activeTab === 'clientes' && t('admin.clients')}
-                {activeTab === 'configuracoes' && t('admin.settings')}
+                {activeTab === 'configuracoes' && t('admin.settingsLabel')}
               </h1>
               {activeTab === 'clientes' && (
                 <div className="flex flex-wrap gap-2 sm:gap-3 mt-4">

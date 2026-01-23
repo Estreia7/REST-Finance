@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/lib/language-context';
 import LanguageSelector from './LanguageSelector';
+import type { AuthChangeEvent } from '@supabase/supabase-js';
 
 export default function Navbar() {
   const router = useRouter();
@@ -60,7 +61,7 @@ export default function Navbar() {
 
     // Listen for auth changes
     const supabase = createClient();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent) => {
       if (event === 'SIGNED_IN') {
         checkAuth();
       } else if (event === 'SIGNED_OUT') {

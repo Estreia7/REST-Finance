@@ -1,7 +1,12 @@
 {
-  "/login/page": "app/login/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
   "/about/page": "app/about/page.js",
+  "/contact/page": "app/contact/page.js",
+  "/forgot-password/page": "app/forgot-password/page.js",
+  "/login/page": "app/login/page.js",
   "/page": "app/page.js",
+  "/plans/page": "app/plans/page.js",
+  "/register/page": "app/register/page.js",
   "/admin/page": "app/admin/page.js",
   "/dashboard/page": "app/dashboard/page.js"
 }
