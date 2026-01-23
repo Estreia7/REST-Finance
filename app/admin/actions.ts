@@ -230,7 +230,7 @@ export async function getMonthlyRevenue(year: number) {
       monthlyRevenue[month] = 0;
     }
 
-    restaurants.forEach((restaurant) => {
+    restaurants.forEach((restaurant: { plan: Plan; createdAt: Date; trialEndsAt: Date | null }) => {
       const createdDate = new Date(restaurant.createdAt);
       const createdYear = createdDate.getFullYear();
       const createdMonth = createdDate.getMonth();
