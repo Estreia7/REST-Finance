@@ -1,10 +1,8 @@
 'use server';
 
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-// Keep these in sync with the Prisma enums in schema.prisma
-type MembershipRole = 'OWNER' | 'STAFF' | 'PLATFORM_ADMIN';
-type Plan = 'TRIAL' | 'MONTHLY' | 'YEARLY';
 import { prisma } from '@/lib/prisma';
+import { Plan, MembershipRole } from '@prisma/client';
 
 export async function registerUser(data: {
   name: string;

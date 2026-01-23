@@ -3,9 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-
-// Keep this in sync with the Prisma enum `Plan` in schema.prisma
-type Plan = 'TRIAL' | 'MONTHLY' | 'YEARLY';
+import { Plan } from '@prisma/client';
 
 export async function getClients() {
   try {
