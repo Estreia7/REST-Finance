@@ -604,7 +604,9 @@ export async function deleteAccount(userId: string) {
 
     // Delete all memberships (this will cascade delete related data if configured)
     // Delete restaurants owned by this user
-    const ownerMemberships = userToDelete.memberships.filter(m => m.role === 'OWNER');
+    const ownerMemberships = userToDelete.memberships.filter(
+      (m: { role: 'OWNER'; restaurantId: string }) => m.role === 'OWNER'
+    );
     for (const membership of ownerMemberships) {
       await prisma.restaurant.delete({
         where: { id: membership.restaurantId },
