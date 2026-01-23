@@ -32,7 +32,9 @@ import {
   TrendingDown,
   AlertCircle,
 } from 'lucide-react';
-import { CostType, CategoryType } from '@prisma/client';
+// Keep these in sync with the Prisma enums in schema.prisma
+type CostType = 'COGS' | 'OPEX';
+type CategoryType = 'REVENUE' | 'COGS' | 'OPEX';
 
 type CostTypeOrEmpty = CostType | '';
 

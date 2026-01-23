@@ -2,7 +2,9 @@
 
 import { prisma } from '@/lib/prisma';
 import { createClient } from '@/lib/supabase/server';
-import { CostType, CategoryType } from '@prisma/client';
+// Keep these in sync with the Prisma enums in schema.prisma
+type CostType = 'COGS' | 'OPEX';
+type CategoryType = 'REVENUE' | 'COGS' | 'OPEX';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 export async function getRestaurant() {

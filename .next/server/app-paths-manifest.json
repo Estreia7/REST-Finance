@@ -4,9 +4,9 @@
   "/contact/page": "app/contact/page.js",
   "/forgot-password/page": "app/forgot-password/page.js",
   "/login/page": "app/login/page.js",
-  "/plans/page": "app/plans/page.js",
   "/page": "app/page.js",
   "/register/page": "app/register/page.js",
-  "/admin/page": "app/admin/page.js",
-  "/dashboard/page": "app/dashboard/page.js"
+  "/plans/page": "app/plans/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/admin/page": "app/admin/page.js"
 }

@@ -44,7 +44,9 @@ import {
   AlertCircle,
   AlertTriangle
 } from 'lucide-react';
-import { Plan, MembershipRole } from '@prisma/client';
+// Keep these in sync with the Prisma enums in schema.prisma
+type Plan = 'TRIAL' | 'MONTHLY' | 'YEARLY';
+type MembershipRole = 'OWNER' | 'STAFF' | 'PLATFORM_ADMIN';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 type Tab = 'dashboard' | 'clientes' | 'configuracoes';

@@ -1,7 +1,9 @@
 'use server';
 
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-import { MembershipRole, Plan } from '@prisma/client';
+// Keep these in sync with the Prisma enums in schema.prisma
+type MembershipRole = 'OWNER' | 'STAFF' | 'PLATFORM_ADMIN';
+type Plan = 'TRIAL' | 'MONTHLY' | 'YEARLY';
 import { prisma } from '@/lib/prisma';
 
 export async function registerUser(data: {
@@ -48,7 +50,7 @@ export async function registerUser(data: {
       include: {
         memberships: {
           where: {
-            role: MembershipRole.OWNER,
+            role: 'OWNER',
             active: true,
           },
         },
@@ -78,7 +80,7 @@ export async function registerUser(data: {
     const restaurant = await prisma.restaurant.create({
       data: {
         name: data.restaurantName,
-        plan: Plan.TRIAL,
+        plan: 'TRIAL',
         trialEndsAt,
       },
     });
@@ -88,7 +90,7 @@ export async function registerUser(data: {
       data: {
         restaurantId: restaurant.id,
         userId: user.id,
-        role: MembershipRole.OWNER,
+        role: 'OWNER',
         active: true,
       },
     });
