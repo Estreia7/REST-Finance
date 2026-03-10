@@ -1,1704 +1,628 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { 
-  getClients, 
-  updateClient, 
-  getClientStats, 
-  getMonthlyRevenue,
-  getAllUsers,
-  updateUser,
-  sendPasswordReset,
-  createAccount,
-  deleteAccount,
-  changeUserPassword,
-  getCurrentUser
-} from './actions';
-import { checkUserRole, checkEmailConfirmation, resendConfirmationEmail } from '@/app/login/actions';
+import { getClientStats, getClients, getMonthlyRevenue, getCurrentUser, bulkUpdateRestaurants } from './actions';
 import { useLanguage } from '@/lib/language-context';
-import LanguageSelector from '@/app/components/LanguageSelector';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Settings, 
-  LogOut, 
-  Menu, 
-  X,
-  Edit,
-  Save,
-  X as XIcon,
-  Building2,
-  Calendar,
-  CreditCard,
-  Mail,
-  Send,
-  Moon,
-  Sun,
-  Plus,
-  Trash2,
-  Key,
-  UserPlus,
-  CheckCircle2,
-  AlertCircle,
-  AlertTriangle
+import {
+  LayoutDashboard, Users, LogOut, Menu, X,
+  Building2, TrendingUp, TrendingDown, CreditCard,
+  Search, ChevronRight, Activity, DollarSign,
+  BarChart2, ArrowUpRight, ArrowDownRight, Shield,
+  ClipboardList,
 } from 'lucide-react';
-import { Plan, MembershipRole } from '@prisma/client';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import UserManagementPanel from './components/UserManagementPanel';
+import RestaurantDetailPanel from './components/RestaurantDetailPanel';
+import ActivityLogPanel from './components/ActivityLogPanel';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, LineChart, Line,
+} from 'recharts';
+import { Plan } from '@prisma/client';
 
-type Tab = 'dashboard' | 'clientes' | 'configuracoes';
-type ClientesSubTab = 'restaurantes' | 'utilizadores';
+// ─── Types ──────────────────────────────────────────────────────────────────
+type Tab = 'dashboard' | 'clientes' | 'users' | 'activity';
 
-interface Client {
+const MONTH_NAMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+interface ClientRestaurant {
   id: string;
   name: string;
   plan: Plan;
   trialEndsAt: Date | null;
   createdAt: Date;
+  subscriptionStatus?: string | null;
   memberships: Array<{
-    user: {
-      id: string;
-      email: string;
-      name: string | null;
-    };
+    user: { id: string; email: string; name: string | null };
+    role: string;
   }>;
 }
 
-interface User {
-  id: string;
-  email: string;
-  name: string | null;
-  createdAt: Date;
-  memberships: Array<{
-    id: string;
-    role: 'OWNER' | 'STAFF' | 'PLATFORM_ADMIN';
-    active: boolean;
-    restaurant: {
-      id: string;
-      name: string;
-      plan: Plan;
-    };
-  }>;
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function calcMRR(monthly: number, yearly: number) {
+  return monthly * 29 + yearly * Math.round(290 / 12);
 }
 
-export default function AdminDashboardPage() {
+function PlanBadge({ plan }: { plan: Plan }) {
+  const map: Record<Plan, { label: string; className: string }> = {
+    TRIAL:   { label: 'Trial',   className: 'bg-warning/10 text-warning border-warning/20' },
+    MONTHLY: { label: 'Mensal',  className: 'bg-info/10 text-info border-info/20' },
+    YEARLY:  { label: 'Anual',   className: 'bg-success/10 text-success border-success/20' },
+  };
+  const { label, className } = map[plan];
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border ${className}`}>
+      {label}
+    </span>
+  );
+}
+
+// ─── Custom Tooltip ───────────────────────────────────────────────────────────
+function ChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-card-elevated border border-border rounded-xl px-3 py-2 shadow-modal text-xs">
+      <p className="text-muted-foreground mb-1">{label}</p>
+      <p className="font-semibold text-foreground">€{payload[0].value.toLocaleString('pt-PT', { minimumFractionDigits: 0 })}</p>
+    </div>
+  );
+}
+
+// ─── Page ────────────────────────────────────────────────────────────────────
+export default function AdminPage() {
   const router = useRouter();
   const { t } = useLanguage();
-  const [user, setUser] = useState<any>(null);
-  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string | null } | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [emailConfirmed, setEmailConfirmed] = useState<boolean | null>(null);
-  const [isResendingEmail, setIsResendingEmail] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  const [activeClientesSubTab, setActiveClientesSubTab] = useState<ClientesSubTab>('restaurantes');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+
+  const [isLoading, setIsLoading]     = useState(true);
+  const [activeTab, setActiveTab]     = useState<Tab>('dashboard');
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
   const [stats, setStats] = useState({ trial: 0, monthly: 0, yearly: 0, total: 0 });
+  const [chartData, setChartData]   = useState<Array<{ month: string; revenue: number }>>([]);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [revenueData, setRevenueData] = useState<Array<{ month: number; revenue: number }>>([]);
-  const [selectedPlan, setSelectedPlan] = useState<Plan | 'ALL'>('ALL');
-  const [editForm, setEditForm] = useState<{ name: string; plan: Plan; trialEndsAt: string } | null>(null);
-  const [editUserForm, setEditUserForm] = useState<{ name: string; email: string; role: 'OWNER' | 'STAFF' | 'PLATFORM_ADMIN' | null; membershipId: string | null } | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [showCreateAccount, setShowCreateAccount] = useState(false);
-  const [createAccountForm, setCreateAccountForm] = useState({
-    name: '',
-    email: '',
-    password: '',
-    restaurantName: '',
-    plan: 'TRIAL' as Plan,
-    trialEndsAt: '',
-  });
-  const [newPassword, setNewPassword] = useState('');
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
-  const [showDeleteModal, setShowDeleteModal] = useState<{ type: 'user' | 'restaurant'; id: string; name: string } | null>(null);
-  const [showEditClientModal, setShowEditClientModal] = useState<Client | null>(null);
-  const [showEditUserModal, setShowEditUserModal] = useState<User | null>(null);
-  const [showPasswordModal, setShowPasswordModal] = useState<{ userId: string; userName: string } | null>(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [pendingTabChange, setPendingTabChange] = useState<Tab | null>(null);
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
-  const [themeChanged, setThemeChanged] = useState(false);
-  const [notifications, setNotifications] = useState<Array<{ id: string; type: 'success' | 'error' | 'info'; message: string }>>([]);
+  const [clients, setClients]       = useState<ClientRestaurant[]>([]);
+  const [search, setSearch]         = useState('');
+  const [planFilter, setPlanFilter] = useState<Plan | 'all'>('all');
+  const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState('');
+  const [bulkSaving, setBulkSaving] = useState(false);
 
-  const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
-  // Notification system
-  const showNotification = (type: 'success' | 'error' | 'info', message: string) => {
-    const id = Date.now().toString();
-    setNotifications(prev => [...prev, { id, type, message }]);
-    setTimeout(() => {
-      setNotifications(prev => prev.filter(n => n.id !== id));
-    }, 5000);
-  };
-
-  // Check for unsaved changes before tab change
-  const handleTabChange = (newTab: Tab) => {
-    if (hasUnsavedChanges || themeChanged) {
-      setPendingTabChange(newTab);
-      return;
+  // ── Load data ────────────────────────────────────────────────────────────
+  const loadChartData = useCallback(async (year: number) => {
+    const result = await getMonthlyRevenue(year);
+    if (result.success && result.data) {
+      const formatted = result.data
+        .sort((a, b) => a.month - b.month)
+        .map((d) => ({ month: MONTH_NAMES[d.month], revenue: d.revenue }));
+      setChartData(formatted);
     }
-    setActiveTab(newTab);
-    // Reset to restaurantes sub-tab when switching to clientes
-    if (newTab === 'clientes') {
-      setActiveClientesSubTab('restaurantes');
-    }
-  };
-
-  const confirmTabChange = () => {
-    if (pendingTabChange) {
-      setHasUnsavedChanges(false);
-      setThemeChanged(false);
-      setActiveTab(pendingTabChange);
-      setPendingTabChange(null);
-    }
-  };
-
-  const cancelTabChange = () => {
-    setPendingTabChange(null);
-  };
-
-  useEffect(() => {
-    // Apply dark theme by default on mount
-    const root = document.documentElement;
-    root.classList.add('dark');
-    root.style.colorScheme = 'dark';
   }, []);
 
-  useEffect(() => {
-    // Apply theme when changed
-    const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    root.style.colorScheme = theme;
-    // Don't persist theme - always reset to dark on refresh
-  }, [theme]);
+  const loadData = useCallback(async () => {
+    const [statsResult, clientsResult, userResult] = await Promise.all([
+      getClientStats(),
+      getClients(),
+      getCurrentUser(),
+    ]);
+    if (statsResult.success && statsResult.data) setStats(statsResult.data);
+    if (clientsResult.success && clientsResult.data) setClients(clientsResult.data as ClientRestaurant[]);
+    if (userResult.success && userResult.data) setCurrentUser(userResult.data);
+    await loadChartData(selectedYear);
+  }, [selectedYear, loadChartData]);
 
+  // ── Auth check ───────────────────────────────────────────────────────────
   useEffect(() => {
     const checkUser = async () => {
       const supabase = createClient();
       const { data: { user }, error } = await supabase.auth.getUser();
-
-      if (error || !user) {
-        router.push('/login');
-        return;
-      }
-
-      const roleCheck = await checkUserRole(user.id);
-      if (!roleCheck.isAdmin) {
-        router.push('/dashboard');
-        return;
-      }
-
-      setUser(user);
-      setIsAdmin(true);
-      
-      // Load current user info
-      const userInfo = await getCurrentUser();
-      if (userInfo.success && userInfo.data) {
-        setCurrentUser(userInfo.data);
-      }
-      
-      // Check email confirmation status
-      const emailCheck = await checkEmailConfirmation();
-      setEmailConfirmed(emailCheck.isConfirmed);
-      
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
+      if (error || !user) { router.push('/'); return; }
       await loadData();
       setIsLoading(false);
     };
-
     checkUser();
-  }, [router]);
-
-  const handleResendConfirmation = async () => {
-    setIsResendingEmail(true);
-    const result = await resendConfirmationEmail();
-    if (result.success) {
-      showNotification('success', t('emailConfirmation.sent'));
-    } else {
-      showNotification('error', result.error || t('emailConfirmation.resending'));
-    }
-    setIsResendingEmail(false);
-  };
+  }, [router, loadData]);
 
   useEffect(() => {
-    if (isAdmin && activeTab === 'dashboard') {
-      loadRevenueData();
-    }
-  }, [selectedYear, isAdmin, activeTab]);
-
-  useEffect(() => {
-    if (isAdmin && activeTab === 'clientes') {
-      loadUsersData();
-      // Always reload clients when switching to clientes tab to ensure fresh data
-      loadData();
-    }
-  }, [activeTab, isAdmin]);
-
-  useEffect(() => {
-    if (isAdmin && activeTab === 'clientes' && activeClientesSubTab === 'utilizadores') {
-      loadUsersData();
-    }
-  }, [activeClientesSubTab, isAdmin, activeTab]);
-
-  const loadData = async () => {
-    if (!isAdmin) return;
-
-    const [clientsResult, statsResult] = await Promise.all([
-      getClients(),
-      getClientStats(),
-    ]);
-
-    if (clientsResult.success && clientsResult.data) {
-      setClients(clientsResult.data as Client[]);
-    } else if (clientsResult.error) {
-      showNotification('error', `${t('admin.notifications.errorLoadingRestaurants')}: ${clientsResult.error}`);
-    }
-
-    if (statsResult.success && statsResult.data) {
-      setStats(statsResult.data);
-    }
-
-    if (activeTab === 'dashboard') {
-      await loadRevenueData();
-    }
-  };
-
-  const loadRevenueData = async () => {
-    const result = await getMonthlyRevenue(selectedYear);
-    if (result.success && result.data) {
-      setRevenueData(result.data);
-    }
-  };
-
-  const loadUsersData = async () => {
-    const result = await getAllUsers();
-    if (result.success && result.data) {
-      setUsers(result.data as User[]);
-    } else if (result.error) {
-      showNotification('error', `${t('admin.notifications.errorLoadingUsers')}: ${result.error}`);
-      console.error('Error loading users:', result.error);
-    }
-  };
+    if (!isLoading) loadChartData(selectedYear);
+  }, [selectedYear, isLoading, loadChartData]);
 
   const handleLogout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push('/login');
-    router.refresh();
+    router.push('/');
   };
 
-  const handleEditClient = (client: Client) => {
-    setShowEditClientModal(client);
-    setEditForm({
-      name: client.name,
-      plan: client.plan,
-      trialEndsAt: client.trialEndsAt 
-        ? new Date(client.trialEndsAt).toISOString().split('T')[0]
-        : '',
+  // ── Derived metrics ──────────────────────────────────────────────────────
+  const mrr = calcMRR(stats.monthly, stats.yearly);
+  const arr = mrr * 12;
+  const conversionRate = stats.total > 0
+    ? Math.round(((stats.monthly + stats.yearly) / stats.total) * 100)
+    : 0;
+  const paidCount = stats.monthly + stats.yearly;
+
+  // ── Bulk actions ─────────────────────────────────────────────────────────
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
     });
   };
-
-  const handleSaveClient = async () => {
-    if (!showEditClientModal || !editForm) return;
-
-    setIsSaving(true);
-    const result = await updateClient({
-      restaurantId: showEditClientModal.id,
-      name: editForm.name,
-      plan: editForm.plan,
-      trialEndsAt: editForm.trialEndsAt ? new Date(editForm.trialEndsAt) : null,
-    });
-
-    if (result.success) {
-      showNotification('success', t('admin.notifications.restaurantUpdated'));
-      await loadData();
-      setShowEditClientModal(null);
-      setEditForm(null);
-      setHasUnsavedChanges(false);
-    } else {
-      showNotification('error', result.error || t('admin.notifications.errorLoadingRestaurants'));
+  const toggleAll = () => {
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filtered.map(c => c.id)));
+  };
+  const handleBulkAction = async () => {
+    if (!bulkAction || selectedIds.size === 0) return;
+    setBulkSaving(true);
+    const ids = Array.from(selectedIds);
+    let data: any = {};
+    if (bulkAction === 'TRIAL') data = { plan: 'TRIAL' };
+    else if (bulkAction === 'MONTHLY') data = { plan: 'MONTHLY' };
+    else if (bulkAction === 'YEARLY') data = { plan: 'YEARLY' };
+    else if (bulkAction === 'EXTEND_TRIAL_30') {
+      const d = new Date(); d.setDate(d.getDate() + 30);
+      data = { trialEndsAt: d };
     }
-    setIsSaving(false);
+    await bulkUpdateRestaurants(ids, data);
+    await loadData();
+    setSelectedIds(new Set());
+    setBulkAction('');
+    setBulkSaving(false);
   };
 
-  const handleEditUser = (user: User) => {
-    setShowEditUserModal(user);
-    const mainMembership = user.memberships.find(m => m.active) || user.memberships[0];
-    setEditUserForm({
-      name: user.name || '',
-      email: user.email,
-      role: mainMembership?.role || null,
-      membershipId: mainMembership?.id || null,
-    });
-  };
+  // ── Filtered clients ─────────────────────────────────────────────────────
+  const filtered = clients.filter((c) => {
+    const owner = c.memberships.find((m) => m.role === 'OWNER')?.user;
+    const q = search.toLowerCase();
+    const matchSearch = !q ||
+      c.name.toLowerCase().includes(q) ||
+      owner?.email.toLowerCase().includes(q) ||
+      owner?.name?.toLowerCase().includes(q);
+    const matchPlan = planFilter === 'all' || c.plan === planFilter;
+    return matchSearch && matchPlan;
+  });
 
-  const handleSaveUser = async () => {
-    if (!showEditUserModal || !editUserForm) return;
+  // ── Sidebar nav ──────────────────────────────────────────────────────────
+  const navItems = [
+    { id: 'dashboard' as Tab, icon: LayoutDashboard,  label: 'Dashboard' },
+    { id: 'clientes'  as Tab, icon: Building2,        label: 'Clientes' },
+    { id: 'users'     as Tab, icon: Users,             label: 'Utilizadores' },
+    { id: 'activity'  as Tab, icon: ClipboardList,     label: 'Atividade' },
+  ];
 
-    setIsSaving(true);
-    const result = await updateUser({
-      userId: showEditUserModal.id,
-      name: editUserForm.name,
-      email: editUserForm.email,
-      role: editUserForm.role || undefined,
-      membershipId: editUserForm.membershipId || undefined,
-    });
-
-    if (result.success) {
-      showNotification('success', t('admin.notifications.userUpdated'));
-      await loadUsersData();
-      setShowEditUserModal(null);
-      setEditUserForm(null);
-      setHasUnsavedChanges(false);
-    } else {
-      showNotification('error', result.error || t('admin.notifications.errorLoadingUsers'));
-    }
-    setIsSaving(false);
-  };
-
-  const handleSendPasswordReset = async (email: string) => {
-    const result = await sendPasswordReset(email);
-    if (result.success) {
-      showNotification('success', t('admin.notifications.passwordResetSent'));
-    } else {
-      showNotification('error', result.error || t('admin.notifications.passwordResetSent'));
-    }
-  };
-
-  const handleCreateAccount = async () => {
-    if (!createAccountForm.name || !createAccountForm.email || !createAccountForm.password || !createAccountForm.restaurantName) {
-      showNotification('error', t('common.loading'));
-      return;
-    }
-
-    if (createAccountForm.password.length < 6) {
-      showNotification('error', t('admin.createAccount.minPassword'));
-      return;
-    }
-
-    setIsSaving(true);
-    const result = await createAccount({
-      name: createAccountForm.name,
-      email: createAccountForm.email,
-      password: createAccountForm.password,
-      restaurantName: createAccountForm.restaurantName,
-      plan: createAccountForm.plan,
-      trialEndsAt: createAccountForm.trialEndsAt ? new Date(createAccountForm.trialEndsAt) : null,
-    });
-
-    if (result.success) {
-      showNotification('success', t('admin.notifications.accountCreated'));
-      setShowCreateAccount(false);
-      setCreateAccountForm({
-        name: '',
-        email: '',
-        password: '',
-        restaurantName: '',
-        plan: 'TRIAL',
-        trialEndsAt: '',
-      });
-      await loadData();
-      await loadUsersData();
-    } else {
-      showNotification('error', result.error || t('admin.notifications.errorLoadingUsers'));
-    }
-    setIsSaving(false);
-  };
-
-  const handleChangePassword = async (userId: string) => {
-    if (!newPassword || newPassword.length < 6) {
-      showNotification('error', t('admin.createAccount.minPassword'));
-      return;
-    }
-
-    setIsSaving(true);
-    const result = await changeUserPassword(userId, newPassword);
-    if (result.success) {
-      showNotification('success', 'Palavra-passe alterada com sucesso!');
-      setShowPasswordModal(null);
-      setNewPassword('');
-    } else {
-      showNotification('error', result.error || 'Erro ao alterar palavra-passe');
-    }
-    setIsSaving(false);
-  };
-
-  const handleDeleteAccount = (userId: string, userName: string) => {
-    setShowDeleteModal({ type: 'user', id: userId, name: userName });
-    setDeleteConfirmText('');
-  };
-
-  const handleDeleteRestaurant = (restaurantId: string, restaurantName: string) => {
-    setShowDeleteModal({ type: 'restaurant', id: restaurantId, name: restaurantName });
-    setDeleteConfirmText('');
-  };
-
-  const confirmDelete = async () => {
-    if (deleteConfirmText.toLowerCase() !== 'eliminar') {
-      showNotification('error', t('admin.modals.deleteInstruction'));
-      return;
-    }
-
-    if (!showDeleteModal) return;
-
-    setIsSaving(true);
-    let result;
-    
-    if (showDeleteModal.type === 'user') {
-      result = await deleteAccount(showDeleteModal.id);
-    } else {
-      // Delete restaurant - need to find owner first
-      const client = clients.find(c => c.id === showDeleteModal.id);
-      if (client?.memberships[0]?.user?.id) {
-        result = await deleteAccount(client.memberships[0].user.id);
-      } else {
-        result = { error: 'Restaurante não encontrado' };
-      }
-    }
-
-    if (result.success) {
-      showNotification('success', showDeleteModal.type === 'user' ? t('admin.notifications.accountDeleted') : t('admin.notifications.restaurantDeleted'));
-      await loadData();
-      await loadUsersData();
-      setShowDeleteModal(null);
-      setDeleteConfirmText('');
-    } else {
-      showNotification('error', result.error || t('common.delete'));
-    }
-    setIsSaving(false);
-  };
-
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    setThemeChanged(true);
-    document.documentElement.classList.toggle('dark', newTheme === 'dark');
-  };
-
-  const saveTheme = () => {
-    // Theme is not persisted - always resets to dark on refresh
-    setThemeChanged(false);
-    showNotification('success', t('admin.settings.themeApplied'));
-  };
-
-  const filteredClients = selectedPlan === 'ALL' 
-    ? clients 
-    : clients.filter(c => c.plan === selectedPlan);
-
-  const chartData = revenueData.map(item => ({
-    month: monthNames[item.month],
-    revenue: item.revenue,
-  }));
-
+  // ── Loading ──────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <main className="flex-1 flex items-center justify-center min-h-screen">
-        <div className="text-center space-y-4">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="text-muted-foreground">{t('common.loading')}</p>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl gradient-bg flex items-center justify-center shadow-glow animate-pulse-slow">
+            <span className="text-white font-black text-lg">R</span>
+          </div>
+          <div className="text-sm text-muted-foreground">A carregar...</div>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen overflow-x-hidden max-w-full flex-col md:flex-row">
-      {/* Mobile Top Navbar */}
-      <nav className="md:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 text-muted-foreground hover:text-foreground"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
-            <h2 className="text-lg font-bold">{t('admin.title')}</h2>
-          </div>
-          {currentUser && (
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                <span className="text-primary font-semibold text-xs">
-                  {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : currentUser.email.charAt(0).toUpperCase()}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
+    <div className="min-h-screen bg-background">
+      {/* ── Sidebar ────────────────────────────────────────────────────────── */}
+      <>
+        {/* Mobile overlay */}
         {isSidebarOpen && (
-          <div className="border-t border-border bg-card">
-            <div className="px-4 py-2 space-y-1">
-              <button
-                onClick={() => {
-                  handleTabChange('dashboard');
-                  setIsSidebarOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${
-                  activeTab === 'dashboard'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-card hover:text-foreground'
-                }`}
-              >
-                <LayoutDashboard className="w-4 h-4" />
-                <span className="text-sm">Dashboard</span>
-              </button>
-              <button
-                onClick={() => {
-                  handleTabChange('clientes');
-                  setIsSidebarOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${
-                  activeTab === 'clientes'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-card hover:text-foreground'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                <span className="text-sm">Clientes</span>
-              </button>
-              <button
-                onClick={() => {
-                  handleTabChange('configuracoes');
-                  setIsSidebarOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${
-                  activeTab === 'configuracoes'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-card hover:text-foreground'
-                }`}
-              >
-                <Settings className="w-4 h-4" />
-                <span className="text-sm">Configurações</span>
-              </button>
-              <div className="pt-2 border-t border-border mt-2">
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-card hover:text-foreground transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span className="text-sm">Sair</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </nav>
-
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex fixed left-0 top-0 h-screen w-64 bg-card border-r border-border z-50">
-        <div className="p-6 h-full flex flex-col w-full">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-xl font-bold">{t('admin.title')}</h2>
-          </div>
-
-          <nav className="flex-1 flex flex-col items-center justify-center space-y-3">
-            <button
-              onClick={() => handleTabChange('dashboard')}
-              className={`w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${
-                activeTab === 'dashboard'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-card hover:text-foreground'
-              }`}
-            >
-              <LayoutDashboard className="w-5 h-5" />
-              <span>{t('admin.dashboard')}</span>
-            </button>
-            <button
-              onClick={() => handleTabChange('clientes')}
-              className={`w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${
-                activeTab === 'clientes'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-card hover:text-foreground'
-              }`}
-            >
-              <Users className="w-5 h-5" />
-              <span>{t('admin.clients')}</span>
-            </button>
-            <button
-              onClick={() => handleTabChange('configuracoes')}
-              className={`w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${
-                activeTab === 'configuracoes'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-card hover:text-foreground'
-              }`}
-            >
-              <Settings className="w-5 h-5" />
-              <span>{t('admin.settingsLabel')}</span>
-            </button>
-          </nav>
-
-          <div className="pt-8 border-t border-border mt-auto space-y-4">
-            {/* Current User Info */}
-            {currentUser && (
-              <div className="px-4 py-3 rounded-lg bg-card/50 border border-border/50">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                    <span className="text-primary font-semibold text-sm">
-                      {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : currentUser.email.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">
-                      {currentUser.name || t('common.loading')}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {currentUser.email}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Language Selector */}
-            <div className="px-4">
-              <LanguageSelector />
-            </div>
-            
-            <button
-              onClick={handleLogout}
-              className="flex items-center justify-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-card hover:text-foreground transition-colors w-full"
-            >
-              <LogOut className="w-5 h-5" />
-              <span>{t('navbar.logout')}</span>
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className={`flex-1 transition-all duration-300 md:ml-64 min-w-0 overflow-x-hidden max-w-full pt-16 md:pt-0`}>
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 md:py-8 max-w-full">
-          {/* Email Confirmation Banner */}
-          {emailConfirmed === false && (
-            <div className="mb-6 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="font-semibold text-amber-600 dark:text-amber-400 mb-1">
-                  {t('emailConfirmation.title')}
-                </h3>
-                <p className="text-sm text-amber-600/80 dark:text-amber-400/80 mb-3">
-                  {t('emailConfirmation.message')}
-                </p>
-                <button
-                  onClick={handleResendConfirmation}
-                  disabled={isResendingEmail}
-                  className="text-sm px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isResendingEmail ? t('emailConfirmation.resending') : t('emailConfirmation.resend')}
-                </button>
-              </div>
-            </div>
-          )}
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 sm:mb-8 gap-4">
-            <div className="flex-1">
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold">
-                {activeTab === 'dashboard' && t('admin.title')}
-                {activeTab === 'clientes' && t('admin.clients')}
-                {activeTab === 'configuracoes' && t('admin.settingsLabel')}
-              </h1>
-              {activeTab === 'clientes' && (
-                <div className="flex flex-wrap gap-2 sm:gap-3 mt-4">
-                  <button
-                    onClick={() => setActiveClientesSubTab('restaurantes')}
-                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
-                      activeClientesSubTab === 'restaurantes'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-card text-muted-foreground hover:bg-card/80'
-                    }`}
-                  >
-                    {t('admin.restaurants')}
-                  </button>
-                  <button
-                    onClick={() => setActiveClientesSubTab('utilizadores')}
-                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
-                      activeClientesSubTab === 'utilizadores'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-card text-muted-foreground hover:bg-card/80'
-                    }`}
-                  >
-                    {t('admin.users')}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Dashboard Tab */}
-          {activeTab === 'dashboard' && (
-            <div className="space-y-6 sm:space-y-8">
-              {/* Stats Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-                <div className="card p-6 space-y-4">
-                  <div className="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center">
-                    <Building2 className="w-6 h-6 text-primary" />
-                  </div>
-                  <h3 className="text-lg font-semibold">{t('admin.stats.total')}</h3>
-                  <p className="text-3xl font-bold">{stats.total}</p>
-                  <p className="text-sm text-muted-foreground">{t('admin.stats.restaurants')}</p>
-                </div>
-
-                <div className="card p-6 space-y-4">
-                  <div className="w-12 h-12 rounded-lg bg-yellow-500/20 flex items-center justify-center">
-                    <Calendar className="w-6 h-6 text-yellow-500" />
-                  </div>
-                  <h3 className="text-lg font-semibold">{t('admin.stats.trial')}</h3>
-                  <p className="text-3xl font-bold">{stats.trial}</p>
-                  <p className="text-sm text-muted-foreground">{t('admin.stats.inTrial')}</p>
-                </div>
-
-                <div className="card p-6 space-y-4">
-                  <div className="w-12 h-12 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                    <CreditCard className="w-6 h-6 text-blue-500" />
-                  </div>
-                  <h3 className="text-lg font-semibold">{t('admin.stats.monthly')}</h3>
-                  <p className="text-3xl font-bold">{stats.monthly}</p>
-                  <p className="text-sm text-muted-foreground">{t('admin.stats.monthlyPlan')}</p>
-                </div>
-
-                <div className="card p-6 space-y-4">
-                  <div className="w-12 h-12 rounded-lg bg-green-500/20 flex items-center justify-center">
-                    <CreditCard className="w-6 h-6 text-green-500" />
-                  </div>
-                  <h3 className="text-lg font-semibold">{t('admin.stats.yearly')}</h3>
-                  <p className="text-3xl font-bold">{stats.yearly}</p>
-                  <p className="text-sm text-muted-foreground">{t('admin.stats.yearlyPlan')}</p>
-                </div>
-              </div>
-
-              {/* Revenue Chart */}
-              <div className="card p-4 sm:p-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3">
-                  <h2 className="text-xl sm:text-2xl font-bold">{t('admin.revenue.monthly')}</h2>
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                    className="px-3 sm:px-4 py-2 bg-background border border-border rounded-lg text-sm sm:text-base w-full sm:w-auto"
-                  >
-                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((year) => (
-                      <option key={year} value={year}>
-                        {year}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="w-full overflow-x-auto">
-                  <ResponsiveContainer width="100%" height={300} minHeight={300}>
-                  <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip formatter={(value: number) => `€${value.toFixed(2)}`} />
-                    <Legend />
-                    <Bar dataKey="revenue" fill="hsl(var(--primary))" />
-                  </BarChart>
-                </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Clientes Tab */}
-          {activeTab === 'clientes' && (
-            <div className="space-y-6 sm:space-y-8">
-              {/* Restaurantes Sub-tab */}
-              {activeClientesSubTab === 'restaurantes' && (
-                <>
-                  {/* Create Account Section */}
-                  <div className="card p-4 sm:p-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3">
-                  <h2 className="text-xl sm:text-2xl font-bold">{t('admin.createAccount.title')}</h2>
-                  <button
-                    onClick={() => setShowCreateAccount(!showCreateAccount)}
-                    className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm sm:text-base w-full sm:w-auto justify-center"
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    {showCreateAccount ? t('common.cancel') : t('admin.createAccount.newAccount')}
-                  </button>
-                </div>
-
-                {showCreateAccount && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-card rounded-lg border border-border">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">{t('admin.createAccount.ownerName')}</label>
-                      <input
-                        type="text"
-                        value={createAccountForm.name}
-                        onChange={(e) => setCreateAccountForm({ ...createAccountForm, name: e.target.value })}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg"
-                        placeholder="João Silva"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">{t('admin.createAccount.email')}</label>
-                      <input
-                        type="email"
-                        value={createAccountForm.email}
-                        onChange={(e) => setCreateAccountForm({ ...createAccountForm, email: e.target.value })}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg"
-                        placeholder="joao@exemplo.com"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">{t('admin.createAccount.password')}</label>
-                      <input
-                        type="password"
-                        value={createAccountForm.password}
-                        onChange={(e) => setCreateAccountForm({ ...createAccountForm, password: e.target.value })}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg"
-                        placeholder={t('admin.createAccount.minPassword')}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">{t('admin.createAccount.restaurantName')}</label>
-                      <input
-                        type="text"
-                        value={createAccountForm.restaurantName}
-                        onChange={(e) => setCreateAccountForm({ ...createAccountForm, restaurantName: e.target.value })}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg"
-                        placeholder="Restaurante Exemplo"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">{t('admin.createAccount.plan')}</label>
-                      <select
-                        value={createAccountForm.plan}
-                        onChange={(e) => setCreateAccountForm({ ...createAccountForm, plan: e.target.value as Plan })}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg"
-                      >
-                        <option value="TRIAL">{t('admin.stats.trial')}</option>
-                        <option value="MONTHLY">{t('admin.stats.monthly')}</option>
-                        <option value="YEARLY">{t('admin.stats.yearly')}</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">{t('admin.createAccount.trialUntil')}</label>
-                      <input
-                        type="date"
-                        value={createAccountForm.trialEndsAt}
-                        onChange={(e) => setCreateAccountForm({ ...createAccountForm, trialEndsAt: e.target.value })}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg"
-                        disabled={createAccountForm.plan !== 'TRIAL'}
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <button
-                        onClick={handleCreateAccount}
-                        disabled={isSaving}
-                        className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        <Plus className="w-4 h-4" />
-                        {isSaving ? t('admin.createAccount.creating') : t('admin.createAccount.create')}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Filter */}
-              <div className="card p-4 sm:p-6">
-                <div className="flex flex-wrap gap-2 sm:gap-3">
-                  <button
-                    onClick={() => setSelectedPlan('ALL')}
-                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
-                      selectedPlan === 'ALL'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-card text-muted-foreground hover:bg-card/80'
-                    }`}
-                  >
-                    {t('admin.filters.all')} ({stats.total})
-                  </button>
-                  <button
-                    onClick={() => setSelectedPlan('TRIAL')}
-                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
-                      selectedPlan === 'TRIAL'
-                        ? 'bg-yellow-500 text-white'
-                        : 'bg-card text-muted-foreground hover:bg-card/80'
-                    }`}
-                  >
-                    {t('admin.filters.trial')} ({stats.trial})
-                  </button>
-                  <button
-                    onClick={() => setSelectedPlan('MONTHLY')}
-                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
-                      selectedPlan === 'MONTHLY'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-card text-muted-foreground hover:bg-card/80'
-                    }`}
-                  >
-                    {t('admin.filters.monthly')} ({stats.monthly})
-                  </button>
-                  <button
-                    onClick={() => setSelectedPlan('YEARLY')}
-                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
-                      selectedPlan === 'YEARLY'
-                        ? 'bg-green-500 text-white'
-                        : 'bg-card text-muted-foreground hover:bg-card/80'
-                    }`}
-                  >
-                    {t('admin.filters.yearly')} ({stats.yearly})
-                  </button>
-                </div>
-              </div>
-
-              {/* Clients Table */}
-              <div className="card p-4 sm:p-6 overflow-hidden">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-2">
-                  <h2 className="text-xl sm:text-2xl font-bold">{t('admin.restaurants')}</h2>
-                  <span className="text-xs sm:text-sm text-muted-foreground">
-                    {clients.length} {t('common.total')}, {filteredClients.length} {t('common.filtered')}
-                  </span>
-                </div>
-                {/* Desktop Table */}
-                <div className="hidden md:block overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6" style={{ maxWidth: '100%' }}>
-                  <div className="min-w-full inline-block">
-                    <table className="w-full" style={{ minWidth: '800px', tableLayout: 'auto' }}>
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-3 px-4 font-semibold whitespace-nowrap">{t('admin.table.restaurant')}</th>
-                        <th className="text-left py-3 px-4 font-semibold whitespace-nowrap">{t('admin.table.owner')}</th>
-                        <th className="text-left py-3 px-4 font-semibold whitespace-nowrap">{t('admin.table.email')}</th>
-                        <th className="text-left py-3 px-4 font-semibold whitespace-nowrap">{t('admin.table.plan')}</th>
-                        <th className="text-left py-3 px-4 font-semibold whitespace-nowrap">{t('admin.table.trialUntil')}</th>
-                        <th className="text-left py-3 px-4 font-semibold whitespace-nowrap">{t('common.actions')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredClients.length > 0 ? filteredClients.map((client) => {
-                        const owner = client.memberships[0]?.user;
-
-                        return (
-                          <tr key={client.id} className="border-b border-border/50 hover:bg-card/50">
-                            <td className="py-3 px-4 max-w-[200px]">
-                              <span className="font-medium block truncate" title={client.name}>{client.name}</span>
-                            </td>
-                            <td className="py-3 px-4 text-muted-foreground max-w-[150px]">
-                              <span className="block truncate" title={owner?.name || 'N/A'}>{owner?.name || 'N/A'}</span>
-                            </td>
-                            <td className="py-3 px-4 text-muted-foreground max-w-[200px] truncate" title={owner?.email || 'N/A'}>
-                              {owner?.email || 'N/A'}
-                            </td>
-                            <td className="py-3 px-4 whitespace-nowrap">
-                              <span
-                                className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                  client.plan === 'TRIAL'
-                                    ? 'bg-yellow-500/20 text-yellow-500'
-                                    : client.plan === 'MONTHLY'
-                                    ? 'bg-blue-500/20 text-blue-500'
-                                    : 'bg-green-500/20 text-green-500'
-                                }`}
-                              >
-                                {client.plan === 'TRIAL'
-                                  ? 'Trial'
-                                  : client.plan === 'MONTHLY'
-                                  ? 'Mensal'
-                                  : 'Anual'}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-muted-foreground whitespace-nowrap">
-                              {client.trialEndsAt
-                                ? new Date(client.trialEndsAt).toLocaleDateString('pt-PT')
-                                : 'N/A'}
-                            </td>
-                            <td className="py-3 px-4 whitespace-nowrap">
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleEditClient(client)}
-                                  className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                                  title="Editar restaurante"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteRestaurant(client.id, client.name)}
-                                  className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                                  title="Excluir restaurante"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      }) : (
-                        <tr>
-                          <td colSpan={6} className="text-center py-12 text-muted-foreground">
-                            {clients.length === 0 ? t('admin.table.loading') : t('admin.table.noResults')}
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                  </div>
-                </div>
-                {/* Mobile Cards */}
-                <div className="md:hidden space-y-4">
-                  {filteredClients.length > 0 ? filteredClients.map((client) => {
-                    const owner = client.memberships[0]?.user;
-                    return (
-                      <div key={client.id} className="bg-card border border-border rounded-lg p-4 space-y-3">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-lg mb-1">{client.name}</h3>
-                            <p className="text-sm text-muted-foreground">{owner?.name || 'N/A'}</p>
-                            <p className="text-sm text-muted-foreground">{owner?.email || 'N/A'}</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleEditClient(client)}
-                              className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                              title="Editar restaurante"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteRestaurant(client.id, client.name)}
-                              className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                              title="Excluir restaurante"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              client.plan === 'TRIAL'
-                                ? 'bg-yellow-500/20 text-yellow-500'
-                                : client.plan === 'MONTHLY'
-                                ? 'bg-blue-500/20 text-blue-500'
-                                : 'bg-green-500/20 text-green-500'
-                            }`}
-                          >
-                            {client.plan === 'TRIAL'
-                              ? 'Trial'
-                              : client.plan === 'MONTHLY'
-                              ? 'Mensal'
-                              : 'Anual'}
-                          </span>
-                          {client.trialEndsAt && (
-                            <span className="text-xs text-muted-foreground">
-                              Trial até: {new Date(client.trialEndsAt).toLocaleDateString('pt-PT')}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  }) : (
-                    <div className="text-center py-12 text-muted-foreground">
-                      {clients.length === 0 ? 'A carregar restaurantes...' : 'Nenhum restaurante encontrado com o filtro selecionado'}
-                    </div>
-                  )}
-                </div>
-              </div>
-                </>
-              )}
-
-              {/* Utilizadores Sub-tab */}
-              {activeClientesSubTab === 'utilizadores' && (
-                <>
-                  {/* Users Table */}
-                  <div className="card p-4 sm:p-6 overflow-hidden">
-                    <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">{t('admin.users')}</h2>
-                {/* Desktop Table */}
-                <div className="hidden md:block overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6" style={{ maxWidth: '100%' }}>
-                  <div className="min-w-full inline-block">
-                    <table className="w-full" style={{ minWidth: '900px', tableLayout: 'auto' }}>
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-3 px-4 font-semibold whitespace-nowrap">{t('admin.table.name')}</th>
-                        <th className="text-left py-3 px-4 font-semibold whitespace-nowrap">{t('admin.table.email')}</th>
-                        <th className="text-left py-3 px-4 font-semibold whitespace-nowrap">{t('admin.table.restaurant')}</th>
-                        <th className="text-left py-3 px-4 font-semibold whitespace-nowrap">{t('admin.table.role')}</th>
-                        <th className="text-left py-3 px-4 font-semibold whitespace-nowrap">{t('admin.table.plan')}</th>
-                        <th className="text-left py-3 px-4 font-semibold whitespace-nowrap">{t('common.actions')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {users.map((user) => {
-                        const restaurant = user.memberships[0]?.restaurant;
-                        const mainMembership = user.memberships.find(m => m.active) || user.memberships[0];
-                        const userRole = mainMembership?.role;
-
-                        return (
-                          <tr key={user.id} className="border-b border-border/50 hover:bg-card/50">
-                            <td className="py-3 px-4 max-w-[150px] truncate" title={user.name || 'N/A'}>
-                              <span className="font-medium">{user.name || 'N/A'}</span>
-                            </td>
-                            <td className="py-3 px-4 text-muted-foreground max-w-[200px] truncate" title={user.email}>
-                              {user.email}
-                            </td>
-                            <td className="py-3 px-4 text-muted-foreground max-w-[200px] truncate" title={restaurant?.name || 'N/A'}>
-                              {restaurant?.name || 'N/A'}
-                            </td>
-                            <td className="py-3 px-4 whitespace-nowrap">
-                              {userRole ? (
-                                <span
-                                  className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                    userRole === 'PLATFORM_ADMIN'
-                                      ? 'bg-purple-500/20 text-purple-500'
-                                      : userRole === 'OWNER'
-                                      ? 'bg-primary/20 text-primary'
-                                      : 'bg-gray-500/20 text-gray-500'
-                                  }`}
-                                >
-                                  {userRole === 'PLATFORM_ADMIN'
-                                    ? 'Admin'
-                                    : userRole === 'OWNER'
-                                    ? 'Proprietário'
-                                    : 'Staff'}
-                                </span>
-                              ) : (
-                                'N/A'
-                              )}
-                            </td>
-                            <td className="py-3 px-4 whitespace-nowrap">
-                              {restaurant ? (
-                                <span
-                                  className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                    restaurant.plan === 'TRIAL'
-                                      ? 'bg-yellow-500/20 text-yellow-500'
-                                      : restaurant.plan === 'MONTHLY'
-                                      ? 'bg-blue-500/20 text-blue-500'
-                                      : 'bg-green-500/20 text-green-500'
-                                  }`}
-                                >
-                                  {restaurant.plan === 'TRIAL'
-                                    ? 'Trial'
-                                    : restaurant.plan === 'MONTHLY'
-                                    ? 'Mensal'
-                                    : 'Anual'}
-                                </span>
-                              ) : (
-                                'N/A'
-                              )}
-                            </td>
-                            <td className="py-3 px-4 whitespace-nowrap">
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleEditUser(user)}
-                                  className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors flex-shrink-0"
-                                  title="Editar utilizador"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => setShowPasswordModal({ userId: user.id, userName: user.name || user.email })}
-                                  className="p-2 text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors flex-shrink-0"
-                                  title="Alterar palavra-passe"
-                                >
-                                  <Key className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleSendPasswordReset(user.email)}
-                                  className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors flex-shrink-0"
-                                  title="Enviar link de redefinição de senha"
-                                >
-                                  <Send className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteAccount(user.id, user.name || user.email)}
-                                  className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors flex-shrink-0"
-                                  title="Excluir conta"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  </div>
-                  {users.length === 0 && (
-                    <div className="text-center py-12 text-muted-foreground">
-                      {t('admin.table.noUsers')}
-                    </div>
-                  )}
-                </div>
-                {/* Mobile Cards */}
-                <div className="md:hidden space-y-4">
-                  {users.length > 0 ? users.map((user) => {
-                    const restaurant = user.memberships[0]?.restaurant;
-                    const mainMembership = user.memberships.find(m => m.active) || user.memberships[0];
-                    const userRole = mainMembership?.role;
-                    return (
-                      <div key={user.id} className="bg-card border border-border rounded-lg p-4 space-y-3">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-lg mb-1">{user.name || 'N/A'}</h3>
-                            <p className="text-sm text-muted-foreground">{user.email}</p>
-                            <p className="text-sm text-muted-foreground">{restaurant?.name || 'N/A'}</p>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            <button
-                              onClick={() => handleEditUser(user)}
-                              className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                              title="Editar utilizador"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => setShowPasswordModal({ userId: user.id, userName: user.name || user.email })}
-                              className="p-2 text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors"
-                              title="Alterar palavra-passe"
-                            >
-                              <Key className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleSendPasswordReset(user.email)}
-                              className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
-                              title="Enviar link de redefinição"
-                            >
-                              <Send className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteAccount(user.id, user.name || user.email)}
-                              className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                              title="Excluir conta"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {userRole && (
-                            <span
-                              className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                userRole === 'PLATFORM_ADMIN'
-                                  ? 'bg-purple-500/20 text-purple-500'
-                                  : userRole === 'OWNER'
-                                  ? 'bg-primary/20 text-primary'
-                                  : 'bg-gray-500/20 text-gray-500'
-                              }`}
-                            >
-                              {userRole === 'PLATFORM_ADMIN'
-                                ? 'Admin'
-                                : userRole === 'OWNER'
-                                ? 'Proprietário'
-                                : 'Staff'}
-                            </span>
-                          )}
-                          {restaurant && (
-                            <span
-                              className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                restaurant.plan === 'TRIAL'
-                                  ? 'bg-yellow-500/20 text-yellow-500'
-                                  : restaurant.plan === 'MONTHLY'
-                                  ? 'bg-blue-500/20 text-blue-500'
-                                  : 'bg-green-500/20 text-green-500'
-                              }`}
-                            >
-                              {restaurant.plan === 'TRIAL'
-                                ? 'Trial'
-                                : restaurant.plan === 'MONTHLY'
-                                ? 'Mensal'
-                                : 'Anual'}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  }) : (
-                    <div className="text-center py-12 text-muted-foreground">
-                      Nenhum utilizador encontrado
-                    </div>
-                  )}
-                </div>
-              </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Configurações Tab */}
-          {activeTab === 'configuracoes' && (
-            <div className="space-y-6 sm:space-y-8">
-              <div className="card p-4 sm:p-6">
-                <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">{t('admin.settings.appearance')}</h2>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold mb-2">Tema</h3>
-                    <p className="text-sm sm:text-base text-muted-foreground">
-                      Alterar entre modo claro e escuro
-                    </p>
-                  </div>
-                  <button
-                    onClick={toggleTheme}
-                    className="flex items-center gap-3 px-4 sm:px-6 py-3 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors w-full sm:w-auto justify-center"
-                  >
-                    {theme === 'light' ? (
-                      <>
-                        <Moon className="w-5 h-5" />
-                        <span>Modo Escuro</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sun className="w-5 h-5" />
-                        <span>Modo Claro</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-                {themeChanged && (
-                  <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                    <p className="text-sm text-amber-600 dark:text-amber-400 mb-3">
-                      {t('admin.settings.unsavedTheme')}
-                    </p>
-                    <button
-                      onClick={saveTheme}
-                      className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2"
-                    >
-                      <Save className="w-4 h-4" />
-                      {t('admin.settings.saveChanges')}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </main>
-
-      {/* Notifications */}
-      <div className="fixed top-4 left-4 right-4 sm:left-auto sm:right-4 z-50 space-y-2 max-w-sm sm:min-w-[300px]">
-        {notifications.map((notification) => (
           <div
-            key={notification.id}
-            className={`w-full sm:min-w-[300px] p-3 sm:p-4 rounded-lg shadow-lg border flex items-start gap-3 animate-slide-in-right ${
-              notification.type === 'success'
-                ? 'bg-green-500/10 border-green-500/30 text-green-600 dark:text-green-400'
-                : notification.type === 'error'
-                ? 'bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400'
-                : 'bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400'
-            }`}
-          >
-            {notification.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            ) : notification.type === 'error' ? (
-              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            ) : (
-              <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            )}
-            <p className="flex-1 text-sm font-medium">{notification.message}</p>
+            className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-30"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        <aside className={`
+          fixed top-0 left-0 h-full w-60 z-40 flex flex-col
+          bg-card border-r border-white/5
+          transition-transform duration-300
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          md:translate-x-0
+        `}>
+          {/* Logo */}
+          <div className="h-14 flex items-center gap-2.5 px-4 border-b border-white/5 shrink-0">
+            <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center shadow-glow-sm">
+              <span className="text-white font-black text-sm">R</span>
+            </div>
+            <div>
+              <span className="font-bold text-sm text-foreground">REST Finance</span>
+              <div className="flex items-center gap-1">
+                <Shield className="w-2.5 h-2.5 text-primary" />
+                <span className="text-[10px] text-primary font-medium">Admin</span>
+              </div>
+            </div>
             <button
-              onClick={() => setNotifications(prev => prev.filter(n => n.id !== notification.id))}
-              className="text-current opacity-70 hover:opacity-100"
+              onClick={() => setSidebarOpen(false)}
+              className="md:hidden ml-auto p-1 rounded-lg text-muted-foreground hover:text-foreground"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
-        ))}
-      </div>
 
-      {/* Unsaved Changes Modal */}
-      {pendingTabChange && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-card rounded-lg p-4 sm:p-6 max-w-md w-full border border-border my-4 sm:my-8">
-            <div className="flex items-center gap-3 mb-4">
-              <AlertTriangle className="w-6 h-6 text-amber-500" />
-              <h3 className="text-xl font-bold">Alterações não guardadas</h3>
+          {/* Nav */}
+          <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+            <p className="section-label px-2 pt-2 pb-1">Plataforma</p>
+            {navItems.map(({ id, icon: Icon, label }) => (
+              <button
+                key={id}
+                onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
+                className={`nav-item w-full ${activeTab === id ? 'active' : ''}`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{label}</span>
+                {activeTab === id && <ChevronRight className="w-3 h-3 ml-auto opacity-50" />}
+              </button>
+            ))}
+          </nav>
+
+          {/* User */}
+          <div className="p-3 border-t border-white/5 shrink-0">
+            <div className="flex items-center gap-2.5 px-2 py-2 rounded-xl">
+              <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center shrink-0">
+                <span className="text-white text-xs font-bold">
+                  {currentUser?.name?.[0]?.toUpperCase() ?? currentUser?.email?.[0]?.toUpperCase() ?? 'A'}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-foreground truncate">{currentUser?.name ?? 'Admin'}</p>
+                <p className="text-[10px] text-muted-foreground truncate">{currentUser?.email}</p>
+              </div>
             </div>
-            <p className="text-muted-foreground mb-6">
-              Tem alterações não guardadas. Deseja guardar antes de mudar de vista?
+            <button
+              onClick={handleLogout}
+              className="nav-item w-full mt-1 text-muted-foreground hover:text-danger"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Terminar sessão</span>
+            </button>
+          </div>
+        </aside>
+      </>
+
+      {/* ── Main ───────────────────────────────────────────────────────────── */}
+      <div className="md:ml-60 flex flex-col min-h-screen">
+        {/* Top bar */}
+        <header className="sticky top-0 z-20 h-14 flex items-center gap-3 px-4 md:px-6 bg-background/80 backdrop-blur-xl border-b border-white/5">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="md:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="text-sm font-semibold text-foreground">
+              {{ dashboard: 'Visão Geral', clientes: 'Clientes', users: 'Utilizadores', activity: 'Atividade' }[activeTab]}
+            </h1>
+            <p className="text-xs text-muted-foreground hidden md:block">
+              {{ dashboard: 'Métricas da plataforma', clientes: `${clients.length} restaurantes registados`, users: 'Gestão de utilizadores', activity: 'Registo de ações' }[activeTab]}
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-end">
-              <button
-                onClick={cancelTabChange}
-                className="px-4 py-2 rounded-lg border border-border hover:bg-card transition-colors w-full sm:w-auto"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmTabChange}
-                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors w-full sm:w-auto"
-              >
-                Continuar sem guardar
-              </button>
-            </div>
           </div>
-        </div>
-      )}
 
-      {/* Edit Client Modal */}
-      {showEditClientModal && editForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-card rounded-lg p-4 sm:p-6 max-w-2xl w-full border border-border my-4 sm:my-8">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold">{t('admin.modals.editRestaurant')}</h3>
-              <button
-                onClick={() => {
-                  setShowEditClientModal(null);
-                  setEditForm(null);
-                  setHasUnsavedChanges(false);
-                }}
-                className="text-muted-foreground hover:text-foreground"
+          {activeTab === 'dashboard' && (
+            <div className="ml-auto">
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                className="input-field py-1.5 text-xs w-24"
               >
-                <X className="w-6 h-6" />
-              </button>
+                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
             </div>
-            <div className="space-y-4">
-              <div>
-                      <label className="block text-sm font-medium mb-2">{t('admin.createAccount.restaurantName')}</label>
-                <input
-                  type="text"
-                  value={editForm.name}
-                  onChange={(e) => {
-                    setEditForm({ ...editForm, name: e.target.value });
-                    setHasUnsavedChanges(true);
-                  }}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg"
-                />
-              </div>
-              <div>
-                      <label className="block text-sm font-medium mb-2">{t('admin.createAccount.plan')}</label>
-                <select
-                  value={editForm.plan}
-                  onChange={(e) => {
-                    setEditForm({ ...editForm, plan: e.target.value as Plan });
-                    setHasUnsavedChanges(true);
-                  }}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg"
-                >
-                  <option value="TRIAL">Trial</option>
-                  <option value="MONTHLY">Mensal</option>
-                  <option value="YEARLY">Anual</option>
-                </select>
-              </div>
-              <div>
-                      <label className="block text-sm font-medium mb-2">{t('admin.createAccount.trialUntil')}</label>
-                <input
-                  type="date"
-                  value={editForm.trialEndsAt}
-                  onChange={(e) => {
-                    setEditForm({ ...editForm, trialEndsAt: e.target.value });
-                    setHasUnsavedChanges(true);
-                  }}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg"
-                />
-              </div>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3 justify-end mt-6">
-              <button
-                onClick={() => {
-                  setShowEditClientModal(null);
-                  setEditForm(null);
-                  setHasUnsavedChanges(false);
-                }}
-                className="px-4 py-2 rounded-lg border border-border hover:bg-card transition-colors w-full sm:w-auto"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSaveClient}
-                disabled={isSaving}
-                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 w-full sm:w-auto"
-              >
-                <Save className="w-4 h-4" />
-                {isSaving ? 'A guardar...' : 'Guardar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          )}
+        </header>
 
-      {/* Edit User Modal */}
-      {showEditUserModal && editUserForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-card rounded-lg p-4 sm:p-6 max-w-2xl w-full border border-border my-4 sm:my-8">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold">{t('admin.modals.editUser')}</h3>
-              <button
-                onClick={() => {
-                  setShowEditUserModal(null);
-                  setEditUserForm(null);
-                  setHasUnsavedChanges(false);
-                }}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Nome</label>
-                <input
-                  type="text"
-                  value={editUserForm.name}
-                  onChange={(e) => {
-                    setEditUserForm({ ...editUserForm, name: e.target.value });
-                    setHasUnsavedChanges(true);
-                  }}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg"
-                />
-              </div>
-              <div>
-                      <label className="block text-sm font-medium mb-2">{t('admin.table.email')}</label>
-                <input
-                  type="email"
-                  value={editUserForm.email}
-                  onChange={(e) => {
-                    setEditUserForm({ ...editUserForm, email: e.target.value });
-                    setHasUnsavedChanges(true);
-                  }}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg"
-                />
-              </div>
-              {editUserForm.membershipId && (
-                <div>
-                      <label className="block text-sm font-medium mb-2">{t('admin.table.role')}</label>
-                  <select
-                    value={editUserForm.role || ''}
-                    onChange={(e) => {
-                      setEditUserForm({ 
-                        ...editUserForm, 
-                        role: e.target.value as 'OWNER' | 'STAFF' | 'PLATFORM_ADMIN' 
-                      });
-                      setHasUnsavedChanges(true);
-                    }}
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg"
-                  >
-                    <option value="OWNER">Proprietário</option>
-                    <option value="STAFF">Staff</option>
-                    <option value="PLATFORM_ADMIN">Admin da Plataforma</option>
-                  </select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {t('admin.table.role')}
-                  </p>
+        <main className="flex-1 p-4 md:p-6 space-y-6">
+
+          {/* ── Dashboard Tab ─────────────────────────────────────────────── */}
+          {activeTab === 'dashboard' && (
+            <>
+              {/* KPI cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+
+                {/* MRR */}
+                <div className="card-glass p-5 rounded-2xl space-y-3 animate-fade-up-1">
+                  <div className="flex items-start justify-between">
+                    <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <DollarSign className="w-4 h-4 text-primary" />
+                    </div>
+                    <span className="flex items-center gap-1 text-xs text-success font-medium bg-success/10 px-2 py-0.5 rounded-full">
+                      <ArrowUpRight className="w-3 h-3" />
+                      MRR
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-black tabular-nums text-foreground">€{mrr.toLocaleString('pt-PT')}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Receita mensal recorrente</p>
+                  </div>
+                  <div className="pt-1 border-t border-white/5">
+                    <p className="text-xs text-muted-foreground">ARR estimado: <span className="text-foreground font-medium">€{arr.toLocaleString('pt-PT')}</span></p>
+                  </div>
                 </div>
-              )}
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3 justify-end mt-6">
-              <button
-                onClick={() => {
-                  setShowEditUserModal(null);
-                  setEditUserForm(null);
-                  setHasUnsavedChanges(false);
-                }}
-                className="px-4 py-2 rounded-lg border border-border hover:bg-card transition-colors w-full sm:w-auto"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={handleSaveUser}
-                disabled={isSaving}
-                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 w-full sm:w-auto"
-              >
-                <Save className="w-4 h-4" />
-                {isSaving ? t('common.loading') : t('common.save')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Change Password Modal */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-card rounded-lg p-4 sm:p-6 max-w-md w-full border border-border my-4 sm:my-8">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold">{t('admin.modals.changePassword')}</h3>
-              <button
-                onClick={() => {
-                  setShowPasswordModal(null);
-                  setNewPassword('');
-                }}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Nova palavra-passe para: <strong>{showPasswordModal.userName}</strong>
-              </p>
-              <div>
-                <label className="block text-sm font-medium mb-2">Nova Palavra-passe</label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg"
-                />
+                {/* Total */}
+                <div className="card-glass p-5 rounded-2xl space-y-3 animate-fade-up-2">
+                  <div className="flex items-start justify-between">
+                    <div className="w-9 h-9 rounded-xl bg-success/10 flex items-center justify-center">
+                      <Building2 className="w-4 h-4 text-success" />
+                    </div>
+                    <span className="text-xs text-muted-foreground font-medium bg-white/5 px-2 py-0.5 rounded-full">Total</span>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-black tabular-nums text-foreground">{stats.total}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Restaurantes registados</p>
+                  </div>
+                  <div className="pt-1 border-t border-white/5 flex gap-3 text-xs">
+                    <span className="text-warning">{stats.trial} trial</span>
+                    <span className="text-muted-foreground">·</span>
+                    <span className="text-success">{paidCount} pagantes</span>
+                  </div>
+                </div>
+
+                {/* Conversion */}
+                <div className="card-glass p-5 rounded-2xl space-y-3 animate-fade-up-3">
+                  <div className="flex items-start justify-between">
+                    <div className="w-9 h-9 rounded-xl bg-info/10 flex items-center justify-center">
+                      <TrendingUp className="w-4 h-4 text-info" />
+                    </div>
+                    <span className="text-xs text-muted-foreground font-medium bg-white/5 px-2 py-0.5 rounded-full">Conversão</span>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-black tabular-nums text-foreground">{conversionRate}%</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Trial → pago</p>
+                  </div>
+                  <div className="w-full bg-white/5 rounded-full h-1.5">
+                    <div
+                      className="h-1.5 rounded-full bg-gradient-to-r from-violet-600 to-indigo-500 transition-all duration-700"
+                      style={{ width: `${conversionRate}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Paid breakdown */}
+                <div className="card-glass p-5 rounded-2xl space-y-3 animate-fade-up-4">
+                  <div className="flex items-start justify-between">
+                    <div className="w-9 h-9 rounded-xl bg-warning/10 flex items-center justify-center">
+                      <CreditCard className="w-4 h-4 text-warning" />
+                    </div>
+                    <span className="text-xs text-muted-foreground font-medium bg-white/5 px-2 py-0.5 rounded-full">Planos</span>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-black tabular-nums text-foreground">{paidCount}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Subscritores activos</p>
+                  </div>
+                  <div className="pt-1 border-t border-white/5 flex gap-3 text-xs">
+                    <span className="text-info">{stats.monthly} mensal</span>
+                    <span className="text-muted-foreground">·</span>
+                    <span className="text-success">{stats.yearly} anual</span>
+                  </div>
+                </div>
+
               </div>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3 justify-end mt-6">
-              <button
-                onClick={() => {
-                  setShowPasswordModal(null);
-                  setNewPassword('');
-                }}
-                className="px-4 py-2 rounded-lg border border-border hover:bg-card transition-colors w-full sm:w-auto"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => handleChangePassword(showPasswordModal.userId)}
-                disabled={isSaving || !newPassword || newPassword.length < 6}
-                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 w-full sm:w-auto"
-              >
-                <Key className="w-4 h-4" />
-                {isSaving ? 'A alterar...' : 'Alterar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-card rounded-lg p-4 sm:p-6 max-w-md w-full border border-border my-4 sm:my-8">
-            <div className="flex items-center gap-3 mb-4">
-              <AlertTriangle className="w-6 h-6 text-red-500" />
-              <h3 className="text-xl font-bold">{t('admin.modals.deleteConfirm')}</h3>
-            </div>
-            <p className="text-muted-foreground mb-4">
-              {t('admin.modals.deleteWarning')} <strong>{showDeleteModal.name}</strong>?
-            </p>
-            <p className="text-sm text-muted-foreground mb-4">
-              {t('admin.modals.deleteInstruction')}
-            </p>
-            <input
-              type="text"
-              value={deleteConfirmText}
-              onChange={(e) => setDeleteConfirmText(e.target.value)}
-              placeholder={t('admin.modals.typeEliminar')}
-              className="w-full px-3 py-2 bg-background border border-border rounded-lg mb-4"
-            />
-            <div className="flex flex-col sm:flex-row gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setShowDeleteModal(null);
-                  setDeleteConfirmText('');
-                }}
-                className="px-4 py-2 rounded-lg border border-border hover:bg-card transition-colors w-full sm:w-auto"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmDelete}
-                disabled={isSaving || deleteConfirmText.toLowerCase() !== 'eliminar'}
-                className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 w-full sm:w-auto"
-              >
-                <Trash2 className="w-4 h-4" />
-                {isSaving ? 'A eliminar...' : 'Eliminar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              {/* Revenue chart */}
+              <div className="card-glass rounded-2xl p-5 md:p-6">
+                <div className="flex items-start justify-between mb-5">
+                  <div>
+                    <h2 className="text-base font-bold text-foreground">Receita da Plataforma</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">Receita estimada por mês · {selectedYear}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-white/5 px-2 py-1 rounded-lg">
+                    <Activity className="w-3 h-3" />
+                    <span>MRR estimado</span>
+                  </div>
+                </div>
+
+                {chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={240}>
+                    <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="adminRevGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="hsl(258 90% 66%)" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="hsl(258 90% 66%)" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 30% 16%)" vertical={false} />
+                      <XAxis dataKey="month" tick={{ fill: 'hsl(215 20% 55%)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: 'hsl(215 20% 55%)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `€${v}`} />
+                      <Tooltip content={<ChartTooltip />} />
+                      <Area
+                        type="monotone"
+                        dataKey="revenue"
+                        stroke="hsl(258 90% 66%)"
+                        strokeWidth={2}
+                        fill="url(#adminRevGrad)"
+                        dot={false}
+                        activeDot={{ r: 4, fill: 'hsl(258 90% 66%)', strokeWidth: 0 }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-60 flex items-center justify-center text-sm text-muted-foreground">
+                    Sem dados para {selectedYear}
+                  </div>
+                )}
+              </div>
+
+              {/* Mini stats row */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="card-glass rounded-xl p-4 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center">
+                    <BarChart2 className="w-4 h-4 text-warning" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Trials activos</p>
+                    <p className="text-lg font-black text-foreground">{stats.trial}</p>
+                  </div>
+                </div>
+                <div className="card-glass rounded-xl p-4 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-info/10 flex items-center justify-center">
+                    <CreditCard className="w-4 h-4 text-info" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Plano mensal</p>
+                    <p className="text-lg font-black text-foreground">{stats.monthly} <span className="text-xs text-muted-foreground font-normal">× €29</span></p>
+                  </div>
+                </div>
+                <div className="card-glass rounded-xl p-4 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 text-success" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Plano anual</p>
+                    <p className="text-lg font-black text-foreground">{stats.yearly} <span className="text-xs text-muted-foreground font-normal">× €290</span></p>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ── Clientes Tab ──────────────────────────────────────────────── */}
+          {activeTab === 'clientes' && (
+            selectedRestaurantId ? (
+              <RestaurantDetailPanel
+                restaurantId={selectedRestaurantId}
+                onBack={() => { setSelectedRestaurantId(null); loadData(); }}
+              />
+            ) : (
+              <div className="space-y-4">
+                {/* Filters */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      type="text"
+                      placeholder="Pesquisar restaurante, email..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="input-field pl-9 w-full"
+                    />
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    {(['all', 'TRIAL', 'MONTHLY', 'YEARLY'] as const).map((f) => {
+                      const labels: Record<string, string> = { all: 'Todos', TRIAL: 'Trial', MONTHLY: 'Mensal', YEARLY: 'Anual' };
+                      return (
+                        <button
+                          key={f}
+                          onClick={() => setPlanFilter(f)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            planFilter === f
+                              ? 'bg-primary text-white shadow-glow-sm'
+                              : 'bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground'
+                          }`}
+                        >
+                          {labels[f]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Bulk actions */}
+                {selectedIds.size > 0 && (
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/20">
+                    <span className="text-xs font-medium text-foreground">{selectedIds.size} selecionado{selectedIds.size > 1 ? 's' : ''}</span>
+                    <select value={bulkAction} onChange={e => setBulkAction(e.target.value)} className="input-field !py-1.5 !text-xs w-auto">
+                      <option value="">Ação em massa...</option>
+                      <option value="TRIAL">Mudar para Trial</option>
+                      <option value="MONTHLY">Mudar para Mensal</option>
+                      <option value="YEARLY">Mudar para Anual</option>
+                      <option value="EXTEND_TRIAL_30">Estender trial +30 dias</option>
+                    </select>
+                    <button onClick={handleBulkAction} disabled={!bulkAction || bulkSaving} className="cta-button !py-1.5 !px-3 text-xs disabled:opacity-40">
+                      {bulkSaving ? 'A aplicar...' : 'Aplicar'}
+                    </button>
+                    <button onClick={() => setSelectedIds(new Set())} className="text-xs text-muted-foreground hover:text-foreground">Limpar</button>
+                  </div>
+                )}
+
+                {/* Table */}
+                <div className="card-glass rounded-2xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-white/5">
+                          <th className="py-3 px-3 w-8">
+                            <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={toggleAll} className="rounded border-white/20" />
+                          </th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Restaurante</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Proprietário</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground hidden md:table-cell">Email</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Plano</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground hidden lg:table-cell">Registado</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground hidden lg:table-cell">Trial até</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map((r) => {
+                          const owner = r.memberships.find((m) => m.role === 'OWNER')?.user;
+                          return (
+                            <tr key={r.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors cursor-pointer group">
+                              <td className="py-3 px-3" onClick={e => e.stopPropagation()}>
+                                <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded border-white/20" />
+                              </td>
+                              <td className="py-3 px-4" onClick={() => setSelectedRestaurantId(r.id)}>
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+                                    <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                                  </div>
+                                  <span className="font-medium text-foreground truncate max-w-[140px]">{r.name}</span>
+                                  <ChevronRight className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                              </td>
+                              <td className="py-3 px-4 text-muted-foreground" onClick={() => setSelectedRestaurantId(r.id)}>{owner?.name || '—'}</td>
+                              <td className="py-3 px-4 text-muted-foreground hidden md:table-cell" onClick={() => setSelectedRestaurantId(r.id)}>{owner?.email || '—'}</td>
+                              <td className="py-3 px-4" onClick={() => setSelectedRestaurantId(r.id)}><PlanBadge plan={r.plan} /></td>
+                              <td className="py-3 px-4 text-muted-foreground hidden lg:table-cell text-xs" onClick={() => setSelectedRestaurantId(r.id)}>
+                                {r.createdAt ? new Date(r.createdAt).toLocaleDateString('pt-PT') : '—'}
+                              </td>
+                              <td className="py-3 px-4 text-muted-foreground hidden lg:table-cell text-xs" onClick={() => setSelectedRestaurantId(r.id)}>
+                                {r.trialEndsAt ? new Date(r.trialEndsAt).toLocaleDateString('pt-PT') : '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+
+                    {filtered.length === 0 && (
+                      <div className="py-16 text-center">
+                        <Building2 className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
+                        <p className="text-sm text-muted-foreground">
+                          {search || planFilter !== 'all' ? 'Nenhum resultado encontrado.' : 'Sem clientes registados.'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {filtered.length > 0 && (
+                    <div className="px-4 py-3 border-t border-white/5 text-xs text-muted-foreground">
+                      {filtered.length} {filtered.length === 1 ? 'resultado' : 'resultados'}
+                      {(search || planFilter !== 'all') && ` de ${clients.length} total`}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          )}
+
+          {/* ── Users Tab ──────────────────────────────────────────────────── */}
+          {activeTab === 'users' && <UserManagementPanel />}
+
+          {/* ── Activity Tab ───────────────────────────────────────────────── */}
+          {activeTab === 'activity' && <ActivityLogPanel />}
+
+        </main>
+      </div>
     </div>
   );
 }

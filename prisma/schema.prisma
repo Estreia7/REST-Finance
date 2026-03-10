@@ -38,13 +38,44 @@ model Restaurant {
   adminAccessEnabled Boolean   @default(false) @map("admin_access_enabled")
   createdAt          DateTime  @default(now()) @map("created_at")
 
+  // Stripe billing fields
+  stripeCustomerId     String?   @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?   @unique @map("stripe_subscription_id")
+  subscriptionStatus   String?   @map("subscription_status") // active | trialing | past_due | canceled | unpaid
+  currentPeriodEnd     DateTime? @map("current_period_end")
+  cancelAtPeriodEnd    Boolean   @default(false) @map("cancel_at_period_end")
+
+  // Onboarding
+  onboardingCompleted Boolean @default(false) @map("onboarding_completed")
+  monthlyRevenueTarget Decimal? @map("monthly_revenue_target")
+
+  // Settings
+  timezone String @default("Europe/Lisbon")
+  currency String @default("EUR")
+
   memberships    Membership[]
   categories     Category[]
   dailySummaries DailySummary[]
   costEntries    CostEntry[]
   auditLogs      AuditLog[]
+  stripeEvents   StripeEvent[]
+  notifications  Notification[]
+  exportLogs     ExportLog[]
+  receiptScans   ReceiptScan[]
 
   @@map("restaurants")
+}
+
+model StripeEvent {
+  id           String     @id
+  type         String
+  processed    Boolean    @default(false)
+  data         Json
+  restaurantId String?    @map("restaurant_id")
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@map("stripe_events")
 }
 
 model User {
@@ -53,10 +84,14 @@ model User {
   name      String?
   createdAt DateTime @default(now()) @map("created_at")
 
+  notificationPrefs Json? @map("notification_prefs")
+
   memberships      Membership[]
   createdSummaries DailySummary[] @relation("SummaryCreatedBy")
   createdCosts     CostEntry[]    @relation("CostCreatedBy")
   auditLogs        AuditLog[]     @relation("AuditActor")
+  notifications    Notification[]
+  receiptScans     ReceiptScan[]
 
   @@map("users")
 }
@@ -69,9 +104,10 @@ model Membership {
   user   User   @relation(fields: [userId], references: [id])
   userId String @map("user_id")
 
-  role      MembershipRole @default(STAFF)
-  active    Boolean        @default(true)
-  createdAt DateTime       @default(now()) @map("created_at")
+  role        MembershipRole @default(STAFF)
+  active      Boolean        @default(true)
+  permissions String[]       @default(["view"])
+  createdAt   DateTime       @default(now()) @map("created_at")
 
   @@unique([restaurantId, userId])
   @@map("memberships")
@@ -146,4 +182,64 @@ model AuditLog {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("audit_logs")
+}
+
+enum NotificationType {
+  ANNOUNCEMENT
+  ALERT
+  SYSTEM
+}
+
+enum ScanType {
+  COST_RECEIPT
+  DAILY_REPORT
+}
+
+enum ScanStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+model Notification {
+  id           String           @id @default(uuid())
+  restaurant   Restaurant?      @relation(fields: [restaurantId], references: [id])
+  restaurantId String?          @map("restaurant_id")
+  user         User             @relation(fields: [userId], references: [id])
+  userId       String           @map("user_id")
+  title        String
+  message      String
+  type         NotificationType @default(SYSTEM)
+  read         Boolean          @default(false)
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  @@map("notifications")
+}
+
+model ExportLog {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+  userId       String     @map("user_id")
+  type         String
+  resource     String
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@map("export_logs")
+}
+
+model ReceiptScan {
+  id            String     @id @default(uuid())
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId  String     @map("restaurant_id")
+  user          User       @relation(fields: [userId], references: [id])
+  userId        String     @map("user_id")
+  imageUrl      String     @map("image_url")
+  scanType      ScanType   @map("scan_type")
+  extractedData Json?      @map("extracted_data")
+  status        ScanStatus @default(PENDING)
+  linkedEntryId String?    @map("linked_entry_id")
+  createdAt     DateTime   @default(now()) @map("created_at")
+
+  @@map("receipt_scans")
 }

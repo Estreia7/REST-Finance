@@ -1,895 +1,460 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import {
-  getRestaurant,
-  getStaff,
-  addStaff,
-  createDailySummary,
-  createCostEntry,
-  getCategories,
-  getDashboardStats,
-  getCurrentUser,
+  getRestaurant, getStaff, addStaff, createDailySummary, createCostEntry,
+  getCategories, getDashboardStats, getCurrentUser, getLast7DaysRevenue,
+  getMonthlyRevenueBreakdown, getCategoryPerformance, getAdvancedDashboardStats,
 } from './actions';
+import RevenueHistoryPanel from './components/RevenueHistoryPanel';
+import CostHistoryPanel from './components/CostHistoryPanel';
+import ReceiptScanner from './components/ReceiptScanner';
+import PnLPanel from './components/PnLPanel';
+import ComparativePanel from './components/ComparativePanel';
+import TicketAnalysisPanel from './components/TicketAnalysisPanel';
+import GoalsPanel from './components/GoalsPanel';
+import MonthlyReportPanel from './components/MonthlyReportPanel';
 import { checkEmailConfirmation, resendConfirmationEmail } from '@/app/login/actions';
+import { trialDaysLeft } from '@/lib/billing-utils';
 import { useLanguage } from '@/lib/language-context';
-import LanguageSelector from '@/app/components/LanguageSelector';
-import {
-  LayoutDashboard,
-  Users,
-  DollarSign,
-  Receipt,
-  LogOut,
-  Menu,
-  X,
-  Plus,
-  Save,
-  X as XIcon,
-  Building2,
-  TrendingUp,
-  TrendingDown,
-  AlertCircle,
-} from 'lucide-react';
-// Keep these in sync with the Prisma enums in schema.prisma
+
+// Components
+import Sidebar          from './components/Sidebar';
+import TopBar           from './components/TopBar';
+import MobileBottomNav  from './components/MobileBottomNav';
+import EmailBanner      from './components/EmailBanner';
+import KPICards         from './components/KPICards';
+import RevenueChart     from './components/RevenueChart';
+import ChannelSplitChart from './components/ChannelSplitChart';
+import CategoryTable    from './components/CategoryTable';
+import QuickEntryPanel  from './components/QuickEntryPanel';
+import StaffPanel       from './components/StaffPanel';
+import BillingPanel     from './components/BillingPanel';
+import SettingsPanel    from './components/SettingsPanel';
+import TrialBanner      from '@/app/components/TrialBanner';
+
+// ─── Types ─────────────────────────────────────────────────────────────────
 type CostType = 'COGS' | 'OPEX';
-type CategoryType = 'REVENUE' | 'COGS' | 'OPEX';
-
 type CostTypeOrEmpty = CostType | '';
-
-type Tab = 'dashboard' | 'revenue' | 'costs' | 'users';
+type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'users' | 'billing' | 'settings';
 
 interface Category {
   id: string;
   name: string;
-  type: CategoryType;
+  type: 'REVENUE' | 'COGS' | 'OPEX';
 }
 
 interface StaffMember {
   id: string;
-  user: {
-    id: string;
-    email: string;
-    name: string | null;
-  };
+  user: { id: string; email: string; name: string | null };
 }
 
-export default function DashboardPage() {
-  const router = useRouter();
-  const { t } = useLanguage();
-  const [user, setUser] = useState<any>(null);
-  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string | null } | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+// ─── Page ──────────────────────────────────────────────────────────────────
+function DashboardPageInner() {
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const { t }        = useLanguage();
+
+  // ── Auth
+  const [user, setUser]             = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isLoading, setIsLoading]   = useState(true);
+
+  // ── UI state
+  const [activeTab, setActiveTab]       = useState<Tab>('dashboard');
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [emailConfirmed, setEmailConfirmed] = useState<boolean | null>(null);
   const [isResendingEmail, setIsResendingEmail] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [restaurant, setRestaurant] = useState<any>(null);
-  const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [stats, setStats] = useState({
-    revenue: 0,
-    costs: 0,
-    profit: 0,
-    profitMargin: 0,
-    staffCount: 0,
-  });
 
-  // Revenue form
+  // ── Data
+  const [restaurant, setRestaurant]       = useState<any>(null);
+  const [staff, setStaff]                 = useState<StaffMember[]>([]);
+  const [categories, setCategories]       = useState<Category[]>([]);
+  const [stats, setStats]                 = useState({ revenue: 0, costs: 0, profit: 0, profitMargin: 0, staffCount: 0 });
+  const [advancedStats, setAdvancedStats] = useState({
+    totalRevenue: 0, revenueChange: 0,
+    primeCostPercent: 0, primeCostTrend: [] as number[],
+    netIncome: 0, netIncomePercent: 0,
+    cogsPercent: 0, cogsPercentChange: 0,
+    labor: 0, cogs: 0, monthlyGoal: 0,
+  });
+  const [last7DaysData, setLast7DaysData]       = useState<Array<{ date: string; revenue: number }>>([]);
+  const [monthlyBreakdown, setMonthlyBreakdown] = useState<Array<{ month: string; food: number; drinks: number; other: number; total: number }>>([]);
+  const [categoryPerformance, setCategoryPerformance] = useState<Array<{ name: string; monthlyRevenue: number; contributionPercent: number; trend: number[] }>>([]);
+
+  // ── Theme
+  const [theme, setTheme]                     = useState<'light' | 'dark'>('dark');
+  const [pendingTheme, setPendingTheme]         = useState<'light' | 'dark'>('dark');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // ── Forms
   const [revenueForm, setRevenueForm] = useState({
     date: new Date().toISOString().split('T')[0],
-    dineInRevenue: '',
-    takeawayRevenue: '',
-    dineInTickets: '',
-    takeawayTickets: '',
-    notes: '',
+    dineInRevenue: '', takeawayRevenue: '', dineInTickets: '', takeawayTickets: '', notes: '',
   });
-
-  // Cost form
   const [costForm, setCostForm] = useState<{
-    date: string;
-    type: CostTypeOrEmpty;
-    categoryId: string;
-    amount: string;
-    description: string;
+    date: string; type: CostTypeOrEmpty; categoryId: string; amount: string; description: string;
   }>({
-    date: new Date().toISOString().split('T')[0],
-    type: '',
-    categoryId: '',
-    amount: '',
-    description: '',
+    date: new Date().toISOString().split('T')[0], type: '', categoryId: '', amount: '', description: '',
   });
-
-  // Staff form
   const [staffEmail, setStaffEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // ── Sub-views for revenue/costs/analytics
+  const [revenueSubView, setRevenueSubView] = useState<'entry' | 'history' | 'scan'>('entry');
+  const [costSubView, setCostSubView] = useState<'entry' | 'history' | 'scan'>('entry');
+  const [analyticsSubView, setAnalyticsSubView] = useState<'pnl' | 'compare' | 'tickets' | 'goals' | 'report'>('pnl');
+
+  // ── Load all data ────────────────────────────────────────────────────────
+  const loadData = useCallback(async () => {
+    try {
+      const [
+        restaurantData, staffData, statsData, userData,
+        last7Data, breakdownData, categoryData, advancedData,
+      ] = await Promise.all([
+        getRestaurant(),
+        getStaff(),
+        getDashboardStats(),
+        getCurrentUser(),
+        getLast7DaysRevenue(),
+        getMonthlyRevenueBreakdown(),
+        getCategoryPerformance(),
+        getAdvancedDashboardStats(),
+      ]);
+
+      if (restaurantData && 'data' in restaurantData) setRestaurant(restaurantData.data);
+      if (staffData && 'data' in staffData)           setStaff(staffData.data as unknown as StaffMember[]);
+      if (statsData && 'data' in statsData)           setStats(statsData.data as any);
+      if (userData && 'data' in userData)             setCurrentUser(userData.data);
+      if (last7Data && 'data' in last7Data)           setLast7DaysData(last7Data.data as any);
+      if (breakdownData && 'data' in breakdownData)   setMonthlyBreakdown(breakdownData.data as any);
+      if (categoryData && 'data' in categoryData)     setCategoryPerformance(categoryData.data as any);
+      if (advancedData && 'data' in advancedData)     setAdvancedStats(advancedData.data as any);
+    } catch (err) {
+      console.error('loadData error:', err);
+    }
+  }, []);
+
+  const loadCategories = useCallback(async () => {
+    const result = await getCategories();
+    if (result && 'data' in result) setCategories(result.data as unknown as Category[]);
+  }, []);
+
+  // ── Auth check ───────────────────────────────────────────────────────────
   useEffect(() => {
+    const supabase = createClient();
+
     const checkUser = async () => {
-      const supabase = createClient();
-      const { data: { user }, error } = await supabase.auth.getUser();
-
-      if (error || !user) {
-        router.push('/login');
-        return;
-      }
-
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push('/'); return; }
       setUser(user);
-      
-      // Load current user info
-      const userInfo = await getCurrentUser();
-      if (userInfo.success && userInfo.data) {
-        setCurrentUser(userInfo.data);
-      }
-      
-      // Check email confirmation status
-      const emailCheck = await checkEmailConfirmation();
-      setEmailConfirmed(emailCheck.isConfirmed);
-      
-      await loadData();
+
+      const emailStatus = await checkEmailConfirmation();
+      setEmailConfirmed(emailStatus.isConfirmed);
+
+      await Promise.all([loadData(), loadCategories()]);
       setIsLoading(false);
     };
 
     checkUser();
-  }, [router]);
+  }, [router, loadData, loadCategories]);
 
-  const handleResendConfirmation = async () => {
-    setIsResendingEmail(true);
-    const result = await resendConfirmationEmail();
-    if (result.success) {
-      alert(t('emailConfirmation.sent'));
-    } else {
-      alert(result.error || 'Erro ao reenviar email de confirmação');
-    }
-    setIsResendingEmail(false);
-  };
-
+  // ── Handle URL params (e.g. ?tab=billing from Stripe redirect) ───────────
   useEffect(() => {
-    if (restaurant && activeTab === 'costs') {
-      // Load all categories initially, then filter by type
-      loadCategories();
+    const tab = searchParams.get('tab') as Tab | null;
+    if (tab && ['dashboard','revenue','costs','analytics','users','billing','settings'].includes(tab)) {
+      setActiveTab(tab);
     }
-  }, [activeTab, restaurant]);
+    const upgrade = searchParams.get('upgrade');
+    if (upgrade === 'success') toast.success('Subscrição activada com sucesso!');
+    if (upgrade === 'canceled') toast.info('Processo de upgrade cancelado.');
+  }, [searchParams]);
 
-  const loadData = async () => {
-    const [restaurantResult, staffResult, statsResult] = await Promise.all([
-      getRestaurant(),
-      getStaff(),
-      getDashboardStats(),
-    ]);
+  // ── Apply theme ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'dark') root.classList.add('dark'); else root.classList.remove('dark');
+    root.style.colorScheme = theme;
+  }, [theme]);
 
-    if (restaurantResult.success && restaurantResult.data) {
-      setRestaurant(restaurantResult.data);
-    }
-
-    if (staffResult.success && staffResult.data) {
-      setStaff(staffResult.data);
-    }
-
-    if (statsResult.success && statsResult.data) {
-      setStats(statsResult.data);
-    }
-  };
-
-  const loadCategories = async () => {
-    // Load all categories (will be filtered by type in the component)
-    const result = await getCategories();
-    if (result.success && result.data) {
-      setCategories(result.data);
-    }
-  };
-
+  // ── Handlers ─────────────────────────────────────────────────────────────
   const handleLogout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push('/login');
-    router.refresh();
+    router.push('/');
+  };
+
+  const handleTabChange = (tab: Tab) => {
+    if (hasUnsavedChanges && activeTab === 'settings') {
+      if (!confirm('Tens alterações por guardar. Queres mesmo sair?')) return;
+      setPendingTheme(theme);
+      setHasUnsavedChanges(false);
+    }
+    setActiveTab(tab);
   };
 
   const handleSubmitRevenue = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-
-    // Refresh session before making server action call
-    try {
-      const supabase = createClient();
-      await supabase.auth.getSession();
-    } catch (error) {
-      console.error('Error refreshing session:', error);
-    }
-
     const result = await createDailySummary({
-      date: new Date(revenueForm.date),
-      dineInRevenue: parseFloat(revenueForm.dineInRevenue) || 0,
+      date:           new Date(revenueForm.date),
+      dineInRevenue:  parseFloat(revenueForm.dineInRevenue)  || 0,
       takeawayRevenue: parseFloat(revenueForm.takeawayRevenue) || 0,
-      dineInTickets: parseInt(revenueForm.dineInTickets) || 0,
-      takeawayTickets: parseInt(revenueForm.takeawayTickets) || 0,
-      notes: revenueForm.notes || undefined,
+      dineInTickets:  parseInt(revenueForm.dineInTickets)    || 0,
+      takeawayTickets: parseInt(revenueForm.takeawayTickets)  || 0,
+      notes: revenueForm.notes,
     });
-
     if (result.success) {
-      alert('Receita registada com sucesso!');
-      setRevenueForm({
-        date: new Date().toISOString().split('T')[0],
-        dineInRevenue: '',
-        takeawayRevenue: '',
-        dineInTickets: '',
-        takeawayTickets: '',
-        notes: '',
-      });
+      toast.success(t('owner.notifications.revenueRegistered'));
+      setRevenueForm({ date: new Date().toISOString().split('T')[0], dineInRevenue: '', takeawayRevenue: '', dineInTickets: '', takeawayTickets: '', notes: '' });
       await loadData();
     } else {
-      const errorMessage = result.error || 'Erro ao registar receita';
-      alert(errorMessage);
-      
-      // Redirect to login if session expired
-      if ((result as any).requiresAuth) {
-        router.push('/login');
-      }
+      toast.error(result.error || t('owner.notifications.errorRegisteringRevenue'));
     }
-
     setIsSubmitting(false);
   };
 
   const handleSubmitCost = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!costForm.type) {
-      alert(t('owner.notifications.selectCostType'));
-      return;
-    }
-
-    if (!costForm.categoryId) {
-      alert(t('owner.notifications.selectCategory'));
-      return;
-    }
-
     setIsSubmitting(true);
-
     const result = await createCostEntry({
-      date: new Date(costForm.date),
-      type: costForm.type as CostType,
-      categoryId: costForm.categoryId || undefined,
-      amount: parseFloat(costForm.amount) || 0,
-      description: costForm.description || undefined,
+      date:        new Date(costForm.date),
+      type:        costForm.type as CostType,
+      categoryId:  costForm.categoryId || undefined,
+      amount:      parseFloat(costForm.amount) || 0,
+      description: costForm.description,
     });
-
     if (result.success) {
-      alert(t('owner.notifications.costRegistered'));
-      setCostForm({
-        date: new Date().toISOString().split('T')[0],
-        type: '',
-        categoryId: '',
-        amount: '',
-        description: '',
-      });
+      toast.success(t('owner.notifications.costRegistered'));
+      setCostForm({ date: new Date().toISOString().split('T')[0], type: '', categoryId: '', amount: '', description: '' });
       await loadData();
     } else {
-      alert(result.error || t('owner.notifications.errorRegisteringCost'));
+      toast.error(result.error || t('owner.notifications.errorRegisteringCost'));
     }
-
     setIsSubmitting(false);
   };
 
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-
     const result = await addStaff(staffEmail);
     if (result.success) {
-      alert(t('owner.notifications.staffAdded'));
+      toast.success(t('owner.notifications.staffAdded'));
       setStaffEmail('');
       await loadData();
     } else {
-      alert(result.error || t('owner.notifications.errorAddingStaff'));
+      toast.error(result.error || t('owner.notifications.errorAddingStaff'));
     }
-
     setIsSubmitting(false);
   };
 
-  const cogsCategories = categories.filter((c) => c.type === 'COGS');
-  const opexCategories = categories.filter((c) => c.type === 'OPEX');
-  const filteredCategories = costForm.type === 'COGS' ? cogsCategories : costForm.type === 'OPEX' ? opexCategories : [];
+  const handleThemeChange = (t: 'light' | 'dark') => {
+    setPendingTheme(t);
+    setHasUnsavedChanges(t !== theme);
+  };
 
+  const handleSaveTheme = () => {
+    setTheme(pendingTheme);
+    setHasUnsavedChanges(false);
+    toast.success('Tema guardado.');
+  };
+
+  const handleResendEmail = async () => {
+    setIsResendingEmail(true);
+    const result = await resendConfirmationEmail();
+    if (result.success) toast.success('Email de confirmação enviado!');
+    else toast.error(result.error || 'Erro ao enviar email.');
+    setIsResendingEmail(false);
+  };
+
+  const daysLeft = trialDaysLeft(restaurant?.trialEndsAt ?? null);
+
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <main className="flex-1 flex items-center justify-center min-h-screen">
-        <div className="text-center space-y-4">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="text-muted-foreground">{t('common.loading')}</p>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl gradient-bg flex items-center justify-center shadow-glow animate-pulse-slow">
+            <span className="text-white font-black text-lg">R</span>
+          </div>
+          <div className="text-sm text-muted-foreground">A carregar...</div>
         </div>
-      </main>
+      </div>
     );
   }
 
+  // ── Layout ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
-      {/* Mobile Top Navbar */}
-      <nav className="md:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 text-muted-foreground hover:text-foreground"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
-            <h2 className="text-lg font-bold truncate">{restaurant?.name || t('owner.title')}</h2>
-          </div>
-          {currentUser && (
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                <span className="text-primary font-semibold text-xs">
-                  {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : currentUser.email.charAt(0).toUpperCase()}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-        {isSidebarOpen && (
-          <div className="border-t border-border bg-card">
-            <div className="px-4 py-2 space-y-1">
-              <button
-                onClick={() => {
-                  setActiveTab('dashboard');
-                  setIsSidebarOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${
-                  activeTab === 'dashboard'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-card hover:text-foreground'
-                }`}
-              >
-                <LayoutDashboard className="w-4 h-4" />
-                <span className="text-sm">{t('owner.dashboard')}</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('revenue');
-                  setIsSidebarOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${
-                  activeTab === 'revenue'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-card hover:text-foreground'
-                }`}
-              >
-                <DollarSign className="w-4 h-4" />
-                <span className="text-sm">{t('owner.revenue')}</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('costs');
-                  setIsSidebarOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${
-                  activeTab === 'costs'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-card hover:text-foreground'
-                }`}
-              >
-                <Receipt className="w-4 h-4" />
-                <span className="text-sm">{t('owner.costs')}</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('users');
-                  setIsSidebarOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${
-                  activeTab === 'users'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-card hover:text-foreground'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                <span className="text-sm">{t('owner.users')}</span>
-              </button>
-              <div className="pt-2 border-t border-border mt-2">
-                <div className="px-3 py-2">
-                  <LanguageSelector />
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-card hover:text-foreground transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span className="text-sm">{t('navbar.logout')}</span>
-                </button>
-              </div>
-            </div>
-          </div>
+    <div className="min-h-screen bg-background">
+      {/* Sidebar */}
+      <Sidebar
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        restaurant={restaurant}
+        currentUser={currentUser}
+        plan={restaurant?.plan ?? 'TRIAL'}
+        daysLeft={daysLeft}
+        onLogout={handleLogout}
+        isOpen={isSidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
+
+      {/* Main */}
+      <div className="md:ml-60 flex flex-col min-h-screen pb-20 md:pb-0">
+        {/* Top bar */}
+        <TopBar
+          activeTab={activeTab}
+          restaurant={restaurant}
+          onMenuClick={() => setSidebarOpen(true)}
+        />
+
+        {/* Trial banner */}
+        {restaurant?.plan === 'TRIAL' && daysLeft <= 7 && (
+          <TrialBanner daysLeft={daysLeft} onUpgrade={() => handleTabChange('billing')} />
         )}
-      </nav>
 
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex fixed left-0 top-0 h-screen w-64 bg-card border-r border-border z-50">
-        <div className="p-6 h-full flex flex-col w-full">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-xl font-bold">{restaurant?.name || t('owner.title')}</h2>
-          </div>
+        {/* Email confirmation banner */}
+        {emailConfirmed === false && (
+          <EmailBanner onResend={handleResendEmail} isResending={isResendingEmail} />
+        )}
 
-          <nav className="flex-1 flex flex-col items-center justify-center space-y-3">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${
-                activeTab === 'dashboard'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-card hover:text-foreground'
-              }`}
-            >
-              <LayoutDashboard className="w-5 h-5" />
-              <span>{t('owner.dashboard')}</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('revenue')}
-              className={`w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${
-                activeTab === 'revenue'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-card hover:text-foreground'
-              }`}
-            >
-              <DollarSign className="w-5 h-5" />
-              <span>{t('owner.revenue')}</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('costs')}
-              className={`w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${
-                activeTab === 'costs'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-card hover:text-foreground'
-              }`}
-            >
-              <Receipt className="w-5 h-5" />
-              <span>{t('owner.costs')}</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('users')}
-              className={`w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${
-                activeTab === 'users'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-card hover:text-foreground'
-              }`}
-            >
-              <Users className="w-5 h-5" />
-              <span>{t('owner.users')}</span>
-            </button>
-          </nav>
-
-          <div className="pt-8 border-t border-border mt-auto space-y-4">
-            {/* Current User Info */}
-            {currentUser && (
-              <div className="px-4 py-3 rounded-lg bg-card/50 border border-border/50">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                    <span className="text-primary font-semibold text-sm">
-                      {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : currentUser.email.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">
-                      {currentUser.name || 'Utilizador'}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {currentUser.email}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            <button
-              onClick={handleLogout}
-              className="flex items-center justify-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-card hover:text-foreground transition-colors w-full"
-            >
-              <LogOut className="w-5 h-5" />
-              <span>Sair</span>
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className={`flex-1 transition-all duration-300 md:ml-64 pt-16 md:pt-0`}>
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 md:py-8 max-w-full">
-          {/* Email Confirmation Banner */}
-          {emailConfirmed === false && (
-            <div className="mb-6 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="font-semibold text-amber-600 dark:text-amber-400 mb-1">
-                  {t('emailConfirmation.title')}
-                </h3>
-                <p className="text-sm text-amber-600/80 dark:text-amber-400/80 mb-3">
-                  {t('emailConfirmation.message')}
-                </p>
-                <button
-                  onClick={handleResendConfirmation}
-                  disabled={isResendingEmail}
-                  className="text-sm px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isResendingEmail ? t('emailConfirmation.resending') : t('emailConfirmation.resend')}
-                </button>
-              </div>
-            </div>
-          )}
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 sm:mb-8 gap-4">
-            <div className="flex-1">
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold">
-                {activeTab === 'dashboard' && t('owner.title')}
-                {activeTab === 'revenue' && t('owner.registerRevenue')}
-                {activeTab === 'costs' && t('owner.registerCost')}
-                {activeTab === 'users' && t('owner.manageUsers')}
-              </h1>
-            </div>
-          </div>
-
-          {/* Dashboard Tab */}
+        {/* Content */}
+        <main className="flex-1 p-4 md:p-6 space-y-6">
           {activeTab === 'dashboard' && (
-            <div className="space-y-6 sm:space-y-8">
-              {/* Stats Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-                <div className="card p-4 sm:p-6 space-y-4">
-                  <div className="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center">
-                    <DollarSign className="w-6 h-6 text-primary" />
-                  </div>
-                  <h3 className="text-lg font-semibold">{t('owner.stats.revenue')}</h3>
-                  <p className="text-3xl font-bold">€{stats.revenue.toFixed(2)}</p>
-                  <p className="text-sm text-muted-foreground">{t('owner.stats.thisMonth')}</p>
+            <>
+              <KPICards stats={stats} advancedStats={advancedStats} last7DaysData={last7DaysData} />
+              <div className="grid lg:grid-cols-3 gap-5">
+                <div className="lg:col-span-2">
+                  <RevenueChart data={monthlyBreakdown} />
                 </div>
-
-                <div className="card p-4 sm:p-6 space-y-4">
-                  <div className="w-12 h-12 rounded-lg bg-danger/20 flex items-center justify-center">
-                    <Receipt className="w-6 h-6 text-danger" />
-                  </div>
-                  <h3 className="text-lg font-semibold">{t('owner.stats.costs')}</h3>
-                  <p className="text-3xl font-bold">€{stats.costs.toFixed(2)}</p>
-                  <p className="text-sm text-muted-foreground">{t('owner.stats.thisMonth')}</p>
-                </div>
-
-                <div className="card p-4 sm:p-6 space-y-4">
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                    stats.profit >= 0 ? 'bg-success/20' : 'bg-danger/20'
-                  }`}>
-                    {stats.profit >= 0 ? (
-                      <TrendingUp className="w-6 h-6 text-success" />
-                    ) : (
-                      <TrendingDown className="w-6 h-6 text-danger" />
-                    )}
-                  </div>
-                  <h3 className="text-lg font-semibold">{t('owner.stats.profit')}</h3>
-                  <p className="text-3xl font-bold">€{stats.profit.toFixed(2)}</p>
-                  <p className="text-sm text-muted-foreground">{t('owner.stats.thisMonth')}</p>
-                </div>
-
-                <div className="card p-4 sm:p-6 space-y-4">
-                  <div className="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center">
-                    <Users className="w-6 h-6 text-primary" />
-                  </div>
-                  <h3 className="text-lg font-semibold">{t('owner.stats.staff')}</h3>
-                  <p className="text-3xl font-bold">{stats.staffCount}</p>
-                  <p className="text-sm text-muted-foreground">{t('owner.stats.members')}</p>
-                </div>
+                <ChannelSplitChart stats={stats} advancedStats={advancedStats} />
               </div>
-
-              {/* Profit Margin */}
-              <div className="card p-4 sm:p-6">
-                <h2 className="text-xl sm:text-2xl font-bold mb-4">{t('owner.stats.profitMargin')}</h2>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">{t('owner.stats.margin')}</span>
-                    <span className={`text-2xl font-bold ${
-                      stats.profitMargin >= 0 ? 'text-success' : 'text-danger'
-                    }`}>
-                      {stats.profitMargin.toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-card rounded-full h-4">
-                    <div
-                      className={`h-4 rounded-full transition-all ${
-                        stats.profitMargin >= 0 ? 'bg-success' : 'bg-danger'
-                      }`}
-                      style={{ width: `${Math.min(Math.abs(stats.profitMargin), 100)}%` }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            </div>
+              <CategoryTable data={categoryPerformance} />
+            </>
           )}
 
-          {/* Revenue Tab */}
           {activeTab === 'revenue' && (
-            <div className="max-w-2xl">
-              <div className="card p-4 sm:p-6">
-                <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">{t('owner.registerRevenue')}</h2>
-                <form onSubmit={handleSubmitRevenue} className="space-y-4 sm:space-y-6">
-                  <div>
-                    <label className="block text-sm font-semibold mb-2">{t('owner.revenueForm.date')}</label>
-                    <input
-                      type="date"
-                      value={revenueForm.date}
-                      onChange={(e) => setRevenueForm({ ...revenueForm, date: e.target.value })}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-background border border-border rounded-lg"
-                      required
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">{t('owner.revenueForm.dineInRevenue')}</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={revenueForm.dineInRevenue}
-                        onChange={(e) => setRevenueForm({ ...revenueForm, dineInRevenue: e.target.value })}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-background border border-border rounded-lg"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">{t('owner.revenueForm.takeawayRevenue')}</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={revenueForm.takeawayRevenue}
-                        onChange={(e) => setRevenueForm({ ...revenueForm, takeawayRevenue: e.target.value })}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-background border border-border rounded-lg"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">{t('owner.revenueForm.dineInTickets')}</label>
-                      <input
-                        type="number"
-                        value={revenueForm.dineInTickets}
-                        onChange={(e) => setRevenueForm({ ...revenueForm, dineInTickets: e.target.value })}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-background border border-border rounded-lg"
-                        placeholder="0"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">{t('owner.revenueForm.takeawayTickets')}</label>
-                      <input
-                        type="number"
-                        value={revenueForm.takeawayTickets}
-                        onChange={(e) => setRevenueForm({ ...revenueForm, takeawayTickets: e.target.value })}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-background border border-border rounded-lg"
-                        placeholder="0"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold mb-2">{t('owner.revenueForm.notes')}</label>
-                    <textarea
-                      value={revenueForm.notes}
-                      onChange={(e) => setRevenueForm({ ...revenueForm, notes: e.target.value })}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-background border border-border rounded-lg"
-                      rows={3}
-                      placeholder={t('owner.revenueForm.notesPlaceholder')}
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full cta-button flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin"></div>
-                        <span>{t('owner.revenueForm.registering')}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-5 h-5" />
-                        <span>{t('owner.revenueForm.register')}</span>
-                      </>
-                    )}
-                  </button>
-                </form>
+            <>
+              <div className="flex gap-1 p-1 bg-white/[0.03] rounded-xl w-fit border border-white/5">
+                <button onClick={() => setRevenueSubView('entry')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'entry' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Registar</button>
+                <button onClick={() => setRevenueSubView('scan')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'scan' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Digitalizar</button>
+                <button onClick={() => setRevenueSubView('history')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'history' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Historial</button>
               </div>
-            </div>
-          )}
-
-          {/* Costs Tab */}
-          {activeTab === 'costs' && (
-            <div className="max-w-2xl">
-              <div className="card p-4 sm:p-6">
-                <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">{t('owner.registerCost')}</h2>
-                <form onSubmit={handleSubmitCost} className="space-y-4 sm:space-y-6">
-                  <div>
-                    <label className="block text-sm font-semibold mb-2">{t('owner.costForm.date')}</label>
-                    <input
-                      type="date"
-                      value={costForm.date}
-                      onChange={(e) => setCostForm({ ...costForm, date: e.target.value })}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-background border border-border rounded-lg"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold mb-2">{t('owner.costForm.costType')}</label>
-                    <select
-                      value={costForm.type}
-                      onChange={(e) => {
-                        const newType = e.target.value as CostType;
-                        setCostForm({ ...costForm, type: newType, categoryId: '' });
-                        // Categories are already loaded and will be filtered by type
-                      }}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-background border border-border rounded-lg"
-                      required
-                    >
-                      <option value="">{t('owner.costForm.selectType')}</option>
-                      <option value="COGS">{t('owner.costForm.cogs')}</option>
-                      <option value="OPEX">{t('owner.costForm.opex')}</option>
-                    </select>
-                  </div>
-
-                  {costForm.type && (
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">{t('owner.costForm.category')}</label>
-                      <select
-                        value={costForm.categoryId}
-                        onChange={(e) => setCostForm({ ...costForm, categoryId: e.target.value })}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-background border border-border rounded-lg"
-                        required
-                      >
-                        <option value="">{t('owner.costForm.selectCategory')}</option>
-                        {filteredCategories.length > 0 ? (
-                          filteredCategories.map((category) => (
-                            <option key={category.id} value={category.id}>
-                              {category.name}
-                            </option>
-                          ))
-                        ) : (
-                          <option value="" disabled>
-                            {costForm.type ? `${t('owner.costForm.loadingCategories')} ${costForm.type === 'COGS' ? 'COGS' : 'OPEX'}...` : t('owner.costForm.selectType')}
-                          </option>
-                        )}
-                      </select>
-                      {filteredCategories.length === 0 && costForm.type && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {t('common.loading')}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-semibold mb-2">{t('owner.costForm.amount')}</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={costForm.amount}
-                      onChange={(e) => setCostForm({ ...costForm, amount: e.target.value })}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-background border border-border rounded-lg"
-                      placeholder="0.00"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold mb-2">{t('owner.costForm.description')}</label>
-                    <textarea
-                      value={costForm.description}
-                      onChange={(e) => setCostForm({ ...costForm, description: e.target.value })}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-background border border-border rounded-lg"
-                      rows={3}
-                      placeholder={t('owner.costForm.descriptionPlaceholder')}
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full cta-button flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin"></div>
-                        <span>{t('owner.costForm.registering')}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-5 h-5" />
-                        <span>{t('owner.costForm.register')}</span>
-                      </>
-                    )}
-                  </button>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* Users Tab */}
-          {activeTab === 'users' && (
-            <div className="space-y-6 sm:space-y-8">
-              <div className="card p-4 sm:p-6">
-                <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">Adicionar Staff</h2>
-                <form onSubmit={handleAddStaff} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold mb-2">Email do Utilizador</label>
-                    <div className="flex gap-3">
-                      <input
-                        type="email"
-                        value={staffEmail}
-                        onChange={(e) => setStaffEmail(e.target.value)}
-                        className="flex-1 px-3 sm:px-4 py-2 sm:py-3 bg-background border border-border rounded-lg"
-                        placeholder="utilizador@email.com"
-                        required
-                      />
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="px-4 sm:px-6 py-2 sm:py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
-                      >
-                        {isSubmitting ? (
-                          <>
-                            <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin"></div>
-                            <span>A adicionar...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="w-5 h-5" />
-                            <span>Adicionar</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      {t('owner.notifications.userMustBeRegistered')}
-                    </p>
-                  </div>
-                </form>
-              </div>
-
-              <div className="card p-4 sm:p-6">
-                <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">{t('owner.stats.staff')}</h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-3 px-4 font-semibold">{t('admin.table.name')}</th>
-                        <th className="text-left py-3 px-4 font-semibold">{t('admin.table.email')}</th>
-                        <th className="text-left py-3 px-4 font-semibold">{t('admin.table.role')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {staff.map((member) => (
-                        <tr key={member.id} className="border-b border-border/50 hover:bg-card/50">
-                          <td className="py-3 px-4 font-medium">
-                            {member.user.name || 'N/A'}
-                          </td>
-                          <td className="py-3 px-4 text-muted-foreground">
-                            {member.user.email}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className="px-3 py-1 rounded-full text-sm font-medium bg-primary/20 text-primary">
-                              Staff
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {staff.length === 0 && (
-                    <div className="text-center py-12 text-muted-foreground">
-                      Nenhum membro da equipa adicionado ainda
-                    </div>
-                  )}
+              {revenueSubView === 'entry' && (
+                <QuickEntryPanel
+                  activeTab="revenue"
+                  revenueForm={revenueForm}
+                  costForm={costForm}
+                  categories={categories}
+                  isSubmitting={isSubmitting}
+                  onRevenueChange={setRevenueForm}
+                  onCostChange={setCostForm}
+                  onSubmitRevenue={handleSubmitRevenue}
+                  onSubmitCost={handleSubmitCost}
+                />
+              )}
+              {revenueSubView === 'scan' && (
+                <div className="max-w-2xl">
+                  <ReceiptScanner onSaved={loadData} />
                 </div>
-              </div>
-            </div>
+              )}
+              {revenueSubView === 'history' && (
+                <RevenueHistoryPanel onDataChange={loadData} />
+              )}
+            </>
           )}
-        </div>
-      </main>
+
+          {activeTab === 'costs' && (
+            <>
+              <div className="flex gap-1 p-1 bg-white/[0.03] rounded-xl w-fit border border-white/5">
+                <button onClick={() => setCostSubView('entry')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${costSubView === 'entry' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Registar</button>
+                <button onClick={() => setCostSubView('scan')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${costSubView === 'scan' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Digitalizar</button>
+                <button onClick={() => setCostSubView('history')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${costSubView === 'history' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Historial</button>
+              </div>
+              {costSubView === 'entry' && (
+                <QuickEntryPanel
+                  activeTab="costs"
+                  revenueForm={revenueForm}
+                  costForm={costForm}
+                  categories={categories}
+                  isSubmitting={isSubmitting}
+                  onRevenueChange={setRevenueForm}
+                  onCostChange={setCostForm}
+                  onSubmitRevenue={handleSubmitRevenue}
+                  onSubmitCost={handleSubmitCost}
+                />
+              )}
+              {costSubView === 'scan' && (
+                <div className="max-w-2xl">
+                  <ReceiptScanner onSaved={loadData} />
+                </div>
+              )}
+              {costSubView === 'history' && (
+                <CostHistoryPanel onDataChange={loadData} />
+              )}
+            </>
+          )}
+
+          {activeTab === 'analytics' && (
+            <>
+              <div className="flex gap-1 p-1 bg-white/[0.03] rounded-xl w-fit border border-white/5">
+                <button onClick={() => setAnalyticsSubView('pnl')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'pnl' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>P&L</button>
+                <button onClick={() => setAnalyticsSubView('compare')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'compare' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Comparação</button>
+                <button onClick={() => setAnalyticsSubView('tickets')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'tickets' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Tickets</button>
+                <button onClick={() => setAnalyticsSubView('goals')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'goals' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Metas</button>
+                <button onClick={() => setAnalyticsSubView('report')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'report' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Relatório</button>
+              </div>
+              {analyticsSubView === 'pnl' && <PnLPanel />}
+              {analyticsSubView === 'compare' && <ComparativePanel />}
+              {analyticsSubView === 'tickets' && <TicketAnalysisPanel />}
+              {analyticsSubView === 'goals' && <GoalsPanel restaurant={restaurant} stats={stats} onUpdate={loadData} />}
+              {analyticsSubView === 'report' && <MonthlyReportPanel />}
+            </>
+          )}
+
+          {activeTab === 'users' && (
+            <StaffPanel
+              staff={staff}
+              staffEmail={staffEmail}
+              isSubmitting={isSubmitting}
+              onEmailChange={setStaffEmail}
+              onAddStaff={handleAddStaff}
+              onDataChange={loadData}
+            />
+          )}
+
+          {activeTab === 'billing' && (
+            <BillingPanel restaurant={restaurant} />
+          )}
+
+          {activeTab === 'settings' && (
+            <SettingsPanel
+              pendingTheme={pendingTheme}
+              hasUnsavedChanges={hasUnsavedChanges}
+              onThemeChange={handleThemeChange}
+              onSaveTheme={handleSaveTheme}
+              onCancelTheme={() => { setPendingTheme(theme); setHasUnsavedChanges(false); }}
+              currentUser={currentUser}
+              restaurant={restaurant}
+              onUpdate={loadData}
+            />
+          )}
+        </main>
+      </div>
+
+      {/* Mobile bottom nav */}
+      <MobileBottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense>
+      <DashboardPageInner />
+    </Suspense>
   );
 }

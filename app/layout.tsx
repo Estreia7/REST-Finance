@@ -2,10 +2,11 @@ import type { ReactNode } from 'react';
 import './globals.css';
 import ConditionalNavbar from './components/ConditionalNavbar';
 import { LanguageProvider } from '@/lib/language-context';
+import { Toaster } from 'sonner';
 
 export const metadata = {
-  title: 'REST Finance – Gerencie KPIs em 2 Minutos por Dia | Sem Planilhas',
-  description: 'Pare de perder tempo com planilhas. Gerencie receita, custos e lucro em tempo real, sem internet. Feito para restaurantes que não têm tempo a perder. Teste grátis por 14 dias.'
+  title: 'REST Finance – KPIs para o teu Restaurante em 2 Minutos por Dia',
+  description: 'Controla receitas, custos e lucro em tempo real. Sem Excel, sem confusão. Feito para proprietários de restaurantes portugueses. Trial gratuito de 14 dias.'
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -18,6 +19,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             {children}
           </div>
         </LanguageProvider>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            style: {
+              background: 'hsl(222 40% 9%)',
+              border: '1px solid hsl(222 30% 16%)',
+              color: 'hsl(210 40% 96%)',
+            },
+          }}
+        />
       </body>
     </html>
   );

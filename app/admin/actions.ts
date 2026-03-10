@@ -525,7 +525,7 @@ export async function createAccount(data: {
       data: {
         name: data.restaurantName,
         plan: data.plan,
-        trialEndsAt: data.trialEndsAt || (data.plan === 'TRIAL' ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : null),
+        trialEndsAt: data.trialEndsAt || (data.plan === 'TRIAL' ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null),
       },
     });
 
@@ -695,6 +695,190 @@ export async function changeUserPassword(userId: string, newPassword: string) {
   } catch (error: any) {
     console.error('Error changing password:', error);
     return { error: error.message || 'Failed to change password' };
+  }
+}
+
+// ─── Restaurant Detail Actions ────────────────────────────────────────────
+
+async function verifyAdmin() {
+  const supabase = await createClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return null;
+
+  const record = await prisma.user.findUnique({
+    where: { id: user.id },
+    include: { memberships: { where: { role: 'PLATFORM_ADMIN', active: true } } },
+  });
+  if (!record || record.memberships.length === 0) return null;
+  return user;
+}
+
+export async function getRestaurantDetail(restaurantId: string) {
+  try {
+    if (!await verifyAdmin()) return { error: 'Unauthorized' };
+
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: restaurantId },
+      include: {
+        memberships: { include: { user: { select: { id: true, email: true, name: true } } } },
+        _count: { select: { dailySummaries: true, costEntries: true } },
+      },
+    });
+    if (!restaurant) return { error: 'Not found' };
+
+    // Get current month stats
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    const [rev, costs] = await Promise.all([
+      prisma.dailySummary.aggregate({
+        where: { restaurantId, date: { gte: startOfMonth, lte: endOfMonth } },
+        _sum: { revenueTotal: true },
+      }),
+      prisma.costEntry.aggregate({
+        where: { restaurantId, date: { gte: startOfMonth, lte: endOfMonth } },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    return {
+      success: true,
+      data: {
+        ...restaurant,
+        currentMonthRevenue: Number(rev._sum.revenueTotal || 0),
+        currentMonthCosts: Number(costs._sum.amount || 0),
+      },
+    };
+  } catch (error: any) {
+    return { error: error.message || 'Failed' };
+  }
+}
+
+export async function getRestaurantRevenue(restaurantId: string, dateFrom: Date, dateTo: Date) {
+  try {
+    if (!await verifyAdmin()) return { error: 'Unauthorized' };
+
+    const entries = await prisma.dailySummary.findMany({
+      where: { restaurantId, date: { gte: dateFrom, lte: dateTo } },
+      orderBy: { date: 'desc' },
+    });
+
+    return {
+      success: true,
+      data: entries.map(e => ({
+        id: e.id, date: e.date,
+        dineInRevenue: Number(e.dineInRevenue),
+        takeawayRevenue: Number(e.takeawayRevenue),
+        revenueTotal: Number(e.revenueTotal),
+        dineInTickets: e.dineInTickets,
+        takeawayTickets: e.takeawayTickets,
+      })),
+    };
+  } catch (error: any) {
+    return { error: error.message || 'Failed' };
+  }
+}
+
+export async function getRestaurantCosts(restaurantId: string, dateFrom: Date, dateTo: Date) {
+  try {
+    if (!await verifyAdmin()) return { error: 'Unauthorized' };
+
+    const entries = await prisma.costEntry.findMany({
+      where: { restaurantId, date: { gte: dateFrom, lte: dateTo } },
+      orderBy: { date: 'desc' },
+      include: { category: { select: { name: true } } },
+    });
+
+    return {
+      success: true,
+      data: entries.map(e => ({
+        id: e.id, date: e.date, type: e.type,
+        categoryName: e.category?.name || '—',
+        amount: Number(e.amount),
+        description: e.description,
+      })),
+    };
+  } catch (error: any) {
+    return { error: error.message || 'Failed' };
+  }
+}
+
+export async function adminUpdateEntry(type: 'revenue' | 'cost', id: string, data: Record<string, any>) {
+  try {
+    if (!await verifyAdmin()) return { error: 'Unauthorized' };
+
+    if (type === 'revenue') {
+      const dineIn = data.dineInRevenue ?? 0;
+      const takeaway = data.takeawayRevenue ?? 0;
+      await prisma.dailySummary.update({
+        where: { id },
+        data: { dineInRevenue: dineIn, takeawayRevenue: takeaway, revenueTotal: dineIn + takeaway },
+      });
+    } else {
+      await prisma.costEntry.update({
+        where: { id },
+        data: { amount: data.amount, description: data.description },
+      });
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message || 'Failed' };
+  }
+}
+
+export async function adminDeleteEntry(type: 'revenue' | 'cost', id: string) {
+  try {
+    if (!await verifyAdmin()) return { error: 'Unauthorized' };
+
+    if (type === 'revenue') {
+      await prisma.dailySummary.delete({ where: { id } });
+    } else {
+      await prisma.costEntry.delete({ where: { id } });
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message || 'Failed' };
+  }
+}
+
+export async function getAuditLogs(filters?: { restaurantId?: string; limit?: number }) {
+  try {
+    if (!await verifyAdmin()) return { error: 'Unauthorized' };
+
+    const logs = await prisma.auditLog.findMany({
+      where: filters?.restaurantId ? { restaurantId: filters.restaurantId } : {},
+      orderBy: { createdAt: 'desc' },
+      take: filters?.limit || 50,
+      include: {
+        actor: { select: { name: true, email: true } },
+        restaurant: { select: { name: true } },
+      },
+    });
+
+    return { success: true, data: logs };
+  } catch (error: any) {
+    return { error: error.message || 'Failed' };
+  }
+}
+
+export async function bulkUpdateRestaurants(ids: string[], data: { plan?: Plan; trialEndsAt?: Date }) {
+  try {
+    if (!await verifyAdmin()) return { error: 'Unauthorized' };
+
+    await prisma.restaurant.updateMany({
+      where: { id: { in: ids } },
+      data: {
+        ...(data.plan && { plan: data.plan }),
+        ...(data.trialEndsAt && { trialEndsAt: data.trialEndsAt }),
+      },
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message || 'Failed' };
   }
 }
 
