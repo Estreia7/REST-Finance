@@ -195,7 +195,7 @@ export default function Navbar() {
 
           {/* Mobile burger */}
           <button
-            className="md:hidden p-2 -mr-1 text-muted-foreground hover:text-foreground transition-colors"
+            className="md:hidden p-2 -mr-1 text-muted-foreground hover:text-foreground transition-colors relative z-50"
             onClick={() => isMobileMenuOpen ? closeMobileMenu() : openMobileMenu()}
             aria-label="Toggle menu"
           >

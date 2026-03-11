@@ -1,7 +1,6 @@
 'use client';
 
-import { LayoutDashboard, TrendingUp, DollarSign, Users, CreditCard, Settings, LogOut, X, Crown, ChevronRight, BarChart3 } from 'lucide-react';
-import { useLanguage } from '@/lib/language-context';
+import { LayoutDashboard, TrendingUp, DollarSign, Users, CreditCard, Settings, LogOut, X, BarChart3 } from 'lucide-react';
 
 type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'users' | 'billing' | 'settings';
 
@@ -30,8 +29,7 @@ const NAV_MANAGE = [
   { id: 'settings' as Tab, icon: Settings,   label: 'Configurações' },
 ] as const;
 
-function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, plan, daysLeft, onLogout, onClose }: Omit<SidebarProps, 'isOpen'>) {
-  const { t } = useLanguage();
+function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLogout, onClose }: Omit<SidebarProps, 'isOpen'>) {
 
   const NavItem = ({ id, icon: Icon, label }: { id: Tab; icon: any; label: string }) => (
     <button
@@ -73,25 +71,6 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, plan,
           </div>
         </div>
       </nav>
-
-      {/* Upgrade box — only on trial */}
-      {plan === 'TRIAL' && (
-        <div className="mx-3 mb-3 p-4 rounded-xl gradient-bg shadow-glow-sm shimmer">
-          <div className="flex items-center gap-2 mb-2">
-            <Crown className="w-4 h-4 text-white/90" />
-            <span className="text-xs font-bold text-white">Upgrade para Standard</span>
-          </div>
-          <p className="text-[11px] text-white/70 mb-3 leading-relaxed">
-            {daysLeft !== undefined ? `${daysLeft} dia${daysLeft !== 1 ? 's' : ''} de trial restante${daysLeft !== 1 ? 's' : ''}` : 'Trial activo'}
-          </p>
-          <button
-            onClick={() => { onTabChange('billing'); onClose(); }}
-            className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-lg transition-all"
-          >
-            Ver planos <ChevronRight className="w-3 h-3" />
-          </button>
-        </div>
-      )}
 
       {/* User card */}
       <div className="p-3 border-t border-white/5 shrink-0">
