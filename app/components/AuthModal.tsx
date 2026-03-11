@@ -400,7 +400,7 @@ export default function AuthModal({ open, onOpenChange, defaultTab = 'login' }: 
                      transition-all duration-300 ease-out max-h-[90vh] overflow-y-auto no-scrollbar"
           style={{
             opacity: animating ? 1 : 0,
-            transform: animating ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.97)',
+            transform: animating ? 'scale(1)' : 'scale(0.95)',
           }}
           onClick={e => e.stopPropagation()}
         >
