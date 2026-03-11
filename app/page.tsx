@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import AuthModal from './components/AuthModal';
 import LanguageSelector from './components/LanguageSelector';
+import Tooltip from './components/Tooltip';
 
 // ─── Animated counter hook ─────────────────────────────────────────────────
 function useCountUp(target: number, duration = 1800) {
@@ -559,7 +560,7 @@ function LandingPageInner() {
           <p className="text-lg md:text-xl text-muted-foreground max-w-xl mx-auto mb-10 animate-fade-in-up leading-relaxed" style={{ animationDelay: '100ms' }}>
             O painel financeiro que todo o dono de restaurante precisa.
             <br className="hidden md:block" />
-            Prime Cost, COGS, margem líquida. Sem Excel. Sem confusão.
+            <Tooltip text="Custo de comida + pessoal em % da receita">Prime Cost</Tooltip>, <Tooltip text="Cost of Goods Sold — custo das matérias-primas">COGS</Tooltip>, <Tooltip text="Lucro real após todos os custos">margem líquida</Tooltip>. Sem Excel. Sem confusão.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up" style={{ animationDelay: '200ms' }}>

@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, X, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Eye, EyeOff, X, Loader2, AlertCircle, CheckCircle2, UtensilsCrossed } from 'lucide-react';
 import { loginWithPassword, checkUserRole } from '@/app/login/actions';
 import { registerUser } from '@/app/register/actions';
 import { useLanguage } from '@/lib/language-context';
@@ -18,7 +17,7 @@ interface AuthModalProps {
 
 // ─── Login Form ────────────────────────────────────────────────────────────
 function LoginForm({ onSwitchTab }: { onSwitchTab: () => void }) {
-  const { t } = useLanguage();
+  useLanguage();
   const router = useRouter();
 
   const [email, setEmail]       = useState('');
@@ -42,7 +41,6 @@ function LoginForm({ onSwitchTab }: { onSwitchTab: () => void }) {
         return;
       }
 
-      // Email not confirmed — auto-confirmed on server, ask user to retry
       if (result.error === 'EMAIL_CONFIRMED_RETRY') {
         const retry = await loginWithPassword(email, password);
         if (retry.success) {
@@ -64,7 +62,7 @@ function LoginForm({ onSwitchTab }: { onSwitchTab: () => void }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-danger/10 border border-danger/20 text-sm text-red-400">
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-danger/10 border border-danger/20 text-sm text-red-400 animate-auth-shake">
           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
@@ -177,7 +175,6 @@ function RegisterForm({ onSwitchTab }: { onSwitchTab: () => void }) {
       }
 
       setSuccess(true);
-      // Auto-login after short delay
       setTimeout(async () => {
         const loginResult = await loginWithPassword(form.email, form.password);
         if (loginResult.success || loginResult.error === 'EMAIL_CONFIRMED_RETRY') {
@@ -217,7 +214,7 @@ function RegisterForm({ onSwitchTab }: { onSwitchTab: () => void }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-danger/10 border border-danger/20 text-sm text-red-400">
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-danger/10 border border-danger/20 text-sm text-red-400 animate-auth-shake">
           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
@@ -328,48 +325,117 @@ function RegisterForm({ onSwitchTab }: { onSwitchTab: () => void }) {
   );
 }
 
-// ─── Main Modal ────────────────────────────────────────────────────────────
+// ─── Main Modal (custom implementation for smooth animations) ──────────────
 export default function AuthModal({ open, onOpenChange, defaultTab = 'login' }: AuthModalProps) {
   const [tab, setTab] = useState<AuthTab>(defaultTab);
+  const [visible, setVisible] = useState(false);
+  const [animating, setAnimating] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
-  // Sync tab when defaultTab prop changes (e.g., opened from different buttons)
-  const handleOpenChange = (isOpen: boolean) => {
-    if (isOpen) setTab(defaultTab);
-    onOpenChange(isOpen);
+  // Sync tab when defaultTab prop changes
+  useEffect(() => {
+    if (open) setTab(defaultTab);
+  }, [open, defaultTab]);
+
+  // Handle open/close with smooth transitions
+  useEffect(() => {
+    if (open) {
+      setVisible(true);
+      // Small delay to allow DOM to render before triggering animation
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setAnimating(true));
+      });
+    } else {
+      setAnimating(false);
+      const timer = setTimeout(() => setVisible(false), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
+
+  const handleClose = () => {
+    onOpenChange(false);
   };
 
+  // Close on overlay click
+  const handleOverlayClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) handleClose();
+  };
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [open]);
+
+  // Prevent body scroll when open
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
+
+  if (!visible) return null;
+
   return (
-    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md data-[state=open]:animate-fade-in" />
-        <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2
-                     bg-card border border-white/10 rounded-2xl shadow-modal p-8
-                     data-[state=open]:animate-fade-in-up outline-none"
-          aria-describedby={undefined}
+    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
+      {/* Overlay */}
+      <div
+        className="absolute inset-0 bg-black/70 backdrop-blur-md transition-opacity duration-300 ease-out"
+        style={{ opacity: animating ? 1 : 0 }}
+        onClick={handleOverlayClick}
+      />
+
+      {/* Content */}
+      <div className="absolute inset-0 flex items-center justify-center p-4" onClick={handleOverlayClick}>
+        <div
+          ref={contentRef}
+          className="relative w-full max-w-md bg-card border border-white/10 rounded-2xl shadow-modal p-6 sm:p-8 outline-none
+                     transition-all duration-300 ease-out max-h-[90vh] overflow-y-auto no-scrollbar"
+          style={{
+            opacity: animating ? 1 : 0,
+            transform: animating ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.97)',
+          }}
+          onClick={e => e.stopPropagation()}
         >
           {/* Close button */}
-          <Dialog.Close className="absolute right-4 top-4 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-all">
+          <button
+            onClick={handleClose}
+            className="absolute right-3 top-3 sm:right-4 sm:top-4 p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-all z-10"
+            aria-label="Fechar"
+          >
             <X className="w-4 h-4" />
-          </Dialog.Close>
+          </button>
 
           {/* Logo mark */}
           <div className="flex items-center gap-2.5 mb-6">
             <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center shadow-glow-sm">
-              <span className="text-white font-black text-sm">R</span>
+              <UtensilsCrossed className="w-4 h-4 text-white" />
             </div>
             <span className="font-bold text-foreground">REST Finance</span>
           </div>
 
           {/* Tab switcher */}
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-muted mb-6">
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-muted mb-6 relative">
+            {/* Sliding indicator */}
+            <div
+              className="absolute top-1 bottom-1 rounded-lg bg-card shadow-sm transition-all duration-300 ease-out"
+              style={{
+                left: tab === 'login' ? '4px' : '50%',
+                width: 'calc(50% - 4px)',
+              }}
+            />
             <button
               type="button"
               onClick={() => setTab('login')}
-              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-150 ${
-                tab === 'login'
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors duration-200 relative z-10 ${
+                tab === 'login' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               Entrar
@@ -377,28 +443,24 @@ export default function AuthModal({ open, onOpenChange, defaultTab = 'login' }: 
             <button
               type="button"
               onClick={() => setTab('register')}
-              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-150 ${
-                tab === 'register'
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors duration-200 relative z-10 ${
+                tab === 'register' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               Criar Conta
             </button>
           </div>
 
-          {/* Form */}
-          <Dialog.Title className="sr-only">
-            {tab === 'login' ? 'Entrar na tua conta' : 'Criar conta gratuita'}
-          </Dialog.Title>
-
-          {tab === 'login' ? (
-            <LoginForm onSwitchTab={() => setTab('register')} />
-          ) : (
-            <RegisterForm onSwitchTab={() => setTab('login')} />
-          )}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+          {/* Form with transition */}
+          <div className="transition-all duration-200 ease-out">
+            {tab === 'login' ? (
+              <LoginForm onSwitchTab={() => setTab('register')} />
+            ) : (
+              <RegisterForm onSwitchTab={() => setTab('login')} />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

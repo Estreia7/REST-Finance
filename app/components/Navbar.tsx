@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Menu, X, DollarSign, LogOut, LayoutDashboard, Moon, Sun, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Menu, X, LogOut, LayoutDashboard, Moon, Sun, ChevronRight, UtensilsCrossed } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -18,9 +18,11 @@ export default function Navbar() {
   const { t } = useLanguage();
   const [isScrolled, setIsScrolled]         = useState(false);
   const [isMobileMenuOpen, setMobileMenu]   = useState(false);
+  const [mobileAnimating, setMobileAnimating] = useState(false);
   const [user, setUser]                      = useState<any>(null);
   const [isLoading, setIsLoading]            = useState(true);
   const [theme, setTheme]                    = useState<'light' | 'dark'>('dark');
+  const menuRef = useRef<HTMLDivElement>(null);
 
   // Always dark on first render
   useEffect(() => {
@@ -61,6 +63,36 @@ export default function Navbar() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Smooth mobile menu open/close
+  const openMobileMenu = () => {
+    setMobileMenu(true);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setMobileAnimating(true));
+    });
+  };
+
+  const closeMobileMenu = () => {
+    setMobileAnimating(false);
+    setTimeout(() => setMobileMenu(false), 250);
+  };
+
+  // Close mobile menu on resize to desktop
+  useEffect(() => {
+    const handler = () => { if (window.innerWidth >= 768) closeMobileMenu(); };
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [isMobileMenuOpen]);
+
   const handleLogout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -84,14 +116,14 @@ export default function Navbar() {
       }`}
     >
       <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-16 md:h-18">
+        <div className="flex items-center justify-between h-14 sm:h-16 md:h-18">
 
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl gradient-bg flex items-center justify-center shadow-glow-sm group-hover:shadow-glow transition-all duration-300">
-              <DollarSign className="w-5 h-5 text-white" />
+          <Link href="/" className="flex items-center gap-2 sm:gap-2.5 group shrink-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl gradient-bg flex items-center justify-center shadow-glow-sm group-hover:shadow-glow transition-all duration-300">
+              <UtensilsCrossed className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
-            <span className="text-lg font-black tracking-tight gradient-text">
+            <span className="text-base sm:text-lg font-black tracking-tight gradient-text">
               REST Finance
             </span>
           </Link>
@@ -163,81 +195,127 @@ export default function Navbar() {
 
           {/* Mobile burger */}
           <button
-            className="md:hidden p-2 text-muted-foreground hover:text-foreground transition-colors"
-            onClick={() => setMobileMenu(v => !v)}
+            className="md:hidden p-2 -mr-1 text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => isMobileMenuOpen ? closeMobileMenu() : openMobileMenu()}
             aria-label="Toggle menu"
           >
-            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            <div className="relative w-5 h-5">
+              <Menu className={`w-5 h-5 absolute inset-0 transition-all duration-300 ${isMobileMenuOpen ? 'opacity-0 rotate-90 scale-50' : 'opacity-100 rotate-0 scale-100'}`} />
+              <X className={`w-5 h-5 absolute inset-0 transition-all duration-300 ${isMobileMenuOpen ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-50'}`} />
+            </div>
           </button>
         </div>
+      </div>
 
-        {/* Mobile menu */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden pb-5 border-t border-white/5 animate-fade-in">
-            <div className="flex flex-col gap-1 pt-3">
-              {navLinks.map(link => (
+      {/* Mobile menu - fullscreen overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="md:hidden fixed inset-0 top-0 z-40 transition-all duration-300 ease-out"
+          style={{ opacity: mobileAnimating ? 1 : 0 }}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-background/95 backdrop-blur-2xl" onClick={closeMobileMenu} />
+
+          {/* Content */}
+          <div
+            ref={menuRef}
+            className="relative flex flex-col h-full pt-14 sm:pt-16 transition-all duration-300 ease-out"
+            style={{
+              transform: mobileAnimating ? 'translateY(0)' : 'translateY(-10px)',
+            }}
+          >
+            <div className="flex-1 overflow-y-auto p-6 space-y-2">
+              {/* Nav links */}
+              {navLinks.map((link, i) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  onClick={() => setMobileMenu(false)}
-                  className="px-3 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 rounded-lg transition-all"
+                  onClick={closeMobileMenu}
+                  className="flex items-center justify-between px-4 py-3.5 text-base font-medium text-foreground hover:bg-white/5 rounded-xl transition-all"
+                  style={{
+                    opacity: mobileAnimating ? 1 : 0,
+                    transform: mobileAnimating ? 'translateX(0)' : 'translateX(-12px)',
+                    transition: `all 0.3s ${100 + i * 60}ms ease-out`,
+                  }}
                 >
                   {link.label}
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 </Link>
               ))}
 
-              <div className="pt-3 border-t border-white/5 mt-2 flex items-center justify-between px-3">
+              {/* Divider */}
+              <div className="border-t border-white/5 my-4" />
+
+              {/* Actions */}
+              <div
+                className="space-y-2"
+                style={{
+                  opacity: mobileAnimating ? 1 : 0,
+                  transform: mobileAnimating ? 'translateX(0)' : 'translateX(-12px)',
+                  transition: `all 0.3s 280ms ease-out`,
+                }}
+              >
+                {!isLoading && (
+                  <>
+                    {user ? (
+                      <>
+                        <Link
+                          href="/dashboard"
+                          onClick={closeMobileMenu}
+                          className="flex items-center gap-3 px-4 py-3.5 text-base font-medium text-foreground hover:bg-white/5 rounded-xl transition-all"
+                        >
+                          <LayoutDashboard className="w-5 h-5 text-primary" />
+                          {t('navbar.dashboard')}
+                        </Link>
+                        <button
+                          onClick={() => { handleLogout(); closeMobileMenu(); }}
+                          className="flex items-center gap-3 w-full px-4 py-3.5 text-base font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 rounded-xl transition-all"
+                        >
+                          <LogOut className="w-5 h-5" />
+                          {t('navbar.logout')}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => { openAuthModal('login'); closeMobileMenu(); }}
+                          className="flex items-center justify-center w-full px-4 py-3.5 text-base font-medium text-foreground border border-white/10 bg-white/[0.04] rounded-xl hover:bg-white/[0.08] transition-all"
+                        >
+                          {t('navbar.login')}
+                        </button>
+                        <button
+                          onClick={() => { openAuthModal('register'); closeMobileMenu(); }}
+                          className="cta-button w-full justify-center py-3.5 text-base"
+                        >
+                          {t('navbar.register')}
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Settings row */}
+              <div
+                className="flex items-center justify-between px-4 pt-4 border-t border-white/5 mt-4"
+                style={{
+                  opacity: mobileAnimating ? 1 : 0,
+                  transition: `opacity 0.3s 350ms ease-out`,
+                }}
+              >
                 <LanguageSelector />
                 <button
                   onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
-                  className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-all"
+                  className="p-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-all"
                 >
-                  {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+                  {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
                 </button>
               </div>
-
-              {!isLoading && (
-                <div className="flex flex-col gap-2 pt-3 border-t border-white/5 mt-1">
-                  {user ? (
-                    <>
-                      <Link
-                        href="/dashboard"
-                        onClick={() => setMobileMenu(false)}
-                        className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-foreground hover:bg-white/5 rounded-lg transition-all"
-                      >
-                        <LayoutDashboard className="w-4 h-4" />
-                        {t('navbar.dashboard')}
-                      </Link>
-                      <button
-                        onClick={() => { handleLogout(); setMobileMenu(false); }}
-                        className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 rounded-lg transition-all"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        {t('navbar.logout')}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => { openAuthModal('login'); setMobileMenu(false); }}
-                        className="w-full px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 rounded-lg transition-all text-left"
-                      >
-                        {t('navbar.login')}
-                      </button>
-                      <button
-                        onClick={() => { openAuthModal('register'); setMobileMenu(false); }}
-                        className="cta-button w-full justify-center"
-                      >
-                        {t('navbar.register')}
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </nav>
   );
 }

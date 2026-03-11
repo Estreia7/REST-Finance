@@ -15,6 +15,7 @@ import {
 import UserManagementPanel from './components/UserManagementPanel';
 import RestaurantDetailPanel from './components/RestaurantDetailPanel';
 import ActivityLogPanel from './components/ActivityLogPanel';
+import AdminMobileBottomNav from './components/MobileBottomNav';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line,
@@ -622,7 +623,13 @@ export default function AdminPage() {
           {activeTab === 'activity' && <ActivityLogPanel />}
 
         </main>
+
+        {/* Mobile bottom padding for nav */}
+        <div className="h-20 md:hidden" />
       </div>
+
+      {/* Mobile bottom nav */}
+      <AdminMobileBottomNav activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setSidebarOpen(false); }} />
     </div>
   );
 }
