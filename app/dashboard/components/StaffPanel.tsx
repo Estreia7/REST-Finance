@@ -132,6 +132,7 @@ export default function StaffPanel({ staff, staffEmail, isSubmitting, onEmailCha
                     onClick={() => handleRemove(member.id)}
                     disabled={removingId === member.id}
                     className="p-1.5 rounded-lg hover:bg-danger/10 text-muted-foreground hover:text-red-400 transition-colors"
+                    aria-label={`Remover ${member.user.name || member.user.email}`}
                   >
                     {removingId === member.id
                       ? <Loader2 className="w-3.5 h-3.5 animate-spin" />

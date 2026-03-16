@@ -2,21 +2,37 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Mail, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Mail, ArrowRight, ArrowLeft, AlertCircle } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     setIsLoading(true);
-    // TODO: Implementar lógica de recuperação de senha
-    setTimeout(() => {
-      setIsLoading(false);
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        setError('Erro ao enviar email. Tente novamente.');
+        return;
+      }
+
       setIsSubmitted(true);
-    }, 1000);
+    } catch {
+      setError('Erro inesperado. Tente novamente.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -46,6 +62,12 @@ export default function ForgotPasswordPage() {
         {!isSubmitted ? (
           <div className="card p-8 space-y-6">
             <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-danger/10 border border-danger/20 text-sm text-red-400">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
               {/* Email */}
               <div className="space-y-2">
                 <label htmlFor="email" className="text-sm font-semibold text-foreground">

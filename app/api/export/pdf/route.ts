@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
 
     // Revenue
     const revenues = await prisma.dailySummary.findMany({
-      where: { restaurantId: rid, date: { gte: startDate, lte: endDate } },
+      where: { restaurantId: rid, deletedAt: null, date: { gte: startDate, lte: endDate } },
     });
     const dineIn = revenues.reduce((s, r) => s + r.dineInRevenue.toNumber(), 0);
     const takeaway = revenues.reduce((s, r) => s + r.takeawayRevenue.toNumber(), 0);
@@ -152,7 +152,7 @@ export async function GET(request: NextRequest) {
 
     // Costs
     const costEntries = await prisma.costEntry.findMany({
-      where: { restaurantId: rid, date: { gte: startDate, lte: endDate } },
+      where: { restaurantId: rid, deletedAt: null, date: { gte: startDate, lte: endDate } },
       include: { category: true },
     });
 

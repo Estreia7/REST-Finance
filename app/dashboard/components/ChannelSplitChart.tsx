@@ -5,9 +5,8 @@ import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recha
 interface ChannelSplitChartProps {
   stats: {
     revenue: number;
-  };
-  advancedStats: {
-    totalRevenue: number;
+    dineInRevenue?: number;
+    takeawayRevenue?: number;
   };
 }
 
@@ -18,19 +17,18 @@ const CustomTooltip = ({ active, payload }: any) => {
   return (
     <div className="px-3 py-2 rounded-xl bg-card border border-white/10 shadow-modal text-xs">
       <span className="font-semibold text-foreground">{payload[0].name}: </span>
-      <span className="text-muted-foreground">€{Number(payload[0].value).toLocaleString('pt-PT', { minimumFractionDigits: 0 })}</span>
+      <span className="text-muted-foreground">€{Number(payload[0].value).toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</span>
     </div>
   );
 };
 
-export default function ChannelSplitChart({ stats, advancedStats }: ChannelSplitChartProps) {
-  // Estimate split — 70/30 as fallback when no granular data
-  const total = advancedStats.totalRevenue || stats.revenue;
-  const dineIn    = Math.round(total * 0.70);
-  const takeaway  = total - dineIn;
+export default function ChannelSplitChart({ stats }: ChannelSplitChartProps) {
+  const dineIn = stats.dineInRevenue ?? 0;
+  const takeaway = stats.takeawayRevenue ?? 0;
+  const total = dineIn + takeaway;
 
   const data = [
-    { name: 'Jantar', value: dineIn },
+    { name: 'Local', value: dineIn },
     { name: 'Take-away', value: takeaway },
   ].filter(d => d.value > 0);
 

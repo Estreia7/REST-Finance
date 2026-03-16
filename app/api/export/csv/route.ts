@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { prisma } from '@/lib/prisma';
 
+/** Sanitize a string for safe CSV output (prevent formula injection) */
+function sanitizeCsvCell(value: string): string {
+  let v = value.replace(/,/g, ';').replace(/\n/g, ' ').replace(/\r/g, '');
+  if (/^[=+\-@\t]/.test(v)) {
+    v = `'${v}`;
+  }
+  return v;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -27,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     if (type === 'revenue') {
       const entries = await prisma.dailySummary.findMany({
-        where: { restaurantId: rid, date: { gte: from, lte: to } },
+        where: { restaurantId: rid, deletedAt: null, date: { gte: from, lte: to } },
         orderBy: { date: 'asc' },
       });
       csv = 'Data,Receita Local,Receita Takeaway,Total,Tickets Local,Tickets Takeaway\n';
@@ -38,14 +47,31 @@ export async function GET(request: NextRequest) {
       });
     } else if (type === 'costs') {
       const entries = await prisma.costEntry.findMany({
-        where: { restaurantId: rid, date: { gte: from, lte: to } },
-        include: { category: true },
+        where: { restaurantId: rid, deletedAt: null, date: { gte: from, lte: to } },
+        include: { category: true, vendor: true },
         orderBy: { date: 'asc' },
       });
-      csv = 'Data,Tipo,Categoria,Descrição,Valor\n';
+      csv = 'Data,Tipo,Categoria,Fornecedor,Descrição,Valor\n';
       entries.forEach(e => {
-        const desc = (e.description || '').replace(/,/g, ';').replace(/\n/g, ' ');
-        csv += `${new Date(e.date).toLocaleDateString('pt-PT')},${e.type},${e.category?.name || ''},${desc},${e.amount.toNumber().toFixed(2)}\n`;
+        const desc = sanitizeCsvCell(e.description || '');
+        const catName = sanitizeCsvCell(e.category?.name || '');
+        const vendorName = sanitizeCsvCell(e.vendor?.name || '');
+        csv += `${new Date(e.date).toLocaleDateString('pt-PT')},${e.type},${catName},${vendorName},${desc},${e.amount.toNumber().toFixed(2)}\n`;
+      });
+    } else if (type === 'invoices') {
+      const items = await prisma.invoiceItem.findMany({
+        where: { restaurantId: rid, invoiceDate: { gte: from, lte: to } },
+        include: { vendor: true },
+        orderBy: { invoiceDate: 'asc' },
+      });
+      csv = 'Data,Fornecedor,NIF,Nº Fatura,Produto,Quantidade,Unidade,Preço Unit.,Total\n';
+      items.forEach(i => {
+        const date = i.invoiceDate ? new Date(i.invoiceDate).toLocaleDateString('pt-PT') : '';
+        const vendor = sanitizeCsvCell(i.vendor?.name || '');
+        const vendorNif = sanitizeCsvCell(i.vendor?.taxId || '');
+        const invNum = sanitizeCsvCell(i.invoiceNumber || '');
+        const product = sanitizeCsvCell(i.productName);
+        csv += `${date},${vendor},${vendorNif},${invNum},${product},${i.quantity.toNumber()},${i.unit || ''},${i.unitPrice.toNumber().toFixed(4)},${i.totalPrice.toNumber().toFixed(2)}\n`;
       });
     }
 

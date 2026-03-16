@@ -47,11 +47,12 @@ model Restaurant {
 
   // Onboarding
   onboardingCompleted Boolean @default(false) @map("onboarding_completed")
-  monthlyRevenueTarget Decimal? @map("monthly_revenue_target")
+  monthlyRevenueTarget Decimal? @map("monthly_revenue_target") @db.Decimal(12, 2)
 
   // Settings
   timezone String @default("Europe/Lisbon")
   currency String @default("EUR")
+  taxId    String? @map("tax_id") // NIF for accountant reports
 
   memberships    Membership[]
   categories     Category[]
@@ -62,6 +63,8 @@ model Restaurant {
   notifications  Notification[]
   exportLogs     ExportLog[]
   receiptScans   ReceiptScan[]
+  vendors        Vendor[]
+  invoiceItems   InvoiceItem[]
 
   @@map("restaurants")
 }
@@ -134,15 +137,18 @@ model DailySummary {
   restaurantId String     @map("restaurant_id")
 
   date            DateTime
-  dineInRevenue   Decimal  @default(0) @map("dine_in_revenue")
-  takeawayRevenue Decimal  @default(0) @map("takeaway_revenue")
-  revenueTotal    Decimal  @default(0) @map("revenue_total")
+  dineInRevenue   Decimal  @default(0) @map("dine_in_revenue") @db.Decimal(12, 2)
+  takeawayRevenue Decimal  @default(0) @map("takeaway_revenue") @db.Decimal(12, 2)
+  revenueTotal    Decimal  @default(0) @map("revenue_total") @db.Decimal(12, 2)
   dineInTickets   Int      @default(0) @map("dine_in_tickets")
   takeawayTickets Int      @default(0) @map("takeaway_tickets")
   notes           String?
 
   createdBy   User   @relation("SummaryCreatedBy", fields: [createdById], references: [id])
   createdById String @map("created_by")
+
+  updatedAt DateTime? @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   @@unique([restaurantId, date])
   @@map("daily_summaries")
@@ -159,13 +165,23 @@ model CostEntry {
   category   Category? @relation(fields: [categoryId], references: [id])
   categoryId String?   @map("category_id")
 
-  amount      Decimal
+  vendor   Vendor? @relation(fields: [vendorId], references: [id])
+  vendorId String? @map("vendor_id")
+
+  amount      Decimal  @db.Decimal(12, 2)
   description String?
 
   createdBy   User     @relation("CostCreatedBy", fields: [createdById], references: [id])
   createdById String   @map("created_by")
   createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime? @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
 
+  invoiceItems InvoiceItem[]
+  receiptScans ReceiptScan[]
+
+  @@index([restaurantId, date])
+  @@index([restaurantId, type, date])
   @@map("cost_entries")
 }
 
@@ -238,8 +254,62 @@ model ReceiptScan {
   scanType      ScanType   @map("scan_type")
   extractedData Json?      @map("extracted_data")
   status        ScanStatus @default(PENDING)
+
+  linkedEntry   CostEntry? @relation(fields: [linkedEntryId], references: [id])
   linkedEntryId String?    @map("linked_entry_id")
   createdAt     DateTime   @default(now()) @map("created_at")
 
+  invoiceItems InvoiceItem[]
+
   @@map("receipt_scans")
+}
+
+model Vendor {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  name    String
+  taxId   String?  @map("tax_id") // NIF
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  costEntries  CostEntry[]
+  invoiceItems InvoiceItem[]
+
+  @@unique([restaurantId, name])
+  @@map("vendors")
+}
+
+model InvoiceItem {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  costEntry   CostEntry? @relation(fields: [costEntryId], references: [id])
+  costEntryId String?    @map("cost_entry_id")
+
+  vendor   Vendor? @relation(fields: [vendorId], references: [id])
+  vendorId String? @map("vendor_id")
+
+  receiptScan   ReceiptScan? @relation(fields: [receiptScanId], references: [id])
+  receiptScanId String?      @map("receipt_scan_id")
+
+  productName    String  @map("product_name")
+  normalizedName String  @map("normalized_name")
+  quantity       Decimal @db.Decimal(10, 3)
+  unit           String? // kg, L, un, etc.
+  unitPrice      Decimal @db.Decimal(10, 4) @map("unit_price")
+  totalPrice     Decimal @db.Decimal(12, 2) @map("total_price")
+
+  invoiceDate   DateTime? @map("invoice_date")
+  invoiceNumber String?   @map("invoice_number")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([restaurantId, normalizedName, vendorId, invoiceDate])
+  @@index([restaurantId, invoiceDate])
+  @@map("invoice_items")
 }

@@ -159,8 +159,8 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
         </div>
       </div>
 
-      {/* Net Income */}
-      <div className="card-glass p-5 animate-fade-up-3">
+      {/* Net Income — hidden on mobile */}
+      <div className="card-glass p-5 animate-fade-up-3 hidden sm:block">
         <div className="flex items-start justify-between mb-1">
           <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/20 flex items-center justify-center">
             <Target className="w-4 h-4 text-green-400" />
@@ -175,7 +175,7 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
             <div className="text-xs text-muted-foreground mt-1">Lucro Líquido</div>
           </div>
           {/* Circular gauge */}
-          <svg width="68" height="68" className="shrink-0 ml-auto">
+          <svg width="68" height="68" className="shrink-0 ml-auto" role="img" aria-label={`Lucro líquido: ${netPct.toFixed(0)}%`}>
             <circle cx="34" cy="34" r={radius} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="5" />
             <circle
               cx="34" cy="34" r={radius}
@@ -194,8 +194,8 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
         </div>
       </div>
 
-      {/* COGS % */}
-      <div className="card-glass p-5 animate-fade-up-4">
+      {/* COGS % — hidden on mobile */}
+      <div className="card-glass p-5 animate-fade-up-4 hidden sm:block">
         <div className="flex items-start justify-between mb-1">
           <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/20 flex items-center justify-center">
             <Activity className="w-4 h-4 text-indigo-400" />

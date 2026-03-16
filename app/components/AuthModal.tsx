@@ -69,8 +69,9 @@ function LoginForm({ onSwitchTab }: { onSwitchTab: () => void }) {
       )}
 
       <div className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground">Email</label>
+        <label htmlFor="login-email" className="text-xs font-medium text-muted-foreground">Email</label>
         <input
+          id="login-email"
           type="email"
           value={email}
           onChange={e => setEmail(e.target.value)}
@@ -82,9 +83,10 @@ function LoginForm({ onSwitchTab }: { onSwitchTab: () => void }) {
       </div>
 
       <div className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground">Palavra-passe</label>
+        <label htmlFor="login-password" className="text-xs font-medium text-muted-foreground">Palavra-passe</label>
         <div className="relative">
           <input
+            id="login-password"
             type={showPass ? 'text' : 'password'}
             value={password}
             onChange={e => setPassword(e.target.value)}
@@ -97,6 +99,7 @@ function LoginForm({ onSwitchTab }: { onSwitchTab: () => void }) {
             type="button"
             onClick={() => setShowPass(v => !v)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            aria-label={showPass ? 'Ocultar palavra-passe' : 'Mostrar palavra-passe'}
           >
             {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
@@ -222,8 +225,9 @@ function RegisterForm({ onSwitchTab }: { onSwitchTab: () => void }) {
 
       <div className="grid grid-cols-1 gap-4">
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">O teu nome</label>
+          <label htmlFor="register-name" className="text-xs font-medium text-muted-foreground">O teu nome</label>
           <input
+            id="register-name"
             type="text"
             value={form.name}
             onChange={update('name')}
@@ -234,8 +238,9 @@ function RegisterForm({ onSwitchTab }: { onSwitchTab: () => void }) {
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">Nome do restaurante</label>
+          <label htmlFor="register-restaurant" className="text-xs font-medium text-muted-foreground">Nome do restaurante</label>
           <input
+            id="register-restaurant"
             type="text"
             value={form.restaurantName}
             onChange={update('restaurantName')}
@@ -246,8 +251,9 @@ function RegisterForm({ onSwitchTab }: { onSwitchTab: () => void }) {
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">Email</label>
+          <label htmlFor="register-email" className="text-xs font-medium text-muted-foreground">Email</label>
           <input
+            id="register-email"
             type="email"
             value={form.email}
             onChange={update('email')}
@@ -259,9 +265,10 @@ function RegisterForm({ onSwitchTab }: { onSwitchTab: () => void }) {
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">Palavra-passe</label>
+          <label htmlFor="register-password" className="text-xs font-medium text-muted-foreground">Palavra-passe</label>
           <div className="relative">
             <input
+              id="register-password"
               type={showPass ? 'text' : 'password'}
               value={form.password}
               onChange={update('password')}
@@ -274,6 +281,7 @@ function RegisterForm({ onSwitchTab }: { onSwitchTab: () => void }) {
               type="button"
               onClick={() => setShowPass(v => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label={showPass ? 'Ocultar palavra-passe' : 'Mostrar palavra-passe'}
             >
               {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -281,9 +289,10 @@ function RegisterForm({ onSwitchTab }: { onSwitchTab: () => void }) {
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">Confirmar palavra-passe</label>
+          <label htmlFor="register-confirm-password" className="text-xs font-medium text-muted-foreground">Confirmar palavra-passe</label>
           <div className="relative">
             <input
+              id="register-confirm-password"
               type={showConfirm ? 'text' : 'password'}
               value={form.confirmPassword}
               onChange={update('confirmPassword')}
@@ -296,6 +305,7 @@ function RegisterForm({ onSwitchTab }: { onSwitchTab: () => void }) {
               type="button"
               onClick={() => setShowConfirm(v => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label={showConfirm ? 'Ocultar confirmação de palavra-passe' : 'Mostrar confirmação de palavra-passe'}
             >
               {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>

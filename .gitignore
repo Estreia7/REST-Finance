@@ -1,1 +1,19 @@
+# dependencies
 node_modules
+
+# env files (NEVER commit secrets)
+.env
+.env.local
+.env.production
+.env*.local
+
+# next.js build
+.next
+out
+
+# build artifacts
+*.tsbuildinfo
+
+# misc
+.DS_Store
+*.pem

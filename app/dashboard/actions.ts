@@ -2,6 +2,8 @@
 
 import { prisma } from '@/lib/prisma';
 import { createClient } from '@/lib/supabase/server';
+import { dailySummarySchema, costEntrySchema, changePasswordSchema, formatZodError } from '@/lib/validations';
+import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 // Keep these in sync with the Prisma enums in schema.prisma
 type CostType = 'COGS' | 'OPEX';
 type CategoryType = 'REVENUE' | 'COGS' | 'OPEX';
@@ -171,77 +173,51 @@ export async function createDailySummary(data: {
   notes?: string;
 }) {
   try {
-    const supabase = await createClient();
-    
-    // Try to get session first
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError) {
-      console.error('Session error in createDailySummary:', sessionError);
-    }
-    
-    // Then get user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      console.error('Authentication error in createDailySummary:', {
-        authError,
-        hasSession: !!session,
-        sessionError
-      });
-      return { 
-        error: 'Sessão expirada. Por favor, faça login novamente.',
-        requiresAuth: true 
-      };
+    // Validate input
+    const parsed = dailySummarySchema.safeParse(data);
+    if (!parsed.success) {
+      return { success: false as const, error: formatZodError(parsed.error) };
     }
 
-    const ownerMembership = await prisma.membership.findFirst({
-      where: {
-        userId: user.id,
-        role: 'OWNER',
-        active: true,
-      },
-    });
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { success: false as const, error: owner.error };
 
-    if (!ownerMembership) {
-      return { error: 'Not an owner' };
-    }
+    const revenueTotal = parsed.data.dineInRevenue + parsed.data.takeawayRevenue;
 
-    const revenueTotal = data.dineInRevenue + data.takeawayRevenue;
-
+    const v = parsed.data;
     const summary = await prisma.dailySummary.upsert({
       where: {
         restaurantId_date: {
-          restaurantId: ownerMembership.restaurantId,
-          date: data.date,
+          restaurantId: owner.restaurantId,
+          date: v.date,
         },
       },
       update: {
-        dineInRevenue: data.dineInRevenue,
-        takeawayRevenue: data.takeawayRevenue,
+        dineInRevenue: v.dineInRevenue,
+        takeawayRevenue: v.takeawayRevenue,
         revenueTotal,
-        dineInTickets: data.dineInTickets,
-        takeawayTickets: data.takeawayTickets,
-        notes: data.notes,
-        createdById: user.id,
+        dineInTickets: v.dineInTickets,
+        takeawayTickets: v.takeawayTickets,
+        notes: v.notes,
+        createdById: owner.userId,
       },
       create: {
-        restaurantId: ownerMembership.restaurantId,
-        date: data.date,
-        dineInRevenue: data.dineInRevenue,
-        takeawayRevenue: data.takeawayRevenue,
+        restaurantId: owner.restaurantId,
+        date: v.date,
+        dineInRevenue: v.dineInRevenue,
+        takeawayRevenue: v.takeawayRevenue,
         revenueTotal,
-        dineInTickets: data.dineInTickets,
-        takeawayTickets: data.takeawayTickets,
-        notes: data.notes,
-        createdById: user.id,
+        dineInTickets: v.dineInTickets,
+        takeawayTickets: v.takeawayTickets,
+        notes: v.notes,
+        createdById: owner.userId,
       },
     });
 
     return { success: true, data: summary };
   } catch (error: any) {
     console.error('Error creating daily summary:', error);
-    return { error: error.message || 'Failed to create daily summary' };
+    return { success: false as const, error: error.message || 'Failed to create daily summary' };
   }
 }
 
@@ -253,45 +229,36 @@ export async function createCostEntry(data: {
   description?: string;
 }) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
+    // Validate input
+    const parsed = costEntrySchema.safeParse(data);
+    if (!parsed.success) {
+      return { success: false as const, error: formatZodError(parsed.error) };
     }
 
-    const ownerMembership = await prisma.membership.findFirst({
-      where: {
-        userId: user.id,
-        role: 'OWNER',
-        active: true,
-      },
-    });
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { success: false as const, error: owner.error };
 
-    if (!ownerMembership) {
-      return { error: 'Not an owner' };
-    }
-
+    const v = parsed.data;
     const costEntry = await prisma.costEntry.create({
       data: {
-        restaurantId: ownerMembership.restaurantId,
-        date: data.date,
-        type: data.type,
-        categoryId: data.categoryId || null,
-        amount: data.amount,
-        description: data.description,
-        createdById: user.id,
+        restaurantId: owner.restaurantId,
+        date: v.date,
+        type: v.type,
+        categoryId: v.categoryId || null,
+        amount: v.amount,
+        description: v.description,
+        createdById: owner.userId,
       },
     });
 
     return { success: true, data: costEntry };
   } catch (error: any) {
     console.error('Error creating cost entry:', error);
-    return { error: error.message || 'Failed to create cost entry' };
+    return { success: false as const, error: error.message || 'Failed to create cost entry' };
   }
 }
 
-export async function initializeDefaultCategories(restaurantId: string) {
+async function initializeDefaultCategories(restaurantId: string) {
   try {
     // Check if categories already exist
     const existingCategories = await prisma.category.findMany({
@@ -445,6 +412,7 @@ export async function getDashboardStats() {
       prisma.dailySummary.aggregate({
         where: {
           restaurantId: ownerMembership.restaurantId,
+          deletedAt: null,
           date: {
             gte: startOfMonth,
             lte: endOfMonth,
@@ -452,11 +420,14 @@ export async function getDashboardStats() {
         },
         _sum: {
           revenueTotal: true,
+          dineInRevenue: true,
+          takeawayRevenue: true,
         },
       }),
       prisma.costEntry.aggregate({
         where: {
           restaurantId: ownerMembership.restaurantId,
+          deletedAt: null,
           date: {
             gte: startOfMonth,
             lte: endOfMonth,
@@ -476,6 +447,8 @@ export async function getDashboardStats() {
     ]);
 
     const revenue = Number(monthlyRevenue._sum.revenueTotal || 0);
+    const dineInRevenue = Number(monthlyRevenue._sum.dineInRevenue || 0);
+    const takeawayRevenue = Number(monthlyRevenue._sum.takeawayRevenue || 0);
     const costs = Number(monthlyCosts._sum.amount || 0);
     const profit = revenue - costs;
     const profitMargin = revenue > 0 ? (profit / revenue) * 100 : 0;
@@ -484,6 +457,8 @@ export async function getDashboardStats() {
       success: true,
       data: {
         revenue,
+        dineInRevenue,
+        takeawayRevenue,
         costs,
         profit,
         profitMargin,
@@ -512,6 +487,7 @@ export async function getRevenueHistory(dateFrom: Date, dateTo: Date) {
     const entries = await prisma.dailySummary.findMany({
       where: {
         restaurantId: membership.restaurantId,
+        deletedAt: null,
         date: { gte: dateFrom, lte: dateTo },
       },
       orderBy: { date: 'desc' },
@@ -555,7 +531,7 @@ export async function updateDailySummary(id: string, data: {
     if (!membership) return { error: 'Not an owner' };
 
     const existing = await prisma.dailySummary.findFirst({
-      where: { id, restaurantId: membership.restaurantId },
+      where: { id, restaurantId: membership.restaurantId, deletedAt: null },
     });
     if (!existing) return { error: 'Entry not found' };
 
@@ -583,25 +559,22 @@ export async function updateDailySummary(id: string, data: {
 
 export async function deleteDailySummary(id: string) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return { error: 'Unauthorized' };
-
-    const membership = await prisma.membership.findFirst({
-      where: { userId: user.id, role: 'OWNER', active: true },
-    });
-    if (!membership) return { error: 'Not an owner' };
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { success: false as const, error: owner.error };
 
     const existing = await prisma.dailySummary.findFirst({
-      where: { id, restaurantId: membership.restaurantId },
+      where: { id, restaurantId: owner.restaurantId, deletedAt: null },
     });
-    if (!existing) return { error: 'Entry not found' };
+    if (!existing) return { success: false as const, error: 'Entry not found' };
 
-    await prisma.dailySummary.delete({ where: { id } });
-    return { success: true };
+    await prisma.dailySummary.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+    return { success: true as const };
   } catch (error: any) {
     console.error('Error deleting daily summary:', error);
-    return { error: error.message || 'Failed to delete entry' };
+    return { success: false as const, error: error.message || 'Failed to delete entry' };
   }
 }
 
@@ -619,6 +592,7 @@ export async function getCostHistory(dateFrom: Date, dateTo: Date, type?: CostTy
     const where: any = {
       restaurantId: membership.restaurantId,
       date: { gte: dateFrom, lte: dateTo },
+      deletedAt: null,
     };
     if (type) where.type = type;
     if (categoryId) where.categoryId = categoryId;
@@ -668,7 +642,7 @@ export async function updateCostEntry(id: string, data: {
     if (!membership) return { error: 'Not an owner' };
 
     const existing = await prisma.costEntry.findFirst({
-      where: { id, restaurantId: membership.restaurantId },
+      where: { id, restaurantId: membership.restaurantId, deletedAt: null },
     });
     if (!existing) return { error: 'Entry not found' };
 
@@ -692,25 +666,22 @@ export async function updateCostEntry(id: string, data: {
 
 export async function deleteCostEntry(id: string) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return { error: 'Unauthorized' };
-
-    const membership = await prisma.membership.findFirst({
-      where: { userId: user.id, role: 'OWNER', active: true },
-    });
-    if (!membership) return { error: 'Not an owner' };
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { success: false as const, error: owner.error };
 
     const existing = await prisma.costEntry.findFirst({
-      where: { id, restaurantId: membership.restaurantId },
+      where: { id, restaurantId: owner.restaurantId, deletedAt: null },
     });
-    if (!existing) return { error: 'Entry not found' };
+    if (!existing) return { success: false as const, error: 'Entry not found' };
 
-    await prisma.costEntry.delete({ where: { id } });
-    return { success: true };
+    await prisma.costEntry.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+    return { success: true as const };
   } catch (error: any) {
     console.error('Error deleting cost entry:', error);
-    return { error: error.message || 'Failed to delete entry' };
+    return { success: false as const, error: error.message || 'Failed to delete entry' };
   }
 }
 
@@ -732,25 +703,25 @@ export async function getPnLStatement(month: number, year: number) {
 
     const [revAgg, cogsAgg, opexAgg, cogsBreakdown, opexBreakdown] = await Promise.all([
       prisma.dailySummary.aggregate({
-        where: { restaurantId: membership.restaurantId, date: { gte: startOfMonth, lte: endOfMonth } },
+        where: { restaurantId: membership.restaurantId, deletedAt: null, date: { gte: startOfMonth, lte: endOfMonth } },
         _sum: { revenueTotal: true, dineInRevenue: true, takeawayRevenue: true },
       }),
       prisma.costEntry.aggregate({
-        where: { restaurantId: membership.restaurantId, type: 'COGS', date: { gte: startOfMonth, lte: endOfMonth } },
+        where: { restaurantId: membership.restaurantId, deletedAt: null, type: 'COGS', date: { gte: startOfMonth, lte: endOfMonth } },
         _sum: { amount: true },
       }),
       prisma.costEntry.aggregate({
-        where: { restaurantId: membership.restaurantId, type: 'OPEX', date: { gte: startOfMonth, lte: endOfMonth } },
+        where: { restaurantId: membership.restaurantId, deletedAt: null, type: 'OPEX', date: { gte: startOfMonth, lte: endOfMonth } },
         _sum: { amount: true },
       }),
       prisma.costEntry.groupBy({
         by: ['categoryId'],
-        where: { restaurantId: membership.restaurantId, type: 'COGS', date: { gte: startOfMonth, lte: endOfMonth } },
+        where: { restaurantId: membership.restaurantId, deletedAt: null, type: 'COGS', date: { gte: startOfMonth, lte: endOfMonth } },
         _sum: { amount: true },
       }),
       prisma.costEntry.groupBy({
         by: ['categoryId'],
-        where: { restaurantId: membership.restaurantId, type: 'OPEX', date: { gte: startOfMonth, lte: endOfMonth } },
+        where: { restaurantId: membership.restaurantId, deletedAt: null, type: 'OPEX', date: { gte: startOfMonth, lte: endOfMonth } },
         _sum: { amount: true },
       }),
     ]);
@@ -810,11 +781,11 @@ export async function getComparativeData() {
 
       const [rev, costs] = await Promise.all([
         prisma.dailySummary.aggregate({
-          where: { restaurantId: membership.restaurantId, date: { gte: start, lte: end } },
+          where: { restaurantId: membership.restaurantId, deletedAt: null, date: { gte: start, lte: end } },
           _sum: { revenueTotal: true },
         }),
         prisma.costEntry.aggregate({
-          where: { restaurantId: membership.restaurantId, date: { gte: start, lte: end } },
+          where: { restaurantId: membership.restaurantId, deletedAt: null, date: { gte: start, lte: end } },
           _sum: { amount: true },
         }),
       ]);
@@ -849,7 +820,7 @@ export async function getTicketAnalysis(dateFrom: Date, dateTo: Date) {
     if (!membership) return { error: 'No access' };
 
     const summaries = await prisma.dailySummary.findMany({
-      where: { restaurantId: membership.restaurantId, date: { gte: dateFrom, lte: dateTo } },
+      where: { restaurantId: membership.restaurantId, deletedAt: null, date: { gte: dateFrom, lte: dateTo } },
       orderBy: { date: 'asc' },
     });
 
@@ -931,18 +902,27 @@ export async function updateUserProfile(name: string) {
 
 export async function changePassword(currentPassword: string, newPassword: string) {
   try {
+    const parsed = changePasswordSchema.safeParse({ currentPassword, newPassword });
+    if (!parsed.success) return { error: formatZodError(parsed.error) };
+
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return { error: 'Unauthorized' };
+    if (authError || !user) return { error: 'Sessão expirada', requiresAuth: true };
 
-    // Supabase requires re-authentication to change password
-    // We'll use updateUser which works with the current session
+    // Verify current password by re-authenticating
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: user.email!,
+      password: currentPassword,
+    });
+    if (verifyError) return { error: 'Palavra-passe atual incorreta' };
+
+    // Now update to new password
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) return { error: error.message };
 
     return { success: true };
   } catch (error: any) {
-    return { error: error.message || 'Failed to change password' };
+    return { error: 'Falha ao alterar palavra-passe' };
   }
 }
 
@@ -1089,6 +1069,7 @@ export async function getLast7DaysRevenue() {
     const summaries = await prisma.dailySummary.findMany({
       where: {
         restaurantId: ownerMembership.restaurantId,
+        deletedAt: null,
         date: {
           gte: sevenDaysAgo,
           lte: now,
@@ -1154,6 +1135,7 @@ export async function getMonthlyRevenueBreakdown() {
     const summaries = await prisma.dailySummary.findMany({
       where: {
         restaurantId: ownerMembership.restaurantId,
+        deletedAt: null,
         date: {
           gte: sixMonthsAgo,
           lte: now,
@@ -1164,30 +1146,25 @@ export async function getMonthlyRevenueBreakdown() {
       },
     });
 
-    // Group by month and calculate Food (dineIn), Drinks (estimated from categories), Other (takeaway)
-    const monthlyData: Record<string, { food: number; drinks: number; other: number }> = {};
+    // Group by month: actual dineIn vs takeaway (no fabricated splits)
+    const monthlyData: Record<string, { dineIn: number; takeaway: number }> = {};
 
     summaries.forEach(summary => {
       const monthKey = `${new Date(summary.date).getFullYear()}-${String(new Date(summary.date).getMonth() + 1).padStart(2, '0')}`;
-      
+
       if (!monthlyData[monthKey]) {
-        monthlyData[monthKey] = { food: 0, drinks: 0, other: 0 };
+        monthlyData[monthKey] = { dineIn: 0, takeaway: 0 };
       }
 
-      // Food = dine-in revenue (main food items)
-      monthlyData[monthKey].food += Number(summary.dineInRevenue) * 0.7; // Estimate 70% food
-      // Drinks = portion of dine-in (estimated 20%)
-      monthlyData[monthKey].drinks += Number(summary.dineInRevenue) * 0.2;
-      // Other = takeaway revenue
-      monthlyData[monthKey].other += Number(summary.takeawayRevenue);
+      monthlyData[monthKey].dineIn += Number(summary.dineInRevenue);
+      monthlyData[monthKey].takeaway += Number(summary.takeawayRevenue);
     });
 
     const result = Object.entries(monthlyData).map(([month, data]) => ({
       month,
-      food: data.food,
-      drinks: data.drinks,
-      other: data.other,
-      total: data.food + data.drinks + data.other,
+      dineIn: data.dineIn,
+      takeaway: data.takeaway,
+      total: data.dineIn + data.takeaway,
     }));
 
     return { success: true, data: result };
@@ -1223,38 +1200,41 @@ export async function getCategoryPerformance() {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-    // Get categories
-    const categories = await prisma.category.findMany({
+    // Get actual cost spending grouped by category
+    const costsByCategory = await prisma.costEntry.groupBy({
+      by: ['categoryId'],
       where: {
         restaurantId: ownerMembership.restaurantId,
-        type: 'REVENUE',
-        isActive: true,
+        deletedAt: null,
+        date: { gte: startOfMonth, lte: endOfMonth },
       },
+      _sum: { amount: true },
     });
 
-    // For now, we'll estimate based on COGS categories since we don't have revenue categories
-    // In a real system, you'd track revenue by category
-    const categoryData = categories
-      .filter(cat => ['Comida', 'Bebidas', 'Sobremesas'].includes(cat.name))
-      .map(cat => {
-        // Estimate revenue based on category (this is a placeholder - real implementation would track this)
-        const estimatedRevenue = cat.name === 'Bebidas' ? 5000 : cat.name === 'Sobremesas' ? 2000 : 15000;
+    const categoryIds = costsByCategory.map(c => c.categoryId).filter(Boolean) as string[];
+    const categories = categoryIds.length > 0
+      ? await prisma.category.findMany({
+          where: { id: { in: categoryIds } },
+          select: { id: true, name: true, type: true },
+        })
+      : [];
+    const catMap = Object.fromEntries(categories.map(c => [c.id, c]));
+
+    const totalSpending = costsByCategory.reduce((sum, c) => sum + Number(c._sum.amount || 0), 0);
+
+    const result = costsByCategory
+      .filter(c => c.categoryId && catMap[c.categoryId])
+      .map(c => {
+        const cat = catMap[c.categoryId!];
+        const amount = Number(c._sum.amount || 0);
         return {
           name: cat.name,
-          revenue: estimatedRevenue,
-          trend: [100, 105, 98, 110, 102, 108, 115], // Sample trend data
+          monthlySpending: amount,
+          contributionPercent: totalSpending > 0 ? (amount / totalSpending) * 100 : 0,
+          type: cat.type,
         };
-      });
-
-    // Calculate total for contribution %
-    const totalRevenue = categoryData.reduce((sum, cat) => sum + cat.revenue, 0);
-
-    const result = categoryData.map(cat => ({
-      name: cat.name,
-      monthlyRevenue: cat.revenue,
-      contributionPercent: totalRevenue > 0 ? (cat.revenue / totalRevenue) * 100 : 0,
-      trend: cat.trend,
-    }));
+      })
+      .sort((a, b) => b.monthlySpending - a.monthlySpending);
 
     return { success: true, data: result };
   } catch (error: any) {
@@ -1307,6 +1287,7 @@ export async function getAdvancedDashboardStats() {
       prisma.dailySummary.aggregate({
         where: {
           restaurantId: ownerMembership.restaurantId,
+          deletedAt: null,
           date: { gte: startOfMonth, lte: endOfMonth },
         },
         _sum: { revenueTotal: true },
@@ -1314,6 +1295,7 @@ export async function getAdvancedDashboardStats() {
       prisma.costEntry.aggregate({
         where: {
           restaurantId: ownerMembership.restaurantId,
+          deletedAt: null,
           date: { gte: startOfMonth, lte: endOfMonth },
         },
         _sum: { amount: true },
@@ -1321,6 +1303,7 @@ export async function getAdvancedDashboardStats() {
       prisma.costEntry.aggregate({
         where: {
           restaurantId: ownerMembership.restaurantId,
+          deletedAt: null,
           type: 'COGS',
           date: { gte: startOfMonth, lte: endOfMonth },
         },
@@ -1330,6 +1313,7 @@ export async function getAdvancedDashboardStats() {
         ? prisma.costEntry.aggregate({
             where: {
               restaurantId: ownerMembership.restaurantId,
+              deletedAt: null,
               date: { gte: startOfMonth, lte: endOfMonth },
               categoryId: { in: laborCategoryIds },
             },
@@ -1343,6 +1327,7 @@ export async function getAdvancedDashboardStats() {
       prisma.dailySummary.aggregate({
         where: {
           restaurantId: ownerMembership.restaurantId,
+          deletedAt: null,
           date: { gte: startOfLastMonth, lte: endOfLastMonth },
         },
         _sum: { revenueTotal: true },
@@ -1350,6 +1335,7 @@ export async function getAdvancedDashboardStats() {
       prisma.costEntry.aggregate({
         where: {
           restaurantId: ownerMembership.restaurantId,
+          deletedAt: null,
           type: 'COGS',
           date: { gte: startOfLastMonth, lte: endOfLastMonth },
         },
@@ -1388,6 +1374,7 @@ export async function getAdvancedDashboardStats() {
         prisma.dailySummary.aggregate({
           where: {
             restaurantId: ownerMembership.restaurantId,
+            deletedAt: null,
             date: { gte: monthStart, lte: monthEnd },
           },
           _sum: { revenueTotal: true },
@@ -1395,6 +1382,7 @@ export async function getAdvancedDashboardStats() {
         prisma.costEntry.aggregate({
           where: {
             restaurantId: ownerMembership.restaurantId,
+            deletedAt: null,
             type: 'COGS',
             date: { gte: monthStart, lte: monthEnd },
           },
@@ -1404,6 +1392,7 @@ export async function getAdvancedDashboardStats() {
           ? prisma.costEntry.aggregate({
               where: {
                 restaurantId: ownerMembership.restaurantId,
+                deletedAt: null,
                 date: { gte: monthStart, lte: monthEnd },
                 categoryId: { in: laborCategoryIds },
               },

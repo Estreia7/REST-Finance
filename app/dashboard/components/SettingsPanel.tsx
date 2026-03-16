@@ -81,8 +81,8 @@ export default function SettingsPanel({
             <div className="text-xs text-muted-foreground">{currentUser?.email || '—'}</div>
           </div>
           <div>
-            <label className="text-xs font-medium text-muted-foreground block mb-2">Nome</label>
-            <input type="text" value={name} onChange={e => setName(e.target.value)} className="input-field" placeholder="O seu nome" />
+            <label htmlFor="settings-name" className="text-xs font-medium text-muted-foreground block mb-2">Nome</label>
+            <input id="settings-name" type="text" value={name} onChange={e => setName(e.target.value)} className="input-field" placeholder="O seu nome" />
           </div>
           <button onClick={handleSaveProfile} disabled={savingProfile || name === (currentUser?.name || '')} className="cta-button py-2 px-5 text-sm disabled:opacity-40">
             {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -99,12 +99,12 @@ export default function SettingsPanel({
         </div>
         <div className="space-y-4">
           <div>
-            <label className="text-xs font-medium text-muted-foreground block mb-2">Nova palavra-passe</label>
-            <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} className="input-field" placeholder="Mínimo 6 caracteres" />
+            <label htmlFor="settings-new-pw" className="text-xs font-medium text-muted-foreground block mb-2">Nova palavra-passe</label>
+            <input id="settings-new-pw" type="password" value={newPw} onChange={e => setNewPw(e.target.value)} className="input-field" placeholder="Mínimo 6 caracteres" />
           </div>
           <div>
-            <label className="text-xs font-medium text-muted-foreground block mb-2">Confirmar</label>
-            <input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} className="input-field" placeholder="Repetir palavra-passe" />
+            <label htmlFor="settings-confirm-pw" className="text-xs font-medium text-muted-foreground block mb-2">Confirmar</label>
+            <input id="settings-confirm-pw" type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} className="input-field" placeholder="Repetir palavra-passe" />
           </div>
           <button onClick={handleChangePassword} disabled={savingPw || !newPw} className="cta-button py-2 px-5 text-sm disabled:opacity-40">
             {savingPw ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
@@ -122,13 +122,13 @@ export default function SettingsPanel({
           </div>
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-2">Nome do restaurante</label>
-              <input type="text" value={restaurantName} onChange={e => setRestaurantName(e.target.value)} className="input-field" />
+              <label htmlFor="settings-restaurant-name" className="text-xs font-medium text-muted-foreground block mb-2">Nome do restaurante</label>
+              <input id="settings-restaurant-name" type="text" value={restaurantName} onChange={e => setRestaurantName(e.target.value)} className="input-field" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-2">Fuso horário</label>
-                <select value={timezone} onChange={e => setTimezone(e.target.value)} className="input-field">
+                <label htmlFor="settings-timezone" className="text-xs font-medium text-muted-foreground block mb-2">Fuso horário</label>
+                <select id="settings-timezone" value={timezone} onChange={e => setTimezone(e.target.value)} className="input-field">
                   <option value="Europe/Lisbon">Europa/Lisboa</option>
                   <option value="Europe/London">Europa/Londres</option>
                   <option value="Europe/Madrid">Europa/Madrid</option>
@@ -137,8 +137,8 @@ export default function SettingsPanel({
                 </select>
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-2">Moeda</label>
-                <select value={currency} onChange={e => setCurrency(e.target.value)} className="input-field">
+                <label htmlFor="settings-currency" className="text-xs font-medium text-muted-foreground block mb-2">Moeda</label>
+                <select id="settings-currency" value={currency} onChange={e => setCurrency(e.target.value)} className="input-field">
                   <option value="EUR">EUR (€)</option>
                   <option value="USD">USD ($)</option>
                   <option value="GBP">GBP (£)</option>

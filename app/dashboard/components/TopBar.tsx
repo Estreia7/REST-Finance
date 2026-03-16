@@ -28,6 +28,7 @@ export default function TopBar({ activeTab, restaurant, onMenuClick }: TopBarPro
       <button
         onClick={onMenuClick}
         className="md:hidden p-2 -ml-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-all"
+        aria-label="Abrir menu"
       >
         <Menu className="w-5 h-5" />
       </button>

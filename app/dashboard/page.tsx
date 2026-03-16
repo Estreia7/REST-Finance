@@ -17,9 +17,11 @@ import ComparativePanel from './components/ComparativePanel';
 import TicketAnalysisPanel from './components/TicketAnalysisPanel';
 import GoalsPanel from './components/GoalsPanel';
 import MonthlyReportPanel from './components/MonthlyReportPanel';
+import PriceTrackingPanel from './components/PriceTrackingPanel';
 import { checkEmailConfirmation, resendConfirmationEmail } from '@/app/login/actions';
 import { trialDaysLeft } from '@/lib/billing-utils';
 import { useLanguage } from '@/lib/language-context';
+import { Plus, ChevronDown, ChevronUp, Rocket, TrendingUp as TrendingUpIcon, DollarSign as DollarSignIcon } from 'lucide-react';
 
 // Components
 import Sidebar          from './components/Sidebar';
@@ -73,7 +75,7 @@ function DashboardPageInner() {
   const [restaurant, setRestaurant]       = useState<any>(null);
   const [staff, setStaff]                 = useState<StaffMember[]>([]);
   const [categories, setCategories]       = useState<Category[]>([]);
-  const [stats, setStats]                 = useState({ revenue: 0, costs: 0, profit: 0, profitMargin: 0, staffCount: 0 });
+  const [stats, setStats]                 = useState({ revenue: 0, dineInRevenue: 0, takeawayRevenue: 0, costs: 0, profit: 0, profitMargin: 0, staffCount: 0 });
   const [advancedStats, setAdvancedStats] = useState({
     totalRevenue: 0, revenueChange: 0,
     primeCostPercent: 0, primeCostTrend: [] as number[],
@@ -82,8 +84,8 @@ function DashboardPageInner() {
     labor: 0, cogs: 0, monthlyGoal: 0,
   });
   const [last7DaysData, setLast7DaysData]       = useState<Array<{ date: string; revenue: number }>>([]);
-  const [monthlyBreakdown, setMonthlyBreakdown] = useState<Array<{ month: string; food: number; drinks: number; other: number; total: number }>>([]);
-  const [categoryPerformance, setCategoryPerformance] = useState<Array<{ name: string; monthlyRevenue: number; contributionPercent: number; trend: number[] }>>([]);
+  const [monthlyBreakdown, setMonthlyBreakdown] = useState<Array<{ month: string; dineIn: number; takeaway: number; total: number }>>([]);
+  const [categoryPerformance, setCategoryPerformance] = useState<Array<{ name: string; monthlySpending: number; contributionPercent: number; type: string }>>([]);
 
   // ── Theme
   const [theme, setTheme]                     = useState<'light' | 'dark'>('dark');
@@ -103,10 +105,13 @@ function DashboardPageInner() {
   const [staffEmail, setStaffEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // ── Mobile dashboard
+  const [showMoreCharts, setShowMoreCharts] = useState(false);
+
   // ── Sub-views for revenue/costs/analytics
   const [revenueSubView, setRevenueSubView] = useState<'entry' | 'history' | 'scan'>('entry');
   const [costSubView, setCostSubView] = useState<'entry' | 'history' | 'scan'>('entry');
-  const [analyticsSubView, setAnalyticsSubView] = useState<'pnl' | 'compare' | 'tickets' | 'goals' | 'report'>('pnl');
+  const [analyticsSubView, setAnalyticsSubView] = useState<'pnl' | 'compare' | 'tickets' | 'goals' | 'report' | 'prices'>('pnl');
 
   // ── Load all data ────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -325,14 +330,74 @@ function DashboardPageInner() {
         <main className="flex-1 p-4 md:p-6 space-y-6">
           {activeTab === 'dashboard' && (
             <>
+              {/* Onboarding card — shown when no data exists */}
+              {stats.revenue === 0 && stats.costs === 0 && last7DaysData.length === 0 && (
+                <div className="card-glass p-6 sm:p-8 border border-primary/20 bg-gradient-to-br from-violet-600/5 to-indigo-600/5">
+                  <div className="flex items-start gap-4">
+                    <div className="w-11 h-11 rounded-xl gradient-bg flex items-center justify-center shadow-glow-sm shrink-0">
+                      <Rocket className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h2 className="text-lg font-bold text-foreground">
+                        Bem-vindo ao REST Finance{currentUser?.name ? `, ${currentUser.name.split(' ')[0]}` : ''}!
+                      </h2>
+                      <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                        Começa por registar a receita de hoje. Demora menos de 2 minutos e vais logo ver os teus KPIs a funcionar.
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-3 mt-4">
+                        <button
+                          onClick={() => handleTabChange('revenue')}
+                          className="cta-button py-2.5 px-5 text-sm"
+                        >
+                          <TrendingUpIcon className="w-4 h-4" />
+                          Registar receita de hoje
+                        </button>
+                        <button
+                          onClick={() => handleTabChange('costs')}
+                          className="cta-button-secondary py-2.5 px-5 text-sm"
+                        >
+                          <DollarSignIcon className="w-4 h-4" />
+                          Registar custos
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <KPICards stats={stats} advancedStats={advancedStats} last7DaysData={last7DaysData} />
-              <div className="grid lg:grid-cols-3 gap-5">
+
+              {/* Charts — collapsible on mobile */}
+              <div className="hidden md:grid lg:grid-cols-3 gap-5">
                 <div className="lg:col-span-2">
                   <RevenueChart data={monthlyBreakdown} />
                 </div>
-                <ChannelSplitChart stats={stats} advancedStats={advancedStats} />
+                <ChannelSplitChart stats={stats} />
               </div>
-              <CategoryTable data={categoryPerformance} />
+              <div className="hidden md:block">
+                <CategoryTable data={categoryPerformance} />
+              </div>
+
+              {/* Mobile: toggle for charts */}
+              <div className="md:hidden">
+                <button
+                  onClick={() => setShowMoreCharts(v => !v)}
+                  className="w-full flex items-center justify-center gap-2 py-3 text-sm font-medium text-muted-foreground hover:text-foreground border border-white/5 rounded-xl bg-white/[0.02] transition-all"
+                >
+                  {showMoreCharts ? (
+                    <><ChevronUp className="w-4 h-4" />Esconder detalhes</>
+                  ) : (
+                    <><ChevronDown className="w-4 h-4" />Ver gráficos e detalhes</>
+                  )}
+                </button>
+                {showMoreCharts && (
+                  <div className="space-y-5 mt-5 animate-fade-in">
+                    <RevenueChart data={monthlyBreakdown} />
+                    <ChannelSplitChart stats={stats} />
+                    <CategoryTable data={categoryPerformance} />
+                  </div>
+                )}
+              </div>
             </>
           )}
 
@@ -406,12 +471,14 @@ function DashboardPageInner() {
                 <button onClick={() => setAnalyticsSubView('tickets')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'tickets' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Tickets</button>
                 <button onClick={() => setAnalyticsSubView('goals')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'goals' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Metas</button>
                 <button onClick={() => setAnalyticsSubView('report')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'report' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Relatório</button>
+                <button onClick={() => setAnalyticsSubView('prices')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'prices' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Preços</button>
               </div>
               {analyticsSubView === 'pnl' && <PnLPanel />}
               {analyticsSubView === 'compare' && <ComparativePanel />}
               {analyticsSubView === 'tickets' && <TicketAnalysisPanel />}
               {analyticsSubView === 'goals' && <GoalsPanel restaurant={restaurant} stats={stats} onUpdate={loadData} />}
               {analyticsSubView === 'report' && <MonthlyReportPanel />}
+              {analyticsSubView === 'prices' && <PriceTrackingPanel />}
             </>
           )}
 
@@ -444,6 +511,17 @@ function DashboardPageInner() {
           )}
         </main>
       </div>
+
+      {/* Mobile FAB — quick entry shortcut */}
+      {activeTab === 'dashboard' && (
+        <button
+          onClick={() => handleTabChange('revenue')}
+          className="fixed right-4 bottom-24 z-40 md:hidden w-14 h-14 rounded-2xl gradient-bg shadow-glow flex items-center justify-center active:scale-95 transition-transform"
+          aria-label="Registar receita"
+        >
+          <Plus className="w-6 h-6 text-white" />
+        </button>
+      )}
 
       {/* Mobile bottom nav */}
       <MobileBottomNav activeTab={activeTab} onTabChange={handleTabChange} />

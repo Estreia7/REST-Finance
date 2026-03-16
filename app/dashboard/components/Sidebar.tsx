@@ -51,7 +51,7 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
           </div>
           <span className="font-black text-sm gradient-text">REST Finance</span>
         </div>
-        <button onClick={onClose} className="md:hidden p-1.5 rounded-lg hover:bg-white/5 text-muted-foreground hover:text-foreground transition-all">
+        <button onClick={onClose} className="md:hidden p-1.5 rounded-lg hover:bg-white/5 text-muted-foreground hover:text-foreground transition-all" aria-label="Fechar menu">
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -91,6 +91,7 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
           <button
             onClick={onLogout}
             title="Sair"
+            aria-label="Sair"
             className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-all shrink-0"
           >
             <LogOut className="w-3.5 h-3.5" />
