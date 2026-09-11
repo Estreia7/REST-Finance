@@ -89,7 +89,7 @@ export default function UserManagementPanel() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-white/5">
+              <tr className="border-b border-border-subtle">
                 <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Utilizador</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground hidden md:table-cell">Email</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Role</th>
@@ -104,7 +104,7 @@ export default function UserManagementPanel() {
                 const restaurant = mainMembership?.restaurant;
 
                 return (
-                  <tr key={u.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
+                  <tr key={u.id} className="border-b border-border-subtle hover:bg-muted transition-colors">
                     <td className="py-3 px-4">
                       {editingId === u.id ? (
                         <div className="flex items-center gap-2">
@@ -112,7 +112,7 @@ export default function UserManagementPanel() {
                           <button onClick={() => handleSaveName(u.id)} disabled={saving} className="p-1 rounded bg-success/20 text-green-400">
                             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                           </button>
-                          <button onClick={() => setEditingId(null)} className="p-1 rounded bg-white/5 text-muted-foreground"><X className="w-3 h-3" /></button>
+                          <button onClick={() => setEditingId(null)} className="p-1 rounded bg-muted text-muted-foreground"><X className="w-3 h-3" /></button>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2.5">
@@ -128,7 +128,7 @@ export default function UserManagementPanel() {
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border ${
                         role === 'PLATFORM_ADMIN' ? 'bg-primary/10 text-primary border-primary/20' :
                         role === 'OWNER' ? 'bg-success/10 text-success border-success/20' :
-                        'bg-white/5 text-muted-foreground border-white/10'
+                        'bg-muted text-muted-foreground border-border'
                       }`}>
                         {role === 'PLATFORM_ADMIN' && <Shield className="w-2.5 h-2.5" />}
                         {role}
@@ -144,17 +144,17 @@ export default function UserManagementPanel() {
                           <button onClick={() => handleChangePw(u.id)} disabled={saving} className="p-1 rounded bg-success/20 text-green-400">
                             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                           </button>
-                          <button onClick={() => { setChangingPwId(null); setNewPassword(''); }} className="p-1 rounded bg-white/5 text-muted-foreground"><X className="w-3 h-3" /></button>
+                          <button onClick={() => { setChangingPwId(null); setNewPassword(''); }} className="p-1 rounded bg-muted text-muted-foreground"><X className="w-3 h-3" /></button>
                         </div>
                       ) : (
                         <div className="flex items-center gap-1 justify-end">
-                          <button onClick={() => { setEditingId(u.id); setEditName(u.name || ''); }} title="Editar nome" className="p-1.5 rounded-lg hover:bg-white/5 text-muted-foreground hover:text-foreground transition-colors">
+                          <button onClick={() => { setEditingId(u.id); setEditName(u.name || ''); }} title="Editar nome" className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => handleResetPw(u.email)} title="Enviar reset email" className="p-1.5 rounded-lg hover:bg-white/5 text-muted-foreground hover:text-foreground transition-colors">
+                          <button onClick={() => handleResetPw(u.email)} title="Enviar reset email" className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                             <Mail className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => { setChangingPwId(u.id); setNewPassword(''); }} title="Alterar password" className="p-1.5 rounded-lg hover:bg-white/5 text-muted-foreground hover:text-foreground transition-colors">
+                          <button onClick={() => { setChangingPwId(u.id); setNewPassword(''); }} title="Alterar password" className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                             <Key className="w-3.5 h-3.5" />
                           </button>
                           <button onClick={() => handleDelete(u.id, u.email)} title="Eliminar conta" className="p-1.5 rounded-lg hover:bg-danger/10 text-muted-foreground hover:text-red-400 transition-colors">
@@ -172,7 +172,7 @@ export default function UserManagementPanel() {
             <div className="py-12 text-center text-sm text-muted-foreground">Nenhum utilizador encontrado.</div>
           )}
         </div>
-        <div className="px-4 py-3 border-t border-white/5 text-xs text-muted-foreground">
+        <div className="px-4 py-3 border-t border-border-subtle text-xs text-muted-foreground">
           {filtered.length} utilizadores
         </div>
       </div>

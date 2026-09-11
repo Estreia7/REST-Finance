@@ -49,7 +49,11 @@ const config: Config = {
           DEFAULT:    'hsl(var(--muted))',
           foreground: 'hsl(var(--muted-foreground))'
         },
-        border:       'hsl(var(--border))',
+        'primary-ink': 'hsl(var(--primary-text))',
+        border: {
+          DEFAULT:    'hsl(var(--border))',
+          subtle:     'hsl(var(--border-subtle))'
+        },
         input:        'hsl(var(--input))',
         ring:         'hsl(var(--ring))',
         success:      'hsl(var(--success))',

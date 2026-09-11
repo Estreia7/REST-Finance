@@ -18,11 +18,11 @@ export default function MobileBottomNav({ activeTab, onTabChange }: { activeTab:
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden">
       {/* Safe area background */}
-      <div className="bg-card/90 backdrop-blur-2xl border-t border-white/5 pb-[env(safe-area-inset-bottom)]">
+      <div className="bg-card/90 backdrop-blur-2xl border-t border-border-subtle pb-[env(safe-area-inset-bottom)]">
         <div className="relative flex items-center justify-around px-1 py-1.5">
           {/* Sliding active indicator */}
           <div
-            className="absolute top-1 h-[calc(100%-8px)] rounded-xl bg-white/[0.06] transition-all duration-300 ease-out"
+            className="absolute top-1 h-[calc(100%-8px)] rounded-xl bg-muted transition-all duration-300 ease-out"
             style={{
               width: `${100 / items.length}%`,
               left: `${(activeIndex / items.length) * 100}%`,

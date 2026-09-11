@@ -104,14 +104,14 @@ export default function RestaurantDetailPanel({ restaurantId, onBack }: Restaura
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button onClick={onBack} className="p-2 rounded-lg hover:bg-white/5 text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={onBack} className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-4 h-4" />
         </button>
         <h2 className="text-xl font-bold text-foreground">{detail.name}</h2>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-white/[0.03] rounded-xl w-fit border border-white/5">
+      <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle">
         {(['overview', 'revenue', 'costs'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${tab === t ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
             {t === 'overview' ? 'Detalhes' : t === 'revenue' ? 'Receita' : 'Custos'}
@@ -173,7 +173,7 @@ export default function RestaurantDetailPanel({ restaurantId, onBack }: Restaura
             <h3 className="text-sm font-bold text-foreground mb-4">Membros ({detail.memberships?.length || 0})</h3>
             <div className="space-y-2">
               {detail.memberships?.map((m: any) => (
-                <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/5">
+                <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg bg-surface border border-border-subtle">
                   <div className="w-7 h-7 rounded-lg gradient-bg flex items-center justify-center">
                     <span className="text-white text-xs font-bold">{(m.user.name || m.user.email)[0].toUpperCase()}</span>
                   </div>
@@ -181,7 +181,7 @@ export default function RestaurantDetailPanel({ restaurantId, onBack }: Restaura
                     <div className="text-xs font-medium text-foreground">{m.user.name || '—'}</div>
                     <div className="text-[10px] text-muted-foreground">{m.user.email}</div>
                   </div>
-                  <span className="text-[10px] text-muted-foreground bg-white/5 px-2 py-0.5 rounded">{m.role}</span>
+                  <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded">{m.role}</span>
                 </div>
               ))}
             </div>
@@ -206,7 +206,7 @@ export default function RestaurantDetailPanel({ restaurantId, onBack }: Restaura
             <div className="card-glass rounded-2xl overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-white/5">
+                  <tr className="border-b border-border-subtle">
                     <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Data</th>
                     {tab === 'costs' && <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Tipo</th>}
                     <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">Valor</th>
@@ -215,7 +215,7 @@ export default function RestaurantDetailPanel({ restaurantId, onBack }: Restaura
                 </thead>
                 <tbody>
                   {entries.map((e: any) => (
-                    <tr key={e.id} className="border-b border-white/[0.03] hover:bg-white/[0.02]">
+                    <tr key={e.id} className="border-b border-border-subtle hover:bg-muted">
                       <td className="py-2 px-4 text-foreground text-xs">{fmtDate(e.date)}</td>
                       {tab === 'costs' && <td className="py-2 px-4 text-muted-foreground text-xs">{e.type} — {e.categoryName}</td>}
                       <td className="py-2 px-4 text-right font-semibold text-foreground text-xs">

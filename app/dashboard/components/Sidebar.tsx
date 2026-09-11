@@ -44,14 +44,14 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center justify-between px-4 h-16 border-b border-white/5 shrink-0">
+      <div className="flex items-center justify-between px-4 h-16 border-b border-border-subtle shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl gradient-bg flex items-center justify-center shadow-glow-sm">
             <span className="text-white font-black text-sm">R</span>
           </div>
           <span className="font-black text-sm gradient-text">REST Finance</span>
         </div>
-        <button onClick={onClose} className="md:hidden p-1.5 rounded-lg hover:bg-white/5 text-muted-foreground hover:text-foreground transition-all" aria-label="Fechar menu">
+        <button onClick={onClose} className="md:hidden p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all" aria-label="Fechar menu">
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -73,8 +73,8 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
       </nav>
 
       {/* User card */}
-      <div className="p-3 border-t border-white/5 shrink-0">
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+      <div className="p-3 border-t border-border-subtle shrink-0">
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-muted border border-border-subtle">
           <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center shrink-0">
             <span className="text-white font-bold text-xs">
               {(currentUser?.name || currentUser?.email || 'U').charAt(0).toUpperCase()}
@@ -92,7 +92,7 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
             onClick={onLogout}
             title="Sair"
             aria-label="Sair"
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-all shrink-0"
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all shrink-0"
           >
             <LogOut className="w-3.5 h-3.5" />
           </button>
@@ -106,7 +106,7 @@ export default function Sidebar(props: SidebarProps) {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 w-60 bg-card/60 backdrop-blur-xl border-r border-white/5 z-40">
+      <aside className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 w-60 bg-card/60 backdrop-blur-xl border-r border-border-subtle z-40">
         <SidebarContent {...props} onClose={() => {}} />
       </aside>
 
@@ -117,7 +117,7 @@ export default function Sidebar(props: SidebarProps) {
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 md:hidden animate-fade-in"
             onClick={props.onClose}
           />
-          <aside className="fixed left-0 top-0 bottom-0 w-72 bg-card border-r border-white/5 z-50 md:hidden animate-slide-in flex flex-col">
+          <aside className="fixed left-0 top-0 bottom-0 w-72 bg-card border-r border-border-subtle z-50 md:hidden animate-slide-in flex flex-col">
             <SidebarContent {...props} />
           </aside>
         </>

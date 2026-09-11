@@ -208,7 +208,7 @@ function RegisterForm({ onSwitchTab }: { onSwitchTab: () => void }) {
           <p className="text-sm text-muted-foreground mt-1">A redirecionar para o teu dashboard...</p>
         </div>
         <div className="w-full bg-border rounded-full h-1 overflow-hidden mt-2">
-          <div className="h-full bg-gradient-to-r from-violet-600 to-indigo-600 animate-gradient rounded-full" style={{ width: '100%', transition: 'width 1s ease' }} />
+          <div className="h-full bg-primary animate-gradient rounded-full" style={{ width: '100%', transition: 'width 1s ease' }} />
         </div>
       </div>
     );
@@ -406,7 +406,7 @@ export default function AuthModal({ open, onOpenChange, defaultTab = 'login' }: 
       <div className="absolute inset-0 flex items-center justify-center p-4" onClick={handleOverlayClick}>
         <div
           ref={contentRef}
-          className="relative w-full max-w-md bg-card border border-white/10 rounded-2xl shadow-modal p-6 sm:p-8 outline-none
+          className="relative w-full max-w-md bg-card border border-border rounded-2xl shadow-modal p-6 sm:p-8 outline-none
                      transition-all duration-300 ease-out max-h-[90vh] overflow-y-auto no-scrollbar"
           style={{
             opacity: animating ? 1 : 0,
@@ -417,7 +417,7 @@ export default function AuthModal({ open, onOpenChange, defaultTab = 'login' }: 
           {/* Close button */}
           <button
             onClick={handleClose}
-            className="absolute right-3 top-3 sm:right-4 sm:top-4 p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-all z-10"
+            className="absolute right-3 top-3 sm:right-4 sm:top-4 p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all z-10"
             aria-label="Fechar"
           >
             <X className="w-4 h-4" />

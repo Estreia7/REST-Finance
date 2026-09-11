@@ -36,7 +36,7 @@ export default function ActivityLogPanel() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-foreground">Registo de Atividade</h2>
-        <button onClick={load} className="p-2 rounded-lg hover:bg-white/5 text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={load} className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
@@ -50,7 +50,7 @@ export default function ActivityLogPanel() {
         <div className="card-glass rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-white/5">
+              <tr className="border-b border-border-subtle">
                 <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Data</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Utilizador</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground hidden md:table-cell">Restaurante</th>
@@ -59,7 +59,7 @@ export default function ActivityLogPanel() {
             </thead>
             <tbody>
               {logs.map(log => (
-                <tr key={log.id} className="border-b border-white/[0.03] hover:bg-white/[0.02]">
+                <tr key={log.id} className="border-b border-border-subtle hover:bg-muted">
                   <td className="py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">{fmtDate(log.createdAt)}</td>
                   <td className="py-2 px-4 text-xs text-foreground">{log.actor?.name || log.actor?.email || '—'}</td>
                   <td className="py-2 px-4 text-xs text-muted-foreground hidden md:table-cell">{log.restaurant?.name || '—'}</td>

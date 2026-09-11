@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { requireMember, isAuthError } from '@/lib/auth-helpers';
 import { toClientError } from '@/lib/errors';
 
+// Authenticated + cookie-based: never statically rendered.
+export const dynamic = 'force-dynamic';
+
 /** Sanitize a string for safe CSV output (prevent formula injection) */
 function sanitizeCsvCell(value: string): string {
   let v = value.replace(/,/g, ';').replace(/\n/g, ' ').replace(/\r/g, '');

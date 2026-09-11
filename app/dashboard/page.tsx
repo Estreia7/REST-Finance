@@ -332,7 +332,7 @@ function DashboardPageInner() {
             <>
               {/* Onboarding card — shown when no data exists */}
               {stats.revenue === 0 && stats.costs === 0 && last7DaysData.length === 0 && (
-                <div className="card-glass p-6 sm:p-8 border border-primary/20 bg-gradient-to-br from-violet-600/5 to-indigo-600/5">
+                <div className="card-glass p-6 sm:p-8 border border-primary/20 bg-primary-subtle">
                   <div className="flex items-start gap-4">
                     <div className="w-11 h-11 rounded-xl gradient-bg flex items-center justify-center shadow-glow-sm shrink-0">
                       <Rocket className="w-5 h-5 text-white" />
@@ -382,7 +382,7 @@ function DashboardPageInner() {
               <div className="md:hidden">
                 <button
                   onClick={() => setShowMoreCharts(v => !v)}
-                  className="w-full flex items-center justify-center gap-2 py-3 text-sm font-medium text-muted-foreground hover:text-foreground border border-white/5 rounded-xl bg-white/[0.02] transition-all"
+                  className="w-full flex items-center justify-center gap-2 py-3 text-sm font-medium text-muted-foreground hover:text-foreground border border-border-subtle rounded-xl bg-surface transition-all"
                 >
                   {showMoreCharts ? (
                     <><ChevronUp className="w-4 h-4" />Esconder detalhes</>
@@ -403,7 +403,7 @@ function DashboardPageInner() {
 
           {activeTab === 'revenue' && (
             <>
-              <div className="flex gap-1 p-1 bg-white/[0.03] rounded-xl w-fit border border-white/5">
+              <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle">
                 <button onClick={() => setRevenueSubView('entry')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'entry' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Registar</button>
                 <button onClick={() => setRevenueSubView('scan')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'scan' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Digitalizar</button>
                 <button onClick={() => setRevenueSubView('history')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'history' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Historial</button>
@@ -434,7 +434,7 @@ function DashboardPageInner() {
 
           {activeTab === 'costs' && (
             <>
-              <div className="flex gap-1 p-1 bg-white/[0.03] rounded-xl w-fit border border-white/5">
+              <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle">
                 <button onClick={() => setCostSubView('entry')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${costSubView === 'entry' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Registar</button>
                 <button onClick={() => setCostSubView('scan')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${costSubView === 'scan' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Digitalizar</button>
                 <button onClick={() => setCostSubView('history')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${costSubView === 'history' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Historial</button>
@@ -465,7 +465,7 @@ function DashboardPageInner() {
 
           {activeTab === 'analytics' && (
             <>
-              <div className="flex gap-1 p-1 bg-white/[0.03] rounded-xl w-fit border border-white/5">
+              <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle">
                 <button onClick={() => setAnalyticsSubView('pnl')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'pnl' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>P&L</button>
                 <button onClick={() => setAnalyticsSubView('compare')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'compare' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Comparação</button>
                 <button onClick={() => setAnalyticsSubView('tickets')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'tickets' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Tickets</button>

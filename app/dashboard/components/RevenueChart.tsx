@@ -12,7 +12,7 @@ interface MonthlyItem {
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="px-4 py-3 rounded-xl bg-card border border-white/10 shadow-modal text-xs">
+    <div className="px-4 py-3 rounded-xl bg-card border border-border shadow-modal text-xs">
       <div className="font-semibold text-foreground mb-2">{label}</div>
       {payload.map((p: any) => (
         <div key={p.name} className="flex items-center justify-between gap-6">

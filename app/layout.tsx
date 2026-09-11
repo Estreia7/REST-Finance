@@ -1,44 +1,77 @@
 import type { ReactNode } from 'react';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import ConditionalNavbar from './components/ConditionalNavbar';
 import { LanguageProvider } from '@/lib/language-context';
+import { ThemeProvider, THEME_INIT_SCRIPT } from '@/lib/theme-context';
 import { Toaster } from 'sonner';
 
-export const metadata = {
-  title: 'REST Finance – KPIs para o teu Restaurante em 2 Minutos por Dia',
-  description: 'Controla receitas, custos e lucro em tempo real. Sem Excel, sem confusão. Feito para proprietários de restaurantes portugueses. Trial gratuito de 14 dias.'
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://rest-finance.bruno-dev.xyz';
+
+export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: 'REST Finance — Controla as finanças do teu restaurante',
+    template: '%s · REST Finance',
+  },
+  description:
+    'Receitas, custos e margens do teu restaurante em tempo real. Prime Cost, food cost e lucro líquido calculados automaticamente — sem Excel.',
+  applicationName: 'REST Finance',
+  openGraph: {
+    type: 'website',
+    locale: 'pt_PT',
+    url: SITE_URL,
+    siteName: 'REST Finance',
+    title: 'REST Finance — Controla as finanças do teu restaurante',
+    description:
+      'Receitas, custos e margens do teu restaurante em tempo real. Sem Excel, sem folhas de cálculo.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'REST Finance',
+    description: 'Controla as finanças do teu restaurante em tempo real.',
+  },
+  robots: { index: true, follow: true },
+  manifest: '/manifest.json',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#faf8f5' },
+    { media: '(prefers-color-scheme: dark)', color: '#10141c' },
+  ],
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="pt" className="h-full dark">
+    <html lang="pt" className="h-full" suppressHydrationWarning>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        {/* Applies the stored theme before first paint so the page never
+            flashes the wrong one. Must stay blocking and inline. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="theme-color" content="#0a0c14" />
-        <link rel="manifest" href="/manifest.json" />
       </head>
       <body className="min-h-screen bg-background text-foreground antialiased">
-        <LanguageProvider>
-          <div className="flex min-h-screen flex-col">
-            <ConditionalNavbar />
-            {children}
-          </div>
-        </LanguageProvider>
+        <ThemeProvider>
+          <LanguageProvider>
+            <div className="flex min-h-screen flex-col">
+              <ConditionalNavbar />
+              {children}
+            </div>
+          </LanguageProvider>
+        </ThemeProvider>
         <Toaster
           position="top-right"
           toastOptions={{
-            style: {
-              background: 'hsl(222 40% 9%)',
-              border: '1px solid hsl(222 30% 16%)',
-              color: 'hsl(210 40% 96%)',
-            },
+            className: 'bg-card text-card-foreground border border-border',
           }}
         />
       </body>
     </html>
   );
 }
-

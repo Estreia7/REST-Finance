@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/lib/language-context';
 import LanguageSelector from './LanguageSelector';
 import type { AuthChangeEvent } from '@supabase/supabase-js';
+import { useTheme } from '@/lib/theme-context';
 
 function openAuthModal(tab: 'login' | 'register') {
   window.dispatchEvent(new CustomEvent('open-auth', { detail: tab }));
@@ -21,25 +22,8 @@ export default function Navbar() {
   const [mobileAnimating, setMobileAnimating] = useState(false);
   const [user, setUser]                      = useState<any>(null);
   const [isLoading, setIsLoading]            = useState(true);
-  const [theme, setTheme]                    = useState<'light' | 'dark'>('dark');
+  const { resolvedTheme, toggleTheme } = useTheme();
   const menuRef = useRef<HTMLDivElement>(null);
-
-  // Always dark on first render
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.add('dark');
-    root.style.colorScheme = 'dark';
-  }, []);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    root.style.colorScheme = theme;
-  }, [theme]);
 
   useEffect(() => {
     const onScroll = () => setIsScrolled(window.scrollY > 20);
@@ -111,7 +95,7 @@ export default function Navbar() {
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         isScrolled
-          ? 'bg-background/80 backdrop-blur-2xl border-b border-white/5 shadow-card'
+          ? 'bg-background/80 backdrop-blur-2xl border-b border-border-subtle shadow-card'
           : 'bg-transparent'
       }`}
     >
@@ -146,11 +130,11 @@ export default function Navbar() {
             <LanguageSelector />
 
             <button
-              onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
-              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-all"
-              aria-label="Toggle theme"
+              onClick={toggleTheme}
+              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+              aria-label={resolvedTheme === 'light' ? 'Mudar para tema escuro' : 'Mudar para tema claro'}
             >
-              {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+              {resolvedTheme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
             </button>
 
             {!isLoading && (
@@ -231,7 +215,7 @@ export default function Navbar() {
                   key={link.href}
                   href={link.href}
                   onClick={closeMobileMenu}
-                  className="flex items-center justify-between px-4 py-3.5 text-base font-medium text-foreground hover:bg-white/5 rounded-xl transition-all"
+                  className="flex items-center justify-between px-4 py-3.5 text-base font-medium text-foreground hover:bg-muted rounded-xl transition-all"
                   style={{
                     opacity: mobileAnimating ? 1 : 0,
                     transform: mobileAnimating ? 'translateX(0)' : 'translateX(-12px)',
@@ -244,7 +228,7 @@ export default function Navbar() {
               ))}
 
               {/* Divider */}
-              <div className="border-t border-white/5 my-4" />
+              <div className="border-t border-border-subtle my-4" />
 
               {/* Actions */}
               <div
@@ -262,14 +246,14 @@ export default function Navbar() {
                         <Link
                           href="/dashboard"
                           onClick={closeMobileMenu}
-                          className="flex items-center gap-3 px-4 py-3.5 text-base font-medium text-foreground hover:bg-white/5 rounded-xl transition-all"
+                          className="flex items-center gap-3 px-4 py-3.5 text-base font-medium text-foreground hover:bg-muted rounded-xl transition-all"
                         >
                           <LayoutDashboard className="w-5 h-5 text-primary" />
                           {t('navbar.dashboard')}
                         </Link>
                         <button
                           onClick={() => { handleLogout(); closeMobileMenu(); }}
-                          className="flex items-center gap-3 w-full px-4 py-3.5 text-base font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 rounded-xl transition-all"
+                          className="flex items-center gap-3 w-full px-4 py-3.5 text-base font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-all"
                         >
                           <LogOut className="w-5 h-5" />
                           {t('navbar.logout')}
@@ -279,7 +263,7 @@ export default function Navbar() {
                       <>
                         <button
                           onClick={() => { openAuthModal('login'); closeMobileMenu(); }}
-                          className="flex items-center justify-center w-full px-4 py-3.5 text-base font-medium text-foreground border border-white/10 bg-white/[0.04] rounded-xl hover:bg-white/[0.08] transition-all"
+                          className="flex items-center justify-center w-full px-4 py-3.5 text-base font-medium text-foreground border border-border bg-muted rounded-xl hover:bg-muted transition-all"
                         >
                           {t('navbar.login')}
                         </button>
@@ -298,7 +282,7 @@ export default function Navbar() {
 
               {/* Settings row */}
               <div
-                className="flex items-center justify-between px-4 pt-4 border-t border-white/5 mt-4"
+                className="flex items-center justify-between px-4 pt-4 border-t border-border-subtle mt-4"
                 style={{
                   opacity: mobileAnimating ? 1 : 0,
                   transition: `opacity 0.3s 350ms ease-out`,
@@ -306,11 +290,11 @@ export default function Navbar() {
               >
                 <LanguageSelector />
                 <button
-                  onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
-                  className="p-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-all"
-                  aria-label="Toggle theme"
+                  onClick={toggleTheme}
+                  className="p-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                  aria-label={resolvedTheme === 'light' ? 'Mudar para tema escuro' : 'Mudar para tema claro'}
                 >
-                  {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+                  {resolvedTheme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
                 </button>
               </div>
             </div>

@@ -223,13 +223,13 @@ export default function AdminPage() {
 
         <aside className={`
           fixed top-0 left-0 h-full w-60 z-40 flex flex-col
-          bg-card border-r border-white/5
+          bg-card border-r border-border-subtle
           transition-transform duration-300
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           md:translate-x-0
         `}>
           {/* Logo */}
-          <div className="h-14 flex items-center gap-2.5 px-4 border-b border-white/5 shrink-0">
+          <div className="h-14 flex items-center gap-2.5 px-4 border-b border-border-subtle shrink-0">
             <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center shadow-glow-sm">
               <span className="text-white font-black text-sm">R</span>
             </div>
@@ -265,7 +265,7 @@ export default function AdminPage() {
           </nav>
 
           {/* User */}
-          <div className="p-3 border-t border-white/5 shrink-0">
+          <div className="p-3 border-t border-border-subtle shrink-0">
             <div className="flex items-center gap-2.5 px-2 py-2 rounded-xl">
               <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center shrink-0">
                 <span className="text-white text-xs font-bold">
@@ -291,10 +291,10 @@ export default function AdminPage() {
       {/* ── Main ───────────────────────────────────────────────────────────── */}
       <div className="md:ml-60 flex flex-col min-h-screen">
         {/* Top bar */}
-        <header className="sticky top-0 z-20 h-14 flex items-center gap-3 px-4 md:px-6 bg-background/80 backdrop-blur-xl border-b border-white/5">
+        <header className="sticky top-0 z-20 h-14 flex items-center gap-3 px-4 md:px-6 bg-background/80 backdrop-blur-xl border-b border-border-subtle">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="md:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5"
+            className="md:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -345,7 +345,7 @@ export default function AdminPage() {
                     <p className="text-2xl font-black tabular-nums text-foreground">€{mrr.toLocaleString('pt-PT')}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">Receita mensal recorrente</p>
                   </div>
-                  <div className="pt-1 border-t border-white/5">
+                  <div className="pt-1 border-t border-border-subtle">
                     <p className="text-xs text-muted-foreground">ARR estimado: <span className="text-foreground font-medium">€{arr.toLocaleString('pt-PT')}</span></p>
                   </div>
                 </div>
@@ -356,13 +356,13 @@ export default function AdminPage() {
                     <div className="w-9 h-9 rounded-xl bg-success/10 flex items-center justify-center">
                       <Building2 className="w-4 h-4 text-success" />
                     </div>
-                    <span className="text-xs text-muted-foreground font-medium bg-white/5 px-2 py-0.5 rounded-full">Total</span>
+                    <span className="text-xs text-muted-foreground font-medium bg-muted px-2 py-0.5 rounded-full">Total</span>
                   </div>
                   <div>
                     <p className="text-2xl font-black tabular-nums text-foreground">{stats.total}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">Restaurantes registados</p>
                   </div>
-                  <div className="pt-1 border-t border-white/5 flex gap-3 text-xs">
+                  <div className="pt-1 border-t border-border-subtle flex gap-3 text-xs">
                     <span className="text-warning">{stats.trial} trial</span>
                     <span className="text-muted-foreground">·</span>
                     <span className="text-success">{paidCount} pagantes</span>
@@ -375,15 +375,15 @@ export default function AdminPage() {
                     <div className="w-9 h-9 rounded-xl bg-info/10 flex items-center justify-center">
                       <TrendingUp className="w-4 h-4 text-info" />
                     </div>
-                    <span className="text-xs text-muted-foreground font-medium bg-white/5 px-2 py-0.5 rounded-full">Conversão</span>
+                    <span className="text-xs text-muted-foreground font-medium bg-muted px-2 py-0.5 rounded-full">Conversão</span>
                   </div>
                   <div>
                     <p className="text-2xl font-black tabular-nums text-foreground">{conversionRate}%</p>
                     <p className="text-xs text-muted-foreground mt-0.5">Trial → pago</p>
                   </div>
-                  <div className="w-full bg-white/5 rounded-full h-1.5">
+                  <div className="w-full bg-muted rounded-full h-1.5">
                     <div
-                      className="h-1.5 rounded-full bg-gradient-to-r from-violet-600 to-indigo-500 transition-all duration-700"
+                      className="h-1.5 rounded-full bg-primary transition-all duration-700"
                       style={{ width: `${conversionRate}%` }}
                     />
                   </div>
@@ -395,13 +395,13 @@ export default function AdminPage() {
                     <div className="w-9 h-9 rounded-xl bg-warning/10 flex items-center justify-center">
                       <CreditCard className="w-4 h-4 text-warning" />
                     </div>
-                    <span className="text-xs text-muted-foreground font-medium bg-white/5 px-2 py-0.5 rounded-full">Planos</span>
+                    <span className="text-xs text-muted-foreground font-medium bg-muted px-2 py-0.5 rounded-full">Planos</span>
                   </div>
                   <div>
                     <p className="text-2xl font-black tabular-nums text-foreground">{paidCount}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">Subscritores activos</p>
                   </div>
-                  <div className="pt-1 border-t border-white/5 flex gap-3 text-xs">
+                  <div className="pt-1 border-t border-border-subtle flex gap-3 text-xs">
                     <span className="text-info">{stats.monthly} mensal</span>
                     <span className="text-muted-foreground">·</span>
                     <span className="text-success">{stats.yearly} anual</span>
@@ -417,7 +417,7 @@ export default function AdminPage() {
                     <h2 className="text-base font-bold text-foreground">Receita da Plataforma</h2>
                     <p className="text-xs text-muted-foreground mt-0.5">Receita estimada por mês · {selectedYear}</p>
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-white/5 px-2 py-1 rounded-lg">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-lg">
                     <Activity className="w-3 h-3" />
                     <span>MRR estimado</span>
                   </div>
@@ -518,7 +518,7 @@ export default function AdminPage() {
                           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                             planFilter === f
                               ? 'bg-primary text-white shadow-glow-sm'
-                              : 'bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground'
+                              : 'bg-muted text-muted-foreground hover:bg-muted hover:text-foreground'
                           }`}
                         >
                           {labels[f]}
@@ -551,9 +551,9 @@ export default function AdminPage() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-white/5">
+                        <tr className="border-b border-border-subtle">
                           <th className="py-3 px-3 w-8">
-                            <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={toggleAll} className="rounded border-white/20" />
+                            <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={toggleAll} className="rounded border-border" />
                           </th>
                           <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Restaurante</th>
                           <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Proprietário</th>
@@ -567,13 +567,13 @@ export default function AdminPage() {
                         {filtered.map((r) => {
                           const owner = r.memberships.find((m) => m.role === 'OWNER')?.user;
                           return (
-                            <tr key={r.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors cursor-pointer group">
+                            <tr key={r.id} className="border-b border-border-subtle hover:bg-muted transition-colors cursor-pointer group">
                               <td className="py-3 px-3" onClick={e => e.stopPropagation()}>
-                                <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded border-white/20" />
+                                <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded border-border" />
                               </td>
                               <td className="py-3 px-4" onClick={() => setSelectedRestaurantId(r.id)}>
                                 <div className="flex items-center gap-2.5">
-                                  <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+                                  <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center shrink-0">
                                     <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
                                   </div>
                                   <span className="font-medium text-foreground truncate max-w-[140px]">{r.name}</span>
@@ -606,7 +606,7 @@ export default function AdminPage() {
                   </div>
 
                   {filtered.length > 0 && (
-                    <div className="px-4 py-3 border-t border-white/5 text-xs text-muted-foreground">
+                    <div className="px-4 py-3 border-t border-border-subtle text-xs text-muted-foreground">
                       {filtered.length} {filtered.length === 1 ? 'resultado' : 'resultados'}
                       {(search || planFilter !== 'all') && ` de ${clients.length} total`}
                     </div>

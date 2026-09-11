@@ -74,7 +74,7 @@ export default function PriceTrackingPanel() {
         <select
           value={threshold}
           onChange={(e) => setThreshold(Number(e.target.value))}
-          className="text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-muted-foreground"
+          className="text-xs bg-muted border border-border rounded-lg px-2 py-1 text-muted-foreground"
         >
           <option value={5}>+5%</option>
           <option value={10}>+10%</option>
@@ -99,10 +99,10 @@ export default function PriceTrackingPanel() {
             const isExpanded = expandedProduct === key;
 
             return (
-              <div key={i} className="border border-white/5 rounded-xl overflow-hidden">
+              <div key={i} className="border border-border-subtle rounded-xl overflow-hidden">
                 <button
                   onClick={() => toggleHistory(alert.productName, alert.vendorId)}
-                  className="w-full flex items-center gap-3 p-3 hover:bg-white/[0.02] transition-colors text-left"
+                  className="w-full flex items-center gap-3 p-3 hover:bg-muted transition-colors text-left"
                 >
                   <div className={`p-1.5 rounded-lg ${isIncrease ? 'bg-red-500/10' : 'bg-green-500/10'}`}>
                     {isIncrease ? (
@@ -131,7 +131,7 @@ export default function PriceTrackingPanel() {
                 </button>
 
                 {isExpanded && (
-                  <div className="border-t border-white/5 p-3 bg-white/[0.01]">
+                  <div className="border-t border-border-subtle p-3 bg-surface">
                     {historyLoading ? (
                       <div className="text-xs text-muted-foreground text-center py-2">A carregar histórico...</div>
                     ) : priceHistory.length === 0 ? (

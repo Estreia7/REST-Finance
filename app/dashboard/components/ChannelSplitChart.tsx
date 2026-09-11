@@ -15,7 +15,7 @@ const COLORS = ['hsl(258 90% 66%)', 'hsl(240 84% 67%)'];
 const CustomTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="px-3 py-2 rounded-xl bg-card border border-white/10 shadow-modal text-xs">
+    <div className="px-3 py-2 rounded-xl bg-card border border-border shadow-modal text-xs">
       <span className="font-semibold text-foreground">{payload[0].name}: </span>
       <span className="text-muted-foreground">€{Number(payload[0].value).toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</span>
     </div>

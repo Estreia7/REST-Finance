@@ -60,7 +60,7 @@ export default function PnLPanel() {
 
             <div className="space-y-1">
               {/* Revenue */}
-              <div className="flex justify-between py-3 border-b border-white/5">
+              <div className="flex justify-between py-3 border-b border-border-subtle">
                 <span className="font-bold text-foreground">Receita Total</span>
                 <span className="font-bold text-foreground">{fmt(data.revenue)}</span>
               </div>
@@ -68,13 +68,13 @@ export default function PnLPanel() {
                 <span className="text-sm text-muted-foreground">Local</span>
                 <span className="text-sm text-muted-foreground">{fmt(data.dineIn)}</span>
               </div>
-              <div className="flex justify-between py-2 pl-4 border-b border-white/5">
+              <div className="flex justify-between py-2 pl-4 border-b border-border-subtle">
                 <span className="text-sm text-muted-foreground">Takeaway</span>
                 <span className="text-sm text-muted-foreground">{fmt(data.takeaway)}</span>
               </div>
 
               {/* COGS */}
-              <div className="flex justify-between py-3 border-b border-white/5">
+              <div className="flex justify-between py-3 border-b border-border-subtle">
                 <span className="font-semibold text-foreground">COGS</span>
                 <span className="font-semibold text-red-400">-{fmt(data.cogs)}</span>
               </div>
@@ -86,7 +86,7 @@ export default function PnLPanel() {
               ))}
 
               {/* Gross Profit */}
-              <div className="flex justify-between py-3 border-y border-white/10 bg-white/[0.02] -mx-6 px-6">
+              <div className="flex justify-between py-3 border-y border-border bg-surface -mx-6 px-6">
                 <span className="font-bold text-foreground">Lucro Bruto</span>
                 <div className="flex items-center gap-2">
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${data.grossMargin >= 60 ? 'bg-success/15 text-green-400' : data.grossMargin >= 50 ? 'bg-warning/15 text-amber-400' : 'bg-danger/15 text-red-400'}`}>
@@ -97,7 +97,7 @@ export default function PnLPanel() {
               </div>
 
               {/* OPEX */}
-              <div className="flex justify-between py-3 border-b border-white/5">
+              <div className="flex justify-between py-3 border-b border-border-subtle">
                 <span className="font-semibold text-foreground">OPEX</span>
                 <span className="font-semibold text-red-400">-{fmt(data.opex)}</span>
               </div>
@@ -109,7 +109,7 @@ export default function PnLPanel() {
               ))}
 
               {/* Net Income */}
-              <div className="flex justify-between py-4 border-t-2 border-white/10 mt-2">
+              <div className="flex justify-between py-4 border-t-2 border-border mt-2">
                 <span className="text-lg font-black text-foreground">Lucro Líquido</span>
                 <div className="flex items-center gap-2">
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${data.netMargin >= 15 ? 'bg-success/15 text-green-400' : data.netMargin >= 5 ? 'bg-warning/15 text-amber-400' : 'bg-danger/15 text-red-400'}`}>
@@ -128,7 +128,7 @@ export default function PnLPanel() {
             {[
               { label: 'Receita', value: data.revenue, color: 'text-foreground' },
               { label: 'COGS %', value: data.revenue > 0 ? (data.cogs / data.revenue * 100) : 0, suffix: '%', color: 'text-amber-400' },
-              { label: 'OPEX %', value: data.revenue > 0 ? (data.opex / data.revenue * 100) : 0, suffix: '%', color: 'text-indigo-400' },
+              { label: 'OPEX %', value: data.revenue > 0 ? (data.opex / data.revenue * 100) : 0, suffix: '%', color: 'text-info' },
               { label: 'Margem Líq.', value: data.netMargin, suffix: '%', color: data.netMargin >= 15 ? 'text-green-400' : 'text-red-400' },
             ].map((card, i) => (
               <div key={i} className="card-glass p-4 text-center">

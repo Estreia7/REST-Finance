@@ -23,11 +23,11 @@ interface TopBarProps {
 
 export default function TopBar({ activeTab, restaurant, onMenuClick }: TopBarProps) {
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between gap-4 h-14 px-4 md:px-6 bg-background/80 backdrop-blur-xl border-b border-white/5">
+    <header className="sticky top-0 z-30 flex items-center justify-between gap-4 h-14 px-4 md:px-6 bg-background/80 backdrop-blur-xl border-b border-border-subtle">
       {/* Mobile menu button */}
       <button
         onClick={onMenuClick}
-        className="md:hidden p-2 -ml-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-all"
+        className="md:hidden p-2 -ml-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
         aria-label="Abrir menu"
       >
         <Menu className="w-5 h-5" />

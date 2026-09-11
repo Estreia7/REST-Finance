@@ -113,7 +113,7 @@ export default function RevenueHistoryPanel({ onDataChange }: { onDataChange?: (
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="input-field !py-1.5 !text-xs w-[130px]" />
           <span className="text-muted-foreground text-xs">—</span>
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="input-field !py-1.5 !text-xs w-[130px]" />
-          <a href={`/api/export/csv?type=revenue&from=${dateFrom}&to=${dateTo}`} className="p-1.5 rounded-lg hover:bg-white/5 text-muted-foreground hover:text-foreground transition-colors" title="Exportar CSV">
+          <a href={`/api/export/csv?type=revenue&from=${dateFrom}&to=${dateTo}`} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Exportar CSV">
             <Download className="w-4 h-4" />
           </a>
         </div>
@@ -131,7 +131,7 @@ export default function RevenueHistoryPanel({ onDataChange }: { onDataChange?: (
         <div className="overflow-x-auto -mx-6 px-6">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-white/5">
+              <tr className="border-b border-border-subtle">
                 <th className="text-left py-3 text-xs font-medium text-muted-foreground">Data</th>
                 <th className="text-right py-3 text-xs font-medium text-muted-foreground">Local</th>
                 <th className="text-right py-3 text-xs font-medium text-muted-foreground">Takeaway</th>
@@ -142,7 +142,7 @@ export default function RevenueHistoryPanel({ onDataChange }: { onDataChange?: (
             </thead>
             <tbody>
               {entries.map(entry => (
-                <tr key={entry.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                <tr key={entry.id} className="border-b border-border-subtle hover:bg-muted transition-colors">
                   {editingId === entry.id ? (
                     <>
                       <td className="py-3 text-foreground font-medium">{fmtDate(entry.date)}</td>
@@ -166,7 +166,7 @@ export default function RevenueHistoryPanel({ onDataChange }: { onDataChange?: (
                           <button onClick={handleSave} disabled={saving} className="p-1.5 rounded-lg bg-success/20 text-green-400 hover:bg-success/30 transition-colors">
                             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                           </button>
-                          <button onClick={() => setEditingId(null)} className="p-1.5 rounded-lg bg-white/5 text-muted-foreground hover:bg-white/10 transition-colors">
+                          <button onClick={() => setEditingId(null)} className="p-1.5 rounded-lg bg-muted text-muted-foreground hover:bg-muted transition-colors">
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -183,7 +183,7 @@ export default function RevenueHistoryPanel({ onDataChange }: { onDataChange?: (
                       </td>
                       <td className="py-3 text-right">
                         <div className="flex gap-1 justify-end">
-                          <button onClick={() => handleEdit(entry)} className="p-1.5 rounded-lg hover:bg-white/5 text-muted-foreground hover:text-foreground transition-colors">
+                          <button onClick={() => handleEdit(entry)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button onClick={() => handleDelete(entry.id)} disabled={deletingId === entry.id} className="p-1.5 rounded-lg hover:bg-danger/10 text-muted-foreground hover:text-red-400 transition-colors">
@@ -197,7 +197,7 @@ export default function RevenueHistoryPanel({ onDataChange }: { onDataChange?: (
               ))}
             </tbody>
             <tfoot>
-              <tr className="border-t border-white/10">
+              <tr className="border-t border-border">
                 <td className="py-3 text-xs font-bold text-foreground">Total</td>
                 <td className="py-3 text-right text-xs font-bold text-foreground">{fmt(totals.dineIn)}</td>
                 <td className="py-3 text-right text-xs font-bold text-foreground">{fmt(totals.takeaway)}</td>

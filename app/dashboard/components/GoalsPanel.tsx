@@ -80,7 +80,7 @@ export default function GoalsPanel({ restaurant, stats, onUpdate }: GoalsPanelPr
           </div>
 
           {/* Progress bar */}
-          <div className="h-4 rounded-full bg-white/5 overflow-hidden mb-6">
+          <div className="h-4 rounded-full bg-muted overflow-hidden mb-6">
             <div
               className={`h-full rounded-full transition-all duration-1000 ${progress >= 100 ? 'bg-success' : 'gradient-bg'}`}
               style={{ width: `${progress}%` }}
@@ -88,19 +88,19 @@ export default function GoalsPanel({ restaurant, stats, onUpdate }: GoalsPanelPr
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-white/[0.03] rounded-xl p-4">
+            <div className="bg-muted rounded-xl p-4">
               <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Receita Atual</div>
               <div className="text-lg font-bold text-foreground">{fmt(stats.revenue)}</div>
             </div>
-            <div className="bg-white/[0.03] rounded-xl p-4">
+            <div className="bg-muted rounded-xl p-4">
               <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Meta</div>
               <div className="text-lg font-bold text-foreground">{fmt(targetValue)}</div>
             </div>
-            <div className="bg-white/[0.03] rounded-xl p-4">
+            <div className="bg-muted rounded-xl p-4">
               <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Falta</div>
               <div className="text-lg font-bold text-foreground">{fmt(Math.max(0, targetValue - stats.revenue))}</div>
             </div>
-            <div className="bg-white/[0.03] rounded-xl p-4">
+            <div className="bg-muted rounded-xl p-4">
               <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Projeção Mensal</div>
               <div className={`text-lg font-bold ${projectedMonthly >= targetValue ? 'text-green-400' : 'text-amber-400'}`}>
                 {fmt(projectedMonthly)}
@@ -109,7 +109,7 @@ export default function GoalsPanel({ restaurant, stats, onUpdate }: GoalsPanelPr
           </div>
 
           {/* Daily pace */}
-          <div className="mt-4 p-4 rounded-xl bg-white/[0.02] border border-white/5">
+          <div className="mt-4 p-4 rounded-xl bg-surface border border-border-subtle">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
                 <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Média Diária</div>

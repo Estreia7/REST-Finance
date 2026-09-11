@@ -32,7 +32,7 @@ export default function Tooltip({ text, children }: TooltipProps) {
         {children}
       </span>
       <span
-        className={`absolute left-1/2 -translate-x-1/2 z-50 px-3 py-2 text-xs font-normal text-foreground bg-card-elevated border border-white/10 rounded-lg shadow-modal whitespace-normal text-center max-w-[220px] w-max pointer-events-none transition-all duration-200
+        className={`absolute left-1/2 -translate-x-1/2 z-50 px-3 py-2 text-xs font-normal text-foreground bg-card-elevated border border-border rounded-lg shadow-modal whitespace-normal text-center max-w-[220px] w-max pointer-events-none transition-all duration-200
           ${position === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'}
           ${show ? 'opacity-100 translate-y-0' : 'opacity-0 ' + (position === 'top' ? 'translate-y-1' : '-translate-y-1')}
         `}
@@ -40,7 +40,7 @@ export default function Tooltip({ text, children }: TooltipProps) {
         {text}
         {/* Arrow */}
         <span
-          className={`absolute left-1/2 -translate-x-1/2 w-2 h-2 bg-card-elevated border-white/10 rotate-45
+          className={`absolute left-1/2 -translate-x-1/2 w-2 h-2 bg-card-elevated border-border rotate-45
             ${position === 'top' ? 'top-full -mt-1 border-b border-r' : 'bottom-full -mb-1 border-t border-l'}
           `}
         />

@@ -103,7 +103,7 @@ export default function ResetPasswordPage() {
               Palavra-passe atualizada com sucesso.
             </p>
             <div className="w-full bg-border rounded-full h-1 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-violet-600 to-indigo-600 rounded-full" style={{ width: '100%', transition: 'width 2s ease' }} />
+              <div className="h-full bg-primary rounded-full" style={{ width: '100%', transition: 'width 2s ease' }} />
             </div>
           </div>
         ) : !sessionReady ? (

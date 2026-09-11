@@ -31,7 +31,7 @@ function TrendBadge({ value, inverted = false }: { value: number; inverted?: boo
   const positive = inverted ? value < 0 : value >= 0;
   return (
     <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full ${
-      positive ? 'bg-success/15 text-green-400' : 'bg-danger/15 text-red-400'
+      positive ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'
     }`}>
       {positive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
       {Math.abs(value).toFixed(1)}%
@@ -46,15 +46,15 @@ function Sparkline({ data }: { data: Array<{ date: string; revenue: number }> })
         <AreaChart data={data} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor="hsl(258 90% 66%)" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="hsl(258 90% 66%)" stopOpacity={0} />
+              <stop offset="5%"  stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
             </linearGradient>
           </defs>
-          <Area type="monotone" dataKey="revenue" stroke="hsl(258 90% 66%)" strokeWidth={1.5} fill="url(#sparkGrad)" dot={false} />
+          <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={1.5} fill="url(#sparkGrad)" dot={false} />
           <Tooltip
             content={({ active, payload }) =>
               active && payload?.[0] ? (
-                <div className="px-2 py-1 rounded-lg bg-card border border-white/10 text-xs font-semibold text-foreground">
+                <div className="px-2 py-1 rounded-lg bg-card border border-border text-xs font-semibold text-foreground">
                   €{Number(payload[0].value).toLocaleString('pt-PT', { minimumFractionDigits: 0 })}
                 </div>
               ) : null
@@ -106,8 +106,8 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
       {/* Revenue */}
       <div className="card-glass p-5 animate-fade-up-1">
         <div className="flex items-start justify-between mb-1">
-          <div className="w-9 h-9 rounded-xl gradient-bg flex items-center justify-center shadow-glow-sm">
-            <DollarSign className="w-4 h-4 text-white" />
+          <div className="w-9 h-9 rounded-xl gradient-bg flex items-center justify-center ">
+            <DollarSign className="w-4 h-4 text-primary-foreground" />
           </div>
           <TrendBadge value={advancedStats.revenueChange} />
         </div>
@@ -122,7 +122,7 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
               <span>Meta mensal</span>
               <span>{goalPercent.toFixed(0)}%</span>
             </div>
-            <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
               <div
                 className="h-full rounded-full gradient-bg transition-all duration-1000"
                 style={{ width: `${goalPercent}%` }}
@@ -135,20 +135,20 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
       {/* Prime Cost */}
       <div className="card-glass p-5 animate-fade-up-2">
         <div className="flex items-start justify-between mb-1">
-          <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/20 flex items-center justify-center">
-            <BarChart3 className="w-4 h-4 text-amber-400" />
+          <div className="w-9 h-9 rounded-xl bg-warning/10 border border-warning/20 flex items-center justify-center">
+            <BarChart3 className="w-4 h-4 text-warning" />
           </div>
           {primeCostIncomplete ? (
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-warning/15 text-amber-400">
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-warning/15 text-warning">
               Incompleto
             </span>
           ) : (
             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
               advancedStats.primeCostPercent > 65
-                ? 'bg-danger/15 text-red-400'
+                ? 'bg-danger/15 text-danger'
                 : advancedStats.primeCostPercent > 60
-                ? 'bg-warning/15 text-amber-400'
-                : 'bg-success/15 text-green-400'
+                ? 'bg-warning/15 text-warning'
+                : 'bg-success/15 text-success'
             }`}>
               {advancedStats.primeCostPercent > 65 ? 'Alto' : advancedStats.primeCostPercent > 60 ? 'Atenção' : 'Bom'}
             </span>
@@ -159,7 +159,7 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
         </div>
         <div className="text-xs text-muted-foreground mt-1">Prime Cost</div>
         {primeCostIncomplete ? (
-          <div className="mt-4 flex items-start gap-1.5 text-[10px] leading-relaxed text-amber-400/90">
+          <div className="mt-4 flex items-start gap-1.5 text-[10px] leading-relaxed text-warning/90">
             <AlertTriangle className="w-3 h-3 shrink-0 mt-px" aria-hidden="true" />
             <span>
               Sem categorias de pessoal definidas — este valor inclui apenas mercadorias.
@@ -172,7 +172,7 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
               <span>Meta &lt;60%</span>
               <span>{advancedStats.primeCostPercent.toFixed(1)}%</span>
             </div>
-            <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-1000 ${
                   advancedStats.primeCostPercent > 65 ? 'bg-danger' : advancedStats.primeCostPercent > 60 ? 'bg-warning' : 'bg-success'
@@ -188,7 +188,7 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
       <div className="card-glass p-5 animate-fade-up-3 hidden sm:block">
         <div className="flex items-start justify-between mb-1">
           <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/20 flex items-center justify-center">
-            <Target className="w-4 h-4 text-green-400" />
+            <Target className="w-4 h-4 text-success" />
           </div>
           <TrendBadge value={advancedStats.netIncomePercent} />
         </div>
@@ -222,8 +222,8 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
       {/* COGS % — hidden on mobile */}
       <div className="card-glass p-5 animate-fade-up-4 hidden sm:block">
         <div className="flex items-start justify-between mb-1">
-          <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/20 flex items-center justify-center">
-            <Activity className="w-4 h-4 text-indigo-400" />
+          <div className="w-9 h-9 rounded-xl bg-info/10 border border-info/20 flex items-center justify-center">
+            <Activity className="w-4 h-4 text-info" />
           </div>
           <TrendBadge value={advancedStats.cogsPercentChange} inverted />
         </div>
@@ -232,13 +232,13 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
         </div>
         <div className="text-xs text-muted-foreground mt-1">COGS %</div>
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="bg-white/[0.03] rounded-lg p-2.5">
+          <div className="bg-muted rounded-lg p-2.5">
             <div className="text-[10px] text-muted-foreground">Receita</div>
             <div className="text-sm font-bold text-foreground mt-0.5">
               €{stats.revenue.toLocaleString('pt-PT', { minimumFractionDigits: 0 })}
             </div>
           </div>
-          <div className="bg-white/[0.03] rounded-lg p-2.5">
+          <div className="bg-muted rounded-lg p-2.5">
             <div className="text-[10px] text-muted-foreground">Custos</div>
             <div className="text-sm font-bold text-foreground mt-0.5">
               €{stats.costs.toLocaleString('pt-PT', { minimumFractionDigits: 0 })}

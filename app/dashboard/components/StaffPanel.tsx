@@ -104,7 +104,7 @@ export default function StaffPanel({ staff, staffEmail, isSubmitting, onEmailCha
         ) : (
           <div className="space-y-2">
             {staff.map(member => (
-              <div key={member.id} className="flex items-center gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all">
+              <div key={member.id} className="flex items-center gap-4 p-4 rounded-xl bg-surface border border-border-subtle hover:bg-muted transition-all">
                 <div className="w-9 h-9 rounded-xl gradient-bg flex items-center justify-center shrink-0">
                   <span className="text-white font-bold text-xs">
                     {(member.user.name || member.user.email).charAt(0).toUpperCase()}

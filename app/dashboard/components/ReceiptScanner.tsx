@@ -147,7 +147,7 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
       <h2 className="text-xl font-bold text-foreground mb-6">Digitalizar Recibo</h2>
 
       {/* Scan type selector */}
-      <div className="flex gap-1 p-1 bg-white/[0.03] rounded-xl w-fit border border-white/5 mb-6">
+      <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle mb-6">
         <button
           onClick={() => { setScanType('DAILY_REPORT'); resetState(); }}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${scanType === 'DAILY_REPORT' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}
@@ -164,7 +164,7 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
 
       {/* Camera / upload */}
       {!imagePreview && (
-        <label className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-white/10 rounded-2xl cursor-pointer hover:border-white/20 transition-colors">
+        <label className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-border rounded-2xl cursor-pointer hover:border-border transition-colors">
           <div className="w-14 h-14 rounded-2xl gradient-bg flex items-center justify-center shadow-glow-sm">
             <Camera className="w-6 h-6 text-white" />
           </div>
@@ -188,7 +188,7 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
       {/* Image preview */}
       {imagePreview && !extracted && (
         <div className="space-y-4">
-          <div className="relative rounded-xl overflow-hidden border border-white/10">
+          <div className="relative rounded-xl overflow-hidden border border-border">
             <img src={imagePreview} alt="Receipt" className="w-full max-h-[400px] object-contain bg-black/20" />
           </div>
           <div className="flex gap-3">
@@ -198,7 +198,7 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
                 : <><Camera className="w-4 h-4" /> Extrair dados</>
               }
             </button>
-            <button onClick={resetState} className="px-4 py-2.5 rounded-xl bg-white/5 text-muted-foreground hover:bg-white/10 transition-colors">
+            <button onClick={resetState} className="px-4 py-2.5 rounded-xl bg-muted text-muted-foreground hover:bg-muted transition-colors">
               <RotateCcw className="w-4 h-4" />
             </button>
           </div>
@@ -237,7 +237,7 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
                     <input type="number" value={(editData as DailyReportData).takeawayTickets} onChange={e => setEditData({ ...editData, takeawayTickets: parseInt(e.target.value) || 0 } as any)} className="input-field !py-1.5 !text-xs" />
                   </div>
                 </div>
-                <div className="p-3 rounded-lg bg-white/[0.03] text-sm font-bold text-foreground">
+                <div className="p-3 rounded-lg bg-muted text-sm font-bold text-foreground">
                   Total: €{((editData as DailyReportData).dineInRevenue + (editData as DailyReportData).takeawayRevenue).toFixed(2)}
                 </div>
               </div>
@@ -257,7 +257,7 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
                 <div className="space-y-2">
                   <div className="text-xs text-muted-foreground">Itens</div>
                   {(editData as CostReceiptData).items.map((item, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs bg-white/[0.03] rounded-lg p-2">
+                    <div key={i} className="flex items-center gap-2 text-xs bg-muted rounded-lg p-2">
                       <span className="flex-1 text-foreground">{item.product}</span>
                       <span className="text-muted-foreground">{item.quantity}x</span>
                       <span className="font-semibold text-foreground">€{item.total.toFixed(2)}</span>
@@ -288,7 +288,7 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
                 : <><Check className="w-4 h-4" /> Confirmar e guardar</>
               }
             </button>
-            <button onClick={resetState} className="px-4 py-2.5 rounded-xl bg-white/5 text-muted-foreground hover:bg-white/10 text-sm transition-colors">
+            <button onClick={resetState} className="px-4 py-2.5 rounded-xl bg-muted text-muted-foreground hover:bg-muted text-sm transition-colors">
               <X className="w-4 h-4" />
             </button>
           </div>

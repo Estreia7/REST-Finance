@@ -3,93 +3,120 @@
 @tailwind utilities;
 
 @layer base {
+  /* ─────────────────────────────────────────
+     REST Finance — Design System
+
+     Light-first, warm neutral canvas with a single amber accent drawn from
+     the logo (chef's hat + rising bar chart). Amber is used sparingly: active
+     navigation, key figures, primary actions. It must never compete with the
+     status colours, which carry meaning in financial data.
+
+     Colours are defined here as HSL triplets and consumed through Tailwind as
+     hsl(var(--token)), so theming never requires touching markup.
+  ───────────────────────────────────────────*/
   :root {
-    /* ─────────────────────────────────────────
-       REST Finance — Premium Dark Design System
-       Always dark. Deep navy base, violet/indigo brand.
-    ───────────────────────────────────────────*/
+    /* Canvas — warm off-white, not pure white: easier across a long working
+       session, and lets white cards read as raised. */
+    --background:         40 30% 97%;
+    --surface:            40 25% 95%;
+    --foreground:         220 25% 12%;
 
-    /* Base layers */
-    --background:         222 47% 5%;    /* #080d1a — deepest navy */
-    --surface:            222 40% 8%;    /* slightly lighter surface */
-    --foreground:         210 40% 96%;   /* near-white text */
+    /* Cards sit above the canvas in plain white with a hairline border. */
+    --card:               0 0% 100%;
+    --card-elevated:      0 0% 100%;
+    --card-foreground:    220 25% 12%;
 
-    /* Cards */
-    --card:               222 40% 9%;    /* card background */
-    --card-elevated:      222 35% 12%;   /* elevated: modals, dropdowns */
-    --card-foreground:    210 40% 96%;
+    --popover:            0 0% 100%;
+    --popover-foreground: 220 25% 12%;
 
-    /* Popovers & dropdowns */
-    --popover:            222 35% 10%;
-    --popover-foreground: 210 40% 96%;
+    /* Brand — amber from the logo, deepened slightly from the raw gold so it
+       holds AA contrast against white when used as text. */
+    --primary:            38 95% 50%;
+    --primary-hover:      38 95% 44%;
+    --primary-foreground: 220 30% 14%;
 
-    /* Brand — violet primary, indigo accent */
-    --primary:            258 90% 66%;   /* violet #8b5cf6 */
-    --primary-hover:      258 90% 72%;
-    --primary-foreground: 0 0% 100%;
+    /* Amber is too light to serve as text on white (3.1:1). This darkened
+       variant is for amber-coloured TEXT and icons; --primary stays vivid for
+       fills, where navy sits on top of it. */
+    --primary-text:       33 92% 34%;
 
-    --secondary:          222 30% 14%;
-    --secondary-foreground: 210 40% 80%;
+    /* Soft amber wash for active nav items and selected rows. */
+    --primary-subtle:     36 100% 94%;
 
-    --accent:             240 84% 67%;   /* indigo #6366f1 */
+    --secondary:          40 20% 92%;
+    --secondary-foreground: 220 20% 30%;
+
+    /* Deep navy-charcoal from the logo mark — emphasis, not fills. */
+    --accent:             220 30% 18%;
     --accent-foreground:  0 0% 100%;
 
-    /* Text hierarchy */
-    --muted:              222 30% 12%;
-    --muted-foreground:   215 20% 50%;
-    --subtle:             215 15% 38%;
+    --muted:              40 20% 94%;
+    --muted-foreground:   220 10% 46%;
+    --subtle:             220 8% 58%;
 
-    /* Borders */
-    --border:             222 30% 16%;
-    --border-subtle:      222 25% 12%;
-    --input:              222 30% 14%;
-    --ring:               258 90% 66%;
+    /* Hairlines, deliberately faint: structure comes from spacing, not rules. */
+    --border:             40 15% 88%;
+    --border-subtle:      40 15% 92%;
+    --input:              40 15% 86%;
+    --ring:               33 92% 44%;
 
-    /* Status */
-    --success:            142 71% 45%;   /* emerald */
-    --warning:            45 93% 47%;    /* amber */
-    --danger:             0 72% 51%;     /* red */
-    --info:               217 91% 60%;   /* blue */
+    /* Status — kept clearly distinct in hue from amber so a warning is never
+       mistaken for an accent. */
+    --success:            152 60% 28%;
+    --warning:            25 85% 30%;
+    --danger:             0 70% 45%;
+    --info:               215 70% 45%;
 
-    /* Destructive (maps to danger) */
-    --destructive:        0 72% 51%;
+    --destructive:        0 70% 45%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Radius */
-    --radius:             0.875rem;
+    --radius:             0.75rem;
     --radius-sm:          0.5rem;
-    --radius-lg:          1.25rem;
+    --radius-lg:          1rem;
   }
 
-  /* Keep .dark in sync — app is always dark but respects OS/user toggle */
+  /* Dark theme — the same system on the logo's navy, for late shifts and
+     closing out. Amber lightens so it stays legible on dark. */
   .dark {
-    --background:         222 47% 5%;
-    --surface:            222 40% 8%;
-    --foreground:         210 40% 96%;
-    --card:               222 40% 9%;
-    --card-elevated:      222 35% 12%;
-    --card-foreground:    210 40% 96%;
-    --popover:            222 35% 10%;
-    --popover-foreground: 210 40% 96%;
-    --primary:            258 90% 66%;
-    --primary-hover:      258 90% 72%;
-    --primary-foreground: 0 0% 100%;
-    --secondary:          222 30% 14%;
-    --secondary-foreground: 210 40% 80%;
-    --accent:             240 84% 67%;
-    --accent-foreground:  0 0% 100%;
-    --muted:              222 30% 12%;
-    --muted-foreground:   215 20% 50%;
-    --subtle:             215 15% 38%;
-    --border:             222 30% 16%;
-    --border-subtle:      222 25% 12%;
-    --input:              222 30% 14%;
-    --ring:               258 90% 66%;
-    --success:            142 71% 45%;
-    --warning:            45 93% 47%;
-    --danger:             0 72% 51%;
-    --info:               217 91% 60%;
-    --destructive:        0 72% 51%;
+    --background:         220 28% 8%;
+    --surface:            220 24% 11%;
+    --foreground:         40 20% 94%;
+
+    --card:               220 24% 12%;
+    --card-elevated:      220 22% 15%;
+    --card-foreground:    40 20% 94%;
+
+    --popover:            220 22% 14%;
+    --popover-foreground: 40 20% 94%;
+
+    --primary:            38 95% 55%;
+    --primary-hover:      38 95% 62%;
+    --primary-foreground: 220 30% 10%;
+    --primary-text:       38 95% 62%;
+
+    --primary-subtle:     35 40% 18%;
+
+    --secondary:          220 20% 18%;
+    --secondary-foreground: 40 15% 80%;
+
+    --accent:             40 20% 94%;
+    --accent-foreground:  220 30% 10%;
+
+    --muted:              220 20% 16%;
+    --muted-foreground:   220 10% 62%;
+    --subtle:             220 10% 50%;
+
+    --border:             220 18% 20%;
+    --border-subtle:      220 18% 16%;
+    --input:              220 18% 22%;
+    --ring:               38 95% 55%;
+
+    --success:            152 55% 48%;
+    --warning:            38 90% 55%;
+    --danger:             0 72% 58%;
+    --info:               215 85% 62%;
+
+    --destructive:        0 72% 58%;
     --destructive-foreground: 0 0% 100%;
   }
 }
@@ -103,7 +130,6 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    background-color: hsl(222, 47%, 5%);
   }
 }
 
@@ -116,42 +142,47 @@
   @apply rounded-xl border border-border bg-card text-card-foreground shadow-sm transition-all duration-200;
 }
 .card:hover {
-  @apply shadow-md border-white/10;
+  @apply shadow-md border-border;
 }
 
-/* Glassmorphism card */
+/* Primary surface. Named card-glass for historical reasons; the glass
+   effect was removed in the rebrand, but the class is used in ~50 places. */
 .card-glass {
-  @apply rounded-xl border border-white/5 bg-white/[0.03] backdrop-blur-xl
-         text-card-foreground shadow-card transition-all duration-200;
+  @apply rounded-xl border border-border bg-card text-card-foreground
+         shadow-sm transition-all duration-200;
 }
 .card-glass:hover {
-  @apply border-white/10 bg-white/[0.05] shadow-glow-sm;
+  @apply shadow-md;
 }
 
-/* Gradient text */
+/* Brand-coloured text. Flat amber, not a gradient — gradients on type are
+   the fastest way to read as generic AI-SaaS. */
 .gradient-text {
-  @apply bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent;
+  @apply text-primary-ink;
 }
 
-/* Gradient background */
+/* Brand-coloured fill, used for icon tiles and small marks. */
 .gradient-bg {
-  @apply bg-gradient-to-br from-violet-600 to-indigo-600;
+  @apply bg-primary;
 }
 
-/* Glow border */
+/* Emphasised border for the recommended/selected item. */
 .glow-border {
-  @apply border border-violet-500/30 shadow-glow;
+  @apply border border-primary/40;
 }
 
-/* Primary CTA button */
+/* Primary action. Solid amber, no gradient, no scale-on-hover — the
+   restraint is the point. */
 .cta-button {
   @apply inline-flex items-center justify-center gap-2 px-6 py-3
-         bg-gradient-to-r from-violet-600 to-indigo-600
-         text-white font-semibold text-sm rounded-xl
-         shadow-lg shadow-violet-500/25
-         hover:shadow-xl hover:shadow-violet-500/40
-         hover:scale-[1.02] active:scale-[0.98]
-         transition-all duration-200 cursor-pointer;
+         bg-primary hover:bg-primary-hover
+         text-primary-foreground font-semibold text-sm rounded-xl
+         shadow-sm hover:shadow-md
+         focus-visible:outline-none focus-visible:ring-2
+         focus-visible:ring-ring focus-visible:ring-offset-2
+         focus-visible:ring-offset-background
+         active:translate-y-px
+         transition-all duration-150 cursor-pointer;
 }
 
 /* Ghost CTA button */

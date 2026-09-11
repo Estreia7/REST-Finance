@@ -94,7 +94,7 @@ export default function ComparativePanel() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-white/5">
+              <tr className="border-b border-border-subtle">
                 <th className="text-left py-2 text-xs font-medium text-muted-foreground">Mês</th>
                 <th className="text-right py-2 text-xs font-medium text-muted-foreground">Receita</th>
                 <th className="text-right py-2 text-xs font-medium text-muted-foreground">Custos</th>
@@ -104,7 +104,7 @@ export default function ComparativePanel() {
             </thead>
             <tbody>
               {data.map((m, i) => (
-                <tr key={i} className="border-b border-white/5">
+                <tr key={i} className="border-b border-border-subtle">
                   <td className="py-2 text-foreground font-medium">{m.label}</td>
                   <td className="py-2 text-right text-muted-foreground">{fmt(m.revenue)}</td>
                   <td className="py-2 text-right text-red-400">{fmt(m.costs)}</td>

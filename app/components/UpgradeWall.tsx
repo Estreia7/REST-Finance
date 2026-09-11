@@ -59,7 +59,7 @@ export default function UpgradeWall({ reason, restaurantId }: UpgradeWallProps) 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-background">
       {/* Glow */}
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-violet-600/10 blur-3xl rounded-full pointer-events-none" />
+      
 
       <div className="relative w-full max-w-3xl text-center">
         <div className="w-16 h-16 rounded-2xl gradient-bg flex items-center justify-center mx-auto mb-6 shadow-glow">
@@ -90,7 +90,7 @@ export default function UpgradeWall({ reason, restaurantId }: UpgradeWallProps) 
             const pid = billing === 'monthly' ? plan.priceId : plan.yearlyId;
             const price = billing === 'monthly' ? plan.price : Math.round(plan.yearPrice / 12);
             return (
-              <div key={plan.name} className={`relative rounded-2xl p-7 flex flex-col ${plan.recommended ? 'glow-border bg-violet-500/[0.04]' : 'card-glass'}`}>
+              <div key={plan.name} className={`relative rounded-2xl p-7 flex flex-col ${plan.recommended ? 'glow-border bg-primary-subtle' : 'card-glass'}`}>
                 {plan.recommended && (
                   <div className="absolute -top-3 left-6">
                     <span className="px-3 py-1 text-xs font-bold gradient-bg text-white rounded-full">Recomendado</span>

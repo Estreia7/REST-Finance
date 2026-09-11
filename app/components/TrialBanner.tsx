@@ -19,7 +19,7 @@ export default function TrialBanner({ daysLeft, onUpgrade }: TrialBannerProps) {
     <div className={`relative flex items-center justify-between gap-4 px-4 py-2.5 text-sm ${
       isUrgent
         ? 'bg-amber-500/10 border-b border-amber-500/20 text-amber-300'
-        : 'bg-violet-500/10 border-b border-violet-500/20 text-violet-300'
+        : 'bg-primary-subtle border-b border-primary/20 text-foreground'
     }`}>
       <div className="flex items-center gap-2.5 flex-1 min-w-0">
         <Clock className="w-4 h-4 shrink-0" />

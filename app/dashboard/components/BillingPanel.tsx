@@ -83,7 +83,7 @@ export default function BillingPanel({ restaurant }: BillingPanelProps) {
           )}
         </div>
 
-        <div className="flex items-center gap-4 p-5 rounded-xl bg-white/[0.02] border border-white/5 mb-5">
+        <div className="flex items-center gap-4 p-5 rounded-xl bg-surface border border-border-subtle mb-5">
           <div className="w-12 h-12 rounded-xl gradient-bg flex items-center justify-center shadow-glow-sm">
             <Crown className="w-6 h-6 text-white" />
           </div>
@@ -141,7 +141,7 @@ export default function BillingPanel({ restaurant }: BillingPanelProps) {
                 features: ['Até 3 restaurantes', 'Colaboradores ilimitados', 'Comparação anual', 'Gestor dedicado'],
               },
             ].map(p => (
-              <div key={p.name} className={`rounded-xl p-5 ${p.recommended ? 'glow-border bg-violet-500/[0.04]' : 'bg-white/[0.02] border border-white/5'}`}>
+              <div key={p.name} className={`rounded-xl p-5 ${p.recommended ? 'glow-border bg-primary-subtle' : 'bg-surface border border-border'}`}>
                 {p.recommended && (
                   <div className="text-xs font-bold gradient-text mb-2">Recomendado</div>
                 )}

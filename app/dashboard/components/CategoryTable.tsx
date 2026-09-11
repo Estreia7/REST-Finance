@@ -27,7 +27,7 @@ export default function CategoryTable({ data }: { data: CategoryItem[] }) {
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-sm font-medium text-foreground truncate">{cat.name}</span>
                 <div className="flex items-center gap-2 shrink-0 ml-2">
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-muted-foreground">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                     {cat.type}
                   </span>
                   <span className="text-xs font-bold text-foreground">
@@ -35,7 +35,7 @@ export default function CategoryTable({ data }: { data: CategoryItem[] }) {
                   </span>
                 </div>
               </div>
-              <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                 <div
                   className="h-full rounded-full gradient-bg transition-all duration-700"
                   style={{ width: `${Math.min(100, cat.contributionPercent)}%` }}

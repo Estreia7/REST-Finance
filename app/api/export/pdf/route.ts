@@ -7,6 +7,9 @@ import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import React from 'react';
 import { toClientError } from '@/lib/errors';
 
+// Authenticated + cookie-based: never statically rendered.
+export const dynamic = 'force-dynamic';
+
 const styles = StyleSheet.create({
   page: { padding: 40, fontSize: 10, fontFamily: 'Helvetica', color: '#1a1a2e' },
   header: { marginBottom: 20 },
