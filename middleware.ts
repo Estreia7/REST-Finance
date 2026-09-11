@@ -1,56 +1,43 @@
-import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  });
+/**
+ * Route protection.
+ *
+ * Checks only for the presence of a session cookie, deliberately: the Edge
+ * runtime cannot reach Postgres, so the real authorisation happens in the
+ * server actions and route handlers via lib/auth-helpers.ts, which read roles
+ * fresh from the database on every request.
+ *
+ * This is a redirect for unauthenticated visitors, not a security boundary.
+ */
+const PROTECTED = ['/dashboard', '/admin'];
+const AUTH_PAGES = ['/login', '/register'];
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({
-            request,
-          });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
-      },
-    }
+function hasSessionCookie(request: NextRequest): boolean {
+  // Auth.js prefixes the cookie with __Secure- when served over HTTPS.
+  return (
+    request.cookies.has('authjs.session-token') ||
+    request.cookies.has('__Secure-authjs.session-token')
   );
+}
 
-  // Refresh session and get user
-  const { data: { user } } = await supabase.auth.getUser();
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const signedIn = hasSessionCookie(request);
 
-  const pathname = request.nextUrl.pathname;
-
-  // Protected routes: redirect to login if not authenticated
-  if (!user && (pathname.startsWith('/dashboard') || pathname.startsWith('/admin'))) {
+  if (!signedIn && PROTECTED.some((p) => pathname.startsWith(p))) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Already authenticated: redirect away from auth pages
-  if (user && (pathname === '/login' || pathname === '/register')) {
+  if (signedIn && AUTH_PAGES.includes(pathname)) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
-  return supabaseResponse;
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|js|css)$).*)',
-  ],
+  matcher: ['/dashboard/:path*', '/admin/:path*', '/login', '/register'],
 };

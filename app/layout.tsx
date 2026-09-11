@@ -5,6 +5,7 @@ import './globals.css';
 import ConditionalNavbar from './components/ConditionalNavbar';
 import { LanguageProvider } from '@/lib/language-context';
 import { ThemeProvider, THEME_INIT_SCRIPT } from '@/lib/theme-context';
+import SessionProvider from './components/SessionProvider';
 import { Toaster } from 'sonner';
 
 const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://rest-finance.bruno-dev.xyz';
@@ -86,6 +87,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body className="min-h-screen bg-background text-foreground antialiased">
+        <SessionProvider>
         <ThemeProvider>
           <LanguageProvider>
             <div className="flex min-h-screen flex-col">
@@ -94,6 +96,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             </div>
           </LanguageProvider>
         </ThemeProvider>
+        </SessionProvider>
         <Toaster
           position="top-right"
           toastOptions={{

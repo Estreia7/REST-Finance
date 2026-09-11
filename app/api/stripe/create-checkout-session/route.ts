@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe, STRIPE_PRICES } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth, isAuthError } from '@/lib/auth-helpers';
 
 export async function POST(req: NextRequest) {
   if (!stripe) {
@@ -9,10 +9,9 @@ export async function POST(req: NextRequest) {
   }
 
   // Authenticate user
-  const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authResult = await requireAuth();
+  if (isAuthError(authResult)) {
+    return NextResponse.json({ error: authResult.error }, { status: 401 });
   }
 
   const { priceId, restaurantId } = await req.json();
@@ -25,7 +24,7 @@ export async function POST(req: NextRequest) {
 
   // Verify restaurant belongs to user
   const membership = await prisma.membership.findFirst({
-    where: { userId: user.id, restaurantId, role: 'OWNER', active: true },
+    where: { userId: authResult.userId, restaurantId, role: 'OWNER', active: true },
     include: { restaurant: true },
   });
 
@@ -39,8 +38,8 @@ export async function POST(req: NextRequest) {
   let customerId = restaurant.stripeCustomerId;
   if (!customerId) {
     const customer = await stripe.customers.create({
-      email: user.email!,
-      metadata: { restaurantId, userId: user.id },
+      email: authResult.email,
+      metadata: { restaurantId, userId: authResult.userId },
     });
     customerId = customer.id;
     await prisma.restaurant.update({
@@ -58,9 +57,9 @@ export async function POST(req: NextRequest) {
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${origin}/dashboard?upgrade=success`,
     cancel_url:  `${origin}/dashboard?upgrade=canceled`,
-    metadata: { restaurantId, userId: user.id },
+    metadata: { restaurantId, userId: authResult.userId },
     subscription_data: {
-      metadata: { restaurantId, userId: user.id },
+      metadata: { restaurantId, userId: authResult.userId },
     },
     allow_promotion_codes: true,
     billing_address_collection: 'auto',

@@ -1,23 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth, isAuthError } from '@/lib/auth-helpers';
 
 export async function POST(req: NextRequest) {
   if (!stripe) {
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });
   }
 
-  const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authResult = await requireAuth();
+  if (isAuthError(authResult)) {
+    return NextResponse.json({ error: authResult.error }, { status: 401 });
   }
 
   const { restaurantId } = await req.json();
 
   const membership = await prisma.membership.findFirst({
-    where: { userId: user.id, restaurantId, role: 'OWNER', active: true },
+    where: { userId: authResult.userId, restaurantId, role: 'OWNER', active: true },
     include: { restaurant: true },
   });
 

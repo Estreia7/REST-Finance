@@ -3,7 +3,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, X, Loader2, AlertCircle, CheckCircle2, UtensilsCrossed } from 'lucide-react';
-import { loginWithPassword, checkUserRole } from '@/app/login/actions';
+import { signIn } from 'next-auth/react';
+import { loginWithPassword } from '@/app/login/actions';
 import { registerUser } from '@/app/register/actions';
 import { useLanguage } from '@/lib/language-context';
 
@@ -34,30 +35,28 @@ function LoginForm({ onSwitchTab }: { onSwitchTab: () => void }) {
     try {
       const result = await loginWithPassword(email, password);
 
-      if (result.success) {
-        const roleResult = await checkUserRole(result.user!.id);
-        router.push(roleResult.isAdmin ? '/admin' : '/dashboard');
-        router.refresh();
+      if ('error' in result && result.error) {
+        setError(result.error);
         return;
       }
 
-      if (result.error === 'EMAIL_CONFIRMED_RETRY') {
-        const retry = await loginWithPassword(email, password);
-        if (retry.success) {
-          const roleResult = await checkUserRole(retry.user!.id);
-          router.push(roleResult.isAdmin ? '/admin' : '/dashboard');
-          router.refresh();
-          return;
-        }
+      if ('redirectTo' in result && result.redirectTo) {
+        router.push(result.redirectTo);
+        router.refresh();
       }
-
-      setError(result.error || 'Erro ao iniciar sessão.');
     } catch {
       setError('Erro inesperado. Tente novamente.');
     } finally {
       setLoading(false);
     }
   }, [email, password, router]);
+
+  /** Hands off to Google; Auth.js returns to the callback URL. */
+  const handleGoogle = useCallback(() => {
+    setError('');
+    setLoading(true);
+    signIn('google', { callbackUrl: '/dashboard' });
+  }, []);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -119,6 +118,29 @@ function LoginForm({ onSwitchTab }: { onSwitchTab: () => void }) {
         )}
       </button>
 
+      <div className="flex items-center gap-3 pt-1">
+        <span className="h-px flex-1 bg-border" />
+        <span className="text-xs text-muted-foreground">ou</span>
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <button
+        type="button"
+        onClick={handleGoogle}
+        disabled={loading}
+        className="cta-button-secondary w-full"
+      >
+        {/* Inline mark: no external request, and it keeps Google's brand
+            colours in both themes. */}
+        <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.57c2.08-1.92 3.28-4.74 3.28-8.09Z" />
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.76c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23Z" />
+          <path fill="#FBBC05" d="M5.84 14.11a6.6 6.6 0 0 1 0-4.22V7.05H2.18a11 11 0 0 0 0 9.9l3.66-2.84Z" />
+          <path fill="#EA4335" d="M12 4.75c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 1.46 14.97.5 12 .5A11 11 0 0 0 2.18 7.05l3.66 2.84c.87-2.6 3.3-4.14 6.16-4.14Z" />
+        </svg>
+        Continuar com Google
+      </button>
+
       <p className="text-center text-sm text-muted-foreground pt-2">
         Não tens conta?{' '}
         <button type="button" onClick={onSwitchTab} className="text-primary hover:text-primary-hover font-medium transition-colors">
@@ -177,19 +199,13 @@ function RegisterForm({ onSwitchTab }: { onSwitchTab: () => void }) {
         return;
       }
 
+      // registerUser signs the new owner in as part of the same call, so
+      // there is nothing to retry here.
       setSuccess(true);
-      setTimeout(async () => {
-        const loginResult = await loginWithPassword(form.email, form.password);
-        if (loginResult.success || loginResult.error === 'EMAIL_CONFIRMED_RETRY') {
-          const retry = loginResult.success
-            ? loginResult
-            : await loginWithPassword(form.email, form.password);
-          if (retry.success) {
-            router.push('/dashboard?onboarding=true');
-            router.refresh();
-          }
-        }
-      }, 1000);
+      if ('redirectTo' in result && result.redirectTo) {
+        router.push(result.redirectTo);
+        router.refresh();
+      }
     } catch {
       setError('Erro inesperado. Tente novamente.');
     } finally {

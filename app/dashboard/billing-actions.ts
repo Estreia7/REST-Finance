@@ -1,23 +1,19 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { createClient } from '@/lib/supabase/server';
+import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { STRIPE_PRICES } from '@/lib/stripe';
 import { toClientError } from '@/lib/errors';
 
 export async function getSubscriptionStatus() {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return null;
 
-    const membership = await prisma.membership.findFirst({
-      where:   { userId: user.id, role: 'OWNER', active: true },
-      include: { restaurant: true },
+    const r = await prisma.restaurant.findUnique({
+      where: { id: owner.restaurantId },
     });
-
-    if (!membership) return null;
-    const r = membership.restaurant;
+    if (!r) return null;
 
     return {
       plan:                r.plan,
@@ -36,21 +32,16 @@ export async function getSubscriptionStatus() {
 
 export async function getCheckoutUrl(priceId: string): Promise<{ url?: string; error?: string }> {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: 'Não autenticado' };
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
-    const membership = await prisma.membership.findFirst({
-      where: { userId: user.id, role: 'OWNER', active: true },
-    });
-    if (!membership) return { error: 'Restaurante não encontrado' };
 
     const res = await fetch(
       `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/stripe/create-checkout-session`,
       {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ priceId, restaurantId: membership.restaurantId }),
+        body:    JSON.stringify({ priceId, restaurantId: owner.restaurantId }),
       }
     );
 
@@ -64,21 +55,16 @@ export async function getCheckoutUrl(priceId: string): Promise<{ url?: string; e
 
 export async function getPortalUrl(): Promise<{ url?: string; error?: string }> {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: 'Não autenticado' };
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
-    const membership = await prisma.membership.findFirst({
-      where: { userId: user.id, role: 'OWNER', active: true },
-    });
-    if (!membership) return { error: 'Restaurante não encontrado' };
 
     const res = await fetch(
       `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/stripe/create-portal-session`,
       {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ restaurantId: membership.restaurantId }),
+        body:    JSON.stringify({ restaurantId: owner.restaurantId }),
       }
     );
 

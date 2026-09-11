@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth, isAuthError } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
 import { scanDocument, isScannerAvailable } from '@/lib/document-scanner';
 import { scanRequestSchema, formatZodError } from '@/lib/validations';
@@ -19,14 +19,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Auth check
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const authResult = await requireAuth();
+    if (isAuthError(authResult)) {
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
 
     // Rate limiting
-    if (!checkRateLimit(`scan:${user.id}`, SCAN_RATE_LIMIT, SCAN_WINDOW_MS)) {
+    if (!checkRateLimit(`scan:${authResult.userId}`, SCAN_RATE_LIMIT, SCAN_WINDOW_MS)) {
       return NextResponse.json(
         { error: 'Limite de scans atingido. Tente novamente mais tarde.' },
         { status: 429 }
@@ -34,7 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     const membership = await prisma.membership.findFirst({
-      where: { userId: user.id, role: { in: ['OWNER', 'STAFF'] }, active: true },
+      where: { userId: authResult.userId, role: { in: ['OWNER', 'STAFF'] }, active: true },
     });
     if (!membership) {
       return NextResponse.json({ error: 'No restaurant access' }, { status: 403 });
@@ -84,7 +83,7 @@ export async function POST(request: NextRequest) {
       const scan = await tx.receiptScan.create({
         data: {
           restaurantId: membership.restaurantId,
-          userId: user.id,
+          userId: authResult.userId,
           imageUrl: '',
           scanType: scanType,
           extractedData: extractedData as any,

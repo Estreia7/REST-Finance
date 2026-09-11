@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Eye, EyeOff, ArrowLeft, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
-import type { AuthChangeEvent } from '@supabase/supabase-js';
+import { resetPasswordWithToken } from '@/app/forgot-password/actions';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -18,22 +17,13 @@ export default function ResetPasswordPage() {
   const [success, setSuccess] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
 
-  // Supabase exchanges the token from the URL hash automatically
+  // The reset link carries a single-use token as a query parameter.
+  const searchParams = useSearchParams();
+  const token = searchParams.get('token') ?? '';
+
   useEffect(() => {
-    const supabase = createClient();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setSessionReady(true);
-      }
-    });
-
-    // Also check if already in a valid session (e.g. page reload)
-    supabase.auth.getSession().then(({ data: { session } }: { data: { session: unknown } }) => {
-      if (session) setSessionReady(true);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+    setSessionReady(Boolean(token));
+  }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,17 +41,16 @@ export default function ResetPasswordPage() {
     setIsLoading(true);
 
     try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.updateUser({ password });
+      const result = await resetPasswordWithToken(token, password);
 
-      if (error) {
-        setError('Erro ao atualizar palavra-passe. Tente novamente.');
+      if (result.error) {
+        setError(result.error);
         return;
       }
 
       setSuccess(true);
       setTimeout(() => {
-        router.push('/dashboard');
+        router.push('/login');
         router.refresh();
       }, 2000);
     } catch {

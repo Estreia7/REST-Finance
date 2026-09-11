@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { createClient } from '@/lib/supabase/client';
+import { signOut } from 'next-auth/react';
 import {
   getRestaurant, getStaff, addStaff, createDailySummary, createCostEntry,
   getCategories, getDashboardStats, getCurrentUser, getLast7DaysRevenue,
@@ -18,7 +18,6 @@ import TicketAnalysisPanel from './components/TicketAnalysisPanel';
 import GoalsPanel from './components/GoalsPanel';
 import MonthlyReportPanel from './components/MonthlyReportPanel';
 import PriceTrackingPanel from './components/PriceTrackingPanel';
-import { checkEmailConfirmation, resendConfirmationEmail } from '@/app/login/actions';
 import { trialDaysLeft } from '@/lib/billing-utils';
 import { useLanguage } from '@/lib/language-context';
 import { Plus, ChevronDown, ChevronUp, Rocket, TrendingUp as TrendingUpIcon, DollarSign as DollarSignIcon } from 'lucide-react';
@@ -27,7 +26,6 @@ import { Plus, ChevronDown, ChevronUp, Rocket, TrendingUp as TrendingUpIcon, Dol
 import Sidebar          from './components/Sidebar';
 import TopBar           from './components/TopBar';
 import MobileBottomNav  from './components/MobileBottomNav';
-import EmailBanner      from './components/EmailBanner';
 import KPICards         from './components/KPICards';
 import RevenueChart     from './components/RevenueChart';
 import ChannelSplitChart from './components/ChannelSplitChart';
@@ -68,8 +66,6 @@ function DashboardPageInner() {
   // ── UI state
   const [activeTab, setActiveTab]       = useState<Tab>('dashboard');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
-  const [emailConfirmed, setEmailConfirmed] = useState<boolean | null>(null);
-  const [isResendingEmail, setIsResendingEmail] = useState(false);
 
   // ── Data
   const [restaurant, setRestaurant]       = useState<any>(null);
@@ -150,15 +146,9 @@ function DashboardPageInner() {
 
   // ── Auth check ───────────────────────────────────────────────────────────
   useEffect(() => {
-    const supabase = createClient();
-
     const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push('/'); return; }
-      setUser(user);
-
-      const emailStatus = await checkEmailConfirmation();
-      setEmailConfirmed(emailStatus.isConfirmed);
+      // Middleware redirects unauthenticated visitors; every action
+      // re-checks membership server-side.
 
       await Promise.all([loadData(), loadCategories()]);
       setIsLoading(false);
@@ -187,8 +177,7 @@ function DashboardPageInner() {
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await signOut({ callbackUrl: '/' });
     router.push('/');
   };
 
@@ -267,13 +256,6 @@ function DashboardPageInner() {
     toast.success('Tema guardado.');
   };
 
-  const handleResendEmail = async () => {
-    setIsResendingEmail(true);
-    const result = await resendConfirmationEmail();
-    if (result.success) toast.success('Email de confirmação enviado!');
-    else toast.error(result.error || 'Erro ao enviar email.');
-    setIsResendingEmail(false);
-  };
 
   const daysLeft = trialDaysLeft(restaurant?.trialEndsAt ?? null);
 
@@ -319,11 +301,6 @@ function DashboardPageInner() {
         {/* Trial banner */}
         {restaurant?.plan === 'TRIAL' && daysLeft <= 7 && (
           <TrialBanner daysLeft={daysLeft} onUpgrade={() => handleTabChange('billing')} />
-        )}
-
-        {/* Email confirmation banner */}
-        {emailConfirmed === false && (
-          <EmailBanner onResend={handleResendEmail} isResending={isResendingEmail} />
         )}
 
         {/* Content */}

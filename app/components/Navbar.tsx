@@ -4,11 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import { Wordmark } from './Logo';
 import { Menu, X, LogOut, LayoutDashboard, Moon, Sun, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/lib/language-context';
 import LanguageSelector from './LanguageSelector';
-import type { AuthChangeEvent } from '@supabase/supabase-js';
 import { useTheme } from '@/lib/theme-context';
 
 function openAuthModal(tab: 'login' | 'register') {
@@ -21,8 +20,6 @@ export default function Navbar() {
   const [isScrolled, setIsScrolled]         = useState(false);
   const [isMobileMenuOpen, setMobileMenu]   = useState(false);
   const [mobileAnimating, setMobileAnimating] = useState(false);
-  const [user, setUser]                      = useState<any>(null);
-  const [isLoading, setIsLoading]            = useState(true);
   const { resolvedTheme, toggleTheme } = useTheme();
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -32,21 +29,10 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  useEffect(() => {
-    const supabase = createClient();
-    const checkAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      setIsLoading(false);
-    };
-    checkAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent) => {
-      if (event === 'SIGNED_IN')  checkAuth();
-      if (event === 'SIGNED_OUT') { setUser(null); setIsLoading(false); }
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+  // useSession tracks sign-in and sign-out on its own.
+  const { data: session, status } = useSession();
+  const user = session?.user ?? null;
+  const isLoading = status === 'loading';
 
   // Smooth mobile menu open/close
   const openMobileMenu = () => {
@@ -79,11 +65,8 @@ export default function Navbar() {
   }, [isMobileMenuOpen]);
 
   const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    setUser(null);
-    router.push('/');
-    router.refresh();
+    // Clears the database session, not just a local token.
+    await signOut({ callbackUrl: '/' });
   };
 
   const navLinks = [

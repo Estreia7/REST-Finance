@@ -4,19 +4,16 @@
  * Credentials come from the environment, never from source. Hardcoding an
  * admin login into a repository is how servers get taken over: public repos
  * are scanned continuously, and a known username with a common password is
- * found within days. This gives the same convenience without that exposure.
+ * found within days.
  *
  * Usage:
- *   ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='<strong>' npx tsx scripts/create-admin.ts
+ *   ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='<strong>' npx ts-node scripts/create-admin.ts
  *
- * Safe to re-run: if the account exists, it is promoted rather than
- * duplicated, and the password is reset to the supplied one.
+ * Safe to re-run: an existing account is promoted rather than duplicated, and
+ * its password is reset to the supplied one.
  */
-import { createClient } from '@supabase/supabase-js';
-// Reuse the app's client: Prisma 7 needs the pg driver adapter configured
-// there, so a bare new PrismaClient() cannot connect.
+import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
-
 
 const EMAIL = process.env.ADMIN_EMAIL;
 const PASSWORD = process.env.ADMIN_PASSWORD;
@@ -31,21 +28,19 @@ async function main() {
   if (!EMAIL || !PASSWORD) {
     fail(
       'Set ADMIN_EMAIL and ADMIN_PASSWORD.\n\n' +
-        "  ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='...' npx tsx scripts/create-admin.ts"
+        "  ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='...' npx ts-node scripts/create-admin.ts"
     );
   }
 
-  // Short or obvious passwords are the entire reason this script exists.
-  // ALLOW_WEAK_PASSWORD=1 overrides the check, so a deliberate choice stays
-  // visible in the command that made it rather than being quietly deleted
-  // from here. The check still protects every account created later.
+  // ALLOW_WEAK_PASSWORD=1 overrides, so a deliberate choice stays visible in
+  // the command that made it rather than being removed from this check, which
+  // still protects every account created later.
   const allowWeak = process.env.ALLOW_WEAK_PASSWORD === '1';
   const problems: string[] = [];
 
   if (PASSWORD.length < 12) {
     problems.push(`only ${PASSWORD.length} characters (12 or more recommended)`);
   }
-
   const WEAK = ['admin', 'password', '12345', 'qwerty', 'letmein'];
   const matched = WEAK.find((w) => PASSWORD.toLowerCase().includes(w));
   if (matched) {
@@ -65,57 +60,15 @@ async function main() {
     console.warn('  Worth changing once the beta clients are onboarded.\n');
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
-    fail('NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.');
-  }
+  const email = EMAIL.trim().toLowerCase();
+  const passwordHash = await bcrypt.hash(PASSWORD, 12);
 
-  const supabase = createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
+  const user = await prisma.user.upsert({
+    where: { email },
+    create: { email, name: NAME, passwordHash, emailVerified: new Date() },
+    update: { name: NAME, passwordHash, emailVerified: new Date() },
   });
-
-  // ---------------------------------------------------------------- auth
-  let authUserId: string;
-
-  const { data: created, error: createErr } = await supabase.auth.admin.createUser({
-    email: EMAIL,
-    password: PASSWORD,
-    email_confirm: true,
-  });
-
-  if (created?.user) {
-    authUserId = created.user.id;
-    console.log(`  Created auth user ${EMAIL}`);
-  } else {
-    // Already registered: find them and reset the password to the supplied one.
-    const { data: list, error: listErr } = await supabase.auth.admin.listUsers();
-    if (listErr) fail(`Could not list users: ${listErr.message}`);
-
-    const existing = list.users.find(
-      (u) => u.email?.toLowerCase() === EMAIL.toLowerCase()
-    );
-    if (!existing) {
-      fail(`Could not create the user: ${createErr?.message ?? 'unknown error'}`);
-    }
-
-    authUserId = existing.id;
-    const { error: updateErr } = await supabase.auth.admin.updateUserById(authUserId, {
-      password: PASSWORD,
-      email_confirm: true,
-    });
-    if (updateErr) fail(`Could not reset the password: ${updateErr.message}`);
-    console.log(`  Auth user ${EMAIL} already existed; password reset`);
-  }
-
-  // -------------------------------------------------------------- prisma
-  // The app reads roles from its own tables, so the user must exist here too,
-  // keyed by the Supabase id.
-  await prisma.user.upsert({
-    where: { id: authUserId },
-    create: { id: authUserId, email: EMAIL, name: NAME },
-    update: { email: EMAIL, name: NAME },
-  });
+  console.log(`  User ${email} ready`);
 
   // PLATFORM_ADMIN is granted through a membership, so it needs a restaurant
   // to hang off. This one is an administrative container, not a real client.
@@ -131,22 +84,22 @@ async function main() {
 
   await prisma.membership.upsert({
     where: {
-      restaurantId_userId: {
-        restaurantId: adminRestaurant.id,
-        userId: authUserId,
-      },
+      restaurantId_userId: { restaurantId: adminRestaurant.id, userId: user.id },
     },
     create: {
       restaurantId: adminRestaurant.id,
-      userId: authUserId,
+      userId: user.id,
       role: 'PLATFORM_ADMIN',
       active: true,
     },
     update: { role: 'PLATFORM_ADMIN', active: true },
   });
 
-  console.log(`  Granted PLATFORM_ADMIN to ${EMAIL}`);
-  console.log('\n  Done. Sign in at /admin.\n');
+  // Any session opened with a previous password is ended.
+  await prisma.session.deleteMany({ where: { userId: user.id } });
+
+  console.log(`  Granted PLATFORM_ADMIN to ${email}`);
+  console.log('\n  Done. Sign in at /login.\n');
 }
 
 main()

@@ -1,10 +1,18 @@
 'use server';
 
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { registerSchema, formatZodError } from '@/lib/validations';
 import { toClientError, isUniqueConstraintError } from '@/lib/errors';
+import { signIn } from '@/lib/auth-config';
 
+/**
+ * Account creation.
+ *
+ * Identity is local now, so this writes the user, restaurant and membership
+ * in one transaction and signs the person straight in. No external service
+ * is involved, and nothing can half-succeed.
+ */
 export async function registerUser(data: {
   name: string;
   email: string;
@@ -12,93 +20,59 @@ export async function registerUser(data: {
   restaurantName: string;
 }) {
   try {
-    // Validate input
     const parsed = registerSchema.safeParse(data);
     if (!parsed.success) {
       return { error: formatZodError(parsed.error) };
     }
 
-    const { name, email, password, restaurantName } = parsed.data;
+    const { name, restaurantName } = parsed.data;
+    const email = parsed.data.email.trim().toLowerCase();
 
-    // 1. Create Supabase auth user
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return { error: 'Configuracao do servidor incompleta. Contacte o suporte.' };
-    }
-
-    const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey);
-
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { name },
-      },
+    const existing = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
     });
-
-    if (authError) {
-      return { error: authError.message };
+    if (existing) {
+      return { error: 'Este email já está registado. Tenta iniciar sessão.' };
     }
 
-    if (!authData.user) {
-      return { error: 'Falha ao criar conta de utilizador' };
-    }
+    const passwordHash = await bcrypt.hash(parsed.data.password, 12);
 
-    // 2. Create User, Restaurant, and Membership in a transaction
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 14);
 
+    // One transaction: an account without a restaurant, or a restaurant with
+    // no owner, would both be broken states.
     await prisma.$transaction(async (tx) => {
-      // Check if user already exists in DB
-      const existingUser = await tx.user.findUnique({
-        where: { id: authData.user!.id },
-        include: {
-          memberships: {
-            where: { role: 'OWNER', active: true },
-          },
-        },
+      const user = await tx.user.create({
+        data: { email, name, passwordHash },
       });
 
-      if (existingUser && existingUser.memberships.length > 0) {
-        throw new Error('Voce ja possui um restaurante. Cada conta so pode ter um restaurante.');
-      }
-
-      // Create or use existing user record
-      const user = existingUser || await tx.user.create({
-        data: {
-          id: authData.user!.id,
-          email,
-          name,
-        },
-      });
-
-      // Create restaurant with trial plan
       const restaurant = await tx.restaurant.create({
-        data: {
-          name: restaurantName,
-          plan: 'TRIAL',
-          trialEndsAt,
-        },
+        data: { name: restaurantName, plan: 'TRIAL', trialEndsAt },
       });
 
-      // Create membership
       await tx.membership.create({
         data: {
-          restaurantId: restaurant.id,
           userId: user.id,
+          restaurantId: restaurant.id,
           role: 'OWNER',
           active: true,
         },
       });
     });
 
-    return { success: true, userId: authData.user.id };
+    await signIn('credentials', {
+      email,
+      password: parsed.data.password,
+      redirect: false,
+    });
+
+    return { success: true, redirectTo: '/dashboard?onboarding=true' };
   } catch (error: unknown) {
     if (isUniqueConstraintError(error, 'email')) {
-      return { error: 'Este email já está registado. Tente fazer login.' };
+      return { error: 'Este email já está registado. Tenta iniciar sessão.' };
     }
-    return { error: toClientError('Erro ao criar conta. Tente novamente.', error, 'generic') };
+    return { error: toClientError('Failed to register', error, 'write') };
   }
 }

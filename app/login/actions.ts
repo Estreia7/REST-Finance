@@ -1,133 +1,88 @@
 'use server';
 
+import { AuthError } from 'next-auth';
 import { prisma } from '@/lib/prisma';
-import { createClient } from '@/lib/supabase/server';
+import { signIn, signOut } from '@/lib/auth-config';
+import { requireAuth, isAuthError } from '@/lib/auth-helpers';
 import { toClientError } from '@/lib/errors';
 
+/**
+ * Sign-in actions.
+ *
+ * Authentication is local (Auth.js + Postgres). Email confirmation is not
+ * enforced during the private beta, since accounts are created by an admin
+ * after an access request, so the address has already been seen.
+ */
+
+/** Where this user belongs after signing in. */
 export async function checkUserRole(userId: string) {
   try {
-    // Verify the caller is authenticated and is the same user
-    const supabase = await createClient();
-    const { data: { user: sessionUser }, error } = await supabase.auth.getUser();
-    if (error || !sessionUser || sessionUser.id !== userId) {
-      return { isAdmin: false };
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        memberships: {
-          where: {
-            role: 'PLATFORM_ADMIN',
-            active: true,
-          },
-        },
-      },
+    const adminMembership = await prisma.membership.findFirst({
+      where: { userId, role: 'PLATFORM_ADMIN', active: true },
+      select: { id: true },
     });
 
-    if (user && user.memberships.length > 0) {
-      return { isAdmin: true };
+    if (adminMembership) return { role: 'PLATFORM_ADMIN' as const, redirectTo: '/admin' };
+
+    const membership = await prisma.membership.findFirst({
+      where: { userId, role: { in: ['OWNER', 'STAFF'] }, active: true },
+      select: { role: true },
+    });
+
+    if (!membership) {
+      return { error: 'A tua conta ainda não tem acesso a nenhum restaurante.' };
     }
 
-    return { isAdmin: false };
+    return { role: membership.role, redirectTo: '/dashboard' };
   } catch (error: unknown) {
-    console.error('Error checking user role:', error);
-    return { isAdmin: false };
+    return { error: toClientError('Failed to resolve role', error, 'read') };
   }
 }
 
 export async function getCurrentUserRole() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-
-    if (error || !user) {
-      return { isAdmin: false };
-    }
-
-    return await checkUserRole(user.id);
+    const authResult = await requireAuth();
+    if (isAuthError(authResult)) return { error: authResult.error };
+    return checkUserRole(authResult.userId);
   } catch (error: unknown) {
-    console.error('Error getting current user role:', error);
-    return { isAdmin: false };
+    return { error: toClientError('Failed to resolve role', error, 'read') };
   }
 }
 
-export async function checkEmailConfirmation() {
-  try {
-    const supabase = await createClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-
-    if (error || !user) {
-      return { isConfirmed: false };
-    }
-
-    return { isConfirmed: user.email_confirmed_at !== null };
-  } catch (error: unknown) {
-    console.error('Error checking email confirmation:', error);
-    return { isConfirmed: false };
-  }
-}
-
-export async function resendConfirmationEmail() {
-  try {
-    const supabase = await createClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-
-    if (error || !user) {
-      return { error: 'User not found' };
-    }
-
-    if (user.email_confirmed_at) {
-      return { success: true, message: 'Email already confirmed' };
-    }
-
-    const { error: resendError } = await supabase.auth.resend({
-      type: 'signup',
-      email: user.email!,
-    });
-
-    if (resendError) {
-      return { error: resendError.message };
-    }
-
-    return { success: true, message: 'Confirmation email sent' };
-  } catch (error: unknown) {
-    return { error: toClientError('Failed to resend confirmation email', error, 'generic') };
-  }
-}
-
+/**
+ * Email and password sign-in.
+ *
+ * Auth.js throws a redirect on success, so `redirect: false` is used and the
+ * caller decides where to go based on the role.
+ */
 export async function loginWithPassword(email: string, password: string) {
   try {
-    const supabase = await createClient();
-
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({
-      email,
+    await signIn('credentials', {
+      email: email.trim().toLowerCase(),
       password,
+      redirect: false,
     });
-
-    if (data?.user && !signInError) {
-      return { success: true, user: data.user, session: data.session };
+  } catch (error) {
+    if (error instanceof AuthError) {
+      // One message for both a wrong password and an unknown address, so the
+      // form cannot be used to discover which emails are registered.
+      return { error: 'Email ou palavra-passe incorretos.' };
     }
-
-    // If email is not confirmed, tell the user to check their inbox
-    if (signInError?.message?.toLowerCase().includes('email') ||
-        signInError?.message?.toLowerCase().includes('confirm') ||
-        signInError?.message?.toLowerCase().includes('not confirmed')) {
-      return {
-        success: false,
-        error: 'Por favor confirme o seu email antes de entrar. Verifique a sua caixa de entrada.'
-      };
-    }
-
-    return {
-      success: false,
-      error: signInError?.message || 'Falha ao iniciar sessao'
-    };
-  } catch (error: unknown) {
-    console.error('Error in loginWithPassword:', error);
-    return {
-      success: false,
-      error: 'Falha ao iniciar sessao'
-    };
+    throw error;
   }
+
+  const authResult = await requireAuth();
+  if (isAuthError(authResult)) {
+    return { error: 'Não foi possível iniciar sessão. Tenta novamente.' };
+  }
+
+  const role = await checkUserRole(authResult.userId);
+  if ('error' in role) return role;
+
+  return { success: true, redirectTo: role.redirectTo };
+}
+
+export async function logout() {
+  await signOut({ redirect: false });
+  return { success: true };
 }

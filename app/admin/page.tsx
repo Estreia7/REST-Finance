@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { signOut } from 'next-auth/react';
 import { getClientStats, getClients, getMonthlyRevenue, getCurrentUser, bulkUpdateRestaurants } from './actions';
 import { useLanguage } from '@/lib/language-context';
 import {
@@ -116,24 +116,21 @@ export default function AdminPage() {
 
   // ── Auth check ───────────────────────────────────────────────────────────
   useEffect(() => {
-    const checkUser = async () => {
-      const supabase = createClient();
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error || !user) { router.push('/'); return; }
+    // Middleware redirects unauthenticated visitors, and every admin action
+    // re-checks the PLATFORM_ADMIN role server-side.
+    const load = async () => {
       await loadData();
       setIsLoading(false);
     };
-    checkUser();
-  }, [router, loadData]);
+    load();
+  }, [loadData]);
 
   useEffect(() => {
     if (!isLoading) loadChartData(selectedYear);
   }, [selectedYear, isLoading, loadChartData]);
 
   const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push('/');
+    await signOut({ callbackUrl: '/' });
   };
 
   // ── Derived metrics ──────────────────────────────────────────────────────
