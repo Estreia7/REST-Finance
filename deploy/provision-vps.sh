@@ -7,9 +7,13 @@
 #
 # Idempotent: re-running skips anything already in place.
 #
-# IMPORTANT: rest-finance.bruno-dev.xyz currently serves AlumAI. This script
-# will NOT overwrite an existing vhost; it writes the new config alongside and
-# tells you what to do, so the switch stays a deliberate act.
+# NOTE ON THE DOMAIN: rest-finance.bruno-dev.xyz currently shows AlumAI. DNS is
+# correct; the cause is that the domain has no nginx vhost of its own, so
+# requests fall through to the default server block. This script creates that
+# vhost (obtaining a certificate first, since the config references one).
+#
+# If a vhost DOES exist and points at another app, the script refuses to
+# overwrite it and tells you how to switch, so that stays a deliberate act.
 set -euo pipefail
 
 APP_NAME="rest-finance"
@@ -106,6 +110,9 @@ say "nginx"
 AVAILABLE="/etc/nginx/sites-available/${DOMAIN}"
 ENABLED="/etc/nginx/sites-enabled/${DOMAIN}"
 
+# Guard only against a vhost that belongs to a DIFFERENT app. If the domain
+# has no vhost at all, nginx falls through to the default server, which is
+# why rest-finance.bruno-dev.xyz was serving AlumAI.
 if [ -f "${AVAILABLE}" ] && ! grep -q "127.0.0.1:${APP_PORT}" "${AVAILABLE}"; then
   warn "${DOMAIN} already has a vhost pointing somewhere else."
   warn "It currently serves:"
@@ -115,16 +122,42 @@ if [ -f "${AVAILABLE}" ] && ! grep -q "127.0.0.1:${APP_PORT}" "${AVAILABLE}"; th
   warn "To switch over, once you are sure:"
   warn "  mv ${AVAILABLE}.rest-finance-new ${AVAILABLE} && nginx -t && systemctl reload nginx"
 else
-  cp "${APP_DIR}/deploy/nginx.conf" "${AVAILABLE}"
-  ln -sfn "${AVAILABLE}" "${ENABLED}"
-
-  # Certbot needs a cert in place before the TLS block will load.
   if [ ! -d "/etc/letsencrypt/live/${DOMAIN}" ]; then
-    warn "No certificate for ${DOMAIN} yet. Issue one with:"
-    warn "  certbot --nginx -d ${DOMAIN}"
-  else
+    # The vhost in deploy/nginx.conf references certificate files. Installing
+    # it before those exist makes 'nginx -t' fail and the reload abort, so
+    # obtain the certificate first using a temporary HTTP-only server block.
+    say "Obtaining a certificate for ${DOMAIN}"
+    mkdir -p /var/www/certbot
+
+    cat > "${AVAILABLE}" <<TEMPVHOST
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location / { return 404; }
+}
+TEMPVHOST
+    ln -sfn "${AVAILABLE}" "${ENABLED}"
     nginx -t && systemctl reload nginx
-    echo "nginx reloaded."
+
+    # --webroot avoids certbot rewriting the vhost we are about to replace.
+    certbot_args="--non-interactive --agree-tos --register-unsafely-without-email"
+    if ! certbot certonly --webroot -w /var/www/certbot -d "${DOMAIN}" $certbot_args; then
+      warn "certbot failed. Check that ${DOMAIN} resolves to this server and"
+      warn "that port 80 reaches it. With Cloudflare proxying on, the HTTP-01"
+      warn "challenge still works, but the origin must accept plain HTTP."
+    fi
+  fi
+
+  if [ -d "/etc/letsencrypt/live/${DOMAIN}" ]; then
+    cp "${APP_DIR}/deploy/nginx.conf" "${AVAILABLE}"
+    ln -sfn "${AVAILABLE}" "${ENABLED}"
+    nginx -t && systemctl reload nginx
+    echo "nginx reloaded. ${DOMAIN} now serves REST Finance on port ${APP_PORT}."
+  else
+    warn "No certificate yet, so the HTTPS vhost was not installed."
+    warn "${DOMAIN} will keep falling through to the default server."
   fi
 fi
 

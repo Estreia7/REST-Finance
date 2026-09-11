@@ -123,10 +123,13 @@ bash deploy/provision-vps.sh
 ```
 
 Creates the database and role with a generated password, clones the repo,
-builds, starts PM2, and installs the nginx vhost. It is idempotent and it
-will **not** overwrite an existing vhost: `rest-finance.bruno-dev.xyz`
-currently serves a different app, so the script writes the new config
-alongside and tells you how to switch when you are ready.
+builds, starts PM2, obtains a TLS certificate and installs the nginx vhost.
+Idempotent.
+
+`rest-finance.bruno-dev.xyz` currently shows AlumAI. DNS is correct: the
+domain simply has no vhost of its own, so nginx falls through to the default
+server block. This script creates it. If a vhost exists but points at another
+app, the script refuses to overwrite it and prints the switch command instead.
 
 It also checks that port 3008 is free and that Postgres is not listening
 beyond localhost.
