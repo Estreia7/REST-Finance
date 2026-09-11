@@ -35,15 +35,33 @@ async function main() {
   }
 
   // Short or obvious passwords are the entire reason this script exists.
+  // ALLOW_WEAK_PASSWORD=1 overrides the check, so a deliberate choice stays
+  // visible in the command that made it rather than being quietly deleted
+  // from here. The check still protects every account created later.
+  const allowWeak = process.env.ALLOW_WEAK_PASSWORD === '1';
+  const problems: string[] = [];
+
   if (PASSWORD.length < 12) {
-    fail('ADMIN_PASSWORD must be at least 12 characters.');
+    problems.push(`only ${PASSWORD.length} characters (12 or more recommended)`);
   }
+
   const WEAK = ['admin', 'password', '12345', 'qwerty', 'letmein'];
-  if (WEAK.some((w) => PASSWORD.toLowerCase().includes(w))) {
-    fail(
-      'ADMIN_PASSWORD contains a common pattern and would be guessed quickly.\n' +
-        '  Use a passphrase or a generated string.'
-    );
+  const matched = WEAK.find((w) => PASSWORD.toLowerCase().includes(w));
+  if (matched) {
+    problems.push(`contains "${matched}", which is in every credential-stuffing list`);
+  }
+
+  if (problems.length > 0) {
+    if (!allowWeak) {
+      fail(
+        'ADMIN_PASSWORD is weak:\n' +
+          problems.map((p) => `    - ${p}`).join('\n') +
+          '\n\n  Use a stronger one, or set ALLOW_WEAK_PASSWORD=1 to proceed anyway.'
+      );
+    }
+    console.warn('\n  WARNING: proceeding with a weak password.');
+    problems.forEach((p) => console.warn(`    - ${p}`));
+    console.warn('  Worth changing once the beta clients are onboarded.\n');
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
