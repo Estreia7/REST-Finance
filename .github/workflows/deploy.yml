@@ -1,0 +1,56 @@
+name: Deploy to VPS
+
+# Deploys to rest-finance.bruno-dev.xyz on the Hetzner VPS (PM2 + nginx).
+# Replaces the previous Vercel and Railway integrations.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false # never interrupt an in-flight deploy
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    # Only deploy when CI actually passed. workflow_dispatch has no parent run,
+    # so allow it through explicitly.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes \
+            "$VPS_USER@$VPS_HOST" \
+            'cd /var/www/rest-finance && bash deploy.sh'
+
+      - name: Verify the site is up
+        env:
+          SITE_URL: https://rest-finance.bruno-dev.xyz
+        run: |
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$SITE_URL" || true)
+            if [ "$code" = "200" ]; then
+              echo "Site responded 200"
+              exit 0
+            fi
+            echo "Attempt $i: got '$code', retrying in 10s"
+            sleep 10
+          done
+          echo "Site did not return 200 after deploy"
+          exit 1

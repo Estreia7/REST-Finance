@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Metadata, Viewport } from 'next';
+import { Bricolage_Grotesque, Public_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import ConditionalNavbar from './components/ConditionalNavbar';
 import { LanguageProvider } from '@/lib/language-context';
@@ -7,6 +8,30 @@ import { ThemeProvider, THEME_INIT_SCRIPT } from '@/lib/theme-context';
 import { Toaster } from 'sonner';
 
 const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://rest-finance.bruno-dev.xyz';
+
+// Display: a grotesque with enough character to carry headlines without
+// reading as a default. Body: Public Sans, chosen for legibility at small
+// sizes and full Portuguese diacritic coverage. Mono: for figures, so columns
+// of money align.
+const display = Bricolage_Grotesque({
+  subsets: ['latin'],
+  variable: '--font-display',
+  display: 'swap',
+  weight: ['600', '700', '800'],
+});
+
+const sans = Public_Sans({
+  subsets: ['latin'],
+  variable: '--font-sans',
+  display: 'swap',
+});
+
+const mono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-mono',
+  display: 'swap',
+  weight: ['400', '500', '600'],
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -47,7 +72,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="pt" className="h-full" suppressHydrationWarning>
+    <html
+      lang="pt"
+      className={`h-full ${display.variable} ${sans.variable} ${mono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         {/* Applies the stored theme before first paint so the page never
             flashes the wrong one. Must stay blocking and inline. */}

@@ -17,7 +17,10 @@ const config: Config = {
     },
     extend: {
       fontFamily: {
-        sans: ['system-ui', ...fontFamily.sans]
+        // Bound to next/font CSS variables set in app/layout.tsx.
+        sans: ['var(--font-sans)', ...fontFamily.sans],
+        display: ['var(--font-display)', 'var(--font-sans)', ...fontFamily.sans],
+        mono: ['var(--font-mono)', ...fontFamily.mono]
       },
       colors: {
         background:  'hsl(var(--background))',
