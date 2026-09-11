@@ -13,9 +13,10 @@
  * duplicated, and the password is reset to the supplied one.
  */
 import { createClient } from '@supabase/supabase-js';
-import { PrismaClient } from '@prisma/client';
+// Reuse the app's client: Prisma 7 needs the pg driver adapter configured
+// there, so a bare new PrismaClient() cannot connect.
+import { prisma } from '../lib/prisma';
 
-const prisma = new PrismaClient();
 
 const EMAIL = process.env.ADMIN_EMAIL;
 const PASSWORD = process.env.ADMIN_PASSWORD;
