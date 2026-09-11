@@ -1,7 +1,7 @@
 'use server';
 
+import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
-import { createClient } from '@/lib/supabase/server';
 import {
   dailySummarySchema,
   costEntrySchema,
@@ -10,26 +10,21 @@ import {
   changePasswordSchema,
   formatZodError,
 } from '@/lib/validations';
-import { requireOwner, isAuthError } from '@/lib/auth-helpers';
+import { requireAuth, requireOwner, requireMember, isAuthError } from '@/lib/auth-helpers';
 import { calculateKpis, toPercent, safeDivide, percentChange } from '@/lib/kpi';
 // Keep these in sync with the Prisma enums in schema.prisma
 type CostType = 'COGS' | 'OPEX';
 type CategoryType = 'REVENUE' | 'COGS' | 'OPEX';
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { toClientError } from '@/lib/errors';
 
 export async function getRestaurant() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
     const membership = await prisma.membership.findFirst({
       where: {
-        userId: user.id,
+        userId: owner.userId,
         role: 'OWNER',
         active: true,
       },
@@ -57,28 +52,12 @@ export async function getRestaurant() {
 
 export async function getStaff() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
-
-    const ownerMembership = await prisma.membership.findFirst({
-      where: {
-        userId: user.id,
-        role: 'OWNER',
-        active: true,
-      },
-    });
-
-    if (!ownerMembership) {
-      return { error: 'Not an owner' };
-    }
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
     const staff = await prisma.membership.findMany({
       where: {
-        restaurantId: ownerMembership.restaurantId,
+        restaurantId: owner.restaurantId,
         role: 'STAFF',
         active: true,
       },
@@ -101,24 +80,8 @@ export async function getStaff() {
 
 export async function addStaff(email: string) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
-
-    const ownerMembership = await prisma.membership.findFirst({
-      where: {
-        userId: user.id,
-        role: 'OWNER',
-        active: true,
-      },
-    });
-
-    if (!ownerMembership) {
-      return { error: 'Not an owner' };
-    }
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
     // Find or create user
     let staffUser = await prisma.user.findUnique({
@@ -135,7 +98,7 @@ export async function addStaff(email: string) {
     const existingMembership = await prisma.membership.findUnique({
       where: {
         restaurantId_userId: {
-          restaurantId: ownerMembership.restaurantId,
+          restaurantId: owner.restaurantId,
           userId: staffUser.id,
         },
       },
@@ -157,7 +120,7 @@ export async function addStaff(email: string) {
     // Create new membership
     await prisma.membership.create({
       data: {
-        restaurantId: ownerMembership.restaurantId,
+        restaurantId: owner.restaurantId,
         userId: staffUser.id,
         role: 'STAFF',
         active: true,
@@ -337,36 +300,20 @@ async function initializeDefaultCategories(restaurantId: string) {
 
 export async function getCategories(type?: CategoryType) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
-
-    const ownerMembership = await prisma.membership.findFirst({
-      where: {
-        userId: user.id,
-        role: 'OWNER',
-        active: true,
-      },
-    });
-
-    if (!ownerMembership) {
-      return { error: 'Not an owner' };
-    }
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
     // Initialize default categories if none exist
     const existingCategories = await prisma.category.findMany({
-      where: { restaurantId: ownerMembership.restaurantId },
+      where: { restaurantId: owner.restaurantId },
     });
 
     if (existingCategories.length === 0) {
-      await initializeDefaultCategories(ownerMembership.restaurantId);
+      await initializeDefaultCategories(owner.restaurantId);
     }
 
     const where: any = {
-      restaurantId: ownerMembership.restaurantId,
+      restaurantId: owner.restaurantId,
       isActive: true,
     };
 
@@ -387,24 +334,8 @@ export async function getCategories(type?: CategoryType) {
 
 export async function getDashboardStats() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
-
-    const ownerMembership = await prisma.membership.findFirst({
-      where: {
-        userId: user.id,
-        role: 'OWNER',
-        active: true,
-      },
-    });
-
-    if (!ownerMembership) {
-      return { error: 'Not an owner' };
-    }
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -413,7 +344,7 @@ export async function getDashboardStats() {
     const [monthlyRevenue, monthlyCosts, staffCount] = await Promise.all([
       prisma.dailySummary.aggregate({
         where: {
-          restaurantId: ownerMembership.restaurantId,
+          restaurantId: owner.restaurantId,
           deletedAt: null,
           date: {
             gte: startOfMonth,
@@ -428,7 +359,7 @@ export async function getDashboardStats() {
       }),
       prisma.costEntry.aggregate({
         where: {
-          restaurantId: ownerMembership.restaurantId,
+          restaurantId: owner.restaurantId,
           deletedAt: null,
           date: {
             gte: startOfMonth,
@@ -441,7 +372,7 @@ export async function getDashboardStats() {
       }),
       prisma.membership.count({
         where: {
-          restaurantId: ownerMembership.restaurantId,
+          restaurantId: owner.restaurantId,
           role: 'STAFF',
           active: true,
         },
@@ -476,18 +407,12 @@ export async function getDashboardStats() {
 
 export async function getRevenueHistory(dateFrom: Date, dateTo: Date) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return { error: 'Unauthorized' };
-
-    const membership = await prisma.membership.findFirst({
-      where: { userId: user.id, role: { in: ['OWNER', 'STAFF'] }, active: true },
-    });
-    if (!membership) return { error: 'No access' };
+    const member = await requireMember();
+    if (isAuthError(member)) return { error: member.error };
 
     const entries = await prisma.dailySummary.findMany({
       where: {
-        restaurantId: membership.restaurantId,
+        restaurantId: member.restaurantId,
         deletedAt: null,
         date: { gte: dateFrom, lte: dateTo },
       },
@@ -521,14 +446,8 @@ export async function updateDailySummary(id: string, data: {
   notes?: string;
 }) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return { error: 'Unauthorized' };
-
-    const membership = await prisma.membership.findFirst({
-      where: { userId: user.id, role: 'OWNER', active: true },
-    });
-    if (!membership) return { error: 'Not an owner' };
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
     // Updates are validated with the same bounds as creation. Without this a
     // negative or absurd revenue could be written through the update path that
@@ -537,7 +456,7 @@ export async function updateDailySummary(id: string, data: {
     if (!parsed.success) return { error: formatZodError(parsed.error) };
 
     const existing = await prisma.dailySummary.findFirst({
-      where: { id, restaurantId: membership.restaurantId, deletedAt: null },
+      where: { id, restaurantId: owner.restaurantId, deletedAt: null },
     });
     if (!existing) return { error: 'Entry not found' };
 
@@ -584,17 +503,11 @@ export async function deleteDailySummary(id: string) {
 
 export async function getCostHistory(dateFrom: Date, dateTo: Date, type?: CostType, categoryId?: string) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return { error: 'Unauthorized' };
-
-    const membership = await prisma.membership.findFirst({
-      where: { userId: user.id, role: { in: ['OWNER', 'STAFF'] }, active: true },
-    });
-    if (!membership) return { error: 'No access' };
+    const member = await requireMember();
+    if (isAuthError(member)) return { error: member.error };
 
     const where: any = {
-      restaurantId: membership.restaurantId,
+      restaurantId: member.restaurantId,
       date: { gte: dateFrom, lte: dateTo },
       deletedAt: null,
     };
@@ -635,21 +548,15 @@ export async function updateCostEntry(id: string, data: {
   date?: Date;
 }) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return { error: 'Unauthorized' };
-
-    const membership = await prisma.membership.findFirst({
-      where: { userId: user.id, role: 'OWNER', active: true },
-    });
-    if (!membership) return { error: 'Not an owner' };
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
     // Same bounds as creation — see updateDailySummary.
     const parsed = costEntryUpdateSchema.safeParse(data);
     if (!parsed.success) return { error: formatZodError(parsed.error) };
 
     const existing = await prisma.costEntry.findFirst({
-      where: { id, restaurantId: membership.restaurantId, deletedAt: null },
+      where: { id, restaurantId: owner.restaurantId, deletedAt: null },
     });
     if (!existing) return { error: 'Entry not found' };
 
@@ -657,7 +564,7 @@ export async function updateCostEntry(id: string, data: {
     // could be reassigned to another tenant's category.
     if (parsed.data.categoryId && parsed.data.categoryId !== existing.categoryId) {
       const category = await prisma.category.findFirst({
-        where: { id: parsed.data.categoryId, restaurantId: membership.restaurantId },
+        where: { id: parsed.data.categoryId, restaurantId: owner.restaurantId },
         select: { id: true },
       });
       if (!category) return { error: 'Categoria inválida' };
@@ -704,39 +611,33 @@ export async function deleteCostEntry(id: string) {
 
 export async function getPnLStatement(month: number, year: number) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return { error: 'Unauthorized' };
-
-    const membership = await prisma.membership.findFirst({
-      where: { userId: user.id, role: { in: ['OWNER', 'STAFF'] }, active: true },
-    });
-    if (!membership) return { error: 'No access' };
+    const member = await requireMember();
+    if (isAuthError(member)) return { error: member.error };
 
     const startOfMonth = new Date(year, month - 1, 1);
     const endOfMonth = new Date(year, month, 0, 23, 59, 59);
 
     const [revAgg, cogsAgg, opexAgg, cogsBreakdown, opexBreakdown] = await Promise.all([
       prisma.dailySummary.aggregate({
-        where: { restaurantId: membership.restaurantId, deletedAt: null, date: { gte: startOfMonth, lte: endOfMonth } },
+        where: { restaurantId: member.restaurantId, deletedAt: null, date: { gte: startOfMonth, lte: endOfMonth } },
         _sum: { revenueTotal: true, dineInRevenue: true, takeawayRevenue: true },
       }),
       prisma.costEntry.aggregate({
-        where: { restaurantId: membership.restaurantId, deletedAt: null, type: 'COGS', date: { gte: startOfMonth, lte: endOfMonth } },
+        where: { restaurantId: member.restaurantId, deletedAt: null, type: 'COGS', date: { gte: startOfMonth, lte: endOfMonth } },
         _sum: { amount: true },
       }),
       prisma.costEntry.aggregate({
-        where: { restaurantId: membership.restaurantId, deletedAt: null, type: 'OPEX', date: { gte: startOfMonth, lte: endOfMonth } },
+        where: { restaurantId: member.restaurantId, deletedAt: null, type: 'OPEX', date: { gte: startOfMonth, lte: endOfMonth } },
         _sum: { amount: true },
       }),
       prisma.costEntry.groupBy({
         by: ['categoryId'],
-        where: { restaurantId: membership.restaurantId, deletedAt: null, type: 'COGS', date: { gte: startOfMonth, lte: endOfMonth } },
+        where: { restaurantId: member.restaurantId, deletedAt: null, type: 'COGS', date: { gte: startOfMonth, lte: endOfMonth } },
         _sum: { amount: true },
       }),
       prisma.costEntry.groupBy({
         by: ['categoryId'],
-        where: { restaurantId: membership.restaurantId, deletedAt: null, type: 'OPEX', date: { gte: startOfMonth, lte: endOfMonth } },
+        where: { restaurantId: member.restaurantId, deletedAt: null, type: 'OPEX', date: { gte: startOfMonth, lte: endOfMonth } },
         _sum: { amount: true },
       }),
     ]);
@@ -758,7 +659,7 @@ export async function getPnLStatement(month: number, year: number) {
     // Cost can be reported consistently with the dashboard and PDF.
     const labourAgg = await prisma.costEntry.aggregate({
       where: {
-        restaurantId: membership.restaurantId,
+        restaurantId: member.restaurantId,
         deletedAt: null,
         date: { gte: startOfMonth, lte: endOfMonth },
         category: { isLabour: true },
@@ -805,14 +706,8 @@ export async function getPnLStatement(month: number, year: number) {
 
 export async function getComparativeData() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return { error: 'Unauthorized' };
-
-    const membership = await prisma.membership.findFirst({
-      where: { userId: user.id, role: { in: ['OWNER', 'STAFF'] }, active: true },
-    });
-    if (!membership) return { error: 'No access' };
+    const member = await requireMember();
+    if (isAuthError(member)) return { error: member.error };
 
     const now = new Date();
     const months = [];
@@ -823,11 +718,11 @@ export async function getComparativeData() {
 
       const [rev, costs] = await Promise.all([
         prisma.dailySummary.aggregate({
-          where: { restaurantId: membership.restaurantId, deletedAt: null, date: { gte: start, lte: end } },
+          where: { restaurantId: member.restaurantId, deletedAt: null, date: { gte: start, lte: end } },
           _sum: { revenueTotal: true },
         }),
         prisma.costEntry.aggregate({
-          where: { restaurantId: membership.restaurantId, deletedAt: null, date: { gte: start, lte: end } },
+          where: { restaurantId: member.restaurantId, deletedAt: null, date: { gte: start, lte: end } },
           _sum: { amount: true },
         }),
       ]);
@@ -851,17 +746,11 @@ export async function getComparativeData() {
 
 export async function getTicketAnalysis(dateFrom: Date, dateTo: Date) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return { error: 'Unauthorized' };
-
-    const membership = await prisma.membership.findFirst({
-      where: { userId: user.id, role: { in: ['OWNER', 'STAFF'] }, active: true },
-    });
-    if (!membership) return { error: 'No access' };
+    const member = await requireMember();
+    if (isAuthError(member)) return { error: member.error };
 
     const summaries = await prisma.dailySummary.findMany({
-      where: { restaurantId: membership.restaurantId, deletedAt: null, date: { gte: dateFrom, lte: dateTo } },
+      where: { restaurantId: member.restaurantId, deletedAt: null, date: { gte: dateFrom, lte: dateTo } },
       orderBy: { date: 'asc' },
     });
 
@@ -902,17 +791,11 @@ export async function getTicketAnalysis(dateFrom: Date, dateTo: Date) {
 
 export async function updateRevenueTarget(target: number) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return { error: 'Unauthorized' };
-
-    const membership = await prisma.membership.findFirst({
-      where: { userId: user.id, role: 'OWNER', active: true },
-    });
-    if (!membership) return { error: 'Not an owner' };
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
     await prisma.restaurant.update({
-      where: { id: membership.restaurantId },
+      where: { id: owner.restaurantId },
       data: { monthlyRevenueTarget: target },
     });
 
@@ -926,12 +809,10 @@ export async function updateRevenueTarget(target: number) {
 
 export async function updateUserProfile(name: string) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return { error: 'Unauthorized' };
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
-    await prisma.user.update({ where: { id: user.id }, data: { name } });
-    await supabase.auth.updateUser({ data: { name } });
+    await prisma.user.update({ where: { id: owner.userId }, data: { name } });
 
     return { success: true };
   } catch (error: unknown) {
@@ -944,29 +825,39 @@ export async function changePassword(currentPassword: string, newPassword: strin
     const parsed = changePasswordSchema.safeParse({ currentPassword, newPassword });
     if (!parsed.success) return { error: formatZodError(parsed.error) };
 
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return { error: 'Sessão expirada', requiresAuth: true };
+    const authResult = await requireAuth();
+    if (isAuthError(authResult)) return { error: authResult.error, requiresAuth: true };
 
-    // Verify current password by re-authenticating
-    const { error: verifyError } = await supabase.auth.signInWithPassword({
-      email: user.email!,
-      password: currentPassword,
+    const user = await prisma.user.findUnique({
+      where: { id: authResult.userId },
+      select: { passwordHash: true },
     });
-    if (verifyError) return { error: 'Palavra-passe atual incorreta' };
 
-    // Now update to new password
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) {
-      console.error('[changePassword] update failed:', error);
-      return { error: 'Não foi possível alterar a palavra-passe. Verifica que cumpre os requisitos mínimos.' };
+    // An account created through Google has no password to change. Setting
+    // one from here would let anyone with a live session add a second way in.
+    if (!user?.passwordHash) {
+      return { error: 'Esta conta inicia sessão com Google e não tem palavra-passe.' };
     }
+
+    const matches = await bcrypt.compare(parsed.data.currentPassword, user.passwordHash);
+    if (!matches) return { error: 'Palavra-passe atual incorreta' };
+
+    const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
+    await prisma.user.update({
+      where: { id: authResult.userId },
+      data: { passwordHash },
+    });
+
+    // Every other session is invalidated, so a password change actually ends
+    // access anywhere the old one was used.
+    await prisma.session.deleteMany({ where: { userId: authResult.userId } });
 
     return { success: true };
   } catch (error: unknown) {
-    return { error: 'Falha ao alterar palavra-passe' };
+    return { error: toClientError('Failed to change password', error, 'write') };
   }
 }
+
 
 export async function updateRestaurantSettings(data: {
   name?: string;
@@ -974,17 +865,11 @@ export async function updateRestaurantSettings(data: {
   currency?: string;
 }) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return { error: 'Unauthorized' };
-
-    const membership = await prisma.membership.findFirst({
-      where: { userId: user.id, role: 'OWNER', active: true },
-    });
-    if (!membership) return { error: 'Not an owner' };
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
     await prisma.restaurant.update({
-      where: { id: membership.restaurantId },
+      where: { id: owner.restaurantId },
       data: {
         ...(data.name && { name: data.name }),
         ...(data.timezone && { timezone: data.timezone }),
@@ -1000,18 +885,17 @@ export async function updateRestaurantSettings(data: {
 
 export async function updateStaffPermissions(membershipId: string, permissions: string[]) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return { error: 'Unauthorized' };
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
     const ownerMembership = await prisma.membership.findFirst({
-      where: { userId: user.id, role: 'OWNER', active: true },
+      where: { userId: owner.userId, role: 'OWNER', active: true },
     });
     if (!ownerMembership) return { error: 'Not an owner' };
 
     // Verify the target membership belongs to the same restaurant
     const targetMembership = await prisma.membership.findFirst({
-      where: { id: membershipId, restaurantId: ownerMembership.restaurantId },
+      where: { id: membershipId, restaurantId: owner.restaurantId },
     });
     if (!targetMembership) return { error: 'Staff member not found' };
 
@@ -1028,17 +912,16 @@ export async function updateStaffPermissions(membershipId: string, permissions: 
 
 export async function removeStaff(membershipId: string) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return { error: 'Unauthorized' };
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
     const ownerMembership = await prisma.membership.findFirst({
-      where: { userId: user.id, role: 'OWNER', active: true },
+      where: { userId: owner.userId, role: 'OWNER', active: true },
     });
     if (!ownerMembership) return { error: 'Not an owner' };
 
     const targetMembership = await prisma.membership.findFirst({
-      where: { id: membershipId, restaurantId: ownerMembership.restaurantId, role: 'STAFF' },
+      where: { id: membershipId, restaurantId: owner.restaurantId, role: 'STAFF' },
     });
     if (!targetMembership) return { error: 'Staff member not found' };
 
@@ -1055,15 +938,11 @@ export async function removeStaff(membershipId: string) {
 
 export async function getCurrentUser() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
     const userRecord = await prisma.user.findUnique({
-      where: { id: user.id },
+      where: { id: owner.userId },
       select: {
         id: true,
         email: true,
@@ -1084,24 +963,8 @@ export async function getCurrentUser() {
 // Get last 7 days revenue for mini chart
 export async function getLast7DaysRevenue() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
-
-    const ownerMembership = await prisma.membership.findFirst({
-      where: {
-        userId: user.id,
-        role: 'OWNER',
-        active: true,
-      },
-    });
-
-    if (!ownerMembership) {
-      return { error: 'Not an owner' };
-    }
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
     const now = new Date();
     const sevenDaysAgo = new Date(now);
@@ -1109,7 +972,7 @@ export async function getLast7DaysRevenue() {
 
     const summaries = await prisma.dailySummary.findMany({
       where: {
-        restaurantId: ownerMembership.restaurantId,
+        restaurantId: owner.restaurantId,
         deletedAt: null,
         date: {
           gte: sevenDaysAgo,
@@ -1149,24 +1012,8 @@ export async function getLast7DaysRevenue() {
 // Get monthly revenue breakdown by category (Food, Drinks, Other)
 export async function getMonthlyRevenueBreakdown() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
-
-    const ownerMembership = await prisma.membership.findFirst({
-      where: {
-        userId: user.id,
-        role: 'OWNER',
-        active: true,
-      },
-    });
-
-    if (!ownerMembership) {
-      return { error: 'Not an owner' };
-    }
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
     const now = new Date();
     const sixMonthsAgo = new Date(now);
@@ -1174,7 +1021,7 @@ export async function getMonthlyRevenueBreakdown() {
 
     const summaries = await prisma.dailySummary.findMany({
       where: {
-        restaurantId: ownerMembership.restaurantId,
+        restaurantId: owner.restaurantId,
         deletedAt: null,
         date: {
           gte: sixMonthsAgo,
@@ -1216,24 +1063,8 @@ export async function getMonthlyRevenueBreakdown() {
 // Get category performance data
 export async function getCategoryPerformance() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
-
-    const ownerMembership = await prisma.membership.findFirst({
-      where: {
-        userId: user.id,
-        role: 'OWNER',
-        active: true,
-      },
-    });
-
-    if (!ownerMembership) {
-      return { error: 'Not an owner' };
-    }
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -1243,7 +1074,7 @@ export async function getCategoryPerformance() {
     const costsByCategory = await prisma.costEntry.groupBy({
       by: ['categoryId'],
       where: {
-        restaurantId: ownerMembership.restaurantId,
+        restaurantId: owner.restaurantId,
         deletedAt: null,
         date: { gte: startOfMonth, lte: endOfMonth },
       },
@@ -1284,24 +1115,8 @@ export async function getCategoryPerformance() {
 // Get advanced dashboard stats (Prime Cost, COGS %, etc.)
 export async function getAdvancedDashboardStats() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
-
-    const ownerMembership = await prisma.membership.findFirst({
-      where: {
-        userId: user.id,
-        role: 'OWNER',
-        active: true,
-      },
-    });
-
-    if (!ownerMembership) {
-      return { error: 'Not an owner' };
-    }
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -1315,7 +1130,7 @@ export async function getAdvancedDashboardStats() {
     // restaurant that used its own category names.
     const laborCategories = await prisma.category.findMany({
       where: {
-        restaurantId: ownerMembership.restaurantId,
+        restaurantId: owner.restaurantId,
         isLabour: true,
       },
       select: { id: true },
@@ -1327,7 +1142,7 @@ export async function getAdvancedDashboardStats() {
     const [currentRevenue, currentCosts, currentCOGS, currentLabor] = await Promise.all([
       prisma.dailySummary.aggregate({
         where: {
-          restaurantId: ownerMembership.restaurantId,
+          restaurantId: owner.restaurantId,
           deletedAt: null,
           date: { gte: startOfMonth, lte: endOfMonth },
         },
@@ -1335,7 +1150,7 @@ export async function getAdvancedDashboardStats() {
       }),
       prisma.costEntry.aggregate({
         where: {
-          restaurantId: ownerMembership.restaurantId,
+          restaurantId: owner.restaurantId,
           deletedAt: null,
           date: { gte: startOfMonth, lte: endOfMonth },
         },
@@ -1343,7 +1158,7 @@ export async function getAdvancedDashboardStats() {
       }),
       prisma.costEntry.aggregate({
         where: {
-          restaurantId: ownerMembership.restaurantId,
+          restaurantId: owner.restaurantId,
           deletedAt: null,
           type: 'COGS',
           date: { gte: startOfMonth, lte: endOfMonth },
@@ -1353,7 +1168,7 @@ export async function getAdvancedDashboardStats() {
       laborCategoryIds.length > 0
         ? prisma.costEntry.aggregate({
             where: {
-              restaurantId: ownerMembership.restaurantId,
+              restaurantId: owner.restaurantId,
               deletedAt: null,
               date: { gte: startOfMonth, lte: endOfMonth },
               categoryId: { in: laborCategoryIds },
@@ -1367,7 +1182,7 @@ export async function getAdvancedDashboardStats() {
     const [lastMonthRevenue, lastMonthCOGS] = await Promise.all([
       prisma.dailySummary.aggregate({
         where: {
-          restaurantId: ownerMembership.restaurantId,
+          restaurantId: owner.restaurantId,
           deletedAt: null,
           date: { gte: startOfLastMonth, lte: endOfLastMonth },
         },
@@ -1375,7 +1190,7 @@ export async function getAdvancedDashboardStats() {
       }),
       prisma.costEntry.aggregate({
         where: {
-          restaurantId: ownerMembership.restaurantId,
+          restaurantId: owner.restaurantId,
           deletedAt: null,
           type: 'COGS',
           date: { gte: startOfLastMonth, lte: endOfLastMonth },
@@ -1425,7 +1240,7 @@ export async function getAdvancedDashboardStats() {
       const [monthRev, monthCOGS, monthLab] = await Promise.all([
         prisma.dailySummary.aggregate({
           where: {
-            restaurantId: ownerMembership.restaurantId,
+            restaurantId: owner.restaurantId,
             deletedAt: null,
             date: { gte: monthStart, lte: monthEnd },
           },
@@ -1433,7 +1248,7 @@ export async function getAdvancedDashboardStats() {
         }),
         prisma.costEntry.aggregate({
           where: {
-            restaurantId: ownerMembership.restaurantId,
+            restaurantId: owner.restaurantId,
             deletedAt: null,
             type: 'COGS',
             date: { gte: monthStart, lte: monthEnd },
@@ -1443,7 +1258,7 @@ export async function getAdvancedDashboardStats() {
         laborCategoryIds.length > 0
           ? prisma.costEntry.aggregate({
               where: {
-                restaurantId: ownerMembership.restaurantId,
+                restaurantId: owner.restaurantId,
                 deletedAt: null,
                 date: { gte: monthStart, lte: monthEnd },
                 categoryId: { in: laborCategoryIds },
@@ -1463,7 +1278,7 @@ export async function getAdvancedDashboardStats() {
     // The owner's real revenue target, set in GoalsPanel. Null when unset so
     // the UI can prompt for one instead of charting a number we invented.
     const restaurant = await prisma.restaurant.findUnique({
-      where: { id: ownerMembership.restaurantId },
+      where: { id: owner.restaurantId },
       select: { monthlyRevenueTarget: true },
     });
     const monthlyGoal = restaurant?.monthlyRevenueTarget

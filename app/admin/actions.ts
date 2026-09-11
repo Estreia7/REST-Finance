@@ -1,36 +1,16 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { createClient } from '@/lib/supabase/server';
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import bcrypt from 'bcryptjs';
+import { randomUUID } from 'node:crypto';
+import { requireAuth, requireAdmin, isAuthError } from '@/lib/auth-helpers';
 import { Plan } from '@prisma/client';
 import { toClientError, isUniqueConstraintError } from '@/lib/errors';
 
 export async function getClients() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
-
-    // Check if user is platform admin
-    const userRecord = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: {
-        memberships: {
-          where: { 
-            role: 'PLATFORM_ADMIN',
-            active: true,
-          },
-        },
-      },
-    });
-
-    if (!userRecord || userRecord.memberships.length === 0) {
-      return { error: 'Unauthorized - Admin access required' };
-    }
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
 
     const restaurants = await prisma.restaurant.findMany({
       include: {
@@ -67,29 +47,8 @@ export async function updateClient(data: {
   trialEndsAt?: Date | null;
 }) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
-
-    // Check if user is platform admin
-    const userRecord = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: {
-        memberships: {
-          where: { 
-            role: 'PLATFORM_ADMIN',
-            active: true,
-          },
-        },
-      },
-    });
-
-    if (!userRecord || userRecord.memberships.length === 0) {
-      return { error: 'Unauthorized - Admin access required' };
-    }
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
 
     const updateData: any = {};
     if (data.name !== undefined) updateData.name = data.name;
@@ -125,29 +84,8 @@ export async function updateClient(data: {
 
 export async function getClientStats() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
-
-    // Check if user is platform admin
-    const userRecord = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: {
-        memberships: {
-          where: { 
-            role: 'PLATFORM_ADMIN',
-            active: true,
-          },
-        },
-      },
-    });
-
-    if (!userRecord || userRecord.memberships.length === 0) {
-      return { error: 'Unauthorized - Admin access required' };
-    }
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
 
     const [trial, monthly, yearly, total] = await Promise.all([
       prisma.restaurant.count({ where: { plan: 'TRIAL' } }),
@@ -172,29 +110,8 @@ export async function getClientStats() {
 
 export async function getMonthlyRevenue(year: number) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
-
-    // Check if user is platform admin
-    const userRecord = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: {
-        memberships: {
-          where: { 
-            role: 'PLATFORM_ADMIN',
-            active: true,
-          },
-        },
-      },
-    });
-
-    if (!userRecord || userRecord.memberships.length === 0) {
-      return { error: 'Unauthorized - Admin access required' };
-    }
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
 
     // Get all restaurants that were active during the year
     const restaurants = await prisma.restaurant.findMany({
@@ -275,29 +192,8 @@ export async function getMonthlyRevenue(year: number) {
 
 export async function getAllUsers() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
-
-    // Check if user is platform admin
-    const userRecord = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: {
-        memberships: {
-          where: { 
-            role: 'PLATFORM_ADMIN',
-            active: true,
-          },
-        },
-      },
-    });
-
-    if (!userRecord || userRecord.memberships.length === 0) {
-      return { error: 'Unauthorized - Admin access required' };
-    }
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
 
     const users = await prisma.user.findMany({
       include: {
@@ -332,29 +228,8 @@ export async function updateUser(data: {
   membershipId?: string | null;
 }) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
-
-    // Check if user is platform admin
-    const userRecord = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: {
-        memberships: {
-          where: { 
-            role: 'PLATFORM_ADMIN',
-            active: true,
-          },
-        },
-      },
-    });
-
-    if (!userRecord || userRecord.memberships.length === 0) {
-      return { error: 'Unauthorized - Admin access required' };
-    }
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
 
     // Update user data
     const updateData: any = {};
@@ -382,41 +257,32 @@ export async function updateUser(data: {
 
 export async function sendPasswordReset(email: string) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
 
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      select: { id: true },
+    });
+    // Do not reveal whether the address is registered.
+    if (!user) return { success: true };
 
-    // Check if user is platform admin
-    const userRecord = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: {
-        memberships: {
-          where: { 
-            role: 'PLATFORM_ADMIN',
-            active: true,
-          },
-        },
-      },
+    // Single-use token, valid for one hour, stored in the table Auth.js
+    // already uses for verification.
+    const token = randomUUID();
+    const expires = new Date(Date.now() + 60 * 60 * 1000);
+
+    await prisma.verificationToken.deleteMany({ where: { identifier: email.toLowerCase() } });
+    await prisma.verificationToken.create({
+      data: { identifier: email.toLowerCase(), token, expires },
     });
 
-    if (!userRecord || userRecord.memberships.length === 0) {
-      return { error: 'Unauthorized - Admin access required' };
-    }
+    const base = process.env.NEXT_PUBLIC_APP_URL ?? '';
+    const link = `${base}/reset-password?token=${token}`;
 
-    // Use Supabase to send password reset
-    // This will work with the anon key for password resets
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/forgot-password`,
-    });
-
-    if (resetError) {
-      return { error: resetError.message };
-    }
-
-    return { success: true };
+    // No mail provider is wired up yet, so the admin passes the link on
+    // directly rather than the request silently doing nothing.
+    return { success: true, resetLink: link };
   } catch (error: unknown) {
     return { error: toClientError('Failed to send password reset', error, 'write') };
   }
@@ -431,66 +297,16 @@ export async function createAccount(data: {
   trialEndsAt?: Date | null;
 }) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
 
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
-
-    // Check if user is platform admin
-    const userRecord = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: {
-        memberships: {
-          where: { 
-            role: 'PLATFORM_ADMIN',
-            active: true,
-          },
-        },
-      },
-    });
-
-    if (!userRecord || userRecord.memberships.length === 0) {
-      return { error: 'Unauthorized - Admin access required' };
-    }
-
-    // Create Supabase auth user using service role key
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !supabaseServiceRoleKey) {
-      return { error: 'Server configuration incomplete - Service role key required' };
-    }
-
-    const supabaseAdmin = createSupabaseClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    });
-    
-    // Use admin API to create user (bypasses email confirmation)
-    const { data: authData, error: signUpError } = await supabaseAdmin.auth.admin.createUser({
-      email: data.email,
-      password: data.password,
-      email_confirm: true,
-      user_metadata: {
-        name: data.name,
-      },
-    });
-
-    if (signUpError) {
-      return { error: signUpError.message };
-    }
-
-    if (!authData.user) {
-      return { error: 'Failed to create user account' };
-    }
+    // Identity is local now: hash the password and mint the id ourselves.
+    const passwordHash = await bcrypt.hash(data.password, 12);
+    const newUserId = randomUUID();
 
     // Check if user already exists in database
     const existingUser = await prisma.user.findUnique({
-      where: { id: authData.user.id },
+      where: { id: newUserId },
       include: {
         memberships: {
           where: {
@@ -505,12 +321,16 @@ export async function createAccount(data: {
       return { error: 'User already has a restaurant' };
     }
 
-    // Create User record in database
+    // Create User record in database. The hash must be stored here: without
+    // it the account exists but can never sign in.
     const dbUser = existingUser || await prisma.user.create({
       data: {
-        id: authData.user.id,
-        email: data.email,
+        id: newUserId,
+        email: data.email.toLowerCase(),
         name: data.name,
+        passwordHash,
+        // Created by an admin, so the address is taken as confirmed.
+        emailVerified: new Date(),
       },
     });
 
@@ -545,84 +365,33 @@ export async function createAccount(data: {
 
 export async function deleteAccount(userId: string) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
 
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
+    if (userId === admin.userId) {
+      return { error: 'Não podes eliminar a tua própria conta.' };
     }
 
-    // Check if user is platform admin
-    const userRecord = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: {
-        memberships: {
-          where: { 
-            role: 'PLATFORM_ADMIN',
-            active: true,
-          },
-        },
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true },
+    });
+    if (!user) return { error: 'Utilizador não encontrado' };
+
+    // Sessions and linked providers cascade from the user row. Memberships
+    // are removed explicitly so the restaurant loses the access immediately.
+    await prisma.$transaction([
+      prisma.membership.deleteMany({ where: { userId } }),
+      prisma.user.delete({ where: { id: userId } }),
+    ]);
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'admin.user.delete',
+        actorUserId: admin.userId,
+        metadata: { deletedUserId: userId, deletedEmail: user.email },
       },
     });
-
-    if (!userRecord || userRecord.memberships.length === 0) {
-      return { error: 'Unauthorized - Admin access required' };
-    }
-
-    // Prevent deleting yourself
-    if (userId === user.id) {
-      return { error: 'Cannot delete your own account' };
-    }
-
-    // Get user's restaurants
-    const userToDelete = await prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        memberships: {
-          include: {
-            restaurant: true,
-          },
-        },
-      },
-    });
-
-    if (!userToDelete) {
-      return { error: 'User not found' };
-    }
-
-    // Delete all memberships (this will cascade delete related data if configured)
-    // Delete restaurants owned by this user
-    const ownerMemberships = userToDelete.memberships.filter(
-      (m) => m.role === 'OWNER'
-    );
-    for (const membership of ownerMemberships) {
-      await prisma.restaurant.delete({
-        where: { id: membership.restaurantId },
-      });
-    }
-
-    // Delete user record (memberships will be deleted by cascade or manually)
-    await prisma.user.delete({
-      where: { id: userId },
-    });
-
-    // Delete from Supabase auth (using service role key)
-    try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      if (supabaseUrl && supabaseServiceRoleKey) {
-        const supabaseAdmin = createSupabaseClient(supabaseUrl, supabaseServiceRoleKey, {
-          auth: {
-            autoRefreshToken: false,
-            persistSession: false
-          }
-        });
-        await supabaseAdmin.auth.admin.deleteUser(userId);
-      }
-    } catch (deleteAuthError) {
-      console.warn('Could not delete user from Supabase auth:', deleteAuthError);
-      // Continue even if auth deletion fails
-    }
 
     return { success: true };
   } catch (error: unknown) {
@@ -632,53 +401,35 @@ export async function deleteAccount(userId: string) {
 
 export async function changeUserPassword(userId: string, newPassword: string) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
 
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
+    if (newPassword.length < 8) {
+      return { error: 'A palavra-passe deve ter pelo menos 8 caracteres.' };
     }
 
-    // Check if user is platform admin
-    const userRecord = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: {
-        memberships: {
-          where: { 
-            role: 'PLATFORM_ADMIN',
-            active: true,
-          },
-        },
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true },
+    });
+    if (!user) return { error: 'Utilizador não encontrado' };
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: userId }, data: { passwordHash } }),
+      // End every existing session: a password change should revoke access
+      // anywhere the old one was used.
+      prisma.session.deleteMany({ where: { userId } }),
+    ]);
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'admin.user.password_change',
+        actorUserId: admin.userId,
+        metadata: { targetUserId: userId, targetEmail: user.email },
       },
     });
-
-    if (!userRecord || userRecord.memberships.length === 0) {
-      return { error: 'Unauthorized - Admin access required' };
-    }
-
-    // Update password using Supabase admin - requires service role key
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !supabaseServiceRoleKey) {
-      return { error: 'Server configuration incomplete - Service role key required' };
-    }
-
-    const supabaseAdmin = createSupabaseClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    });
-    
-    // Use admin API to update password
-    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-      password: newPassword,
-    });
-
-    if (updateError) {
-      return { error: updateError.message };
-    }
 
     return { success: true };
   } catch (error: unknown) {
@@ -688,17 +439,11 @@ export async function changeUserPassword(userId: string, newPassword: string) {
 
 // ─── Restaurant Detail Actions ────────────────────────────────────────────
 
+/** Returns the admin's identity, or null when the caller is not one. */
 async function verifyAdmin() {
-  const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return null;
-
-  const record = await prisma.user.findUnique({
-    where: { id: user.id },
-    include: { memberships: { where: { role: 'PLATFORM_ADMIN', active: true } } },
-  });
-  if (!record || record.memberships.length === 0) return null;
-  return user;
+  const admin = await requireAdmin();
+  if (isAuthError(admin)) return null;
+  return admin;
 }
 
 export async function getRestaurantDetail(restaurantId: string) {
@@ -872,15 +617,11 @@ export async function bulkUpdateRestaurants(ids: string[], data: { plan?: Plan; 
 
 export async function getCurrentUser() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { error: 'Unauthorized' };
-    }
+    const authResult = await requireAuth();
+    if (isAuthError(authResult)) return { error: authResult.error };
 
     const userRecord = await prisma.user.findUnique({
-      where: { id: user.id },
+      where: { id: authResult.userId },
       select: {
         id: true,
         email: true,

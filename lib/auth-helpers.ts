@@ -1,5 +1,17 @@
-import { createClient } from '@/lib/supabase/server';
 import { prisma } from '@/lib/prisma';
+import { auth } from '@/lib/auth-config';
+
+/**
+ * Authorisation helpers.
+ *
+ * Every server action and route handler goes through one of these rather than
+ * querying memberships inline. The signatures are unchanged from the Supabase
+ * implementation so call sites did not have to move; only the session lookup
+ * underneath is different.
+ *
+ * Roles are read fresh from the database on each call, never from the session,
+ * so deactivating a member takes effect on their next request.
+ */
 
 interface AuthResult {
   userId: string;
@@ -19,28 +31,23 @@ interface MemberResult extends AuthResult {
 type AuthError = { error: string; requiresAuth?: boolean };
 
 export async function requireAuth(): Promise<AuthResult | AuthError> {
-  const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const session = await auth();
 
-  if (error || !user) {
+  if (!session?.user?.id) {
     return { error: 'Sessão expirada. Por favor, faça login novamente.', requiresAuth: true };
   }
 
-  return { userId: user.id, email: user.email! };
+  return { userId: session.user.id, email: session.user.email ?? '' };
 }
 
 export async function requireOwner(): Promise<OwnerResult | AuthError> {
-  const auth = await requireAuth();
-  if ('error' in auth) return auth;
+  const authResult = await requireAuth();
+  if ('error' in authResult) return authResult;
 
   const membership = await prisma.membership.findFirst({
-    where: {
-      userId: auth.userId,
-      role: 'OWNER',
-      active: true,
-    },
-    // See requireMember: an owner of several restaurants must resolve to the
-    // same one on every request, not an arbitrary row.
+    where: { userId: authResult.userId, role: 'OWNER', active: true },
+    // Deterministic: an owner of several restaurants must resolve to the same
+    // one on every request, not an arbitrary row.
     orderBy: { createdAt: 'asc' },
   });
 
@@ -49,26 +56,19 @@ export async function requireOwner(): Promise<OwnerResult | AuthError> {
   }
 
   return {
-    userId: auth.userId,
-    email: auth.email,
+    userId: authResult.userId,
+    email: authResult.email,
     restaurantId: membership.restaurantId,
     membershipId: membership.id,
   };
 }
 
 export async function requireMember(): Promise<MemberResult | AuthError> {
-  const auth = await requireAuth();
-  if ('error' in auth) return auth;
+  const authResult = await requireAuth();
+  if ('error' in authResult) return authResult;
 
   const membership = await prisma.membership.findFirst({
-    where: {
-      userId: auth.userId,
-      role: { in: ['OWNER', 'STAFF'] },
-      active: true,
-    },
-    // Deterministic selection: without an explicit order, a user belonging to
-    // more than one restaurant would be scoped to whichever row Postgres
-    // happened to return first, and could see a different one per request.
+    where: { userId: authResult.userId, role: { in: ['OWNER', 'STAFF'] }, active: true },
     orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
   });
 
@@ -77,11 +77,28 @@ export async function requireMember(): Promise<MemberResult | AuthError> {
   }
 
   return {
-    userId: auth.userId,
-    email: auth.email,
+    userId: authResult.userId,
+    email: authResult.email,
     restaurantId: membership.restaurantId,
     role: membership.role as 'OWNER' | 'STAFF',
   };
+}
+
+/** Platform administrator. Checked independently of any restaurant. */
+export async function requireAdmin(): Promise<AuthResult | AuthError> {
+  const authResult = await requireAuth();
+  if ('error' in authResult) return authResult;
+
+  const membership = await prisma.membership.findFirst({
+    where: { userId: authResult.userId, role: 'PLATFORM_ADMIN', active: true },
+    select: { id: true },
+  });
+
+  if (!membership) {
+    return { error: 'Sem permissões de administrador' };
+  }
+
+  return authResult;
 }
 
 export function isAuthError(result: unknown): result is AuthError {
