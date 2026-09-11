@@ -36,18 +36,18 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'REST Finance — Controla as finanças do teu restaurante',
+    default: 'REST Finance: controlo financeiro para restaurantes',
     template: '%s · REST Finance',
   },
   description:
-    'Receitas, custos e margens do teu restaurante em tempo real. Prime Cost, food cost e lucro líquido calculados automaticamente — sem Excel.',
+    'Receitas, custos e margens do teu restaurante em tempo real. Prime Cost, food cost e lucro líquido calculados automaticamente. Sem Excel.',
   applicationName: 'REST Finance',
   openGraph: {
     type: 'website',
     locale: 'pt_PT',
     url: SITE_URL,
     siteName: 'REST Finance',
-    title: 'REST Finance — Controla as finanças do teu restaurante',
+    title: 'REST Finance: controlo financeiro para restaurantes',
     description:
       'Receitas, custos e margens do teu restaurante em tempo real. Sem Excel, sem folhas de cálculo.',
   },

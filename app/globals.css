@@ -188,10 +188,14 @@
 /* Ghost CTA button */
 .cta-button-secondary {
   @apply inline-flex items-center justify-center gap-2 px-6 py-3
-         border border-white/10 bg-white/[0.04] backdrop-blur-sm
+         border border-border bg-card
          text-foreground font-semibold text-sm rounded-xl
-         hover:bg-white/[0.08] hover:border-white/20
-         transition-all duration-200 cursor-pointer;
+         hover:bg-muted
+         focus-visible:outline-none focus-visible:ring-2
+         focus-visible:ring-ring focus-visible:ring-offset-2
+         focus-visible:ring-offset-background
+         active:translate-y-px
+         transition-all duration-150 cursor-pointer;
 }
 
 /* Sidebar nav item */
@@ -200,7 +204,7 @@
          text-muted-foreground transition-all duration-150 cursor-pointer;
 }
 .nav-item:hover {
-  @apply bg-white/5 text-foreground;
+  @apply bg-muted text-foreground;
 }
 .nav-item.active {
   @apply bg-primary/10 text-primary border-l-2 border-primary rounded-l-none pl-[10px];
@@ -223,7 +227,7 @@
   @apply bg-info/15 text-blue-400 border border-info/20;
 }
 .badge-muted {
-  @apply bg-white/5 text-muted-foreground border border-white/5;
+  @apply bg-muted text-muted-foreground border border-border;
 }
 
 /* Form inputs */
@@ -388,10 +392,21 @@
    LANDING PAGE SECTIONS
 ───────────────────────────────────────────*/
 .section-title {
-  @apply text-3xl md:text-4xl font-black tracking-tight text-foreground;
+  @apply font-display text-3xl md:text-4xl lg:text-[2.75rem] font-bold
+         tracking-tight text-foreground leading-[1.1];
 }
 .section-subtitle {
-  @apply text-base md:text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto;
+  @apply text-base md:text-lg text-muted-foreground leading-relaxed max-w-[58ch];
+}
+
+/* Figures: tabular so columns of money align, mono so they read as data. */
+.figure {
+  @apply font-mono tabular-nums tracking-tight;
+}
+
+/* Section rhythm for the landing page. */
+.section-y {
+  @apply py-20 md:py-28;
 }
 
 /* FAQ accordion */
