@@ -103,27 +103,33 @@ Required repository secrets:
 
 The app runs under PM2 as `rest-finance` on port 3008, behind the nginx vhost in [`deploy/nginx.conf`](deploy/nginx.conf).
 
-### First-time server setup
+### First-time setup
+
+Two scripts, run once each.
+
+**1. GitHub secrets** (from your machine, with `gh` authenticated):
 
 ```bash
-# On the VPS
-sudo -u postgres psql -c "CREATE ROLE rest_finance WITH LOGIN PASSWORD '<strong>';"
-sudo -u postgres psql -c "CREATE DATABASE rest_finance OWNER rest_finance;"
-
-git clone https://github.com/Estreia7/REST-Finance.git /var/www/rest-finance
-cd /var/www/rest-finance
-# create .env with production values
-npm ci && npx prisma migrate deploy && npm run build
-pm2 start ecosystem.config.js && pm2 save
-
-# nginx
-cp deploy/nginx.conf /etc/nginx/sites-available/rest-finance.bruno-dev.xyz
-ln -s /etc/nginx/sites-available/rest-finance.bruno-dev.xyz /etc/nginx/sites-enabled/
-nginx -t && systemctl reload nginx
-certbot --nginx -d rest-finance.bruno-dev.xyz
+bash deploy/setup-github-secrets.sh
 ```
 
-Postgres should listen on `localhost` only. Do not expose 5432.
+Creates a dedicated deploy key if one does not exist, uploads all four
+secrets, and prints the public key to authorise on the server.
+
+**2. Server provisioning** (on the VPS, as root):
+
+```bash
+bash deploy/provision-vps.sh
+```
+
+Creates the database and role with a generated password, clones the repo,
+builds, starts PM2, and installs the nginx vhost. It is idempotent and it
+will **not** overwrite an existing vhost: `rest-finance.bruno-dev.xyz`
+currently serves a different app, so the script writes the new config
+alongside and tells you how to switch when you are ready.
+
+It also checks that port 3008 is free and that Postgres is not listening
+beyond localhost.
 
 ---
 
