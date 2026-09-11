@@ -29,10 +29,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
 
   session: {
-    // Database sessions: signing out server-side revokes access at once.
-    strategy: 'database',
+    // Auth.js supports the Credentials provider only with JWT sessions, so
+    // the token carries identity and nothing else. Roles and membership are
+    // still read from the database on every request (lib/auth-helpers.ts),
+    // which is what makes deactivating a member take effect immediately
+    // rather than when their token expires.
+    strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days
-    updateAge: 24 * 60 * 60, // refresh the expiry at most once a day
+    updateAge: 24 * 60 * 60, // refresh at most once a day
   },
 
   pages: {
@@ -104,9 +108,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return Boolean(existing) || true;
     },
 
-    async session({ session, user }) {
-      if (session.user) {
-        session.user.id = user.id;
+    // With a JWT strategy the adapter does not populate `user`, so the id is
+    // carried on the token instead.
+    async jwt({ token, user }) {
+      if (user?.id) token.sub = user.id;
+      return token;
+    },
+
+    async session({ session, token }) {
+      if (session.user && token.sub) {
+        session.user.id = token.sub;
       }
       return session;
     },
