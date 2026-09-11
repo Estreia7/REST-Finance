@@ -1,6 +1,6 @@
 'use client';
 
-import { TrendingUp, TrendingDown, DollarSign, BarChart3, Target, Activity } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, BarChart3, Target, Activity, AlertTriangle } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts';
 
 interface KPICardsProps {
@@ -18,7 +18,11 @@ interface KPICardsProps {
     netIncomePercent: number;
     cogsPercent: number;
     cogsPercentChange: number;
-    monthlyGoal: number;
+    /** Null until the owner sets a target in GoalsPanel. */
+    monthlyGoal: number | null;
+    /** False when no cost category is flagged as labour — Prime Cost is then
+     *  COGS-only and must be shown as incomplete, not as a healthy number. */
+    hasLabourCategories?: boolean;
   };
   last7DaysData: Array<{ date: string; revenue: number }>;
 }
@@ -79,7 +83,12 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
     cogsPercent: rawAdvanced?.cogsPercent ?? 0,
     cogsPercentChange: rawAdvanced?.cogsPercentChange ?? 0,
     monthlyGoal: rawAdvanced?.monthlyGoal ?? 0,
+    hasLabourCategories: rawAdvanced?.hasLabourCategories ?? true,
   };
+
+  // Without a labour category, Prime Cost is COGS-only and therefore far too
+  // low. Never present that as a healthy figure.
+  const primeCostIncomplete = !advancedStats.hasLabourCategories;
 
   const goalPercent = advancedStats.monthlyGoal > 0
     ? Math.min(100, (advancedStats.totalRevenue / advancedStats.monthlyGoal) * 100)
@@ -129,34 +138,50 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
           <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/20 flex items-center justify-center">
             <BarChart3 className="w-4 h-4 text-amber-400" />
           </div>
-          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-            advancedStats.primeCostPercent > 65
-              ? 'bg-danger/15 text-red-400'
-              : advancedStats.primeCostPercent > 60
-              ? 'bg-warning/15 text-amber-400'
-              : 'bg-success/15 text-green-400'
-          }`}>
-            {advancedStats.primeCostPercent > 65 ? 'Alto' : advancedStats.primeCostPercent > 60 ? 'Atenção' : 'Bom'}
-          </span>
+          {primeCostIncomplete ? (
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-warning/15 text-amber-400">
+              Incompleto
+            </span>
+          ) : (
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+              advancedStats.primeCostPercent > 65
+                ? 'bg-danger/15 text-red-400'
+                : advancedStats.primeCostPercent > 60
+                ? 'bg-warning/15 text-amber-400'
+                : 'bg-success/15 text-green-400'
+            }`}>
+              {advancedStats.primeCostPercent > 65 ? 'Alto' : advancedStats.primeCostPercent > 60 ? 'Atenção' : 'Bom'}
+            </span>
+          )}
         </div>
         <div className="mt-3 text-3xl font-black tabular-nums text-foreground">
           {advancedStats.primeCostPercent.toFixed(1)}%
         </div>
         <div className="text-xs text-muted-foreground mt-1">Prime Cost</div>
-        <div className="mt-4 space-y-1.5">
-          <div className="flex justify-between text-[10px] text-muted-foreground">
-            <span>Meta &lt;60%</span>
-            <span>{advancedStats.primeCostPercent.toFixed(1)}%</span>
+        {primeCostIncomplete ? (
+          <div className="mt-4 flex items-start gap-1.5 text-[10px] leading-relaxed text-amber-400/90">
+            <AlertTriangle className="w-3 h-3 shrink-0 mt-px" aria-hidden="true" />
+            <span>
+              Sem categorias de pessoal definidas — este valor inclui apenas mercadorias.
+              Marca as categorias de ordenados nas definições.
+            </span>
           </div>
-          <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-1000 ${
-                advancedStats.primeCostPercent > 65 ? 'bg-danger' : advancedStats.primeCostPercent > 60 ? 'bg-warning' : 'bg-success'
-              }`}
-              style={{ width: `${Math.min(100, advancedStats.primeCostPercent)}%` }}
-            />
+        ) : (
+          <div className="mt-4 space-y-1.5">
+            <div className="flex justify-between text-[10px] text-muted-foreground">
+              <span>Meta &lt;60%</span>
+              <span>{advancedStats.primeCostPercent.toFixed(1)}%</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-1000 ${
+                  advancedStats.primeCostPercent > 65 ? 'bg-danger' : advancedStats.primeCostPercent > 60 ? 'bg-warning' : 'bg-success'
+                }`}
+                style={{ width: `${Math.min(100, advancedStats.primeCostPercent)}%` }}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Net Income — hidden on mobile */}

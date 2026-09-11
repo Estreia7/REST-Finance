@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { createClient } from '@/lib/supabase/server';
+import { toClientError } from '@/lib/errors';
 
 export async function checkUserRole(userId: string) {
   try {
@@ -29,7 +30,7 @@ export async function checkUserRole(userId: string) {
     }
 
     return { isAdmin: false };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error checking user role:', error);
     return { isAdmin: false };
   }
@@ -45,7 +46,7 @@ export async function getCurrentUserRole() {
     }
 
     return await checkUserRole(user.id);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error getting current user role:', error);
     return { isAdmin: false };
   }
@@ -61,7 +62,7 @@ export async function checkEmailConfirmation() {
     }
 
     return { isConfirmed: user.email_confirmed_at !== null };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error checking email confirmation:', error);
     return { isConfirmed: false };
   }
@@ -90,9 +91,8 @@ export async function resendConfirmationEmail() {
     }
 
     return { success: true, message: 'Confirmation email sent' };
-  } catch (error: any) {
-    console.error('Error resending confirmation email:', error);
-    return { error: error.message || 'Failed to resend confirmation email' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to resend confirmation email', error, 'generic') };
   }
 }
 
@@ -123,7 +123,7 @@ export async function loginWithPassword(email: string, password: string) {
       success: false,
       error: signInError?.message || 'Falha ao iniciar sessao'
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in loginWithPassword:', error);
     return {
       success: false,

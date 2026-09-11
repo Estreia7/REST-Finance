@@ -126,8 +126,15 @@ model Category {
   sortOrder Int          @default(0) @map("sort_order")
   isActive  Boolean      @default(true) @map("is_active")
 
+  /// Marks a cost category as labour (wages, employer contributions) so Prime
+  /// Cost can be computed reliably. Previously labour was matched by hardcoded
+  /// category names, which silently produced labour = 0 — and a Prime Cost
+  /// understated by roughly half — for any restaurant using its own names.
+  isLabour Boolean @default(false) @map("is_labour")
+
   costEntries CostEntry[]
 
+  @@index([restaurantId, isActive])
   @@map("categories")
 }
 

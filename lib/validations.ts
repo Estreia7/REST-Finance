@@ -12,6 +12,16 @@ export const dailySummarySchema = z.object({
 
 export type DailySummaryInput = z.infer<typeof dailySummarySchema>;
 
+/**
+ * Partial update of a revenue entry. Every field is optional, but any field
+ * that IS supplied must satisfy the same bounds as on creation — otherwise a
+ * negative or absurd revenue could be written through the update path that
+ * creation correctly rejects.
+ */
+export const dailySummaryUpdateSchema = dailySummarySchema.partial().strict();
+
+export type DailySummaryUpdateInput = z.infer<typeof dailySummaryUpdateSchema>;
+
 // === Cost Entry ===
 export const costEntrySchema = z.object({
   date: z.coerce.date(),
@@ -22,6 +32,32 @@ export const costEntrySchema = z.object({
 });
 
 export type CostEntryInput = z.infer<typeof costEntrySchema>;
+
+/** Partial update of a cost entry. See dailySummaryUpdateSchema. */
+export const costEntryUpdateSchema = costEntrySchema.partial().strict();
+
+export type CostEntryUpdateInput = z.infer<typeof costEntryUpdateSchema>;
+
+// === Vendor ===
+export const vendorSchema = z.object({
+  name: z.string().trim().min(2, 'Nome demasiado curto').max(200, 'Nome demasiado longo'),
+  taxId: z.string().trim().max(20, 'NIF inválido').optional().nullable(),
+});
+
+export type VendorInput = z.infer<typeof vendorSchema>;
+
+// === Invoice line item ===
+export const invoiceItemSchema = z.object({
+  productName: z.string().trim().min(1, 'Produto obrigatório').max(200),
+  quantity: z.number().positive('Quantidade deve ser positiva').max(999999),
+  unit: z.string().trim().max(20).optional().nullable(),
+  unitPrice: z.number().min(0, 'Preço não pode ser negativo').max(999999),
+  totalPrice: z.number().min(0, 'Total não pode ser negativo').max(9999999),
+  invoiceNumber: z.string().trim().max(100).optional().nullable(),
+  invoiceDate: z.coerce.date().optional().nullable(),
+});
+
+export type InvoiceItemInput = z.infer<typeof invoiceItemSchema>;
 
 // === Registration ===
 export const registerSchema = z.object({

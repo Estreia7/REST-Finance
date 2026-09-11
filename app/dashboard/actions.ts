@@ -2,12 +2,21 @@
 
 import { prisma } from '@/lib/prisma';
 import { createClient } from '@/lib/supabase/server';
-import { dailySummarySchema, costEntrySchema, changePasswordSchema, formatZodError } from '@/lib/validations';
+import {
+  dailySummarySchema,
+  costEntrySchema,
+  dailySummaryUpdateSchema,
+  costEntryUpdateSchema,
+  changePasswordSchema,
+  formatZodError,
+} from '@/lib/validations';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
+import { calculateKpis, toPercent, safeDivide, percentChange } from '@/lib/kpi';
 // Keep these in sync with the Prisma enums in schema.prisma
 type CostType = 'COGS' | 'OPEX';
 type CategoryType = 'REVENUE' | 'COGS' | 'OPEX';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { toClientError } from '@/lib/errors';
 
 export async function getRestaurant() {
   try {
@@ -41,9 +50,8 @@ export async function getRestaurant() {
     }
 
     return { success: true, data: membership.restaurant };
-  } catch (error: any) {
-    console.error('Error fetching restaurant:', error);
-    return { error: error.message || 'Failed to fetch restaurant' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch restaurant', error, 'read') };
   }
 }
 
@@ -86,9 +94,8 @@ export async function getStaff() {
     });
 
     return { success: true, data: staff };
-  } catch (error: any) {
-    console.error('Error fetching staff:', error);
-    return { error: error.message || 'Failed to fetch staff' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch staff', error, 'read') };
   }
 }
 
@@ -158,9 +165,8 @@ export async function addStaff(email: string) {
     });
 
     return { success: true };
-  } catch (error: any) {
-    console.error('Error adding staff:', error);
-    return { error: error.message || 'Failed to add staff' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to add staff', error, 'write') };
   }
 }
 
@@ -215,9 +221,8 @@ export async function createDailySummary(data: {
     });
 
     return { success: true, data: summary };
-  } catch (error: any) {
-    console.error('Error creating daily summary:', error);
-    return { success: false as const, error: error.message || 'Failed to create daily summary' };
+  } catch (error: unknown) {
+    return { success: false as const, error: toClientError('Failed to create daily summary', error, 'write') };
   }
 }
 
@@ -252,9 +257,8 @@ export async function createCostEntry(data: {
     });
 
     return { success: true, data: costEntry };
-  } catch (error: any) {
-    console.error('Error creating cost entry:', error);
-    return { success: false as const, error: error.message || 'Failed to create cost entry' };
+  } catch (error: unknown) {
+    return { success: false as const, error: toClientError('Failed to create cost entry', error, 'write') };
   }
 }
 
@@ -326,9 +330,8 @@ async function initializeDefaultCategories(restaurantId: string) {
     }
 
     return { success: true, message: 'Default categories created' };
-  } catch (error: any) {
-    console.error('Error initializing categories:', error);
-    return { error: error.message || 'Failed to initialize categories' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to initialize categories', error, 'write') };
   }
 }
 
@@ -377,9 +380,8 @@ export async function getCategories(type?: CategoryType) {
     });
 
     return { success: true, data: categories };
-  } catch (error: any) {
-    console.error('Error fetching categories:', error);
-    return { error: error.message || 'Failed to fetch categories' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch categories', error, 'read') };
   }
 }
 
@@ -465,9 +467,8 @@ export async function getDashboardStats() {
         staffCount,
       },
     };
-  } catch (error: any) {
-    console.error('Error fetching dashboard stats:', error);
-    return { error: error.message || 'Failed to fetch dashboard stats' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch dashboard stats', error, 'read') };
   }
 }
 
@@ -507,9 +508,8 @@ export async function getRevenueHistory(dateFrom: Date, dateTo: Date) {
     }));
 
     return { success: true, data };
-  } catch (error: any) {
-    console.error('Error fetching revenue history:', error);
-    return { error: error.message || 'Failed to fetch revenue history' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch revenue history', error, 'read') };
   }
 }
 
@@ -530,13 +530,19 @@ export async function updateDailySummary(id: string, data: {
     });
     if (!membership) return { error: 'Not an owner' };
 
+    // Updates are validated with the same bounds as creation. Without this a
+    // negative or absurd revenue could be written through the update path that
+    // createDailySummary correctly rejects.
+    const parsed = dailySummaryUpdateSchema.safeParse(data);
+    if (!parsed.success) return { error: formatZodError(parsed.error) };
+
     const existing = await prisma.dailySummary.findFirst({
       where: { id, restaurantId: membership.restaurantId, deletedAt: null },
     });
     if (!existing) return { error: 'Entry not found' };
 
-    const dineIn = data.dineInRevenue ?? Number(existing.dineInRevenue);
-    const takeaway = data.takeawayRevenue ?? Number(existing.takeawayRevenue);
+    const dineIn = parsed.data.dineInRevenue ?? Number(existing.dineInRevenue);
+    const takeaway = parsed.data.takeawayRevenue ?? Number(existing.takeawayRevenue);
 
     const updated = await prisma.dailySummary.update({
       where: { id },
@@ -544,16 +550,15 @@ export async function updateDailySummary(id: string, data: {
         dineInRevenue: dineIn,
         takeawayRevenue: takeaway,
         revenueTotal: dineIn + takeaway,
-        dineInTickets: data.dineInTickets ?? existing.dineInTickets,
-        takeawayTickets: data.takeawayTickets ?? existing.takeawayTickets,
-        notes: data.notes ?? existing.notes,
+        dineInTickets: parsed.data.dineInTickets ?? existing.dineInTickets,
+        takeawayTickets: parsed.data.takeawayTickets ?? existing.takeawayTickets,
+        notes: parsed.data.notes ?? existing.notes,
       },
     });
 
     return { success: true, data: updated };
-  } catch (error: any) {
-    console.error('Error updating daily summary:', error);
-    return { error: error.message || 'Failed to update entry' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to update entry', error, 'write') };
   }
 }
 
@@ -572,9 +577,8 @@ export async function deleteDailySummary(id: string) {
       data: { deletedAt: new Date() },
     });
     return { success: true as const };
-  } catch (error: any) {
-    console.error('Error deleting daily summary:', error);
-    return { success: false as const, error: error.message || 'Failed to delete entry' };
+  } catch (error: unknown) {
+    return { success: false as const, error: toClientError('Failed to delete entry', error, 'delete') };
   }
 }
 
@@ -618,9 +622,8 @@ export async function getCostHistory(dateFrom: Date, dateTo: Date, type?: CostTy
     }));
 
     return { success: true, data };
-  } catch (error: any) {
-    console.error('Error fetching cost history:', error);
-    return { error: error.message || 'Failed to fetch cost history' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch cost history', error, 'read') };
   }
 }
 
@@ -641,26 +644,39 @@ export async function updateCostEntry(id: string, data: {
     });
     if (!membership) return { error: 'Not an owner' };
 
+    // Same bounds as creation — see updateDailySummary.
+    const parsed = costEntryUpdateSchema.safeParse(data);
+    if (!parsed.success) return { error: formatZodError(parsed.error) };
+
     const existing = await prisma.costEntry.findFirst({
       where: { id, restaurantId: membership.restaurantId, deletedAt: null },
     });
     if (!existing) return { error: 'Entry not found' };
 
+    // A supplied categoryId must belong to this restaurant; otherwise an entry
+    // could be reassigned to another tenant's category.
+    if (parsed.data.categoryId && parsed.data.categoryId !== existing.categoryId) {
+      const category = await prisma.category.findFirst({
+        where: { id: parsed.data.categoryId, restaurantId: membership.restaurantId },
+        select: { id: true },
+      });
+      if (!category) return { error: 'Categoria inválida' };
+    }
+
     const updated = await prisma.costEntry.update({
       where: { id },
       data: {
-        amount: data.amount ?? Number(existing.amount),
-        description: data.description ?? existing.description,
-        categoryId: data.categoryId ?? existing.categoryId,
-        type: data.type ?? existing.type,
-        date: data.date ?? existing.date,
+        amount: parsed.data.amount ?? Number(existing.amount),
+        description: parsed.data.description ?? existing.description,
+        categoryId: parsed.data.categoryId ?? existing.categoryId,
+        type: parsed.data.type ?? existing.type,
+        date: parsed.data.date ?? existing.date,
       },
     });
 
     return { success: true, data: updated };
-  } catch (error: any) {
-    console.error('Error updating cost entry:', error);
-    return { error: error.message || 'Failed to update entry' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to update entry', error, 'write') };
   }
 }
 
@@ -679,9 +695,8 @@ export async function deleteCostEntry(id: string) {
       data: { deletedAt: new Date() },
     });
     return { success: true as const };
-  } catch (error: any) {
-    console.error('Error deleting cost entry:', error);
-    return { success: false as const, error: error.message || 'Failed to delete entry' };
+  } catch (error: unknown) {
+    return { success: false as const, error: toClientError('Failed to delete entry', error, 'delete') };
   }
 }
 
@@ -738,26 +753,53 @@ export async function getPnLStatement(month: number, year: number) {
     const takeaway = Number(revAgg._sum.takeawayRevenue || 0);
     const cogs = Number(cogsAgg._sum.amount || 0);
     const opex = Number(opexAgg._sum.amount || 0);
-    const grossProfit = revenue - cogs;
-    const netIncome = grossProfit - opex;
+
+    // Labour is the subset of OPEX in categories flagged as labour, so Prime
+    // Cost can be reported consistently with the dashboard and PDF.
+    const labourAgg = await prisma.costEntry.aggregate({
+      where: {
+        restaurantId: membership.restaurantId,
+        deletedAt: null,
+        date: { gte: startOfMonth, lte: endOfMonth },
+        category: { isLabour: true },
+      },
+      _sum: { amount: true },
+    });
+    const labour = Number(labourAgg._sum.amount || 0);
+
+    // All financial formulas come from lib/kpi.ts — the single source of truth.
+    const kpis = calculateKpis({
+      revenueTotal: revenue,
+      cogsTotal: cogs,
+      labourTotal: labour,
+      opexTotal: Math.max(opex - labour, 0),
+      dineInRevenue: dineIn,
+      takeawayRevenue: takeaway,
+      dineInTickets: 0,
+      takeawayTickets: 0,
+    });
+
+    const grossProfit = kpis.grossProfit;
+    const netIncome = kpis.netIncome;
 
     return {
       success: true,
       data: {
         month, year,
         revenue, dineIn, takeaway,
-        cogs, opex,
+        cogs, opex, labour,
         grossProfit,
-        grossMargin: revenue > 0 ? (grossProfit / revenue) * 100 : 0,
+        grossMargin: toPercent(kpis.grossProfitPct),
         netIncome,
-        netMargin: revenue > 0 ? (netIncome / revenue) * 100 : 0,
+        netMargin: toPercent(kpis.netIncomePct),
+        primeCost: kpis.primeCost,
+        primeCostPercent: toPercent(kpis.primeCostPct),
         cogsBreakdown: cogsBreakdown.map(b => ({ category: catMap[b.categoryId || ''] || 'Sem categoria', amount: Number(b._sum.amount || 0) })),
         opexBreakdown: opexBreakdown.map(b => ({ category: catMap[b.categoryId || ''] || 'Sem categoria', amount: Number(b._sum.amount || 0) })),
       },
     };
-  } catch (error: any) {
-    console.error('Error fetching P&L:', error);
-    return { error: error.message || 'Failed to fetch P&L' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch P&L', error, 'read') };
   }
 }
 
@@ -802,9 +844,8 @@ export async function getComparativeData() {
     }
 
     return { success: true, data: months };
-  } catch (error: any) {
-    console.error('Error fetching comparative data:', error);
-    return { error: error.message || 'Failed to fetch comparative data' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch comparative data', error, 'read') };
   }
 }
 
@@ -854,9 +895,8 @@ export async function getTicketAnalysis(dateFrom: Date, dateTo: Date) {
         totalTickets,
       },
     };
-  } catch (error: any) {
-    console.error('Error fetching ticket analysis:', error);
-    return { error: error.message || 'Failed to fetch ticket analysis' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch ticket analysis', error, 'read') };
   }
 }
 
@@ -877,9 +917,8 @@ export async function updateRevenueTarget(target: number) {
     });
 
     return { success: true };
-  } catch (error: any) {
-    console.error('Error updating revenue target:', error);
-    return { error: error.message || 'Failed to update target' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to update target', error, 'write') };
   }
 }
 
@@ -895,8 +934,8 @@ export async function updateUserProfile(name: string) {
     await supabase.auth.updateUser({ data: { name } });
 
     return { success: true };
-  } catch (error: any) {
-    return { error: error.message || 'Failed to update profile' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to update profile', error, 'write') };
   }
 }
 
@@ -918,10 +957,13 @@ export async function changePassword(currentPassword: string, newPassword: strin
 
     // Now update to new password
     const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) return { error: error.message };
+    if (error) {
+      console.error('[changePassword] update failed:', error);
+      return { error: 'Não foi possível alterar a palavra-passe. Verifica que cumpre os requisitos mínimos.' };
+    }
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return { error: 'Falha ao alterar palavra-passe' };
   }
 }
@@ -951,8 +993,8 @@ export async function updateRestaurantSettings(data: {
     });
 
     return { success: true };
-  } catch (error: any) {
-    return { error: error.message || 'Failed to update restaurant' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to update restaurant', error, 'write') };
   }
 }
 
@@ -979,8 +1021,8 @@ export async function updateStaffPermissions(membershipId: string, permissions: 
     });
 
     return { success: true };
-  } catch (error: any) {
-    return { error: error.message || 'Failed to update permissions' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to update permissions', error, 'write') };
   }
 }
 
@@ -1006,8 +1048,8 @@ export async function removeStaff(membershipId: string) {
     });
 
     return { success: true };
-  } catch (error: any) {
-    return { error: error.message || 'Failed to remove staff' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to remove staff', error, 'delete') };
   }
 }
 
@@ -1034,9 +1076,8 @@ export async function getCurrentUser() {
     }
 
     return { success: true, data: userRecord };
-  } catch (error: any) {
-    console.error('Error fetching current user:', error);
-    return { error: error.message || 'Failed to fetch user' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch user', error, 'read') };
   }
 }
 
@@ -1100,9 +1141,8 @@ export async function getLast7DaysRevenue() {
     }
 
     return { success: true, data };
-  } catch (error: any) {
-    console.error('Error fetching last 7 days revenue:', error);
-    return { error: error.message || 'Failed to fetch revenue data' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch revenue data', error, 'read') };
   }
 }
 
@@ -1168,9 +1208,8 @@ export async function getMonthlyRevenueBreakdown() {
     }));
 
     return { success: true, data: result };
-  } catch (error: any) {
-    console.error('Error fetching monthly breakdown:', error);
-    return { error: error.message || 'Failed to fetch breakdown' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch breakdown', error, 'read') };
   }
 }
 
@@ -1237,9 +1276,8 @@ export async function getCategoryPerformance() {
       .sort((a, b) => b.monthlySpending - a.monthlySpending);
 
     return { success: true, data: result };
-  } catch (error: any) {
-    console.error('Error fetching category performance:', error);
-    return { error: error.message || 'Failed to fetch category performance' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch category performance', error, 'read') };
   }
 }
 
@@ -1271,11 +1309,14 @@ export async function getAdvancedDashboardStats() {
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    // Get labor categories first
+    // Labour categories are identified by an explicit flag. Matching on
+    // hardcoded names ('Ordenado 1', 'Segurança Social') silently yielded
+    // labour = 0 — and a Prime Cost understated by roughly half — for any
+    // restaurant that used its own category names.
     const laborCategories = await prisma.category.findMany({
       where: {
         restaurantId: ownerMembership.restaurantId,
-        name: { in: ['Ordenado 1', 'Segurança Social'] },
+        isLabour: true,
       },
       select: { id: true },
     });
@@ -1347,22 +1388,33 @@ export async function getAdvancedDashboardStats() {
     const totalCosts = Number(currentCosts._sum.amount || 0);
     const cogs = Number(currentCOGS._sum.amount || 0);
     const labor = Number(currentLabor._sum.amount || 0);
-    const netIncome = revenue - totalCosts;
-    
-    // Prime Cost = (COGS + Labor) / Revenue
-    const primeCostPercent = revenue > 0 ? ((cogs + labor) / revenue) * 100 : 0;
-    
-    // COGS %
-    const cogsPercent = revenue > 0 ? (cogs / revenue) * 100 : 0;
-    
+
+    // All financial formulas come from lib/kpi.ts — the single source of truth.
+    // `totalCosts` already includes COGS and labour, so non-labour opex is the
+    // remainder; passing them separately keeps the engine's inputs unambiguous.
+    const kpis = calculateKpis({
+      revenueTotal: revenue,
+      cogsTotal: cogs,
+      labourTotal: labor,
+      opexTotal: Math.max(totalCosts - cogs - labor, 0),
+      dineInRevenue: 0,
+      takeawayRevenue: 0,
+      dineInTickets: 0,
+      takeawayTickets: 0,
+    });
+
+    const netIncome = kpis.netIncome;
+    const primeCostPercent = toPercent(kpis.primeCostPct);
+    const cogsPercent = toPercent(kpis.foodCostPct);
+
     // Previous month COGS % for trend
     const lastMonthRevenueVal = Number(lastMonthRevenue._sum.revenueTotal || 0);
     const lastMonthCOGSVal = Number(lastMonthCOGS._sum.amount || 0);
-    const lastMonthCOGSPercent = lastMonthRevenueVal > 0 ? (lastMonthCOGSVal / lastMonthRevenueVal) * 100 : 0;
+    const lastMonthCOGSPercent = toPercent(safeDivide(lastMonthCOGSVal, lastMonthRevenueVal));
     const cogsPercentChange = cogsPercent - lastMonthCOGSPercent;
-    
+
     // Revenue change vs previous month
-    const revenueChange = lastMonthRevenueVal > 0 ? ((revenue - lastMonthRevenueVal) / lastMonthRevenueVal) * 100 : 0;
+    const revenueChange = toPercent(percentChange(revenue, lastMonthRevenueVal));
 
     // Prime cost trend (simple sparkline data - last 7 months)
     const primeCostTrend = [];
@@ -1408,6 +1460,16 @@ export async function getAdvancedDashboardStats() {
       primeCostTrend.push(primeCost);
     }
 
+    // The owner's real revenue target, set in GoalsPanel. Null when unset so
+    // the UI can prompt for one instead of charting a number we invented.
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: ownerMembership.restaurantId },
+      select: { monthlyRevenueTarget: true },
+    });
+    const monthlyGoal = restaurant?.monthlyRevenueTarget
+      ? Number(restaurant.monthlyRevenueTarget)
+      : null;
+
     return {
       success: true,
       data: {
@@ -1416,16 +1478,19 @@ export async function getAdvancedDashboardStats() {
         primeCostPercent,
         primeCostTrend,
         netIncome,
-        netIncomePercent: revenue > 0 ? (netIncome / revenue) * 100 : 0,
+        netIncomePercent: toPercent(kpis.netIncomePct),
         cogsPercent,
         cogsPercentChange,
+        laborPercent: toPercent(kpis.labourCostPct),
         labor,
         cogs,
-        monthlyGoal: revenue * 0.15, // 15% profit goal (example)
+        monthlyGoal,
+        /** False when no category is flagged as labour, so the UI can warn
+         *  that Prime Cost is incomplete rather than showing a wrong number. */
+        hasLabourCategories: laborCategoryIds.length > 0,
       },
     };
-  } catch (error: any) {
-    console.error('Error fetching advanced stats:', error);
-    return { error: error.message || 'Failed to fetch advanced stats' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch advanced stats', error, 'read') };
   }
 }

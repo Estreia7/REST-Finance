@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { Plan } from '@prisma/client';
+import { toClientError, isUniqueConstraintError } from '@/lib/errors';
 
 export async function getClients() {
   try {
@@ -54,9 +55,8 @@ export async function getClients() {
     });
 
     return { success: true, data: restaurants };
-  } catch (error: any) {
-    console.error('Error fetching clients:', error);
-    return { error: error.message || 'Failed to fetch clients' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch clients', error, 'read') };
   }
 }
 
@@ -118,9 +118,8 @@ export async function updateClient(data: {
     });
 
     return { success: true, data: restaurant };
-  } catch (error: any) {
-    console.error('Error updating client:', error);
-    return { error: error.message || 'Failed to update client' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to update client', error, 'write') };
   }
 }
 
@@ -166,9 +165,8 @@ export async function getClientStats() {
         total,
       },
     };
-  } catch (error: any) {
-    console.error('Error fetching stats:', error);
-    return { error: error.message || 'Failed to fetch stats' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch stats', error, 'read') };
   }
 }
 
@@ -270,9 +268,8 @@ export async function getMonthlyRevenue(year: number) {
     }));
 
     return { success: true, data: chartData };
-  } catch (error: any) {
-    console.error('Error fetching monthly revenue:', error);
-    return { error: error.message || 'Failed to fetch monthly revenue' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch monthly revenue', error, 'read') };
   }
 }
 
@@ -322,9 +319,8 @@ export async function getAllUsers() {
     });
 
     return { success: true, data: users };
-  } catch (error: any) {
-    console.error('Error fetching users:', error);
-    return { error: error.message || 'Failed to fetch users' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch users', error, 'read') };
   }
 }
 
@@ -379,9 +375,8 @@ export async function updateUser(data: {
     }
 
     return { success: true, data: updatedUser };
-  } catch (error: any) {
-    console.error('Error updating user:', error);
-    return { error: error.message || 'Failed to update user' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to update user', error, 'write') };
   }
 }
 
@@ -422,9 +417,8 @@ export async function sendPasswordReset(email: string) {
     }
 
     return { success: true };
-  } catch (error: any) {
-    console.error('Error sending password reset:', error);
-    return { error: error.message || 'Failed to send password reset' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to send password reset', error, 'write') };
   }
 }
 
@@ -540,16 +534,12 @@ export async function createAccount(data: {
     });
 
     return { success: true, userId: dbUser.id, restaurantId: restaurant.id };
-  } catch (error: any) {
-    console.error('Error creating account:', error);
-    
-    if (error.code === 'P2002') {
-      if (error.meta?.target?.includes('email')) {
-        return { error: 'Email already registered' };
-      }
+  } catch (error: unknown) {
+    if (isUniqueConstraintError(error, 'email')) {
+      return { error: 'Email already registered' };
     }
 
-    return { error: error.message || 'Failed to create account' };
+    return { error: toClientError('Failed to create account', error, 'write') };
   }
 }
 
@@ -635,9 +625,8 @@ export async function deleteAccount(userId: string) {
     }
 
     return { success: true };
-  } catch (error: any) {
-    console.error('Error deleting account:', error);
-    return { error: error.message || 'Failed to delete account' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to delete account', error, 'delete') };
   }
 }
 
@@ -692,9 +681,8 @@ export async function changeUserPassword(userId: string, newPassword: string) {
     }
 
     return { success: true };
-  } catch (error: any) {
-    console.error('Error changing password:', error);
-    return { error: error.message || 'Failed to change password' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to change password', error, 'write') };
   }
 }
 
@@ -750,8 +738,8 @@ export async function getRestaurantDetail(restaurantId: string) {
         currentMonthCosts: Number(costs._sum.amount || 0),
       },
     };
-  } catch (error: any) {
-    return { error: error.message || 'Failed' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed', error, 'generic') };
   }
 }
 
@@ -775,8 +763,8 @@ export async function getRestaurantRevenue(restaurantId: string, dateFrom: Date,
         takeawayTickets: e.takeawayTickets,
       })),
     };
-  } catch (error: any) {
-    return { error: error.message || 'Failed' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed', error, 'generic') };
   }
 }
 
@@ -799,8 +787,8 @@ export async function getRestaurantCosts(restaurantId: string, dateFrom: Date, d
         description: e.description,
       })),
     };
-  } catch (error: any) {
-    return { error: error.message || 'Failed' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed', error, 'generic') };
   }
 }
 
@@ -823,8 +811,8 @@ export async function adminUpdateEntry(type: 'revenue' | 'cost', id: string, dat
     }
 
     return { success: true };
-  } catch (error: any) {
-    return { error: error.message || 'Failed' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed', error, 'generic') };
   }
 }
 
@@ -839,8 +827,8 @@ export async function adminDeleteEntry(type: 'revenue' | 'cost', id: string) {
     }
 
     return { success: true };
-  } catch (error: any) {
-    return { error: error.message || 'Failed' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed', error, 'generic') };
   }
 }
 
@@ -859,8 +847,8 @@ export async function getAuditLogs(filters?: { restaurantId?: string; limit?: nu
     });
 
     return { success: true, data: logs };
-  } catch (error: any) {
-    return { error: error.message || 'Failed' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed', error, 'generic') };
   }
 }
 
@@ -877,8 +865,8 @@ export async function bulkUpdateRestaurants(ids: string[], data: { plan?: Plan; 
     });
 
     return { success: true };
-  } catch (error: any) {
-    return { error: error.message || 'Failed' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed', error, 'generic') };
   }
 }
 
@@ -905,8 +893,7 @@ export async function getCurrentUser() {
     }
 
     return { success: true, data: userRecord };
-  } catch (error: any) {
-    console.error('Error fetching current user:', error);
-    return { error: error.message || 'Failed to fetch user' };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch user', error, 'read') };
   }
 }

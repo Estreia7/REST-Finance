@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { createClient } from '@/lib/supabase/server';
 import { STRIPE_PRICES } from '@/lib/stripe';
+import { toClientError } from '@/lib/errors';
 
 export async function getSubscriptionStatus() {
   try {
@@ -56,8 +57,8 @@ export async function getCheckoutUrl(priceId: string): Promise<{ url?: string; e
     const data = await res.json();
     if (!res.ok) return { error: data.error };
     return { url: data.url };
-  } catch (err: any) {
-    return { error: err.message };
+  } catch (err: unknown) {
+    return { error: toClientError('Stripe request failed', err, 'generic') };
   }
 }
 
@@ -84,8 +85,8 @@ export async function getPortalUrl(): Promise<{ url?: string; error?: string }> 
     const data = await res.json();
     if (!res.ok) return { error: data.error };
     return { url: data.url };
-  } catch (err: any) {
-    return { error: err.message };
+  } catch (err: unknown) {
+    return { error: toClientError('Stripe request failed', err, 'generic') };
   }
 }
 

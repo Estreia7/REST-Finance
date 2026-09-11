@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { prisma } from '@/lib/prisma';
+import { requireMember, isAuthError } from '@/lib/auth-helpers';
+import { toClientError } from '@/lib/errors';
 
 /** Sanitize a string for safe CSV output (prevent formula injection) */
 function sanitizeCsvCell(value: string): string {
@@ -13,22 +14,20 @@ function sanitizeCsvCell(value: string): string {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // requireMember enforces an ACTIVE OWNER/STAFF membership. The previous
+    // inline lookup filtered on userId alone, so a deactivated staff member
+    // kept full CSV access to revenue, costs and P&L.
+    const member = await requireMember();
+    if (isAuthError(member)) {
+      return NextResponse.json({ error: member.error }, { status: member.requiresAuth ? 401 : 403 });
+    }
 
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'revenue'; // revenue | costs | pnl
     const dateFrom = searchParams.get('from');
     const dateTo = searchParams.get('to');
 
-    const membership = await prisma.membership.findFirst({
-      where: { userId: user.id },
-      select: { restaurantId: true },
-    });
-    if (!membership) return NextResponse.json({ error: 'No restaurant' }, { status: 404 });
-
-    const rid = membership.restaurantId;
+    const rid = member.restaurantId;
     const from = dateFrom ? new Date(dateFrom) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const to = dateTo ? new Date(dateTo + 'T23:59:59') : new Date();
 
@@ -76,7 +75,7 @@ export async function GET(request: NextRequest) {
     }
 
     await prisma.exportLog.create({
-      data: { restaurantId: rid, userId: user.id, type: 'CSV', resource: `${type}-export` },
+      data: { restaurantId: rid, userId: member.userId, type: 'CSV', resource: `${type}-export` },
     });
 
     return new NextResponse(csv, {
@@ -85,8 +84,8 @@ export async function GET(request: NextRequest) {
         'Content-Disposition': `attachment; filename="${type}-export.csv"`,
       },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('CSV export error:', err);
-    return NextResponse.json({ error: err.message || 'Failed' }, { status: 500 });
+    return NextResponse.json({ error: toClientError('Failed', err, 'generic') }, { status: 500 });
   }
 }

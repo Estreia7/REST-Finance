@@ -3,6 +3,7 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { prisma } from '@/lib/prisma';
 import { registerSchema, formatZodError } from '@/lib/validations';
+import { toClientError, isUniqueConstraintError } from '@/lib/errors';
 
 export async function registerUser(data: {
   name: string;
@@ -94,13 +95,10 @@ export async function registerUser(data: {
     });
 
     return { success: true, userId: authData.user.id };
-  } catch (error: any) {
-    console.error('Registration error:', error);
-    if (error.code === 'P2002') {
-      if (error.meta?.target?.includes('email')) {
-        return { error: 'Este email ja esta registado. Tente fazer login.' };
-      }
+  } catch (error: unknown) {
+    if (isUniqueConstraintError(error, 'email')) {
+      return { error: 'Este email já está registado. Tente fazer login.' };
     }
-    return { error: error.message || 'Erro ao criar conta. Tente novamente.' };
+    return { error: toClientError('Erro ao criar conta. Tente novamente.', error, 'generic') };
   }
 }

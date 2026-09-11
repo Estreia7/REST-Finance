@@ -11,6 +11,11 @@ interface OwnerResult extends AuthResult {
   membershipId: string;
 }
 
+interface MemberResult extends AuthResult {
+  restaurantId: string;
+  role: 'OWNER' | 'STAFF';
+}
+
 type AuthError = { error: string; requiresAuth?: boolean };
 
 export async function requireAuth(): Promise<AuthResult | AuthError> {
@@ -34,6 +39,9 @@ export async function requireOwner(): Promise<OwnerResult | AuthError> {
       role: 'OWNER',
       active: true,
     },
+    // See requireMember: an owner of several restaurants must resolve to the
+    // same one on every request, not an arbitrary row.
+    orderBy: { createdAt: 'asc' },
   });
 
   if (!membership) {
@@ -48,7 +56,7 @@ export async function requireOwner(): Promise<OwnerResult | AuthError> {
   };
 }
 
-export async function requireMember(): Promise<(AuthResult & { restaurantId: string }) | AuthError> {
+export async function requireMember(): Promise<MemberResult | AuthError> {
   const auth = await requireAuth();
   if ('error' in auth) return auth;
 
@@ -58,6 +66,10 @@ export async function requireMember(): Promise<(AuthResult & { restaurantId: str
       role: { in: ['OWNER', 'STAFF'] },
       active: true,
     },
+    // Deterministic selection: without an explicit order, a user belonging to
+    // more than one restaurant would be scoped to whichever row Postgres
+    // happened to return first, and could see a different one per request.
+    orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
   });
 
   if (!membership) {
@@ -68,6 +80,7 @@ export async function requireMember(): Promise<(AuthResult & { restaurantId: str
     userId: auth.userId,
     email: auth.email,
     restaurantId: membership.restaurantId,
+    role: membership.role as 'OWNER' | 'STAFF',
   };
 }
 

@@ -21,9 +21,12 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.text();
     event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
-  } catch (err: any) {
-    console.error('[webhook] Signature verification failed:', err.message);
-    return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
+  } catch (err: unknown) {
+    // This endpoint is unauthenticated, so the response must not describe why
+    // verification failed — that would help an attacker forge a valid request.
+    // The real reason is logged server-side for debugging.
+    console.error('[webhook] Signature verification failed:', err);
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
   // Idempotency: skip already-processed events

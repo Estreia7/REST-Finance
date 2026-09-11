@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { prisma } from '@/lib/prisma';
+import { requireMember, isAuthError } from '@/lib/auth-helpers';
+import { calculateKpis, toPercent } from '@/lib/kpi';
 import ReactPDF from '@react-pdf/renderer';
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import React from 'react';
+import { toClientError } from '@/lib/errors';
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontSize: 10, fontFamily: 'Helvetica', color: '#1a1a2e' },
@@ -119,24 +121,35 @@ function MonthlyReport({ data }: { data: any }) {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // requireMember enforces an ACTIVE OWNER/STAFF membership. The previous
+    // inline lookup filtered on userId alone, so a deactivated staff member
+    // kept full PDF access to the monthly P&L.
+    const member = await requireMember();
+    if (isAuthError(member)) {
+      return NextResponse.json({ error: member.error }, { status: member.requiresAuth ? 401 : 403 });
+    }
 
     const { searchParams } = new URL(request.url);
     const month = parseInt(searchParams.get('month') || `${new Date().getMonth() + 1}`);
     const year = parseInt(searchParams.get('year') || `${new Date().getFullYear()}`);
-    const restaurantId = searchParams.get('restaurantId');
 
-    // Find restaurant
-    const membership = await prisma.membership.findFirst({
-      where: restaurantId ? { userId: user.id, restaurantId } : { userId: user.id },
-      include: { restaurant: true },
+    if (!Number.isInteger(month) || month < 1 || month > 12) {
+      return NextResponse.json({ error: 'Mês inválido' }, { status: 400 });
+    }
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+      return NextResponse.json({ error: 'Ano inválido' }, { status: 400 });
+    }
+
+    // The restaurant always comes from the caller's own membership; a
+    // client-supplied restaurantId is never trusted.
+    const rid = member.restaurantId;
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: rid },
+      select: { name: true },
     });
-    if (!membership) return NextResponse.json({ error: 'No restaurant' }, { status: 404 });
+    if (!restaurant) return NextResponse.json({ error: 'No restaurant' }, { status: 404 });
 
-    const rid = membership.restaurantId;
-    const rName = membership.restaurant.name;
+    const rName = restaurant.name;
 
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0, 23, 59, 59);
@@ -148,7 +161,9 @@ export async function GET(request: NextRequest) {
     const dineIn = revenues.reduce((s, r) => s + r.dineInRevenue.toNumber(), 0);
     const takeaway = revenues.reduce((s, r) => s + r.takeawayRevenue.toNumber(), 0);
     const totalRevenue = dineIn + takeaway;
-    const totalTickets = revenues.reduce((s, r) => s + r.dineInTickets + r.takeawayTickets, 0);
+    const dineInTickets = revenues.reduce((s, r) => s + r.dineInTickets, 0);
+    const takeawayTickets = revenues.reduce((s, r) => s + r.takeawayTickets, 0);
+    const totalTickets = dineInTickets + takeawayTickets;
 
     // Costs
     const costEntries = await prisma.costEntry.findMany({
@@ -170,8 +185,27 @@ export async function GET(request: NextRequest) {
 
     const totalCOGS = cogsList.reduce((s, c) => s + c.amount.toNumber(), 0);
     const totalOPEX = opexList.reduce((s, c) => s + c.amount.toNumber(), 0);
-    const grossProfit = totalRevenue - totalCOGS;
-    const netIncome = grossProfit - totalOPEX;
+
+    // Labour is the subset of OPEX in categories flagged as labour. Prime Cost
+    // was previously computed as (COGS + ALL opex), which swept in rent and
+    // utilities and overstated it — while the dashboard, matching labour by
+    // hardcoded names, understated it. The two reports disagreed.
+    const labourTotal = opexList
+      .filter(c => c.category?.isLabour)
+      .reduce((s, c) => s + c.amount.toNumber(), 0);
+    const nonLabourOpex = totalOPEX - labourTotal;
+
+    // All financial formulas come from lib/kpi.ts — the single source of truth.
+    const kpis = calculateKpis({
+      revenueTotal: totalRevenue,
+      cogsTotal: totalCOGS,
+      labourTotal,
+      opexTotal: nonLabourOpex,
+      dineInRevenue: dineIn,
+      takeawayRevenue: takeaway,
+      dineInTickets,
+      takeawayTickets,
+    });
 
     const data = {
       restaurant: rName,
@@ -179,18 +213,24 @@ export async function GET(request: NextRequest) {
       year,
       revenue: { dineIn, takeaway },
       costs: { cogsByCategory: groupByCategory(cogsList), opexByCategory: groupByCategory(opexList) },
-      pnl: { totalRevenue, totalCOGS, grossProfit, totalOPEX, netIncome },
+      pnl: {
+        totalRevenue,
+        totalCOGS,
+        grossProfit: kpis.grossProfit,
+        totalOPEX,
+        netIncome: kpis.netIncome,
+      },
       kpis: {
-        grossMargin: totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0,
-        netMargin: totalRevenue > 0 ? (netIncome / totalRevenue) * 100 : 0,
-        avgTicket: totalTickets > 0 ? totalRevenue / totalTickets : 0,
-        primeCost: totalRevenue > 0 ? ((totalCOGS + totalOPEX) / totalRevenue) * 100 : 0,
+        grossMargin: toPercent(kpis.grossProfitPct),
+        netMargin: toPercent(kpis.netIncomePct),
+        avgTicket: kpis.avgTicketOverall,
+        primeCost: toPercent(kpis.primeCostPct),
       },
     };
 
     // Log export
     await prisma.exportLog.create({
-      data: { restaurantId: rid, userId: user.id, type: 'PDF', resource: `monthly-report-${year}-${month}` },
+      data: { restaurantId: rid, userId: member.userId, type: 'PDF', resource: `monthly-report-${year}-${month}` },
     });
 
     const pdfStream = await ReactPDF.renderToStream(MonthlyReport({ data }) as any);
@@ -207,8 +247,8 @@ export async function GET(request: NextRequest) {
         'Content-Disposition': `attachment; filename="relatorio-${year}-${String(month).padStart(2, '0')}.pdf"`,
       },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('PDF generation error:', err);
-    return NextResponse.json({ error: err.message || 'Failed to generate PDF' }, { status: 500 });
+    return NextResponse.json({ error: toClientError('Failed to generate PDF', err, 'generic') }, { status: 500 });
   }
 }
