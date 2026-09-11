@@ -8,6 +8,13 @@ import {
   BarChart3, FileText, Users, Sparkle,
 } from 'lucide-react';
 import AuthModal from './components/AuthModal';
+import Logo, { Wordmark } from './components/Logo';
+import TiltCard from './components/landing/TiltCard';
+import WorkflowDiagram from './components/landing/WorkflowDiagram';
+import {
+  DailyEntryArt, ScanArt, PriceAlertArt,
+  PrimeCostArt, ReportArt, TeamArt,
+} from './components/landing/Illustrations';
 import LanguageSelector from './components/LanguageSelector';
 import Reveal from './components/landing/Reveal';
 import MetricPanel from './components/landing/MetricPanel';
@@ -38,12 +45,12 @@ function LandingPageInner() {
   }, [openModal]);
 
   const features = [
-    { icon: Receipt, key: 'entry' },
-    { icon: Camera, key: 'invoices' },
-    { icon: TrendingDown, key: 'prices' },
-    { icon: BarChart3, key: 'kpis' },
-    { icon: FileText, key: 'reports' },
-    { icon: Users, key: 'team' },
+    { icon: Receipt, key: 'entry', Art: DailyEntryArt },
+    { icon: Camera, key: 'invoices', Art: ScanArt },
+    { icon: TrendingDown, key: 'prices', Art: PriceAlertArt },
+    { icon: BarChart3, key: 'kpis', Art: PrimeCostArt },
+    { icon: FileText, key: 'reports', Art: ReportArt },
+    { icon: Users, key: 'team', Art: TeamArt },
   ] as const;
 
   const metrics = ['primeCost', 'foodCost', 'margin'] as const;
@@ -90,6 +97,7 @@ function LandingPageInner() {
             </div>
 
             <div className="lg:col-span-6 lg:pl-8">
+              <TiltCard>
               <MetricPanel
                 labels={{
                   primeCost: t('landing.metrics.primeCost.label'),
@@ -100,6 +108,7 @@ function LandingPageInner() {
                   healthy: t('landing.metrics.healthyLabel'),
                 }}
               />
+              </TiltCard>
             </div>
           </div>
         </div>
@@ -142,9 +151,9 @@ function LandingPageInner() {
           </Reveal>
 
           <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-border rounded-2xl overflow-hidden border border-border">
-            {features.map(({ icon: Icon, key }, i) => (
+            {features.map(({ icon: Icon, key, Art }, i) => (
               <Reveal key={key} delay={i * 60}>
-                <div className="h-full bg-card p-6 lg:p-8">
+                <div className="h-full bg-card p-6 lg:p-8 flex flex-col">
                   <Icon className="w-5 h-5 text-primary-ink" aria-hidden="true" />
                   <h3 className="mt-4 font-semibold text-foreground">
                     {t(`landing.features.${key}.title`)}
@@ -152,6 +161,7 @@ function LandingPageInner() {
                   <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
                     {t(`landing.features.${key}.body`)}
                   </p>
+                  <Art className="mt-6 -mx-2 text-foreground" />
                 </div>
               </Reveal>
             ))}
@@ -195,6 +205,20 @@ function LandingPageInner() {
           <Reveal>
             <h2 className="section-title">{t('landing.how.title')}</h2>
           </Reveal>
+
+          {/* The same three stages the list below describes, drawn. */}
+          <WorkflowDiagram
+            className="mt-10 hidden md:block"
+            labels={{
+              input: t('landing.how.flowInput'),
+              inputDetail: t('landing.how.flowInputDetail'),
+              engine: t('landing.how.flowEngine'),
+              engineDetail: t('landing.how.flowEngineDetail'),
+              output: t('landing.how.flowOutput'),
+              outputDetail: t('landing.how.flowOutputDetail'),
+            }}
+          />
+
           <ol className="mt-12 grid md:grid-cols-3 gap-8 md:gap-12">
             {steps.map((key, i) => (
               <Reveal key={key} delay={i * 80}>
@@ -274,7 +298,7 @@ function LandingPageInner() {
         <div className="mx-auto max-w-7xl px-6 py-14">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="col-span-2 md:col-span-1">
-              <span className="font-display font-bold text-foreground">REST Finance</span>
+              <Wordmark markSize={32} />
               <p className="mt-3 text-sm text-muted-foreground max-w-[28ch]">
                 {t('landing.footer.tagline')}
               </p>

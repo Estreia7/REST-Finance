@@ -417,3 +417,127 @@ details > summary {
 details > summary::-webkit-details-marker {
   display: none;
 }
+
+/* ─────────────────────────────────────────
+   LANDING ILLUSTRATIONS
+
+   Each animation runs once, when its container gains .is-visible via an
+   IntersectionObserver. Nothing loops: motion here explains a sequence, it
+   does not decorate. Under prefers-reduced-motion the container never gains
+   the class, so elements render in their final state.
+───────────────────────────────────────────*/
+
+/* Elements start hidden ONLY when the browser will animate them. Without
+   this guard, a visitor with reduced motion would see nothing at all. */
+@media (prefers-reduced-motion: no-preference) {
+  .rf-pop,
+  .rf-field,
+  .rf-line,
+  .rf-grow {
+    opacity: 0;
+  }
+  .rf-grow {
+    transform: scaleX(0);
+  }
+  .rf-draw {
+    stroke-dasharray: 260;
+    stroke-dashoffset: 260;
+  }
+  .rf-scan {
+    opacity: 0;
+  }
+}
+
+.is-visible .rf-pop,
+.is-visible .rf-line {
+  animation: rf-pop 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.is-visible .rf-field {
+  animation: rf-field 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.is-visible .rf-grow {
+  animation: rf-grow 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.is-visible .rf-draw {
+  animation: rf-draw 900ms cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+
+.is-visible .rf-scan {
+  animation: rf-scan 1400ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* The one deliberate loop: a slow pulse on a price alert, which represents
+   something still needing attention. */
+.is-visible .rf-ping {
+  animation: rf-ping 2.4s ease-out 1.2s infinite;
+}
+
+@keyframes rf-pop {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes rf-field {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes rf-grow {
+  from { opacity: 0; transform: scaleX(0); }
+  to   { opacity: 1; transform: scaleX(1); }
+}
+
+@keyframes rf-draw {
+  from { stroke-dashoffset: 260; opacity: 1; }
+  to   { stroke-dashoffset: 0;   opacity: 1; }
+}
+
+@keyframes rf-scan {
+  0%   { opacity: 0; transform: translateY(0); }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(96px); }
+}
+
+@keyframes rf-ping {
+  0%   { transform: scale(1);   opacity: .8; }
+  70%  { transform: scale(2.4); opacity: 0; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+/* ─────────────────────────────────────────
+   3D CARD TILT
+
+   Cards lean toward the cursor. Pointer-driven, so it never fires on touch,
+   and it degrades to a plain card when motion is reduced.
+───────────────────────────────────────────*/
+.tilt-scene {
+  perspective: 900px;
+}
+
+.tilt-card {
+  transform-style: preserve-3d;
+  transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .tilt-card:hover {
+    transition-duration: 120ms;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tilt-card {
+    transform: none !important;
+  }
+}
+
+/* Content lifted off the card face, so the tilt reads as depth. */
+.tilt-layer {
+  transform: translateZ(28px);
+}

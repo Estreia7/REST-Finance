@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Menu, X, LogOut, LayoutDashboard, Moon, Sun, ChevronRight, UtensilsCrossed } from 'lucide-react';
+import { Wordmark } from './Logo';
+import { Menu, X, LogOut, LayoutDashboard, Moon, Sun, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -86,9 +87,10 @@ export default function Navbar() {
   };
 
   const navLinks = [
-    { href: '/about',   label: t('navbar.about') },
-    { href: '/plans',   label: t('navbar.plans') },
-    { href: '/contact', label: t('navbar.contact') },
+    { href: '/#features', label: t('landing.nav.features') },
+    { href: '/#metrics',  label: t('landing.nav.metrics') },
+    { href: '/#faq',      label: t('landing.nav.faq') },
+    { href: '/about',     label: t('navbar.about') },
   ];
 
   return (
@@ -103,13 +105,8 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-14 sm:h-16 md:h-18">
 
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 sm:gap-2.5 group shrink-0">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl gradient-bg flex items-center justify-center shadow-glow-sm group-hover:shadow-glow transition-all duration-300">
-              <UtensilsCrossed className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-            </div>
-            <span className="text-base sm:text-lg font-black tracking-tight gradient-text">
-              REST Finance
-            </span>
+          <Link href="/" className="shrink-0" aria-label="REST Finance">
+            <Wordmark markSize={34} priority />
           </Link>
 
           {/* Desktop nav links */}

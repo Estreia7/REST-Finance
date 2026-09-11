@@ -94,10 +94,15 @@ function Figure({ value, decimals = 0, prefix = '', suffix = '' }: {
   return (
     <span ref={ref} className="figure">
       {prefix}
-      {Number(display).toLocaleString('pt-PT', {
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals,
-      })}
+      {Number(display)
+        .toLocaleString('pt-PT', {
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals,
+        })
+        // pt-PT separates thousands with U+202F, which the mono face renders
+        // as a full-width gap ("48 400"). A thin space keeps the grouping
+        // readable without splitting the number visually.
+        .replace(/ | /g, ' ')}
       {suffix}
     </span>
   );
