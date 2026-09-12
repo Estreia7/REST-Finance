@@ -44,6 +44,12 @@ export const CHANGELOG: Release[] = [
     entries: [
       {
         kind: 'new',
+        title: 'Estado — IVA trimestral e IRC',
+        detail:
+          'Uma estimativa do IVA a entregar em cada trimestre, com o prazo de entrega, e do IRC no fim do ano. As taxas estão actualizadas a 2026: 13% na comida, 23% nas bebidas alcoólicas e refrigerantes, e 15% de IRC até 50.000 €. É uma estimativa para saber o que aí vem — quem entrega a declaração é o seu contabilista.',
+      },
+      {
+        kind: 'new',
         title: 'Calculadora de ementa',
         detail:
           'Em Análises › Ementa. Monte a receita de cada prato e fique a saber quanto deixa, já com o IVA descontado. Os preços dos ingredientes vêm das suas facturas sempre que o nome coincide, por isso uma subida do fornecedor aparece sozinha na margem.',

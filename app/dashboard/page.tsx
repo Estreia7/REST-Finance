@@ -40,13 +40,14 @@ import BillingPanel     from './components/BillingPanel';
 import CompliancePanel from './components/CompliancePanel';
 import SchedulePanel from './components/SchedulePanel';
 import MenuCalculatorPanel from './components/MenuCalculatorPanel';
+import EstadoPanel from './components/EstadoPanel';
 import SettingsPanel    from './components/SettingsPanel';
 import TrialBanner      from '@/app/components/TrialBanner';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 type CostType = 'COGS' | 'OPEX';
 type CostTypeOrEmpty = CostType | '';
-type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'compliance' | 'schedule' | 'users' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
 interface Category {
   id: string;
@@ -191,7 +192,7 @@ function DashboardPageInner() {
   // ── Handle URL params (e.g. ?tab=billing from Stripe redirect) ───────────
   useEffect(() => {
     const tab = searchParams.get('tab') as Tab | null;
-    if (tab && ['dashboard','revenue','costs','analytics','compliance','schedule','users','billing','settings'].includes(tab)) {
+    if (tab && ['dashboard','revenue','costs','analytics','compliance','schedule','estado','users','billing','settings'].includes(tab)) {
       setActiveTab(tab);
     }
     const upgrade = searchParams.get('upgrade');
@@ -521,6 +522,8 @@ function DashboardPageInner() {
           {activeTab === 'compliance' && <CompliancePanel />}
 
           {activeTab === 'schedule' && <SchedulePanel />}
+
+          {activeTab === 'estado' && <EstadoPanel />}
 
           {activeTab === 'settings' && (
             <SettingsPanel

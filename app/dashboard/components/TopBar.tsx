@@ -4,7 +4,7 @@ import { Menu } from 'lucide-react';
 import LanguageSelector from '@/app/components/LanguageSelector';
 import WhatsNew from './WhatsNew';
 
-type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'compliance' | 'schedule' | 'users' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
 const TAB_LABELS: Record<Tab, string> = {
   dashboard: 'Dashboard',
@@ -13,6 +13,7 @@ const TAB_LABELS: Record<Tab, string> = {
   analytics: 'Análises',
   compliance: 'Conformidade',
   schedule: 'Horários',
+  estado:    'Estado',
   users:     'Equipa',
   billing:   'Faturação',
   settings:  'Configurações',
