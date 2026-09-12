@@ -22,6 +22,12 @@ export const translations = {
       total: 'Total',
       filtered: 'filtrados',
     },
+    // Welcome splash (shown between sign-in and the dashboard)
+    welcome: {
+      greeting: 'Bem-vindo',
+      greetingNoName: 'Bem-vindo',
+      loading: 'A preparar o teu painel...',
+    },
     // Navbar
     navbar: {
       about: 'Sobre Nós',
@@ -372,6 +378,12 @@ export const translations = {
       actions: 'Actions',
       total: 'Total',
       filtered: 'filtered',
+    },
+    // Welcome splash (shown between sign-in and the dashboard)
+    welcome: {
+      greeting: 'Welcome',
+      greetingNoName: 'Welcome',
+      loading: 'Preparing your dashboard...',
     },
     // Navbar
     navbar: {

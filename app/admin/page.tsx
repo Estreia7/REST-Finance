@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { getClientStats, getClients, getMonthlyRevenue, getCurrentUser, bulkUpdateRestaurants } from './actions';
 import { useLanguage } from '@/lib/language-context';
+import { greetingName } from '@/lib/welcome-quotes';
+import { consumeJustSignedIn } from '@/lib/welcome-signal';
+import WelcomeSplash from '@/app/components/WelcomeSplash';
 import {
   LayoutDashboard, Users, LogOut, Menu, X,
   Building2, TrendingUp, TrendingDown, CreditCard,
@@ -84,6 +87,14 @@ export default function AdminPage() {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
+  // ── Welcome splash
+  // Raised by the sign-in form and consumed once, so only an actual sign-in
+  // is greeted — not every refresh of the console.
+  const [showWelcome, setShowWelcome] = useState(false);
+  useEffect(() => {
+    if (consumeJustSignedIn()) setShowWelcome(true);
+  }, []);
+
   const [stats, setStats] = useState({ trial: 0, monthly: 0, yearly: 0, total: 0 });
   const [chartData, setChartData]   = useState<Array<{ month: string; revenue: number }>>([]);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -123,8 +134,15 @@ export default function AdminPage() {
     // Middleware redirects unauthenticated visitors, and every admin action
     // re-checks the PLATFORM_ADMIN role server-side.
     const load = async () => {
-      await loadData();
-      setIsLoading(false);
+      try {
+        await loadData();
+      } catch (err) {
+        // Always end the loading state, so a failed fetch shows an empty
+        // console rather than stranding the user on the welcome screen.
+        console.error('admin load error:', err);
+      } finally {
+        setIsLoading(false);
+      }
     };
     load();
   }, [loadData]);
@@ -196,6 +214,20 @@ export default function AdminPage() {
     { id: 'activity'  as Tab, icon: ClipboardList,     label: 'Atividade' },
     { id: 'settings'  as Tab, icon: Settings,          label: 'Definições' },
   ];
+
+  // ── Welcome ──────────────────────────────────────────────────────────────
+  // Covers the wait after a fresh sign-in, and only lifts once the console's
+  // data is in, so it replaces the spinner below rather than preceding it.
+  if (showWelcome) {
+    return (
+      <WelcomeSplash
+        audience="admin"
+        name={greetingName(currentUser?.name, currentUser?.email)}
+        ready={!isLoading}
+        onDone={() => setShowWelcome(false)}
+      />
+    );
+  }
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (isLoading) {

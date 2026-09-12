@@ -7,6 +7,7 @@ import { signIn, useSession } from 'next-auth/react';
 import { loginWithPassword } from '@/app/login/actions';
 import { registerUser } from '@/app/register/actions';
 import { useLanguage } from '@/lib/language-context';
+import { markJustSignedIn } from '@/lib/welcome-signal';
 
 type AuthTab = 'login' | 'register';
 
@@ -45,6 +46,9 @@ function LoginForm({ onSwitchTab }: { onSwitchTab: () => void }) {
         // Pull the session the server action just created, so the navbar and
         // the destination page render signed in on first paint.
         await updateSession();
+        // Tells the destination page this is a fresh sign-in, so it greets
+        // the user by name instead of showing a bare spinner.
+        markJustSignedIn();
         router.replace(result.redirectTo);
         router.refresh();
       }
@@ -59,6 +63,7 @@ function LoginForm({ onSwitchTab }: { onSwitchTab: () => void }) {
   const handleGoogle = useCallback(() => {
     setError('');
     setLoading(true);
+    markJustSignedIn();
     signIn('google', { callbackUrl: '/dashboard' });
   }, []);
 
@@ -209,6 +214,7 @@ function RegisterForm({ onSwitchTab }: { onSwitchTab: () => void }) {
       setSuccess(true);
       if ('redirectTo' in result && result.redirectTo) {
         await updateSession();
+        markJustSignedIn();
         router.replace(result.redirectTo);
         router.refresh();
       }

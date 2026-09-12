@@ -21,6 +21,9 @@ import MonthlyReportPanel from './components/MonthlyReportPanel';
 import PriceTrackingPanel from './components/PriceTrackingPanel';
 import { trialDaysLeft } from '@/lib/billing-utils';
 import { useLanguage } from '@/lib/language-context';
+import { greetingName } from '@/lib/welcome-quotes';
+import { consumeJustSignedIn } from '@/lib/welcome-signal';
+import WelcomeSplash from '@/app/components/WelcomeSplash';
 import { Plus, ChevronDown, ChevronUp, Rocket, TrendingUp as TrendingUpIcon, DollarSign as DollarSignIcon } from 'lucide-react';
 
 // Components
@@ -64,6 +67,16 @@ function DashboardPageInner() {
   const [user, setUser]             = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isLoading, setIsLoading]   = useState(true);
+
+  // ── Welcome splash
+  // Only for someone arriving straight from the sign-in form; a refresh of
+  // the dashboard falls through to the plain loading state. Read in an effect
+  // rather than a state initialiser so the server and the first client render
+  // agree, and so the flag is not consumed twice under strict mode.
+  const [showWelcome, setShowWelcome] = useState(false);
+  useEffect(() => {
+    if (consumeJustSignedIn()) setShowWelcome(true);
+  }, []);
 
   // ── UI state
   const [activeTab, setActiveTab]       = useState<Tab>('dashboard');
@@ -158,8 +171,16 @@ function DashboardPageInner() {
       // Middleware redirects unauthenticated visitors; every action
       // re-checks membership server-side.
 
-      await Promise.all([loadData(), loadCategories()]);
-      setIsLoading(false);
+      try {
+        await Promise.all([loadData(), loadCategories()]);
+      } catch (err) {
+        // A failed load must still end the loading state: the panels below
+        // render their own empty states, whereas leaving isLoading set would
+        // strand the user on the welcome screen with no way forward.
+        console.error('dashboard load error:', err);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     checkUser();
@@ -263,6 +284,20 @@ function DashboardPageInner() {
   const daysLeft = trialDaysLeft(restaurant?.trialEndsAt ?? null);
 
   // ── Loading ───────────────────────────────────────────────────────────────
+  // The welcome splash covers the wait for a fresh sign-in. It stays up until
+  // both the data is in and its own minimum has elapsed, so it replaces the
+  // spinner below rather than flashing before it.
+  if (showWelcome) {
+    return (
+      <WelcomeSplash
+        audience="owner"
+        name={greetingName(currentUser?.name, currentUser?.email)}
+        ready={!isLoading}
+        onDone={() => setShowWelcome(false)}
+      />
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">

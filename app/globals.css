@@ -582,3 +582,107 @@ details > summary::-webkit-details-marker {
 .tilt-layer {
   transform: translateZ(28px);
 }
+
+/* ─────────────────────────────────────────
+   Welcome splash
+
+   The screen shown between signing in and the dashboard being usable. Each
+   piece enters on its own delay so the eye is led down the screen — mark,
+   greeting, quote, progress — rather than everything appearing at once.
+
+   Every rule here is inert under prefers-reduced-motion: the component drops
+   the classes, and the fallbacks below make sure nothing is left invisible if
+   a class does slip through.
+───────────────────────────────────────────*/
+
+/* Text blocks: rise into place. */
+.welcome-rise {
+  opacity: 0;
+  animation: welcomeRise 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes welcomeRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Chart bars: grow up out of the baseline. */
+.welcome-bar {
+  animation: welcomeBar 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes welcomeBar {
+  from { transform: scaleY(0); opacity: 0; }
+  to   { transform: scaleY(1); opacity: 1; }
+}
+
+/* The cloche and the admin shield: settle in from above, then breathe. */
+.welcome-lift {
+  animation: welcomeLift 760ms cubic-bezier(0.16, 1, 0.3, 1) both,
+             welcomeFloat 3.6s ease-in-out 1.4s infinite;
+}
+
+@keyframes welcomeLift {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes welcomeFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+/* Steam above the cloche. */
+.welcome-steam {
+  animation: welcomeSteam 2.8s ease-in-out infinite both;
+}
+
+@keyframes welcomeSteam {
+  0%       { opacity: 0; transform: translateY(4px); }
+  35%      { opacity: 0.9; }
+  100%     { opacity: 0; transform: translateY(-10px); }
+}
+
+/* Admin: the client nodes pop in, the ring turns slowly behind them. */
+.welcome-node {
+  animation: welcomeNode 560ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes welcomeNode {
+  from { opacity: 0; transform: scale(0.2); transform-box: fill-box; transform-origin: center; }
+  to   { opacity: 1; transform: scale(1);   transform-box: fill-box; transform-origin: center; }
+}
+
+.welcome-orbit {
+  animation: welcomeOrbit 24s linear infinite;
+}
+
+@keyframes welcomeOrbit {
+  to { transform: rotate(360deg); }
+}
+
+/* The tick inside the shield, drawn on. */
+.welcome-check {
+  stroke-dasharray: 18;
+  stroke-dashoffset: 18;
+  animation: welcomeCheck 520ms ease-out 900ms both;
+}
+
+@keyframes welcomeCheck {
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-rise,
+  .welcome-bar,
+  .welcome-lift,
+  .welcome-steam,
+  .welcome-node,
+  .welcome-orbit,
+  .welcome-check {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+}
