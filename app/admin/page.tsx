@@ -23,6 +23,7 @@ import {
   ResponsiveContainer, LineChart, Line,
 } from 'recharts';
 import { Plan } from '@prisma/client';
+import Logo from '@/app/components/Logo';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type Tab = 'dashboard' | 'clientes' | 'users' | 'activity' | 'settings';
@@ -230,9 +231,7 @@ export default function AdminPage() {
         `}>
           {/* Logo */}
           <div className="h-14 flex items-center gap-2.5 px-4 border-b border-border-subtle shrink-0">
-            <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center shadow-glow-sm">
-              <span className="text-white font-black text-sm">R</span>
-            </div>
+            <Logo size={32} className="shrink-0" priority />
             <div>
               <span className="font-bold text-sm text-foreground">REST Finance</span>
               <div className="flex items-center gap-1">

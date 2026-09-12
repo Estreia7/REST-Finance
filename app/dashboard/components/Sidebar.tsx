@@ -1,6 +1,7 @@
 'use client';
 
 import { useLanguage } from '@/lib/language-context';
+import { Wordmark } from '@/app/components/Logo';
 import { LayoutDashboard, TrendingUp, DollarSign, Users, CreditCard, Settings, LogOut, X, BarChart3 } from 'lucide-react';
 
 type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'users' | 'billing' | 'settings';
@@ -49,10 +50,7 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
       {/* Logo */}
       <div className="flex items-center justify-between px-4 h-16 border-b border-border-subtle shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl gradient-bg flex items-center justify-center shadow-glow-sm">
-            <span className="text-white font-black text-sm">R</span>
-          </div>
-          <span className="font-black text-sm gradient-text">REST Finance</span>
+          <Wordmark markSize={30} />
         </div>
         <button onClick={onClose} className="md:hidden p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all" aria-label="Fechar menu">
           <X className="w-4 h-4" />
