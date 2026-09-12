@@ -62,6 +62,9 @@ const config: Config = {
         success:      'hsl(var(--success))',
         warning:      'hsl(var(--warning))',
         danger:       'hsl(var(--danger))',
+        'lamp-success': 'hsl(var(--lamp-success))',
+        'lamp-warning': 'hsl(var(--lamp-warning))',
+        'lamp-danger':  'hsl(var(--lamp-danger))',
         info:         'hsl(var(--info))',
         destructive: {
           DEFAULT:    'hsl(var(--destructive))',

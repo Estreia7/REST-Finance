@@ -305,9 +305,10 @@ export default function CompliancePanel() {
                       <td className="py-3 pr-3 align-top">
                         {/* The lamp. Colour is the glance; the wording in the
                             validity column carries the same meaning for anyone
-                            who cannot rely on it. */}
+                            who cannot rely on it. The halo is what makes a red
+                            one findable while scrolling past twenty rows. */}
                         <span
-                          className={`block mt-1 w-2.5 h-2.5 rounded-full ${style.dot}`}
+                          className={`block mt-1 w-2.5 h-2.5 rounded-full ${style.dot} ${style.glow}`}
                           aria-hidden="true"
                         />
                       </td>

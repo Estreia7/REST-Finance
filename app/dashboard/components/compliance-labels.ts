@@ -27,10 +27,30 @@ export const TYPE_LABELS: Record<string, string> = {
  */
 export const STATUS_STYLE: Record<
   ComplianceStatus,
-  { dot: string; text: string; label: string }
+  { dot: string; glow: string; text: string; label: string }
 > = {
-  expired: { dot: 'bg-danger', text: 'text-danger', label: 'Expirado' },
-  expiring: { dot: 'bg-warning', text: 'text-warning', label: 'A expirar' },
-  valid: { dot: 'bg-success', text: 'text-success', label: 'Válido' },
-  no_expiry: { dot: 'bg-muted-foreground/40', text: 'text-muted-foreground', label: 'Sem validade' },
+  expired: {
+    dot: 'bg-lamp-danger',
+    glow: 'shadow-[0_0_0_3px_hsl(var(--lamp-danger)/0.18)]',
+    text: 'text-danger',
+    label: 'Expirado',
+  },
+  expiring: {
+    dot: 'bg-lamp-warning',
+    glow: 'shadow-[0_0_0_3px_hsl(var(--lamp-warning)/0.18)]',
+    text: 'text-warning',
+    label: 'A expirar',
+  },
+  valid: {
+    dot: 'bg-lamp-success',
+    glow: '',
+    text: 'text-success',
+    label: 'Válido',
+  },
+  no_expiry: {
+    dot: 'bg-muted-foreground/35',
+    glow: '',
+    text: 'text-muted-foreground',
+    label: 'Sem validade',
+  },
 };

@@ -67,6 +67,13 @@
     --danger:             0 70% 45%;
     --info:               215 70% 45%;
 
+    /* Indicator lamps. Separate from the text tokens above, which are darkened
+       for contrast against the page: a dot carries no text, so it is free to
+       be as saturated as a real warning light needs to be. */
+    --lamp-success:       152 62% 40%;
+    --lamp-warning:       32 96% 50%;
+    --lamp-danger:        0 84% 55%;
+
     --destructive:        0 70% 45%;
     --destructive-foreground: 0 0% 100%;
 
@@ -115,6 +122,10 @@
     --warning:            38 90% 55%;
     --danger:             0 72% 58%;
     --info:               215 85% 62%;
+
+    --lamp-success:       152 58% 50%;
+    --lamp-warning:       38 95% 58%;
+    --lamp-danger:        0 78% 62%;
 
     --destructive:        0 72% 58%;
     --destructive-foreground: 0 0% 100%;
