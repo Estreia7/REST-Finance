@@ -45,28 +45,37 @@ const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set
  */
 type Section = 'revenue' | 'cogs' | 'opex' | 'result';
 
-const SECTION: Record<Section, { head: string; body: string; accent: string; rule: string }> = {
+const SECTION: Record<
+  Section,
+  { head: string; body: string; bodySolid: string; accent: string; rule: string }
+> = {
   revenue: {
     head: 'bg-pnl-revenue-bg text-pnl-revenue',
     body: 'bg-pnl-revenue-bg/40',
+    // Pinned columns need an opaque fill: a translucent tint lets the months
+    // scroll underneath and print through the figures.
+    bodySolid: 'bg-[hsl(var(--pnl-revenue-bg))]',
     accent: 'bg-pnl-revenue',
     rule: 'border-pnl-revenue/25',
   },
   cogs: {
     head: 'bg-pnl-cogs-bg text-pnl-cogs',
     body: 'bg-pnl-cogs-bg/40',
+    bodySolid: 'bg-[hsl(var(--pnl-cogs-bg))]',
     accent: 'bg-pnl-cogs',
     rule: 'border-pnl-cogs/25',
   },
   opex: {
     head: 'bg-pnl-opex-bg text-pnl-opex',
     body: 'bg-pnl-opex-bg/40',
+    bodySolid: 'bg-[hsl(var(--pnl-opex-bg))]',
     accent: 'bg-pnl-opex',
     rule: 'border-pnl-opex/25',
   },
   result: {
     head: 'bg-pnl-result-bg text-foreground',
     body: 'bg-pnl-result-bg/50',
+    bodySolid: 'bg-[hsl(var(--pnl-result-bg))]',
     accent: 'bg-accent',
     rule: 'border-border',
   },
@@ -165,7 +174,7 @@ export default function AnnualPnL() {
         <th
           scope="row"
           className={`sticky left-0 z-10 text-left px-4 py-2 whitespace-nowrap
-                      ${heading ? `${style.head} font-semibold` : `${style.body} font-normal`}
+                      ${heading ? `${style.head} font-semibold` : `${style.bodySolid} font-normal`}
                       ${indent ? 'pl-8 text-muted-foreground' : ''}`}
         >
           {/* A colour stripe on the band's own line, so the section is legible
@@ -185,14 +194,21 @@ export default function AnnualPnL() {
           </td>
         ))}
 
-        <td className={`px-4 py-2 text-right border-l ${style.rule}`}>
+        {/* Total and share are pinned together at the right edge, so a figure
+            in the middle of the year keeps its name on one side and its
+            yearly context on the other. Both need an opaque background of
+            their own, or the months scroll underneath and print through. */}
+        <td
+          className={`sticky right-[76px] z-10 px-4 py-2 text-right border-l ${style.rule}
+                      ${heading ? style.head : style.bodySolid}`}
+        >
           <Cell line={line} monthIndex={null} bold />
         </td>
 
         <td
-          className={`sticky right-0 z-10 px-4 py-2 text-right figure whitespace-nowrap
+          className={`sticky right-0 z-10 w-[76px] px-4 py-2 text-right figure whitespace-nowrap
                       border-l ${style.rule}
-                      ${heading ? `${style.head} font-semibold` : `${style.body} text-muted-foreground`}`}
+                      ${heading ? `${style.head} font-semibold` : `${style.bodySolid} text-muted-foreground`}`}
         >
           {line.percentOfRevenue === null ? '' : formatPercent(line.percentOfRevenue)}
         </td>
@@ -261,12 +277,15 @@ export default function AnnualPnL() {
                 {MONTH_ABBR.map((m) => (
                   <th key={m} scope="col" className="px-2.5 py-2 text-right font-medium">{m}</th>
                 ))}
-                <th scope="col" className="px-4 py-2 text-right font-medium border-l border-border-subtle">
+                <th
+                  scope="col"
+                  className="sticky right-[76px] z-10 bg-card px-4 py-2 text-right font-medium border-l border-border-subtle"
+                >
                   Total
                 </th>
                 <th
                   scope="col"
-                  className="sticky right-0 z-10 bg-card px-4 py-2 text-right font-medium border-l border-border-subtle"
+                  className="sticky right-0 z-10 w-[76px] bg-card px-4 py-2 text-right font-medium border-l border-border-subtle"
                 >
                   % rec.
                 </th>
