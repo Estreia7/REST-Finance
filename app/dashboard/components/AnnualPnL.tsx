@@ -8,114 +8,16 @@ import PnLDrilldown, { type DrillTarget } from './PnLDrilldown';
 import { rate, bandLabel, type PtBenchmarkKey } from '@/lib/benchmarks';
 import InfoHint from '@/app/components/InfoHint';
 import { type GlossaryKey } from '@/lib/glossary';
-
-type Line = {
-  label: string;
-  months: number[];
-  total: number;
-  percentOfRevenue: number | null;
-  drill: {
-    kind: 'revenue' | 'cogs' | 'opex';
-    categoryId?: string;
-    channel?: 'total' | 'dineIn' | 'takeaway';
-  } | null;
-};
-
-type Annual = {
-  year: number;
-  revenue: Line;
-  dineIn: Line;
-  takeaway: Line;
-  cogs: Line;
-  cogsLines: Line[];
-  labour: Line;
-  labourLines: Line[];
-  primeCost: Line;
-  opex: Line;
-  opexLines: Line[];
-  controllableIncome: Line;
-  occupancy: Line;
-  occupancyLines: Line[];
-  netIncome: Line;
-};
-
-const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
-/**
- * How each band of the statement is painted.
- *
- * Colour here means "which part of the statement is this", never "is this good
- * or bad" — a red row would collide with the compliance indicators, and on a
- * P&L a large cost figure is not itself a problem. The tints are deliberately
- * pale: the figures are the content, and a band that competes with them has
- * gone too far.
- */
-type Section = 'revenue' | 'cogs' | 'labour' | 'opex' | 'occupancy' | 'result';
-
-const SECTION: Record<
-  Section,
-  { head: string; body: string; bodySolid: string; accent: string; rule: string }
-> = {
-  revenue: {
-    head: 'bg-pnl-revenue-bg text-pnl-revenue',
-    body: 'bg-pnl-revenue-bg/40',
-    // Pinned columns need an opaque fill: a translucent tint lets the months
-    // scroll underneath and print through the figures.
-    bodySolid: 'bg-[hsl(var(--pnl-revenue-bg))]',
-    accent: 'bg-pnl-revenue',
-    rule: 'border-pnl-revenue/25',
-  },
-  cogs: {
-    head: 'bg-pnl-cogs-bg text-pnl-cogs',
-    body: 'bg-pnl-cogs-bg/40',
-    bodySolid: 'bg-[hsl(var(--pnl-cogs-bg))]',
-    accent: 'bg-pnl-cogs',
-    rule: 'border-pnl-cogs/25',
-  },
-  labour: {
-    head: 'bg-pnl-labour-bg text-pnl-labour',
-    body: 'bg-pnl-labour-bg/40',
-    bodySolid: 'bg-[hsl(var(--pnl-labour-bg))]',
-    accent: 'bg-pnl-labour',
-    rule: 'border-pnl-labour/25',
-  },
-  opex: {
-    head: 'bg-pnl-opex-bg text-pnl-opex',
-    body: 'bg-pnl-opex-bg/40',
-    bodySolid: 'bg-[hsl(var(--pnl-opex-bg))]',
-    accent: 'bg-pnl-opex',
-    rule: 'border-pnl-opex/25',
-  },
-  occupancy: {
-    head: 'bg-pnl-occupancy-bg text-pnl-occupancy',
-    body: 'bg-pnl-occupancy-bg/40',
-    bodySolid: 'bg-[hsl(var(--pnl-occupancy-bg))]',
-    accent: 'bg-pnl-occupancy',
-    rule: 'border-pnl-occupancy/25',
-  },
-  result: {
-    head: 'bg-pnl-result-bg text-foreground',
-    body: 'bg-pnl-result-bg/50',
-    bodySolid: 'bg-[hsl(var(--pnl-result-bg))]',
-    accent: 'bg-accent',
-    rule: 'border-border',
-  },
-};
-
-/** Reuses the lamp tokens, so a red here means what a red means elsewhere. */
-const HEALTH_DOT: Record<string, string> = {
-  good: 'bg-lamp-success',
-  watch: 'bg-lamp-warning',
-  bad: 'bg-lamp-danger',
-  unknown: 'bg-muted-foreground/30',
-};
-
-const HEALTH_TEXT: Record<string, string> = {
-  good: 'text-success',
-  watch: 'text-warning',
-  bad: 'text-danger',
-  unknown: 'text-muted-foreground',
-};
+import AnnualPnLMobile from './AnnualPnLMobile';
+import {
+  type Annual,
+  type Line,
+  type Section,
+  MONTH_ABBR,
+  SECTION,
+  HEALTH_DOT,
+  HEALTH_TEXT,
+} from './pnl-shared';
 
 /**
  * Twelve months across, with each figure showing its share of annual revenue.
@@ -133,6 +35,27 @@ export default function AnnualPnL() {
   const [data, setData] = useState<Annual | null>(null);
   const [loading, setLoading] = useState(true);
   const [drill, setDrill] = useState<DrillTarget | null>(null);
+
+  /**
+   * Which month the phone is showing.
+   *
+   * Twelve columns cannot be adapted onto a 390px screen by narrowing them —
+   * the name column and the pinned total already eat most of the width, and
+   * what survives is a sliver of figures with no context. So the phone reads
+   * the statement the way an owner actually reads it after service: one
+   * month, top to bottom, every line present. The year stays on the desktop,
+   * where twelve columns across is genuinely the better view.
+   *
+   * Defaults to the current month when the chosen year is this one, and to
+   * December for a year already closed.
+   */
+  const [mobileMonth, setMobileMonth] = useState(
+    year === currentYear ? new Date().getMonth() : 11
+  );
+
+  useEffect(() => {
+    setMobileMonth(year === currentYear ? new Date().getMonth() : 11);
+  }, [year, currentYear]);
 
   useEffect(() => {
     setLoading(true);
@@ -309,14 +232,16 @@ export default function AnnualPnL() {
 
   return (
     <>
-      <div className="card-glass p-6">
+      <div className="card-glass p-4 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
           <div className="min-w-0">
             <h3 className="font-bold text-foreground">
               Demonstração de resultados {year}
             </h3>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Clica num valor para ver os lançamentos que o compõem.
+              {/* The phone taps; only a desktop clicks. */}
+              <span className="hidden md:inline">Clica num valor para ver os lançamentos que o compõem.</span>
+              <span className="md:hidden">Toca numa linha para ver os lançamentos.</span>
             </p>
           </div>
 
@@ -332,11 +257,20 @@ export default function AnnualPnL() {
           </select>
         </div>
 
-        {/* Wider than a phone, and wider than most laptops once twelve months
+        {/* ── Phone: one month, read top to bottom ───────────────────────── */}
+        <AnnualPnLMobile
+          data={data}
+          month={mobileMonth}
+          onMonthChange={setMobileMonth}
+          onDrill={openDrill}
+        />
+
+        {/* ── Desktop: the full year across ──────────────────────────────
+            Wider than a phone, and wider than most laptops once twelve months
             and a total are across. The label and the percentage are pinned to
             either edge so a figure in the middle always has both its name and
             its share of revenue in view. */}
-        <div className="overflow-x-auto -mx-6 px-6">
+        <div className="hidden md:block overflow-x-auto -mx-6 px-6">
           <table className="min-w-full w-max text-sm border-collapse">
             <caption className="sr-only">
               Demonstração de resultados de {year}, por mês, com percentagem da receita
