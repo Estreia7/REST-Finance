@@ -49,6 +49,12 @@ model Restaurant {
   onboardingCompleted Boolean @default(false) @map("onboarding_completed")
   monthlyRevenueTarget Decimal? @map("monthly_revenue_target") @db.Decimal(12, 2)
 
+  /// Dining room capacity and service length, used for RevPASH (revenue per
+  /// available seat-hour). Null until the owner supplies them, so the metric
+  /// is hidden rather than computed from a guess.
+  seats              Int?     @map("seats")
+  serviceHoursPerDay Decimal? @map("service_hours_per_day") @db.Decimal(4, 1)
+
   // Settings
   timezone String @default("Europe/Lisbon")
   currency String @default("EUR")

@@ -15,6 +15,7 @@ import {
 import UserManagementPanel from './components/UserManagementPanel';
 import RestaurantDetailPanel from './components/RestaurantDetailPanel';
 import AuthSettingsPanel from './components/AuthSettingsPanel';
+import DemoAccountPanel from './components/DemoAccountPanel';
 import ActivityLogPanel from './components/ActivityLogPanel';
 import AdminMobileBottomNav from './components/MobileBottomNav';
 import {
@@ -621,7 +622,12 @@ export default function AdminPage() {
           {/* ── Activity Tab ───────────────────────────────────────────────── */}
           {activeTab === 'activity' && <ActivityLogPanel />}
 
-          {activeTab === 'settings' && <AuthSettingsPanel />}
+          {activeTab === 'settings' && (
+            <div className="space-y-6">
+              <DemoAccountPanel />
+              <AuthSettingsPanel />
+            </div>
+          )}
 
         </main>
 
