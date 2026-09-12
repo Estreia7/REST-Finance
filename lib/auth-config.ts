@@ -116,9 +116,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
 
     async session({ session, token }) {
-      if (session.user && token.sub) {
-        session.user.id = token.sub;
-      }
+      if (!session.user || !token.sub) return session;
+
+      session.user.id = token.sub;
+
+      // Read the role on each session fetch rather than baking it into the
+      // token: a revoked admin loses the flag immediately, and the UI needs
+      // it to send platform admins to /admin instead of a restaurant
+      // dashboard they do not have.
+      const membership = await prisma.membership.findFirst({
+        where: { userId: token.sub, active: true },
+        orderBy: { role: 'asc' },
+        select: { role: true },
+      });
+
+      session.user.role = membership?.role ?? null;
       return session;
     },
   },

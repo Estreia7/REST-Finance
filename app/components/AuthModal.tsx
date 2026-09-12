@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, X, Loader2, AlertCircle, CheckCircle2, UtensilsCrossed } from 'lucide-react';
-import { signIn } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
 import { loginWithPassword } from '@/app/login/actions';
 import { registerUser } from '@/app/register/actions';
 import { useLanguage } from '@/lib/language-context';
@@ -26,6 +26,7 @@ function LoginForm({ onSwitchTab }: { onSwitchTab: () => void }) {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
+  const { update: updateSession } = useSession();
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +42,10 @@ function LoginForm({ onSwitchTab }: { onSwitchTab: () => void }) {
       }
 
       if ('redirectTo' in result && result.redirectTo) {
-        router.push(result.redirectTo);
+        // Pull the session the server action just created, so the navbar and
+        // the destination page render signed in on first paint.
+        await updateSession();
+        router.replace(result.redirectTo);
         router.refresh();
       }
     } catch {
@@ -166,6 +170,7 @@ function RegisterForm({ onSwitchTab }: { onSwitchTab: () => void }) {
   const [showConfirm, setShowConfirm]   = useState(false);
   const [loading, setLoading]           = useState(false);
   const [error, setError]               = useState('');
+  const { update: updateSession } = useSession();
   const [success, setSuccess]           = useState(false);
 
   const update = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -203,7 +208,8 @@ function RegisterForm({ onSwitchTab }: { onSwitchTab: () => void }) {
       // there is nothing to retry here.
       setSuccess(true);
       if ('redirectTo' in result && result.redirectTo) {
-        router.push(result.redirectTo);
+        await updateSession();
+        router.replace(result.redirectTo);
         router.refresh();
       }
     } catch {

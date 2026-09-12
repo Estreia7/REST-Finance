@@ -33,6 +33,11 @@ export default function Navbar() {
   const { data: session, status } = useSession();
   const user = session?.user ?? null;
   const isLoading = status === 'loading';
+  // Platform admins have no restaurant of their own, so /dashboard would be
+  // empty for them.
+  const isPlatformAdmin = session?.user?.role === 'PLATFORM_ADMIN';
+  const homeHref = isPlatformAdmin ? '/admin' : '/dashboard';
+  const homeLabel = isPlatformAdmin ? t('navbar.admin') : t('navbar.dashboard');
 
   // Smooth mobile menu open/close
   const openMobileMenu = () => {
@@ -122,11 +127,11 @@ export default function Navbar() {
                 {user ? (
                   <>
                     <Link
-                      href="/dashboard"
+                      href={homeHref}
                       className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                     >
                       <LayoutDashboard className="w-4 h-4" />
-                      {t('navbar.dashboard')}
+                      {homeLabel}
                     </Link>
                     <button
                       onClick={handleLogout}
@@ -224,12 +229,12 @@ export default function Navbar() {
                     {user ? (
                       <>
                         <Link
-                          href="/dashboard"
+                          href={homeHref}
                           onClick={closeMobileMenu}
                           className="flex items-center gap-3 px-4 py-3.5 text-base font-medium text-foreground hover:bg-muted rounded-xl transition-all"
                         >
                           <LayoutDashboard className="w-5 h-5 text-primary" />
-                          {t('navbar.dashboard')}
+                          {homeLabel}
                         </Link>
                         <button
                           onClick={() => { handleLogout(); closeMobileMenu(); }}

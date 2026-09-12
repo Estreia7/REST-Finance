@@ -327,14 +327,14 @@ function DashboardPageInner() {
                           className="cta-button py-2.5 px-5 text-sm"
                         >
                           <TrendingUpIcon className="w-4 h-4" />
-                          Registar receita de hoje
+                          {t('nav.logTodayRevenue')}
                         </button>
                         <button
                           onClick={() => handleTabChange('costs')}
                           className="cta-button-secondary py-2.5 px-5 text-sm"
                         >
                           <DollarSignIcon className="w-4 h-4" />
-                          Registar custos
+                          {t('nav.logCosts')}
                         </button>
                       </div>
                     </div>
@@ -362,9 +362,9 @@ function DashboardPageInner() {
                   className="w-full flex items-center justify-center gap-2 py-3 text-sm font-medium text-muted-foreground hover:text-foreground border border-border-subtle rounded-xl bg-surface transition-all"
                 >
                   {showMoreCharts ? (
-                    <><ChevronUp className="w-4 h-4" />Esconder detalhes</>
+                    <><ChevronUp className="w-4 h-4" />{t('nav.hideDetails')}</>
                   ) : (
-                    <><ChevronDown className="w-4 h-4" />Ver gráficos e detalhes</>
+                    <><ChevronDown className="w-4 h-4" />{t('nav.showDetails')}</>
                   )}
                 </button>
                 {showMoreCharts && (
@@ -381,9 +381,9 @@ function DashboardPageInner() {
           {activeTab === 'revenue' && (
             <>
               <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle">
-                <button onClick={() => setRevenueSubView('entry')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'entry' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Registar</button>
-                <button onClick={() => setRevenueSubView('scan')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'scan' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Digitalizar</button>
-                <button onClick={() => setRevenueSubView('history')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'history' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Historial</button>
+                <button onClick={() => setRevenueSubView('entry')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'entry' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.entry')}</button>
+                <button onClick={() => setRevenueSubView('scan')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'scan' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.scan')}</button>
+                <button onClick={() => setRevenueSubView('history')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'history' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.history')}</button>
               </div>
               {revenueSubView === 'entry' && (
                 <QuickEntryPanel
@@ -412,9 +412,9 @@ function DashboardPageInner() {
           {activeTab === 'costs' && (
             <>
               <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle">
-                <button onClick={() => setCostSubView('entry')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${costSubView === 'entry' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Registar</button>
-                <button onClick={() => setCostSubView('scan')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${costSubView === 'scan' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Digitalizar</button>
-                <button onClick={() => setCostSubView('history')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${costSubView === 'history' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Historial</button>
+                <button onClick={() => setCostSubView('entry')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${costSubView === 'entry' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.entry')}</button>
+                <button onClick={() => setCostSubView('scan')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${costSubView === 'scan' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.scan')}</button>
+                <button onClick={() => setCostSubView('history')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${costSubView === 'history' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.history')}</button>
               </div>
               {costSubView === 'entry' && (
                 <QuickEntryPanel
@@ -444,11 +444,11 @@ function DashboardPageInner() {
             <>
               <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle">
                 <button onClick={() => setAnalyticsSubView('pnl')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'pnl' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>P&L</button>
-                <button onClick={() => setAnalyticsSubView('compare')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'compare' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Comparação</button>
-                <button onClick={() => setAnalyticsSubView('tickets')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'tickets' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Tickets</button>
-                <button onClick={() => setAnalyticsSubView('goals')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'goals' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Metas</button>
-                <button onClick={() => setAnalyticsSubView('report')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'report' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Relatório</button>
-                <button onClick={() => setAnalyticsSubView('prices')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'prices' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Preços</button>
+                <button onClick={() => setAnalyticsSubView('compare')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'compare' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.comparison')}</button>
+                <button onClick={() => setAnalyticsSubView('tickets')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'tickets' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.tickets')}</button>
+                <button onClick={() => setAnalyticsSubView('goals')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'goals' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.goals')}</button>
+                <button onClick={() => setAnalyticsSubView('report')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'report' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.report')}</button>
+                <button onClick={() => setAnalyticsSubView('prices')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'prices' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.prices')}</button>
               </div>
               {analyticsSubView === 'pnl' && <PnLPanel />}
               {analyticsSubView === 'compare' && <ComparativePanel />}

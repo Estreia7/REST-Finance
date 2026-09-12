@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/lib/language-context';
 import { LayoutDashboard, TrendingUp, DollarSign, Users, CreditCard, Settings, LogOut, X, BarChart3 } from 'lucide-react';
 
 type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'users' | 'billing' | 'settings';
@@ -17,19 +18,21 @@ interface SidebarProps {
 }
 
 const NAV_MAIN = [
-  { id: 'dashboard' as Tab, icon: LayoutDashboard, label: 'Dashboard' },
-  { id: 'revenue'   as Tab, icon: TrendingUp,       label: 'Receita' },
-  { id: 'costs'     as Tab, icon: DollarSign,       label: 'Custos' },
-  { id: 'analytics' as Tab, icon: BarChart3,         label: 'Análises' },
+  { id: 'dashboard' as Tab, icon: LayoutDashboard, tKey: 'nav.dashboard' },
+  { id: 'revenue'   as Tab, icon: TrendingUp,      tKey: 'nav.revenue' },
+  { id: 'costs'     as Tab, icon: DollarSign,      tKey: 'nav.costs' },
+  { id: 'analytics' as Tab, icon: BarChart3,       tKey: 'nav.analytics' },
 ] as const;
 
 const NAV_MANAGE = [
-  { id: 'users'    as Tab, icon: Users,      label: 'Equipa' },
-  { id: 'billing'  as Tab, icon: CreditCard, label: 'Faturação' },
-  { id: 'settings' as Tab, icon: Settings,   label: 'Configurações' },
+  { id: 'users'    as Tab, icon: Users,      tKey: 'nav.team' },
+  { id: 'billing'  as Tab, icon: CreditCard, tKey: 'nav.billing' },
+  { id: 'settings' as Tab, icon: Settings,   tKey: 'nav.settings' },
 ] as const;
 
 function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLogout, onClose }: Omit<SidebarProps, 'isOpen'>) {
+  const { t } = useLanguage();
+
 
   const NavItem = ({ id, icon: Icon, label }: { id: Tab; icon: any; label: string }) => (
     <button
@@ -59,15 +62,19 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-6 pt-4">
         <div>
-          <div className="section-label px-3 mb-2">Visão Geral</div>
+          <div className="section-label px-3 mb-2">{t('nav.sectionMain')}</div>
           <div className="space-y-0.5">
-            {NAV_MAIN.map(item => <NavItem key={item.id} {...item} />)}
+            {NAV_MAIN.map(({ id, icon, tKey }) => (
+              <NavItem key={id} id={id} icon={icon} label={t(tKey)} />
+            ))}
           </div>
         </div>
         <div>
-          <div className="section-label px-3 mb-2">Gestão</div>
+          <div className="section-label px-3 mb-2">{t('nav.sectionManage')}</div>
           <div className="space-y-0.5">
-            {NAV_MANAGE.map(item => <NavItem key={item.id} {...item} />)}
+            {NAV_MANAGE.map(({ id, icon, tKey }) => (
+              <NavItem key={id} id={id} icon={icon} label={t(tKey)} />
+            ))}
           </div>
         </div>
       </nav>
@@ -90,8 +97,8 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
           </div>
           <button
             onClick={onLogout}
-            title="Sair"
-            aria-label="Sair"
+            title={t('nav.logout')}
+            aria-label={t('nav.logout')}
             className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all shrink-0"
           >
             <LogOut className="w-3.5 h-3.5" />

@@ -31,6 +31,7 @@ export const translations = {
       register: 'Pedir acesso',
       logout: 'Sair',
       dashboard: 'Dashboard',
+      admin: 'Administração',
     },
     // Admin Dashboard
     admin: {
@@ -119,6 +120,32 @@ export const translations = {
       },
     },
     // Owner Dashboard
+    // Dashboard navigation
+    nav: {
+      dashboard: 'Dashboard',
+      revenue: 'Receita',
+      costs: 'Custos',
+      analytics: 'Análises',
+      team: 'Equipa',
+      billing: 'Faturação',
+      settings: 'Definições',
+      support: 'Suporte',
+      sectionMain: 'Gestão',
+      sectionManage: 'Conta',
+      logout: 'Terminar sessão',
+      entry: 'Registar',
+      scan: 'Digitalizar',
+      history: 'Historial',
+      comparison: 'Comparação',
+      tickets: 'Tickets',
+      goals: 'Metas',
+      report: 'Relatório',
+      prices: 'Preços',
+      showDetails: 'Ver gráficos e detalhes',
+      hideDetails: 'Esconder detalhes',
+      logTodayRevenue: 'Registar receita de hoje',
+      logCosts: 'Registar custos',
+    },
     owner: {
       title: 'Dashboard',
       dashboard: 'Dashboard',
@@ -328,6 +355,7 @@ export const translations = {
       register: 'Request access',
       logout: 'Logout',
       dashboard: 'Dashboard',
+      admin: 'Administration',
     },
     // Admin Dashboard
     admin: {
@@ -416,6 +444,32 @@ export const translations = {
       },
     },
     // Owner Dashboard
+    // Dashboard navigation
+    nav: {
+      dashboard: 'Dashboard',
+      revenue: 'Revenue',
+      costs: 'Costs',
+      analytics: 'Analytics',
+      team: 'Team',
+      billing: 'Billing',
+      settings: 'Settings',
+      support: 'Support',
+      sectionMain: 'Manage',
+      sectionManage: 'Account',
+      logout: 'Sign out',
+      entry: 'Add',
+      scan: 'Scan',
+      history: 'History',
+      comparison: 'Comparison',
+      tickets: 'Covers',
+      goals: 'Goals',
+      report: 'Report',
+      prices: 'Prices',
+      showDetails: 'Show charts and detail',
+      hideDetails: 'Hide detail',
+      logTodayRevenue: "Log today's revenue",
+      logCosts: 'Log costs',
+    },
     owner: {
       title: 'Dashboard',
       dashboard: 'Dashboard',
