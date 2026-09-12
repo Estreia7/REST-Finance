@@ -39,6 +39,7 @@ import StaffPanel       from './components/StaffPanel';
 import BillingPanel     from './components/BillingPanel';
 import CompliancePanel from './components/CompliancePanel';
 import SchedulePanel from './components/SchedulePanel';
+import MenuCalculatorPanel from './components/MenuCalculatorPanel';
 import SettingsPanel    from './components/SettingsPanel';
 import TrialBanner      from '@/app/components/TrialBanner';
 
@@ -129,7 +130,7 @@ function DashboardPageInner() {
   // ── Sub-views for revenue/costs/analytics
   const [revenueSubView, setRevenueSubView] = useState<'entry' | 'history' | 'scan'>('entry');
   const [costSubView, setCostSubView] = useState<'entry' | 'history' | 'scan'>('entry');
-  const [analyticsSubView, setAnalyticsSubView] = useState<'pnl' | 'compare' | 'tickets' | 'goals' | 'report' | 'prices'>('pnl');
+  const [analyticsSubView, setAnalyticsSubView] = useState<'pnl' | 'compare' | 'tickets' | 'menu' | 'goals' | 'report' | 'prices'>('pnl');
 
   // ── Load all data ────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -487,6 +488,7 @@ function DashboardPageInner() {
                 <button onClick={() => setAnalyticsSubView('pnl')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'pnl' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>P&L</button>
                 <button onClick={() => setAnalyticsSubView('compare')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'compare' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.comparison')}</button>
                 <button onClick={() => setAnalyticsSubView('tickets')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'tickets' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.tickets')}</button>
+                <button onClick={() => setAnalyticsSubView('menu')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'menu' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.menuCalc')}</button>
                 <button onClick={() => setAnalyticsSubView('goals')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'goals' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.goals')}</button>
                 <button onClick={() => setAnalyticsSubView('report')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'report' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.report')}</button>
                 <button onClick={() => setAnalyticsSubView('prices')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'prices' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.prices')}</button>
@@ -494,6 +496,7 @@ function DashboardPageInner() {
               {analyticsSubView === 'pnl' && <PnLPanel />}
               {analyticsSubView === 'compare' && <ComparativePanel />}
               {analyticsSubView === 'tickets' && <TicketAnalysisPanel />}
+              {analyticsSubView === 'menu' && <MenuCalculatorPanel />}
               {analyticsSubView === 'goals' && <GoalsPanel restaurant={restaurant} stats={stats} onUpdate={loadData} />}
               {analyticsSubView === 'report' && <MonthlyReportPanel />}
               {analyticsSubView === 'prices' && <PriceTrackingPanel />}

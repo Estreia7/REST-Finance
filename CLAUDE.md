@@ -111,6 +111,34 @@ This project is a a app for the finance of restaurant owner's to have control in
 - Steps: call `resolve-library-id` → pick the best match → call `query-docs` → answer using the fetched docs with code examples.
 - Do this proactively — the user should never have to ask for it.
 
+## Changelog — required for every user-facing change
+
+Every change a restaurant owner would notice gets an entry in
+`lib/changelog.ts`, in the same commit as the change itself. A changelog
+written later is written from the git log, and a git log entry is about the
+code, not about what the owner can now do.
+
+**Steps**
+1. Add the entry to the newest release in `lib/changelog.ts`, under one of the
+   three kinds:
+   - `new` — something they could not do before
+   - `improvement` — something they could do, now better
+   - `fix` — something that was wrong and no longer is
+2. Bump `CHANGELOG_VERSION` and the release `date` when starting a new release.
+3. Write it for the owner, not for us. "The menu calculator now takes prices
+   from your invoices" — never "refactored the costing module". No file names,
+   no component names, no internal vocabulary.
+4. Say where to find it when the feature lives somewhere non-obvious
+   ("Em Análises › Ementa").
+
+**Skip it** for pure refactors, test-only changes, dependency bumps, and
+anything else with no visible effect. If you cannot describe the change in
+terms of what the owner can now do, it probably does not belong in the
+changelog.
+
+The entries surface in the dashboard top bar under the sparkles icon, with an
+unread dot until the owner opens it.
+
 ## Core Principles
 
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.

@@ -102,6 +102,8 @@ model Restaurant {
   shiftTemplates    ShiftTemplate[]
   shifts            Shift[]
   scheduleClosures  ScheduleClosure[]
+  ingredients       Ingredient[]
+  menuItems         MenuItem[]
 
   @@map("restaurants")
 }
@@ -590,4 +592,114 @@ model ScheduleClosure {
   @@unique([restaurantId, date])
   @@index([restaurantId, date])
   @@map("schedule_closures")
+}
+
+/// An ingredient the kitchen buys, priced per unit.
+///
+/// Separate from InvoiceItem because the two answer different questions.
+/// InvoiceItem is a historical record — what was bought, on which invoice, at
+/// what price. This is the current working cost of a thing the kitchen uses,
+/// which a recipe multiplies by a quantity. Linking the two by normalised
+/// name is what lets a supplier's price rise show up in a dish's margin
+/// without the owner re-typing anything.
+model Ingredient {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  name String
+  /// Matches against InvoiceItem.normalizedName, so invoices can price this.
+  normalizedName String @map("normalized_name")
+
+  /// The unit the kitchen measures in: kg, L, un. Recipes state quantities in
+  /// a sub-unit (g, ml) and convert, because nobody writes "0.15 kg of cod".
+  unit String @default("kg")
+
+  /// Cost per unit, in euros, excluding VAT.
+  ///
+  /// Null means "take it from the invoices": the cost is then whatever the
+  /// most recent invoice said, and it moves on its own. A number here pins it,
+  /// for things that never appear on an invoice — oil by the drop, the gas
+  /// that cooks it, a garnish bought at the market for cash.
+  manualUnitCost Decimal? @map("manual_unit_cost") @db.Decimal(10, 4)
+
+  /// Cached from the latest matching invoice, so a menu of forty dishes does
+  /// not issue forty lookups. Refreshed when the menu is opened.
+  invoiceUnitCost Decimal?  @map("invoice_unit_cost") @db.Decimal(10, 4)
+  invoiceCostAt   DateTime? @map("invoice_cost_at")
+
+  /// Waste and trim: 1kg of whole fish does not yield 1kg of plated fish.
+  /// A percentage rather than a factor, because that is how a chef says it.
+  wastePercent Decimal @default(0) @map("waste_percent") @db.Decimal(5, 2)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  recipeLines RecipeLine[]
+
+  @@index([restaurantId, deletedAt])
+  @@index([restaurantId, normalizedName])
+  @@map("ingredients")
+}
+
+/// A dish, drink, or set menu that appears on the menu board.
+model MenuItem {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  name     String
+  category String?
+
+  /// What the customer pays, VAT included — the number printed on the menu.
+  ///
+  /// Storing the gross price is the point: it is the only figure the owner
+  /// can check against the board without doing arithmetic. The net price is
+  /// derived when margins are computed, never stored, so it cannot drift out
+  /// of step with the VAT rate.
+  priceGross Decimal @map("price_gross") @db.Decimal(10, 2)
+
+  /// Portugal charges 13% on restaurant food and 23% on alcohol, so the rate
+  /// belongs to the item, not the restaurant. Stored as a percentage.
+  vatRate Decimal @default(13) @map("vat_rate") @db.Decimal(5, 2)
+
+  /// Roughly how many are sold in a month. Optional, and only used to rank
+  /// dishes by what they actually contribute: a 70% margin on something
+  /// nobody orders matters less than 55% on the dish that carries the room.
+  monthlyVolume Int? @map("monthly_volume")
+
+  active    Boolean   @default(true)
+  sortOrder Int       @default(0) @map("sort_order")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  recipeLines RecipeLine[]
+
+  @@index([restaurantId, deletedAt, sortOrder])
+  @@map("menu_items")
+}
+
+/// One ingredient in one dish, with how much of it the recipe uses.
+model RecipeLine {
+  id String @id @default(uuid())
+
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  menuItemId String   @map("menu_item_id")
+
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  ingredientId String     @map("ingredient_id")
+
+  /// In the recipe's own unit — grams, millilitres, or whole units — which is
+  /// how a chef writes it. Converted against the ingredient's purchase unit
+  /// when the cost is computed.
+  quantity Decimal @db.Decimal(10, 3)
+  unit     String  @default("g")
+
+  sortOrder Int @default(0) @map("sort_order")
+
+  @@unique([menuItemId, ingredientId])
+  @@index([menuItemId])
+  @@map("recipe_lines")
 }

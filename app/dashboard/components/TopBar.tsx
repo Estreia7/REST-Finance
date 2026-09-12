@@ -2,6 +2,7 @@
 
 import { Menu } from 'lucide-react';
 import LanguageSelector from '@/app/components/LanguageSelector';
+import WhatsNew from './WhatsNew';
 
 type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'compliance' | 'schedule' | 'users' | 'billing' | 'settings';
 
@@ -44,6 +45,7 @@ export default function TopBar({ activeTab, restaurant, onMenuClick }: TopBarPro
 
       {/* Right side */}
       <div className="flex items-center gap-2 shrink-0">
+        <WhatsNew />
         <LanguageSelector />
       </div>
     </header>
