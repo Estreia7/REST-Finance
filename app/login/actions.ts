@@ -56,9 +56,20 @@ export async function getCurrentUserRole() {
  * caller decides where to go based on the role.
  */
 export async function loginWithPassword(email: string, password: string) {
+  const normalised = email.trim().toLowerCase();
+
+  // Resolve the destination BEFORE signing in. signIn() sets the session
+  // cookie on the outgoing response, but auth() reads the incoming request,
+  // which still has no cookie: reading the session here would always fail on
+  // a first login even though the sign-in itself succeeded.
+  const user = await prisma.user.findUnique({
+    where: { email: normalised },
+    select: { id: true },
+  });
+
   try {
     await signIn('credentials', {
-      email: email.trim().toLowerCase(),
+      email: normalised,
       password,
       redirect: false,
     });
@@ -71,13 +82,13 @@ export async function loginWithPassword(email: string, password: string) {
     throw error;
   }
 
-  const authResult = await requireAuth();
-  if (isAuthError(authResult)) {
-    return { error: 'Não foi possível iniciar sessão. Tenta novamente.' };
-  }
+  // signIn() did not throw, so the credentials were valid and the user row
+  // exists. Fall back to the dashboard if the role lookup is inconclusive
+  // rather than failing a sign-in that has already happened.
+  if (!user) return { success: true, redirectTo: '/dashboard' };
 
-  const role = await checkUserRole(authResult.userId);
-  if ('error' in role) return role;
+  const role = await checkUserRole(user.id);
+  if ('error' in role) return { success: true, redirectTo: '/dashboard' };
 
   return { success: true, redirectTo: role.redirectTo };
 }
