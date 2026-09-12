@@ -225,72 +225,71 @@ export async function createCostEntry(data: {
   }
 }
 
+/**
+ * Default cost categories for a new restaurant.
+ *
+ * `isLabour` matters: Prime Cost is COGS plus labour, and a category that is
+ * not flagged contributes nothing to it. Wages and social security were
+ * previously created unflagged, so every new restaurant reported a Prime Cost
+ * understated by roughly half with no error shown.
+ */
+const DEFAULT_COGS_CATEGORIES = [
+  'Comida',
+  'Bebidas',
+  'Sobremesas',
+  'Consumíveis Diretos',
+  'Outro',
+  'Diversos',
+] as const;
+
+const DEFAULT_OPEX_CATEGORIES: ReadonlyArray<{ name: string; isLabour?: boolean }> = [
+  { name: 'Ordenados', isLabour: true },
+  { name: 'Segurança Social', isLabour: true },
+  { name: 'Renda' },
+  { name: 'Luz' },
+  { name: 'Água' },
+  { name: 'Gás' },
+  { name: 'Internet + TV' },
+  { name: 'Manutenção' },
+  { name: 'Material Cozinha' },
+  { name: 'Limpeza/Higiene' },
+  { name: 'Marketing' },
+  { name: 'POS Sistema' },
+  { name: 'Seguros' },
+  { name: 'Licenças TV+Musica' },
+  { name: 'Bank fees' },
+  { name: 'Outros' },
+];
+
 async function initializeDefaultCategories(restaurantId: string) {
   try {
-    // Check if categories already exist
-    const existingCategories = await prisma.category.findMany({
-      where: { restaurantId },
-    });
-
-    if (existingCategories.length > 0) {
+    const existing = await prisma.category.count({ where: { restaurantId } });
+    if (existing > 0) {
       return { success: true, message: 'Categories already exist' };
     }
 
-    // Default COGS categories
-    const cogsCategories = [
-      { name: 'Comida', sortOrder: 1 },
-      { name: 'Bebidas', sortOrder: 2 },
-      { name: 'Sobremesas', sortOrder: 3 },
-      { name: 'Consumíveis Diretos', sortOrder: 4 },
-      { name: 'Outro', sortOrder: 5 },
-      { name: 'Diversos', sortOrder: 6 },
-    ];
-
-    // Default OPEX categories
-    const opexCategories = [
-      { name: 'Renda', sortOrder: 1 },
-      { name: 'Internet + TV', sortOrder: 2 },
-      { name: 'Água', sortOrder: 3 },
-      { name: 'Luz', sortOrder: 4 },
-      { name: 'Gás', sortOrder: 5 },
-      { name: 'Manutenção', sortOrder: 6 },
-      { name: 'Material Cozinha', sortOrder: 7 },
-      { name: 'Marketing', sortOrder: 8 },
-      { name: 'POS Sistema', sortOrder: 9 },
-      { name: 'Bank fees', sortOrder: 10 },
-      { name: 'Seguros', sortOrder: 11 },
-      { name: 'Licenças TV+Musica', sortOrder: 12 },
-      { name: 'Segurança Social', sortOrder: 13 },
-      { name: 'Ordenado 1', sortOrder: 14 },
-      { name: 'Limpeza/Higiene', sortOrder: 15 },
-      { name: 'Outros', sortOrder: 16 },
-    ];
-
-    // Create COGS categories
-    for (const cat of cogsCategories) {
-      await prisma.category.create({
-        data: {
+    // One statement rather than 22 sequential inserts.
+    await prisma.category.createMany({
+      data: [
+        ...DEFAULT_COGS_CATEGORIES.map((name, i) => ({
           restaurantId,
-          type: 'COGS',
-          name: cat.name,
-          sortOrder: cat.sortOrder,
+          type: 'COGS' as const,
+          name,
+          sortOrder: i + 1,
           isActive: true,
-        },
-      });
-    }
-
-    // Create OPEX categories
-    for (const cat of opexCategories) {
-      await prisma.category.create({
-        data: {
+          isLabour: false,
+        })),
+        ...DEFAULT_OPEX_CATEGORIES.map((cat, i) => ({
           restaurantId,
-          type: 'OPEX',
+          type: 'OPEX' as const,
           name: cat.name,
-          sortOrder: cat.sortOrder,
+          sortOrder: i + 1,
           isActive: true,
-        },
-      });
-    }
+          isLabour: cat.isLabour ?? false,
+        })),
+      ],
+      skipDuplicates: true,
+    });
 
     return { success: true, message: 'Default categories created' };
   } catch (error: unknown) {
