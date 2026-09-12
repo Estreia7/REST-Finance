@@ -104,11 +104,11 @@ async function main() {
     { name: 'Hortofrutícolas', type: 'COGS' as const, isLabour: false, share: 0.16 },
     { name: 'Mercearia', type: 'COGS' as const, isLabour: false, share: 0.16 },
     { name: 'Bebidas', type: 'COGS' as const, isLabour: false, share: 0.14 },
-    { name: 'Ordenados', type: 'OPEX' as const, isLabour: true, share: 0.58 },
-    { name: 'Segurança Social', type: 'OPEX' as const, isLabour: true, share: 0.14 },
-    { name: 'Renda', type: 'OPEX' as const, isLabour: false, share: 0.14 },
-    { name: 'Eletricidade e água', type: 'OPEX' as const, isLabour: false, share: 0.08 },
-    { name: 'Outros', type: 'OPEX' as const, isLabour: false, share: 0.06 },
+    { name: 'Ordenados', type: 'OPEX' as const, isLabour: true, share: 0.53 },
+    { name: 'Segurança Social', type: 'OPEX' as const, isLabour: true, share: 0.12 },
+    { name: 'Renda', type: 'OPEX' as const, isLabour: false, share: 0.18 },
+    { name: 'Eletricidade e água', type: 'OPEX' as const, isLabour: false, share: 0.1 },
+    { name: 'Outros', type: 'OPEX' as const, isLabour: false, share: 0.07 },
   ];
 
   const categories = await Promise.all(
@@ -241,8 +241,10 @@ async function main() {
       .filter((s) => s.date.getFullYear() === year && s.date.getMonth() === month)
       .reduce((sum, s) => sum + Number(s.revenueTotal), 0);
 
-    // Labour around 31% of revenue, other opex around 21%.
-    const totalOpex = monthRevenue * 0.52;
+    // Labour ~30% of revenue, other opex ~16%. Prime Cost then sits near the
+    // top of its healthy band and crosses it when food cost rises in 2026,
+    // which is exactly the transition the product exists to flag.
+    const totalOpex = monthRevenue * 0.46;
 
     for (const spec of opexSpec) {
       const amount = round2(totalOpex * spec.share);
