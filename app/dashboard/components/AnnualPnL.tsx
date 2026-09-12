@@ -246,7 +246,12 @@ export default function AnnualPnL() {
         </th>
 
         {MONTH_ABBR.map((_, i) => (
-          <td key={i} className="px-2.5 py-2 text-right">
+          <td
+            key={i}
+            // The last month needs clearance, or the pinned Total sits on top
+            // of it and clips the figure mid-digit.
+            className={`px-2.5 py-2 text-right ${i === 11 ? 'pr-6' : ''}`}
+          >
             <Cell line={line} monthIndex={i} bold={heading} />
           </td>
         ))}
@@ -256,7 +261,7 @@ export default function AnnualPnL() {
             yearly context on the other. Both need an opaque background of
             their own, or the months scroll underneath and print through. */}
         <td
-          className={`sticky right-[76px] z-10 px-4 py-2 text-right border-l ${style.rule}
+          className={`sticky right-[76px] z-10 px-4 py-2 text-right border-l shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.10)] ${style.rule}
                       ${heading ? style.head : style.bodySolid}`}
         >
           <Cell line={line} monthIndex={null} bold />
@@ -336,7 +341,7 @@ export default function AnnualPnL() {
                 ))}
                 <th
                   scope="col"
-                  className="sticky right-[76px] z-10 bg-card px-4 py-2 text-right font-medium border-l border-border-subtle"
+                  className="sticky right-[76px] z-10 bg-card px-4 py-2 text-right font-medium border-l border-border-subtle shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.10)]"
                 >
                   Total
                 </th>
