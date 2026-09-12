@@ -45,3 +45,42 @@ describe('category actions', () => {
     expect(checks.length).toBeGreaterThanOrEqual(2);
   });
 });
+
+/**
+ * Admin mutations touch clients' books, so the safeguards there are asserted
+ * separately. Structural checks, but each failure is invisible in the UI.
+ */
+const adminSource = readFileSync('app/admin/actions.ts', 'utf8');
+
+describe('admin entry mutations', () => {
+  it('soft deletes rather than destroying a client record', () => {
+    expect(adminSource).not.toMatch(/prisma\.dailySummary\.delete\(/);
+    expect(adminSource).not.toMatch(/prisma\.costEntry\.delete\(/);
+    expect(adminSource).toContain('deletedAt: new Date()');
+  });
+
+  it('validates what an admin writes, like an owner edit is validated', () => {
+    // This was the one path that could write a negative revenue.
+    expect(adminSource).toContain('adminRevenueUpdateSchema');
+    expect(adminSource).toContain('adminCostUpdateSchema');
+    expect(adminSource).not.toMatch(/adminUpdateEntry\([^)]*Record<string, any>/);
+  });
+
+  it('writes an audit entry for every edit and delete', () => {
+    for (const action of [
+      'admin.revenue.update',
+      'admin.cost.update',
+      'admin.revenue.delete',
+      'admin.cost.delete',
+    ]) {
+      expect(adminSource).toContain(action);
+    }
+  });
+
+  it('records which restaurant was touched', () => {
+    // An audit entry with no tenant is not much of an audit entry.
+    const audits = adminSource.match(/action: 'admin\.(revenue|cost)\./g) ?? [];
+    const scoped = adminSource.match(/restaurantId: before\.restaurantId/g) ?? [];
+    expect(scoped.length).toBe(audits.length);
+  });
+});

@@ -340,7 +340,8 @@ export async function getDashboardStats() {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-    const [monthlyRevenue, monthlyCosts, staffCount] = await Promise.all([
+    const [monthlyRevenue, monthlyCosts, monthlyCogs, monthlyLabour, staffCount] =
+      await Promise.all([
       prisma.dailySummary.aggregate({
         where: {
           restaurantId: owner.restaurantId,
@@ -369,6 +370,26 @@ export async function getDashboardStats() {
           amount: true,
         },
       }),
+      // Goods and labour separately, so the KPI engine can compute prime
+      // cost rather than this returning a lump the caller cannot break down.
+      prisma.costEntry.aggregate({
+        where: {
+          restaurantId: owner.restaurantId,
+          deletedAt: null,
+          type: 'COGS',
+          date: { gte: startOfMonth, lte: endOfMonth },
+        },
+        _sum: { amount: true },
+      }),
+      prisma.costEntry.aggregate({
+        where: {
+          restaurantId: owner.restaurantId,
+          deletedAt: null,
+          category: { isLabour: true },
+          date: { gte: startOfMonth, lte: endOfMonth },
+        },
+        _sum: { amount: true },
+      }),
       prisma.membership.count({
         where: {
           restaurantId: owner.restaurantId,
@@ -382,8 +403,25 @@ export async function getDashboardStats() {
     const dineInRevenue = Number(monthlyRevenue._sum.dineInRevenue || 0);
     const takeawayRevenue = Number(monthlyRevenue._sum.takeawayRevenue || 0);
     const costs = Number(monthlyCosts._sum.amount || 0);
-    const profit = revenue - costs;
-    const profitMargin = revenue > 0 ? (profit / revenue) * 100 : 0;
+    const cogs = Number(monthlyCogs._sum.amount || 0);
+    const labour = Number(monthlyLabour._sum.amount || 0);
+
+    // All financial arithmetic goes through lib/kpi.ts. This was the last
+    // call site still computing profit inline, which meant the headline tile
+    // and the P&L could drift apart without anything catching it.
+    const kpis = calculateKpis({
+      revenueTotal: revenue,
+      cogsTotal: cogs,
+      labourTotal: labour,
+      opexTotal: Math.max(costs - cogs - labour, 0),
+      dineInRevenue,
+      takeawayRevenue,
+      dineInTickets: 0,
+      takeawayTickets: 0,
+    });
+
+    const profit = kpis.netIncome;
+    const profitMargin = toPercent(kpis.netIncomePct);
 
     return {
       success: true,
@@ -391,6 +429,10 @@ export async function getDashboardStats() {
         revenue,
         dineInRevenue,
         takeawayRevenue,
+        cogs,
+        labour,
+        primeCostPercent: toPercent(kpis.primeCostPct),
+        foodCostPercent: toPercent(kpis.foodCostPct),
         costs,
         profit,
         profitMargin,

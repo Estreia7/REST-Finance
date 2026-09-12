@@ -5,7 +5,27 @@ import bcrypt from 'bcryptjs';
 import { randomUUID } from 'node:crypto';
 import { requireAuth, requireAdmin, isAuthError } from '@/lib/auth-helpers';
 import { Plan } from '@prisma/client';
+import { z } from 'zod';
 import { toClientError, isUniqueConstraintError } from '@/lib/errors';
+
+/**
+ * Admin edits are bounded exactly like an owner's own edits. Without this the
+ * admin console was the one way to write a negative revenue into a client's
+ * books.
+ */
+const adminRevenueUpdateSchema = z
+  .object({
+    dineInRevenue: z.number().min(0, 'Receita não pode ser negativa').max(999999).optional(),
+    takeawayRevenue: z.number().min(0, 'Receita não pode ser negativa').max(999999).optional(),
+  })
+  .strict();
+
+const adminCostUpdateSchema = z
+  .object({
+    amount: z.number().min(0, 'Valor não pode ser negativo').max(999999).optional(),
+    description: z.string().trim().max(500).optional(),
+  })
+  .strict();
 
 export async function getClients() {
   try {
@@ -537,43 +557,165 @@ export async function getRestaurantCosts(restaurantId: string, dateFrom: Date, d
   }
 }
 
-export async function adminUpdateEntry(type: 'revenue' | 'cost', id: string, data: Record<string, any>) {
+export async function adminUpdateEntry(
+  type: 'revenue' | 'cost',
+  id: string,
+  data: { dineInRevenue?: number; takeawayRevenue?: number; amount?: number; description?: string }
+) {
   try {
-    if (!await verifyAdmin()) return { error: 'Unauthorized' };
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
 
     if (type === 'revenue') {
-      const dineIn = data.dineInRevenue ?? 0;
-      const takeaway = data.takeawayRevenue ?? 0;
+      const parsed = adminRevenueUpdateSchema.safeParse(data);
+      if (!parsed.success) {
+        return { error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
+      }
+
+      // Read first, so the audit entry can record what actually changed and
+      // which restaurant it belonged to.
+      const before = await prisma.dailySummary.findFirst({
+        where: { id, deletedAt: null },
+        select: {
+          restaurantId: true,
+          date: true,
+          dineInRevenue: true,
+          takeawayRevenue: true,
+        },
+      });
+      if (!before) return { error: 'Lançamento não encontrado' };
+
+      const dineIn = parsed.data.dineInRevenue ?? Number(before.dineInRevenue);
+      const takeaway = parsed.data.takeawayRevenue ?? Number(before.takeawayRevenue);
+
       await prisma.dailySummary.update({
         where: { id },
-        data: { dineInRevenue: dineIn, takeawayRevenue: takeaway, revenueTotal: dineIn + takeaway },
+        data: {
+          dineInRevenue: dineIn,
+          takeawayRevenue: takeaway,
+          revenueTotal: dineIn + takeaway,
+        },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          restaurantId: before.restaurantId,
+          action: 'admin.revenue.update',
+          actorUserId: admin.userId,
+          metadata: {
+            entryId: id,
+            date: before.date.toISOString(),
+            from: {
+              dineIn: Number(before.dineInRevenue),
+              takeaway: Number(before.takeawayRevenue),
+            },
+            to: { dineIn, takeaway },
+          },
+        },
       });
     } else {
+      const parsed = adminCostUpdateSchema.safeParse(data);
+      if (!parsed.success) {
+        return { error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
+      }
+
+      const before = await prisma.costEntry.findFirst({
+        where: { id, deletedAt: null },
+        select: { restaurantId: true, date: true, amount: true, description: true },
+      });
+      if (!before) return { error: 'Lançamento não encontrado' };
+
       await prisma.costEntry.update({
         where: { id },
-        data: { amount: data.amount, description: data.description },
+        data: {
+          amount: parsed.data.amount ?? Number(before.amount),
+          description: parsed.data.description ?? before.description,
+        },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          restaurantId: before.restaurantId,
+          action: 'admin.cost.update',
+          actorUserId: admin.userId,
+          metadata: {
+            entryId: id,
+            date: before.date.toISOString(),
+            from: { amount: Number(before.amount), description: before.description },
+            to: { amount: parsed.data.amount, description: parsed.data.description },
+          },
+        },
       });
     }
 
     return { success: true };
   } catch (error: unknown) {
-    return { error: toClientError('Failed', error, 'generic') };
+    return { error: toClientError('Failed to update entry as admin', error, 'write') };
   }
 }
 
 export async function adminDeleteEntry(type: 'revenue' | 'cost', id: string) {
   try {
-    if (!await verifyAdmin()) return { error: 'Unauthorized' };
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
 
+    // Soft delete, matching every tenant-facing path. A hard delete here
+    // destroyed a client's financial record with nothing to recover from and
+    // no trace of who did it.
     if (type === 'revenue') {
-      await prisma.dailySummary.delete({ where: { id } });
+      const before = await prisma.dailySummary.findFirst({
+        where: { id, deletedAt: null },
+        select: { restaurantId: true, date: true, revenueTotal: true },
+      });
+      if (!before) return { error: 'Lançamento não encontrado' };
+
+      await prisma.dailySummary.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          restaurantId: before.restaurantId,
+          action: 'admin.revenue.delete',
+          actorUserId: admin.userId,
+          metadata: {
+            entryId: id,
+            date: before.date.toISOString(),
+            revenueTotal: Number(before.revenueTotal),
+          },
+        },
+      });
     } else {
-      await prisma.costEntry.delete({ where: { id } });
+      const before = await prisma.costEntry.findFirst({
+        where: { id, deletedAt: null },
+        select: { restaurantId: true, date: true, amount: true, description: true },
+      });
+      if (!before) return { error: 'Lançamento não encontrado' };
+
+      await prisma.costEntry.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          restaurantId: before.restaurantId,
+          action: 'admin.cost.delete',
+          actorUserId: admin.userId,
+          metadata: {
+            entryId: id,
+            date: before.date.toISOString(),
+            amount: Number(before.amount),
+            description: before.description,
+          },
+        },
+      });
     }
 
     return { success: true };
   } catch (error: unknown) {
-    return { error: toClientError('Failed', error, 'generic') };
+    return { error: toClientError('Failed to delete entry as admin', error, 'delete') };
   }
 }
 
