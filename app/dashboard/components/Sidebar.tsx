@@ -2,6 +2,7 @@
 
 import { useLanguage } from '@/lib/language-context';
 import { Wordmark } from '@/app/components/Logo';
+import RestaurantSwitcher from './RestaurantSwitcher';
 import { LayoutDashboard, TrendingUp, DollarSign, Users, CreditCard, Settings, LogOut, X, BarChart3, ShieldCheck } from 'lucide-react';
 
 type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'compliance' | 'users' | 'billing' | 'settings';
@@ -56,6 +57,11 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
         <button onClick={onClose} className="md:hidden p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all" aria-label="Fechar menu">
           <X className="w-4 h-4" />
         </button>
+      </div>
+
+      {/* Renders nothing unless this person holds more than one restaurant. */}
+      <div className="px-3 pt-3 empty:hidden">
+        <RestaurantSwitcher />
       </div>
 
       {/* Nav */}

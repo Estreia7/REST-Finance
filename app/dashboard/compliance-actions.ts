@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { saveDocument, deleteStoredImage } from '@/lib/uploads';
 import { toClientError } from '@/lib/errors';
-import { EXPIRY_WARNING_DAYS, statusFor } from '@/lib/compliance';
+import { EXPIRY_WARNING_DAYS, statusFor, summarise } from '@/lib/compliance';
 
 /**
  * Compliance documents: insurance, licences, certificates.
@@ -31,8 +31,11 @@ const DOC_TYPES = [
   'OTHER',
 ] as const;
 
+const RENEWAL_PERIODS = ['NONE', 'MONTHLY', 'ANNUAL'] as const;
+
 const metadataSchema = z.object({
   type: z.enum(DOC_TYPES, { message: 'Tipo de documento inválido' }),
+  renewalPeriod: z.enum(RENEWAL_PERIODS).default('NONE'),
   name: z.string().trim().min(2, 'Nome demasiado curto').max(120, 'Nome demasiado longo'),
   reference: z.string().trim().max(80).optional().nullable(),
   issuedAt: z.coerce.date().optional().nullable(),
@@ -53,6 +56,7 @@ export async function uploadComplianceDoc(formData: FormData) {
 
     const raw = {
       type: formData.get('type'),
+      renewalPeriod: formData.get('renewalPeriod') || 'NONE',
       name: formData.get('name'),
       reference: formData.get('reference') || null,
       issuedAt: formData.get('issuedAt') || null,
@@ -85,6 +89,7 @@ export async function uploadComplianceDoc(formData: FormData) {
       data: {
         restaurantId: owner.restaurantId,
         type: parsed.data.type,
+        renewalPeriod: parsed.data.renewalPeriod,
         name: parsed.data.name,
         reference: parsed.data.reference ?? null,
         filePath: saved.storedPath,
@@ -108,6 +113,7 @@ export async function updateComplianceDoc(
   id: string,
   input: {
     name: string;
+    renewalPeriod?: 'NONE' | 'MONTHLY' | 'ANNUAL';
     reference?: string | null;
     issuedAt?: string | null;
     expiresAt?: string | null;
@@ -121,11 +127,15 @@ export async function updateComplianceDoc(
     // Scoped fetch first: a forged id from another restaurant must not resolve.
     const existing = await prisma.complianceDoc.findFirst({
       where: { id, restaurantId: owner.restaurantId, deletedAt: null },
-      select: { id: true, type: true },
+      select: { id: true, type: true, renewalPeriod: true },
     });
     if (!existing) return { error: 'Documento não encontrado' };
 
-    const parsed = metadataSchema.safeParse({ ...input, type: existing.type });
+    const parsed = metadataSchema.safeParse({
+      ...input,
+      type: existing.type,
+      renewalPeriod: input.renewalPeriod ?? existing.renewalPeriod,
+    });
     if (!parsed.success) {
       return { error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
     }
@@ -138,6 +148,7 @@ export async function updateComplianceDoc(
       where: { id },
       data: {
         name: parsed.data.name,
+        renewalPeriod: parsed.data.renewalPeriod,
         reference: parsed.data.reference ?? null,
         issuedAt: parsed.data.issuedAt ?? null,
         expiresAt: parsed.data.expiresAt ?? null,
@@ -202,6 +213,7 @@ export async function getComplianceDocs() {
       select: {
         id: true,
         type: true,
+        renewalPeriod: true,
         name: true,
         reference: true,
         filePath: true,
@@ -214,10 +226,28 @@ export async function getComplianceDocs() {
       },
     });
 
+    // The greeting names both, so they are fetched alongside rather than left
+    // to a second round trip from the client.
+    const [restaurant, user] = await Promise.all([
+      prisma.restaurant.findUnique({
+        where: { id: owner.restaurantId },
+        select: { name: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: owner.userId },
+        select: { name: true },
+      }),
+    ]);
+
     const now = new Date();
     return {
       success: true,
-      data: docs.map((d) => ({ ...d, status: statusFor(d.expiresAt, now) })),
+      data: {
+        docs: docs.map((d) => ({ ...d, status: statusFor(d.expiresAt, now) })),
+        summary: summarise(docs, now),
+        restaurantName: restaurant?.name ?? '',
+        ownerName: user?.name?.trim() || '',
+      },
     };
   } catch (error: unknown) {
     return { error: toClientError('Failed to fetch compliance documents', error, 'read') };

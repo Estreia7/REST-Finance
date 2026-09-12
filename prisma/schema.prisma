@@ -32,6 +32,14 @@ enum CostType {
 
 /// Documents a restaurant has to keep current. Ordered roughly by how often
 /// they are asked for in an inspection.
+/// How often a document has to be renewed, so the next expiry can be
+/// proposed automatically when the current one is replaced.
+enum RenewalPeriod {
+  NONE
+  MONTHLY
+  ANNUAL
+}
+
 enum ComplianceDocType {
   INSURANCE       // Seguro de responsabilidade civil
   HACCP           // Plano HACCP
@@ -390,6 +398,9 @@ model ComplianceDoc {
   filePath  String  @map("file_path")
   mimeType  String  @map("mime_type")
   sizeBytes Int     @map("size_bytes")
+
+  /// Monthly or annual renewal. NONE for one-off documents.
+  renewalPeriod RenewalPeriod @default(NONE) @map("renewal_period")
 
   issuedAt  DateTime? @map("issued_at")
   /// Null for documents that do not expire, so they are never chased.

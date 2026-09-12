@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth-config';
+import { readActiveRestaurantCookie, resolveActiveRestaurant } from '@/lib/active-restaurant';
 
 /**
  * Authorisation helpers.
@@ -44,12 +45,16 @@ export async function requireOwner(): Promise<OwnerResult | AuthError> {
   const authResult = await requireAuth();
   if ('error' in authResult) return authResult;
 
-  const membership = await prisma.membership.findFirst({
+  const memberships = await prisma.membership.findMany({
     where: { userId: authResult.userId, role: 'OWNER', active: true },
     // Deterministic: an owner of several restaurants must resolve to the same
     // one on every request, not an arbitrary row.
     orderBy: { createdAt: 'asc' },
   });
+
+  // The cookie only chooses among restaurants this owner already holds, so a
+  // forged value selects nothing they could not already reach.
+  const membership = resolveActiveRestaurant(memberships, readActiveRestaurantCookie());
 
   if (!membership) {
     return { error: 'Sem permissão de proprietário' };
@@ -67,10 +72,12 @@ export async function requireMember(): Promise<MemberResult | AuthError> {
   const authResult = await requireAuth();
   if ('error' in authResult) return authResult;
 
-  const membership = await prisma.membership.findFirst({
+  const memberships = await prisma.membership.findMany({
     where: { userId: authResult.userId, role: { in: ['OWNER', 'STAFF'] }, active: true },
     orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
   });
+
+  const membership = resolveActiveRestaurant(memberships, readActiveRestaurantCookie());
 
   if (!membership) {
     return { error: 'Sem acesso ao restaurante' };
