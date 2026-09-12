@@ -49,6 +49,11 @@ model Restaurant {
   onboardingCompleted Boolean @default(false) @map("onboarding_completed")
   monthlyRevenueTarget Decimal? @map("monthly_revenue_target") @db.Decimal(12, 2)
 
+  /// Restaurant logo, stored as a path under the storage directory rather
+  /// than in the database. Served through an authenticated route so it is
+  /// not world-readable by URL guessing.
+  logoPath String? @map("logo_path")
+
   /// Dining room capacity and service length, used for RevPASH (revenue per
   /// available seat-hour). Null until the owner supplies them, so the metric
   /// is hidden rather than computed from a guess.

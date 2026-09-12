@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { getComparativeData } from '../actions';
+import { useChartTheme, tooltipProps } from '@/lib/chart-theme';
+import { useLanguage } from '@/lib/language-context';
 
 interface MonthData {
   label: string;
@@ -13,6 +15,10 @@ interface MonthData {
 }
 
 export default function ComparativePanel() {
+  const chart = useChartTheme();
+  // Series colours come from the theme, so they cannot live at module scope.
+  const COLORS = [chart.primary, chart.info];
+  const { t } = useLanguage();
   const [data, setData] = useState<MonthData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -67,22 +73,21 @@ export default function ComparativePanel() {
 
       {/* Chart */}
       <div className="card-glass p-6">
-        <h3 className="text-lg font-bold text-foreground mb-6">Comparação Mensal (6 meses)</h3>
+        <h3 className="text-lg font-bold text-foreground mb-6">{t('charts.titleMonthlyComparison')}</h3>
         <div className="h-[350px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="label" tick={{ fill: 'hsl(215 20% 65%)', fontSize: 11 }} />
-              <YAxis tick={{ fill: 'hsl(215 20% 65%)', fontSize: 11 }} tickFormatter={v => `€${(v / 1000).toFixed(0)}k`} />
+              <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+              <XAxis dataKey="label" tick={{ fill: chart.axis, fontSize: 11 }} />
+              <YAxis tick={{ fill: chart.axis, fontSize: 11 }} tickFormatter={v => `€${(v / 1000).toFixed(0)}k`} />
               <Tooltip
-                contentStyle={{ background: 'hsl(222 47% 11%)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '12px' }}
-                labelStyle={{ color: 'hsl(210 40% 96%)' }}
+                {...tooltipProps(chart)}
                 formatter={(value: number) => [fmt(value)]}
               />
               <Legend wrapperStyle={{ fontSize: '11px' }} />
-              <Bar dataKey="revenue" name="Receita" fill="hsl(258 90% 66%)" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="costs" name="Custos" fill="hsl(0 72% 51%)" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="profit" name="Lucro" fill="hsl(142 71% 45%)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="revenue" name={t('charts.revenue')} fill={chart.primary} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="costs" name={t('charts.costs')} fill={chart.danger} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="profit" name={t('charts.profit')} fill={chart.success} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -90,7 +95,7 @@ export default function ComparativePanel() {
 
       {/* Monthly table */}
       <div className="card-glass p-6">
-        <h3 className="text-sm font-bold text-foreground mb-4">Detalhe Mensal</h3>
+        <h3 className="text-sm font-bold text-foreground mb-4">{t('charts.titleMonthlyDetail')}</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

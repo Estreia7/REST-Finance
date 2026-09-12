@@ -4,6 +4,11 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Sun, Moon, Save, AlertCircle, CheckCircle2, Loader2, User, Lock, Building2 } from 'lucide-react';
 import { updateUserProfile, changePassword, updateRestaurantSettings } from '../actions';
+import {
+  uploadRestaurantLogo, removeRestaurantLogo,
+  uploadProfilePicture, removeProfilePicture,
+} from '../image-actions';
+import ImageUpload from './ImageUpload';
 
 interface SettingsPanelProps {
   pendingTheme:      'light' | 'dark';
@@ -72,9 +77,21 @@ export default function SettingsPanel({
           <h2 className="text-lg font-bold text-foreground">Perfil</h2>
         </div>
         <div className="space-y-4">
+          <div className="p-4 rounded-xl bg-surface border border-border-subtle">
+            <ImageUpload
+              kind="avatar"
+              shape="circle"
+              currentPath={currentUser?.image ?? null}
+              label="Foto de perfil"
+              hint="PNG, JPG ou WebP, até 2 MB."
+              onUpload={uploadProfilePicture}
+              onRemove={removeProfilePicture}
+            />
+          </div>
+
           <div className="flex items-center gap-4 p-4 rounded-xl bg-surface border border-border-subtle">
             <div className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">
+              <span className="text-primary-foreground font-bold text-sm">
                 {(name || currentUser?.email || 'U').charAt(0).toUpperCase()}
               </span>
             </div>
@@ -121,6 +138,17 @@ export default function SettingsPanel({
             <h2 className="text-lg font-bold text-foreground">Restaurante</h2>
           </div>
           <div className="space-y-4">
+            <div className="p-4 rounded-xl bg-surface border border-border-subtle">
+              <ImageUpload
+                kind="logo"
+                currentPath={restaurant?.logoPath ?? null}
+                label="Logótipo do restaurante"
+                hint="Aparece no painel e nos relatórios. PNG, JPG ou WebP, até 2 MB."
+                onUpload={uploadRestaurantLogo}
+                onRemove={removeRestaurantLogo}
+              />
+            </div>
+
             <div>
               <label htmlFor="settings-restaurant-name" className="text-xs font-medium text-muted-foreground block mb-2">Nome do restaurante</label>
               <input id="settings-restaurant-name" type="text" value={restaurantName} onChange={e => setRestaurantName(e.target.value)} className="input-field" />

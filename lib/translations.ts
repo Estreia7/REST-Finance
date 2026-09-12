@@ -120,6 +120,28 @@ export const translations = {
       },
     },
     // Owner Dashboard
+    // Chart series and axis labels
+    charts: {
+      revenue: 'Receita',
+      costs: 'Custos',
+      profit: 'Lucro',
+      dineIn: 'Local',
+      takeaway: 'Take-away',
+      average: 'Médio',
+      target: 'Meta',
+      cogs: 'Mercadorias',
+      labour: 'Pessoal',
+      opex: 'Despesas',
+      month: 'Mês',
+      day: 'Dia',
+      noData: 'Ainda não há dados para mostrar.',
+      titleMonthlyRevenue: 'Receita mensal',
+      titleRevenueByChannel: 'Receita mensal por canal',
+      titleSalesChannel: 'Canal de vendas',
+      titleMonthlyComparison: 'Comparação mensal (6 meses)',
+      titleMonthlyDetail: 'Detalhe mensal',
+      titleAvgTicket: 'Evolução do ticket médio',
+    },
     // Dashboard navigation
     nav: {
       dashboard: 'Dashboard',
@@ -444,6 +466,28 @@ export const translations = {
       },
     },
     // Owner Dashboard
+    // Chart series and axis labels
+    charts: {
+      revenue: 'Revenue',
+      costs: 'Costs',
+      profit: 'Profit',
+      dineIn: 'Dine-in',
+      takeaway: 'Takeaway',
+      average: 'Average',
+      target: 'Target',
+      cogs: 'Goods',
+      labour: 'Labour',
+      opex: 'Overheads',
+      month: 'Month',
+      day: 'Day',
+      noData: 'No data to show yet.',
+      titleMonthlyRevenue: 'Monthly revenue',
+      titleRevenueByChannel: 'Monthly revenue by channel',
+      titleSalesChannel: 'Sales channel',
+      titleMonthlyComparison: 'Monthly comparison (6 months)',
+      titleMonthlyDetail: 'Monthly detail',
+      titleAvgTicket: 'Average ticket over time',
+    },
     // Dashboard navigation
     nav: {
       dashboard: 'Dashboard',

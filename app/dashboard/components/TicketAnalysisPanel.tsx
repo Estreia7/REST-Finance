@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Loader2, Calendar } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { getTicketAnalysis } from '../actions';
+import { useChartTheme, tooltipProps } from '@/lib/chart-theme';
+import { useLanguage } from '@/lib/language-context';
 
 interface TicketData {
   daily: Array<{
@@ -21,6 +23,10 @@ interface TicketData {
 }
 
 export default function TicketAnalysisPanel() {
+  const chart = useChartTheme();
+  // Series colours come from the theme, so they cannot live at module scope.
+  const COLORS = [chart.primary, chart.info];
+  const { t } = useLanguage();
   const now = new Date();
   const [dateFrom, setDateFrom] = useState(new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]);
   const [dateTo, setDateTo] = useState(new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]);
@@ -86,21 +92,21 @@ export default function TicketAnalysisPanel() {
 
       {/* Chart */}
       <div className="card-glass p-6">
-        <h3 className="text-lg font-bold text-foreground mb-6">Evolução do Ticket Médio</h3>
+        <h3 className="text-lg font-bold text-foreground mb-6">{t('charts.titleAvgTicket')}</h3>
         <div className="h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="date" tick={{ fill: 'hsl(215 20% 65%)', fontSize: 10 }} />
-              <YAxis tick={{ fill: 'hsl(215 20% 65%)', fontSize: 11 }} tickFormatter={v => `€${v}`} />
+              <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+              <XAxis dataKey="date" tick={{ fill: chart.axis, fontSize: 10 }} />
+              <YAxis tick={{ fill: chart.axis, fontSize: 11 }} tickFormatter={v => `€${v}`} />
               <Tooltip
-                contentStyle={{ background: 'hsl(222 47% 11%)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '12px' }}
+                {...tooltipProps(chart)}
                 formatter={(value: number) => [`€${value.toFixed(2)}`]}
               />
               <Legend wrapperStyle={{ fontSize: '11px' }} />
-              <Line type="monotone" dataKey="medio" name="Médio" stroke="hsl(258 90% 66%)" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="local" name="Local" stroke="hsl(142 71% 45%)" strokeWidth={1.5} dot={false} />
-              <Line type="monotone" dataKey="takeaway" name="Takeaway" stroke="hsl(45 93% 47%)" strokeWidth={1.5} dot={false} />
+              <Line type="monotone" dataKey="medio" name={t('charts.average')} stroke={chart.primary} strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="local" name={t('charts.dineIn')} stroke={chart.success} strokeWidth={1.5} dot={false} />
+              <Line type="monotone" dataKey="takeaway" name={t('charts.takeaway')} stroke={chart.warning} strokeWidth={1.5} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>

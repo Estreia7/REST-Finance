@@ -1,6 +1,8 @@
 'use client';
 
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useChartTheme } from '@/lib/chart-theme';
+import { useLanguage } from '@/lib/language-context';
 
 interface ChannelSplitChartProps {
   stats: {
@@ -9,8 +11,6 @@ interface ChannelSplitChartProps {
     takeawayRevenue?: number;
   };
 }
-
-const COLORS = ['hsl(258 90% 66%)', 'hsl(240 84% 67%)'];
 
 const CustomTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null;
@@ -23,6 +23,10 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 export default function ChannelSplitChart({ stats }: ChannelSplitChartProps) {
+  const { t } = useLanguage();
+  const chart = useChartTheme();
+  // Series colours come from the theme, so they cannot live at module scope.
+  const COLORS = [chart.primary, chart.info];
   const dineIn = stats.dineInRevenue ?? 0;
   const takeaway = stats.takeawayRevenue ?? 0;
   const total = dineIn + takeaway;
@@ -35,7 +39,7 @@ export default function ChannelSplitChart({ stats }: ChannelSplitChartProps) {
   if (!total) {
     return (
       <div className="card-glass p-6">
-        <h3 className="font-bold text-foreground mb-4">Canal de Vendas</h3>
+        <h3 className="font-bold text-foreground mb-4">{t('charts.titleSalesChannel')}</h3>
         <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
           Sem dados de receita.
         </div>
@@ -45,7 +49,7 @@ export default function ChannelSplitChart({ stats }: ChannelSplitChartProps) {
 
   return (
     <div className="card-glass p-6">
-      <h3 className="font-bold text-foreground mb-4">Canal de Vendas</h3>
+      <h3 className="font-bold text-foreground mb-4">{t('charts.titleSalesChannel')}</h3>
       <ResponsiveContainer width="100%" height={200}>
         <PieChart>
           <Pie
@@ -64,7 +68,7 @@ export default function ChannelSplitChart({ stats }: ChannelSplitChartProps) {
           <Tooltip content={<CustomTooltip />} />
           <Legend
             wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
-            formatter={(v) => <span style={{ color: 'hsl(215 20% 55%)' }}>{v}</span>}
+            formatter={(v) => <span style={{ color: chart.axis }}>{v}</span>}
           />
         </PieChart>
       </ResponsiveContainer>

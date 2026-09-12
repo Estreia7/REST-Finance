@@ -2,6 +2,7 @@
 
 import { TrendingUp, TrendingDown, DollarSign, BarChart3, Target, Activity, AlertTriangle } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts';
+import { useChartTheme } from '@/lib/chart-theme';
 
 interface KPICardsProps {
   stats: {
@@ -67,6 +68,7 @@ function Sparkline({ data }: { data: Array<{ date: string; revenue: number }> })
 }
 
 export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, last7DaysData }: KPICardsProps) {
+  const chart = useChartTheme();
   const stats = {
     revenue: rawStats?.revenue ?? 0,
     costs: rawStats?.costs ?? 0,
@@ -201,11 +203,11 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
           </div>
           {/* Circular gauge */}
           <svg width="68" height="68" className="shrink-0 ml-auto" role="img" aria-label={`Lucro líquido: ${netPct.toFixed(0)}%`}>
-            <circle cx="34" cy="34" r={radius} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="5" />
+            <circle cx="34" cy="34" r={radius} fill="none" stroke={chart.grid} strokeWidth="5" />
             <circle
               cx="34" cy="34" r={radius}
               fill="none"
-              stroke={netPct > 15 ? 'hsl(142 71% 45%)' : netPct > 5 ? 'hsl(45 93% 47%)' : 'hsl(0 72% 51%)'}
+              stroke={netPct > 15 ? chart.success : netPct > 5 ? chart.warning : chart.danger}
               strokeWidth="5"
               strokeLinecap="round"
               strokeDasharray={`${dash} ${circ}`}
