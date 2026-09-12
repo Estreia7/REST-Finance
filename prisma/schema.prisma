@@ -30,6 +30,19 @@ enum CostType {
   OPEX
 }
 
+/// Documents a restaurant has to keep current. Ordered roughly by how often
+/// they are asked for in an inspection.
+enum ComplianceDocType {
+  INSURANCE       // Seguro de responsabilidade civil
+  HACCP           // Plano HACCP
+  FIRE_SAFETY     // Segurança contra incêndios
+  ASAE_LICENCE    // Licença de utilização / ASAE
+  HYGIENE_CERT    // Formação em higiene alimentar
+  WASTE_CONTRACT  // Contrato de recolha de resíduos
+  PEST_CONTROL    // Controlo de pragas
+  OTHER
+}
+
 model Restaurant {
   id                 String    @id @default(uuid())
   name               String
@@ -76,6 +89,7 @@ model Restaurant {
   receiptScans   ReceiptScan[]
   vendors        Vendor[]
   invoiceItems   InvoiceItem[]
+  complianceDocs ComplianceDoc[]
 
   @@map("restaurants")
 }
@@ -119,6 +133,7 @@ model User {
   auditLogs        AuditLog[]     @relation("AuditActor")
   notifications    Notification[]
   receiptScans     ReceiptScan[]
+  complianceDocs   ComplianceDoc[] @relation("ComplianceUploadedBy")
 
   @@map("users")
 }
@@ -354,6 +369,44 @@ model ReceiptScan {
   invoiceItems InvoiceItem[]
 
   @@map("receipt_scans")
+}
+
+/// Insurance policies, licences and certificates, with their expiry dates.
+///
+/// The file itself lives under the storage directory and only its path is
+/// kept here, so a database dump does not carry the documents. Soft deleted,
+/// because an expired policy is still the record of what was in force at the
+/// time and may be needed after an incident.
+model ComplianceDoc {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  type ComplianceDocType
+  name String
+  /// Policy or licence number, as printed on the document.
+  reference String?
+
+  filePath  String  @map("file_path")
+  mimeType  String  @map("mime_type")
+  sizeBytes Int     @map("size_bytes")
+
+  issuedAt  DateTime? @map("issued_at")
+  /// Null for documents that do not expire, so they are never chased.
+  expiresAt DateTime? @map("expires_at")
+
+  notes String?
+
+  uploadedBy   User     @relation("ComplianceUploadedBy", fields: [uploadedById], references: [id])
+  uploadedById String   @map("uploaded_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  /// Drives the expiry queries that power the dashboard warnings.
+  @@index([restaurantId, expiresAt])
+  @@index([restaurantId, type])
+  @@map("compliance_docs")
 }
 
 model Vendor {

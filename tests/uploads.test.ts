@@ -111,3 +111,51 @@ describe('deleteStoredImage', () => {
     await expect(deleteStoredImage(null)).resolves.toBeUndefined();
   });
 });
+
+describe('saveDocument', () => {
+  const PDF = [0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a];
+
+  it('accepts a PDF', async () => {
+    const { saveDocument } = await mod();
+    const file = new File([new Uint8Array(PDF)], 'apolice.pdf', { type: 'application/pdf' });
+    const result = await saveDocument('rest-1', file);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.kind).toBe('pdf');
+      expect(result.storedPath).toMatch(/^compliance\/rest-1\/[0-9a-f-]{36}\.pdf$/);
+    }
+  });
+
+  it('accepts a scanned image of a licence', async () => {
+    const { saveDocument } = await mod();
+    const jpeg = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0])], 's.jpg');
+    expect((await saveDocument('rest-1', jpeg)).ok).toBe(true);
+  });
+
+  it('rejects an executable renamed to .pdf', async () => {
+    const { saveDocument } = await mod();
+    // MZ header: a Windows executable.
+    const exe = new File([new Uint8Array([0x4d, 0x5a, 0x90, 0x00])], 'x.pdf', {
+      type: 'application/pdf',
+    });
+    expect((await saveDocument('rest-1', exe)).ok).toBe(false);
+  });
+
+  it('rejects HTML, which would be served back and could carry script', async () => {
+    const { saveDocument } = await mod();
+    const html = new TextEncoder().encode('<html><script>alert(1)</script></html>');
+    expect((await saveDocument('rest-1', new File([html], 'a.pdf'))).ok).toBe(false);
+  });
+
+  it('allows a larger file than an image but still caps it', async () => {
+    const { saveDocument, MAX_DOC_BYTES } = await mod();
+    // 3 MB would be rejected as an image but is fine for a scanned policy.
+    const mid = new Uint8Array(3 * 1024 * 1024);
+    mid.set(PDF);
+    expect((await saveDocument('rest-1', new File([mid], 'm.pdf'))).ok).toBe(true);
+
+    const over = new Uint8Array(MAX_DOC_BYTES + 1);
+    over.set(PDF);
+    expect((await saveDocument('rest-1', new File([over], 'o.pdf'))).ok).toBe(false);
+  });
+});

@@ -2,9 +2,9 @@
 
 import { useLanguage } from '@/lib/language-context';
 import { Wordmark } from '@/app/components/Logo';
-import { LayoutDashboard, TrendingUp, DollarSign, Users, CreditCard, Settings, LogOut, X, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, DollarSign, Users, CreditCard, Settings, LogOut, X, BarChart3, ShieldCheck } from 'lucide-react';
 
-type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'users' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'compliance' | 'users' | 'billing' | 'settings';
 
 interface SidebarProps {
   activeTab:    Tab;
@@ -23,6 +23,7 @@ const NAV_MAIN = [
   { id: 'revenue'   as Tab, icon: TrendingUp,      tKey: 'nav.revenue' },
   { id: 'costs'     as Tab, icon: DollarSign,      tKey: 'nav.costs' },
   { id: 'analytics' as Tab, icon: BarChart3,       tKey: 'nav.analytics' },
+  { id: 'compliance' as Tab, icon: ShieldCheck,    tKey: 'nav.compliance' },
 ] as const;
 
 const NAV_MANAGE = [

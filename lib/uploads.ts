@@ -20,6 +20,7 @@ const STORAGE_ROOT = process.env.STORAGE_DIR ?? path.join(process.cwd(), 'storag
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 type ImageKind = 'png' | 'jpeg' | 'webp';
+export type DocKind = ImageKind | 'pdf';
 
 /**
  * Identifies an image from its leading bytes.
@@ -57,6 +58,73 @@ export const IMAGE_MIME: Record<ImageKind, string> = {
   jpeg: 'image/jpeg',
   webp: 'image/webp',
 };
+
+export const DOC_MIME: Record<DocKind, string> = {
+  ...IMAGE_MIME,
+  pdf: 'application/pdf',
+};
+
+/** 10 MB. A scanned licence or policy can legitimately be larger than a logo. */
+export const MAX_DOC_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Identifies a compliance document: the image formats plus PDF.
+ *
+ * A PDF starts with "%PDF-". Checking it means a renamed executable or an
+ * HTML file with a script in it cannot be stored and later served back.
+ */
+function sniffDocument(bytes: Uint8Array): DocKind | null {
+  if (
+    bytes.length > 5 &&
+    bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 &&
+    bytes[3] === 0x46 && bytes[4] === 0x2d
+  ) {
+    return 'pdf';
+  }
+  return sniffImage(bytes);
+}
+
+export type SaveDocResult =
+  | { ok: true; storedPath: string; kind: DocKind; sizeBytes: number }
+  | { ok: false; error: string };
+
+/**
+ * Writes a compliance document. Same guarantees as saveImage: random stored
+ * name, content checked against magic bytes, confined to the owner's folder.
+ */
+export async function saveDocument(
+  ownerId: string,
+  file: File
+): Promise<SaveDocResult> {
+  if (file.size === 0) return { ok: false, error: 'O ficheiro está vazio.' };
+  if (file.size > MAX_DOC_BYTES) {
+    return { ok: false, error: 'O documento não pode exceder 10 MB.' };
+  }
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const kind = sniffDocument(bytes);
+
+  if (!kind) {
+    return { ok: false, error: 'Formato inválido. Usa PDF, PNG, JPG ou WebP.' };
+  }
+
+  if (!/^[a-zA-Z0-9-]{1,64}$/.test(ownerId)) {
+    return { ok: false, error: 'Identificador inválido.' };
+  }
+
+  const dir = path.join(STORAGE_ROOT, 'compliance', ownerId);
+  await mkdir(dir, { recursive: true });
+
+  const filename = `${randomUUID()}.${kind}`;
+  await writeFile(path.join(dir, filename), bytes);
+
+  return {
+    ok: true,
+    storedPath: path.posix.join('compliance', ownerId, filename),
+    kind,
+    sizeBytes: file.size,
+  };
+}
 
 export type SaveResult =
   | { ok: true; storedPath: string; kind: ImageKind }
@@ -127,7 +195,7 @@ export async function deleteStoredImage(storedPath: string | null): Promise<void
 }
 
 /** Extension of a stored path, for choosing a Content-Type when serving. */
-export function kindFromPath(storedPath: string): ImageKind | null {
+export function kindFromPath(storedPath: string): DocKind | null {
   const ext = path.extname(storedPath).slice(1).toLowerCase();
-  return ext === 'png' || ext === 'jpeg' || ext === 'webp' ? ext : null;
+  return ext === 'png' || ext === 'jpeg' || ext === 'webp' || ext === 'pdf' ? ext : null;
 }

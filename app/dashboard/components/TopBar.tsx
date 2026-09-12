@@ -3,13 +3,14 @@
 import { Menu } from 'lucide-react';
 import LanguageSelector from '@/app/components/LanguageSelector';
 
-type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'users' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'compliance' | 'users' | 'billing' | 'settings';
 
 const TAB_LABELS: Record<Tab, string> = {
   dashboard: 'Dashboard',
   revenue:   'Receita',
   costs:     'Custos',
   analytics: 'Análises',
+  compliance: 'Conformidade',
   users:     'Equipa',
   billing:   'Faturação',
   settings:  'Configurações',

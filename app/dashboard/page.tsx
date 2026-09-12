@@ -34,13 +34,14 @@ import CategoryTable    from './components/CategoryTable';
 import QuickEntryPanel  from './components/QuickEntryPanel';
 import StaffPanel       from './components/StaffPanel';
 import BillingPanel     from './components/BillingPanel';
+import CompliancePanel from './components/CompliancePanel';
 import SettingsPanel    from './components/SettingsPanel';
 import TrialBanner      from '@/app/components/TrialBanner';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 type CostType = 'COGS' | 'OPEX';
 type CostTypeOrEmpty = CostType | '';
-type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'users' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'compliance' | 'users' | 'billing' | 'settings';
 
 interface Category {
   id: string;
@@ -477,6 +478,8 @@ function DashboardPageInner() {
           {activeTab === 'billing' && (
             <BillingPanel restaurant={restaurant} />
           )}
+
+          {activeTab === 'compliance' && <CompliancePanel />}
 
           {activeTab === 'settings' && (
             <SettingsPanel
