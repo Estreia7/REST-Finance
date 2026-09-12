@@ -236,7 +236,13 @@ async function main() {
   for (const key of monthKeys) {
     const [year, month] = key.split('-').map(Number);
     const monthEnd = new Date(year, month + 1, 0);
-    if (monthEnd > end) continue;
+
+    // The current month has not finished, so posting nothing would leave it
+    // with revenue and goods but no overheads, showing a profit margin near
+    // 60% instead of ~11%. Post the part of the month that has happened,
+    // dated today, which is also what an owner mid-month would have entered.
+    const isPartial = monthEnd > end;
+    const postingDate = isPartial ? new Date(end) : monthEnd;
 
     const monthRevenue = summaries
       .filter((s) => s.date.getFullYear() === year && s.date.getMonth() === month)
@@ -245,6 +251,8 @@ async function main() {
     // Labour ~30% of revenue, other opex ~26%. Prime Cost then sits near the
     // top of its healthy band and crosses it when food cost rises in 2026,
     // and net margin lands around 13%, inside the healthy 10-15% band.
+    // Revenue is already only the days that happened, so the same rate gives
+    // the right proportion for a partial month.
     const totalOpex = monthRevenue * 0.56;
 
     for (const spec of opexSpec) {
@@ -253,7 +261,7 @@ async function main() {
 
       costs.push({
         restaurantId: rid,
-        date: monthEnd,
+        date: postingDate,
         type: 'OPEX' as const,
         categoryId: catByName.get(spec.name)!.id,
         amount,

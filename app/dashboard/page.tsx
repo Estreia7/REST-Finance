@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { signOut } from 'next-auth/react';
+import { useTheme } from '@/lib/theme-context';
 import {
   getRestaurant, getStaff, addStaff, createDailySummary, createCostEntry,
   getCategories, getDashboardStats, getCurrentUser, getLast7DaysRevenue,
@@ -84,8 +85,14 @@ function DashboardPageInner() {
   const [categoryPerformance, setCategoryPerformance] = useState<Array<{ name: string; monthlySpending: number; contributionPercent: number; type: string }>>([]);
 
   // ── Theme
-  const [theme, setTheme]                     = useState<'light' | 'dark'>('dark');
-  const [pendingTheme, setPendingTheme]         = useState<'light' | 'dark'>('dark');
+  const { resolvedTheme: theme, setTheme } = useTheme();
+  const [pendingTheme, setPendingTheme]         = useState<'light' | 'dark'>('light');
+
+  // The settings toggle previews a choice before it is saved, so it starts
+  // from whatever theme is actually applied rather than a fixed default.
+  useEffect(() => {
+    setPendingTheme(theme);
+  }, [theme]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // ── Forms
@@ -168,12 +175,7 @@ function DashboardPageInner() {
     if (upgrade === 'canceled') toast.info('Processo de upgrade cancelado.');
   }, [searchParams]);
 
-  // ── Apply theme ──────────────────────────────────────────────────────────
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === 'dark') root.classList.add('dark'); else root.classList.remove('dark');
-    root.style.colorScheme = theme;
-  }, [theme]);
+  // Theme is applied by ThemeProvider; the dashboard only reads it.
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleLogout = async () => {
