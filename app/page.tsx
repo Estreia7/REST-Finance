@@ -19,6 +19,7 @@ import LanguageSelector from './components/LanguageSelector';
 import Reveal from './components/landing/Reveal';
 import MetricPanel from './components/landing/MetricPanel';
 import FaqList from './components/landing/FaqList';
+import Photo from './components/landing/Photo';
 import { useLanguage } from '@/lib/language-context';
 
 function LandingPageInner() {
@@ -111,6 +112,20 @@ function LandingPageInner() {
               </TiltCard>
             </div>
           </div>
+
+          {/* The room the product is for. A wide band under the split rather
+              than a backdrop behind the copy: the metric panel is the proof
+              and must not lose contrast to a photograph. */}
+          <Reveal delay={120}>
+            <Photo
+              src="/landing/hero-dining-room.webp"
+              alt={t('landing.photos.hero')}
+              ratio="aspect-[2/1] md:aspect-[21/9]"
+              sizes="(min-width: 1280px) 1280px, 100vw"
+              priority
+              className="mt-16 md:mt-20"
+            />
+          </Reveal>
         </div>
       </section>
 
@@ -121,6 +136,15 @@ function LandingPageInner() {
             <div className="lg:col-span-5">
               <Reveal>
                 <h2 className="section-title">{t('landing.problem.title')}</h2>
+              </Reveal>
+              {/* The drawer of invoices this section describes. */}
+              <Reveal delay={140}>
+                <Photo
+                  src="/landing/invoices-counter.webp"
+                  alt={t('landing.photos.invoices')}
+                  sizes="(min-width: 1024px) 40vw, 100vw"
+                  className="mt-8 hidden lg:block"
+                />
               </Reveal>
             </div>
             <div className="lg:col-span-7">
@@ -172,10 +196,24 @@ function LandingPageInner() {
       {/* METRICS: wide rows, each with its healthy range. */}
       <section id="metrics" className="section-y border-b border-border bg-surface">
         <div className="mx-auto max-w-7xl px-6">
-          <Reveal>
-            <h2 className="section-title">{t('landing.metrics.title')}</h2>
-            <p className="section-subtitle mt-4">{t('landing.metrics.body')}</p>
-          </Reveal>
+          <div className="grid lg:grid-cols-12 gap-10 lg:gap-16 items-end">
+            <div className="lg:col-span-7">
+              <Reveal>
+                <h2 className="section-title">{t('landing.metrics.title')}</h2>
+                <p className="section-subtitle mt-4">{t('landing.metrics.body')}</p>
+              </Reveal>
+            </div>
+            {/* Food cost as it actually arrives: crates at the back door. */}
+            <div className="lg:col-span-5">
+              <Reveal delay={120}>
+                <Photo
+                  src="/landing/supplier-delivery.webp"
+                  alt={t('landing.photos.delivery')}
+                  sizes="(min-width: 1024px) 40vw, 100vw"
+                />
+              </Reveal>
+            </div>
+          </div>
 
           <dl className="mt-12 divide-y divide-border border-y border-border">
             {metrics.map((key, i) => (
@@ -218,6 +256,17 @@ function LandingPageInner() {
               outputDetail: t('landing.how.flowOutputDetail'),
             }}
           />
+
+          {/* Where the three steps end up: the nightly close, in minutes. */}
+          <Reveal delay={100}>
+            <Photo
+              src="/landing/owner-closing-books.webp"
+              alt={t('landing.photos.owner')}
+              ratio="aspect-[2/1] md:aspect-[3/1]"
+              sizes="(min-width: 1280px) 1280px, 100vw"
+              className="mt-12"
+            />
+          </Reveal>
 
           <ol className="mt-12 grid md:grid-cols-3 gap-8 md:gap-12">
             {steps.map((key, i) => (
@@ -275,19 +324,33 @@ function LandingPageInner() {
       {/* FINAL CTA */}
       <section className="section-y">
         <div className="mx-auto max-w-7xl px-6">
+          {/* Split rather than a centred card: the page ends on craft and
+              control, with the copy on solid card so the CTA keeps full
+              contrast instead of sitting over a photograph. */}
           <Reveal>
-            <div className="rounded-2xl border border-border bg-card px-8 py-14 md:px-14 text-center">
-              <h2 className="section-title">{t('landing.finalCta.title')}</h2>
-              <p className="mt-4 text-lg text-muted-foreground max-w-[48ch] mx-auto">
-                {t('landing.finalCta.body')}
-              </p>
-              <button onClick={() => openModal('register')} className="cta-button mt-8 group">
-                {t('landing.finalCta.cta')}
-                <ArrowRight
-                  className="w-4 h-4 transition-transform group-hover:translate-x-0.5"
-                  aria-hidden="true"
-                />
-              </button>
+            <div className="grid md:grid-cols-2 rounded-2xl border border-border bg-card overflow-hidden">
+              <Photo
+                src="/landing/kitchen-mise-en-place.webp"
+                alt={t('landing.photos.kitchen')}
+                ratio="aspect-[3/2] md:aspect-auto md:h-full"
+                sizes="(min-width: 768px) 50vw, 100vw"
+                className="rounded-none border-0 md:min-h-[22rem]"
+              />
+              <div className="px-8 py-14 md:px-12 md:py-16 flex flex-col justify-center">
+                <h2 className="section-title">{t('landing.finalCta.title')}</h2>
+                <p className="mt-4 text-lg text-muted-foreground max-w-[44ch]">
+                  {t('landing.finalCta.body')}
+                </p>
+                <div>
+                  <button onClick={() => openModal('register')} className="cta-button mt-8 group">
+                    {t('landing.finalCta.cta')}
+                    <ArrowRight
+                      className="w-4 h-4 transition-transform group-hover:translate-x-0.5"
+                      aria-hidden="true"
+                    />
+                  </button>
+                </div>
+              </div>
             </div>
           </Reveal>
         </div>
