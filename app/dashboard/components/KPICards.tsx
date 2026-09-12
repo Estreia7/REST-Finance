@@ -4,6 +4,10 @@ import { TrendingUp, TrendingDown, DollarSign, BarChart3, Target, Activity, Aler
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts';
 import { useChartTheme } from '@/lib/chart-theme';
 import { formatMoney } from '@/lib/format';
+import InfoHint from '@/app/components/InfoHint';
+import TooltipHint from '@/app/components/Tooltip';
+import { glossaryText } from '@/lib/glossary';
+import { useLanguage } from '@/lib/language-context';
 
 interface KPICardsProps {
   stats: {
@@ -29,15 +33,23 @@ interface KPICardsProps {
   last7DaysData: Array<{ date: string; revenue: number }>;
 }
 
+/**
+ * A bare green or red percentage says nothing about what it is measured
+ * against, so the badge carries its own explanation rather than leaving the
+ * reader to guess the comparison.
+ */
 function TrendBadge({ value, inverted = false }: { value: number; inverted?: boolean }) {
+  const { language } = useLanguage();
   const positive = inverted ? value < 0 : value >= 0;
   return (
-    <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full ${
-      positive ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'
-    }`}>
-      {positive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-      {Math.abs(value).toFixed(1)}%
-    </span>
+    <TooltipHint text={glossaryText('trendBadge', language)} underline={false}>
+      <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full ${
+        positive ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'
+      }`}>
+        {positive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+        {Math.abs(value).toFixed(1)}%
+      </span>
+    </TooltipHint>
   );
 }
 
@@ -117,12 +129,23 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
         <div className="mt-3 text-3xl font-black tabular-nums text-foreground">
           €{advancedStats.totalRevenue.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
         </div>
-        <div className="text-xs text-muted-foreground mt-1">Receita este mês</div>
-        {last7DaysData.length > 0 && <Sparkline data={last7DaysData} />}
+        <div className="text-xs text-muted-foreground mt-1">
+          Receita este mês<InfoHint term="revenue" />
+        </div>
+        {/* An unlabelled line of peaks reads as decoration until something
+            says which seven days it covers. */}
+        {last7DaysData.length > 0 && (
+          <>
+            <Sparkline data={last7DaysData} />
+            <div className="mt-1 text-[10px] text-muted-foreground">
+              Últimos 7 dias<InfoHint term="sparkline" />
+            </div>
+          </>
+        )}
         {advancedStats.monthlyGoal > 0 && (
           <div className="mt-3">
             <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-              <span>Meta mensal</span>
+              <span>Meta mensal<InfoHint term="target" /></span>
               <span>{goalPercent.toFixed(0)}%</span>
             </div>
             <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -160,7 +183,9 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
         <div className="mt-3 text-3xl font-black tabular-nums text-foreground">
           {advancedStats.primeCostPercent.toFixed(1)}%
         </div>
-        <div className="text-xs text-muted-foreground mt-1">Prime Cost</div>
+        <div className="text-xs text-muted-foreground mt-1">
+          Prime Cost<InfoHint term="primeCost" />
+        </div>
         {primeCostIncomplete ? (
           <div className="mt-4 flex items-start gap-1.5 text-[10px] leading-relaxed text-warning/90">
             <AlertTriangle className="w-3 h-3 shrink-0 mt-px" aria-hidden="true" />
@@ -200,7 +225,9 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
             <div className="text-3xl font-black tabular-nums text-foreground">
               {formatMoney(Math.abs(advancedStats.netIncome))}
             </div>
-            <div className="text-xs text-muted-foreground mt-1">Lucro Líquido</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              Lucro Líquido<InfoHint term="netIncome" />
+            </div>
           </div>
           {/* Circular gauge */}
           <svg width="68" height="68" className="shrink-0 ml-auto" role="img" aria-label={`Lucro líquido: ${netPct.toFixed(0)}%`}>
@@ -233,16 +260,18 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
         <div className="mt-3 text-3xl font-black tabular-nums text-foreground">
           {advancedStats.cogsPercent.toFixed(1)}%
         </div>
-        <div className="text-xs text-muted-foreground mt-1">COGS %</div>
+        <div className="text-xs text-muted-foreground mt-1">
+          COGS %<InfoHint term="cogsPct" />
+        </div>
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="bg-muted rounded-lg p-2.5">
-            <div className="text-[10px] text-muted-foreground">Receita</div>
+            <div className="text-[10px] text-muted-foreground">Receita<InfoHint term="revenue" /></div>
             <div className="text-sm font-bold text-foreground mt-0.5">
               {formatMoney(stats.revenue)}
             </div>
           </div>
           <div className="bg-muted rounded-lg p-2.5">
-            <div className="text-[10px] text-muted-foreground">Custos</div>
+            <div className="text-[10px] text-muted-foreground">Custos<InfoHint term="costs" /></div>
             <div className="text-sm font-bold text-foreground mt-0.5">
               {formatMoney(stats.costs)}
             </div>

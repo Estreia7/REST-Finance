@@ -49,7 +49,8 @@ export default function ChannelSplitChart({ stats }: ChannelSplitChartProps) {
 
   return (
     <div className="card-glass p-6">
-      <h3 className="font-bold text-foreground mb-4">{t('charts.titleSalesChannel')}</h3>
+      <h3 className="font-bold text-foreground mb-1">{t('charts.titleSalesChannel')}</h3>
+      <p className="text-xs text-muted-foreground mb-4">{t('charts.subSalesChannel')}</p>
       <ResponsiveContainer width="100%" height={200}>
         <PieChart>
           <Pie

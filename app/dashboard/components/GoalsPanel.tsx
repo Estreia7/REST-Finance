@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Target, Loader2, Save } from 'lucide-react';
 import { updateRevenueTarget } from '../actions';
+import InfoHint from '@/app/components/InfoHint';
 
 interface GoalsPanelProps {
   restaurant: any;
@@ -73,7 +74,7 @@ export default function GoalsPanel({ restaurant, stats, onUpdate }: GoalsPanelPr
       {targetValue > 0 && (
         <div className="card-glass p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-foreground">Progresso</h3>
+            <h3 className="text-lg font-bold text-foreground">Progresso<InfoHint term="progress" /></h3>
             <span className={`text-2xl font-black ${progress >= 100 ? 'text-green-400' : progress >= 70 ? 'gradient-text' : 'text-amber-400'}`}>
               {progress.toFixed(0)}%
             </span>
@@ -89,19 +90,27 @@ export default function GoalsPanel({ restaurant, stats, onUpdate }: GoalsPanelPr
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-muted rounded-xl p-4">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Receita Atual</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                Receita Atual<InfoHint term="revenue" />
+              </div>
               <div className="text-lg font-bold text-foreground">{fmt(stats.revenue)}</div>
             </div>
             <div className="bg-muted rounded-xl p-4">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Meta</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                Meta<InfoHint term="target" />
+              </div>
               <div className="text-lg font-bold text-foreground">{fmt(targetValue)}</div>
             </div>
             <div className="bg-muted rounded-xl p-4">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Falta</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                Falta<InfoHint term="remaining" />
+              </div>
               <div className="text-lg font-bold text-foreground">{fmt(Math.max(0, targetValue - stats.revenue))}</div>
             </div>
             <div className="bg-muted rounded-xl p-4">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Projeção Mensal</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                Projeção Mensal<InfoHint term="projectedMonthly" />
+              </div>
               <div className={`text-lg font-bold ${projectedMonthly >= targetValue ? 'text-green-400' : 'text-amber-400'}`}>
                 {fmt(projectedMonthly)}
               </div>
@@ -112,11 +121,15 @@ export default function GoalsPanel({ restaurant, stats, onUpdate }: GoalsPanelPr
           <div className="mt-4 p-4 rounded-xl bg-surface border border-border-subtle">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Média Diária</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                  Média Diária<InfoHint term="dailyPace" />
+                </div>
                 <div className="text-sm font-bold text-foreground">{fmt(dailyPace)}</div>
               </div>
               <div>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Necessário/Dia</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                  Necessário/Dia<InfoHint term="dailyNeeded" />
+                </div>
                 <div className={`text-sm font-bold ${dailyNeeded <= dailyPace ? 'text-green-400' : 'text-amber-400'}`}>
                   {dailyNeeded > 0 ? fmt(dailyNeeded) : '—'}
                 </div>

@@ -6,6 +6,8 @@ import { getAnnualPnL } from '../pnl-actions';
 import { formatMoney, formatPercent } from '@/lib/format';
 import PnLDrilldown, { type DrillTarget } from './PnLDrilldown';
 import { rate, bandLabel, type PtBenchmarkKey } from '@/lib/benchmarks';
+import InfoHint from '@/app/components/InfoHint';
+import { type GlossaryKey } from '@/lib/glossary';
 
 type Line = {
   label: string;
@@ -196,6 +198,7 @@ export default function AnnualPnL() {
     indent = false,
     benchmark,
     higherIsBetter = false,
+    term,
   }: {
     line: Line;
     section: Section;
@@ -205,6 +208,12 @@ export default function AnnualPnL() {
     /** Rates the share against its band, for the subtotals worth judging. */
     benchmark?: PtBenchmarkKey;
     higherIsBetter?: boolean;
+    /**
+     * Explains the line's name. Only the band totals carry one: the detail
+     * rows underneath are the owner's own category names, which need no
+     * glossary, and an icon on every row would bury the figures.
+     */
+    term?: GlossaryKey;
   }) => {
     const style = SECTION[section];
 
@@ -232,6 +241,7 @@ export default function AnnualPnL() {
             />
           )}
           {line.label}
+          {term && <InfoHint term={term} />}
 
           {benchmark && (
             <span
@@ -349,22 +359,22 @@ export default function AnnualPnL() {
                   scope="col"
                   className="sticky right-0 z-10 w-[76px] bg-card px-4 py-2 text-right font-medium border-l border-border-subtle"
                 >
-                  % rec.
+                  % rec.<InfoHint term="pctOfRevenue" />
                 </th>
               </tr>
             </thead>
 
             <tbody>
-              <Row line={data.revenue} section="revenue" heading />
-              <Row line={data.dineIn} section="revenue" indent />
-              <Row line={data.takeaway} section="revenue" indent />
+              <Row line={data.revenue} section="revenue" heading term="revenue" />
+              <Row line={data.dineIn} section="revenue" indent term="dineIn" />
+              <Row line={data.takeaway} section="revenue" indent term="takeaway" />
 
-              <Row line={data.cogs} section="cogs" heading />
+              <Row line={data.cogs} section="cogs" heading term="cogs" />
               {data.cogsLines.map((l) => (
                 <Row key={l.label} line={l} section="cogs" indent />
               ))}
 
-              <Row line={data.labour} section="labour" heading />
+              <Row line={data.labour} section="labour" heading term="labour" />
               {data.labourLines.map((l) => (
                 <Row key={l.label} line={l} section="labour" indent />
               ))}
@@ -372,9 +382,9 @@ export default function AnnualPnL() {
               {/* USAR's headline subtotal: cost of sales plus labour, before
                   anything else. There is deliberately no gross-profit line —
                   a margin taken before labour does not predict much. */}
-              <Row line={data.primeCost} section="result" heading benchmark="primeCostPct" />
+              <Row line={data.primeCost} section="result" heading benchmark="primeCostPct" term="primeCost" />
 
-              <Row line={data.opex} section="opex" heading />
+              <Row line={data.opex} section="opex" heading term="opex" />
               {data.opexLines.map((l) => (
                 <Row key={l.label} line={l} section="opex" indent />
               ))}
@@ -385,11 +395,12 @@ export default function AnnualPnL() {
                 heading
                 benchmark="controllableIncomePct"
                 higherIsBetter
+                term="controllableIncome"
               />
 
               {/* Below the controllable line, because the lease is not
                   something this month's decisions can change. */}
-              <Row line={data.occupancy} section="occupancy" heading />
+              <Row line={data.occupancy} section="occupancy" heading term="occupancy" />
               {data.occupancyLines.map((l) => (
                 <Row key={l.label} line={l} section="occupancy" indent />
               ))}
@@ -400,6 +411,7 @@ export default function AnnualPnL() {
                 heading
                 benchmark="netIncomePct"
                 higherIsBetter
+                term="netIncome"
               />
             </tbody>
           </table>

@@ -49,7 +49,8 @@ export default function RevenueChart({ data }: { data: MonthlyItem[] }) {
 
   return (
     <div className="card-glass p-6">
-      <h3 className="font-bold text-foreground mb-6">{t('charts.titleRevenueByChannel')}</h3>
+      <h3 className="font-bold text-foreground mb-1">{t('charts.titleRevenueByChannel')}</h3>
+      <p className="text-xs text-muted-foreground mb-5">{t('charts.subRevenueByChannel')}</p>
       <ResponsiveContainer width="100%" height={240}>
         <AreaChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: 10 }}>
           <defs>

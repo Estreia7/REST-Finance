@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { FileText, Download, Loader2 } from 'lucide-react';
+import InfoHint from '@/app/components/InfoHint';
 
 const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -33,11 +34,16 @@ export default function MonthlyReportPanel() {
     <div className="card-glass p-6">
       <div className="flex items-center gap-2 mb-5">
         <FileText className="w-5 h-5 text-primary" />
-        <h2 className="text-lg font-bold text-foreground">Relatório Mensal PDF</h2>
+        <h2 className="text-lg font-bold text-foreground">
+          Relatório Mensal PDF<InfoHint term="monthlyReport" />
+        </h2>
       </div>
 
+      {/* "P&L e KPIs" is the jargon this whole pass exists to remove. */}
       <p className="text-sm text-muted-foreground mb-6">
-        Gere um relatório PDF completo com P&L, receitas, custos e KPIs do mês selecionado.
+        Um PDF com as contas fechadas do mês escolhido: o que vendeu, o que gastou em
+        mercadorias e despesas, e o que sobrou no fim. Pronto a enviar ao contabilista
+        ou ao banco.
       </p>
 
       <div className="flex items-end gap-4 mb-6">

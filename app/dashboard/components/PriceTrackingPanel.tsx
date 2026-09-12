@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { getPriceAlerts, getProductPriceHistory } from '../price-actions';
+import InfoHint from '@/app/components/InfoHint';
 
 interface PriceAlert {
   productName: string;
@@ -64,13 +65,16 @@ export default function PriceTrackingPanel() {
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">
           <AlertTriangle className="w-5 h-5 text-amber-400" />
-          <h3 className="font-bold text-foreground">Alertas de Preço</h3>
+          <h3 className="font-bold text-foreground">Alertas de Preço<InfoHint term="priceAlert" /></h3>
           {alerts.length > 0 && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-medium">
               {alerts.length}
             </span>
           )}
         </div>
+        {/* A bare "+5%" dropdown says nothing about what it filters. */}
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span>Avisar a partir de<InfoHint term="priceThreshold" /></span>
         <select
           value={threshold}
           onChange={(e) => setThreshold(Number(e.target.value))}
@@ -81,6 +85,7 @@ export default function PriceTrackingPanel() {
           <option value={15}>+15%</option>
           <option value={20}>+20%</option>
         </select>
+        </label>
       </div>
 
       {loading ? (
@@ -138,7 +143,12 @@ export default function PriceTrackingPanel() {
                       <div className="text-xs text-muted-foreground text-center py-2">Sem histórico disponível.</div>
                     ) : (
                       <div className="space-y-1">
-                        <div className="text-xs font-medium text-muted-foreground mb-2">Histórico de Preços</div>
+                        <div className="flex items-center justify-between text-xs font-medium text-muted-foreground mb-2">
+                          <span>Histórico de Preços</span>
+                          <span className="font-normal">
+                            Preço unitário × quantidade<InfoHint term="unitPrice" />
+                          </span>
+                        </div>
                         {priceHistory.map((point, j) => (
                           <div key={j} className="flex items-center justify-between text-xs">
                             <span className="text-muted-foreground">

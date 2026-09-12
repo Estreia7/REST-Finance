@@ -6,6 +6,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { getTicketAnalysis } from '../actions';
 import { useChartTheme, tooltipProps } from '@/lib/chart-theme';
 import { useLanguage } from '@/lib/language-context';
+import InfoHint from '@/app/components/InfoHint';
 
 interface TicketData {
   daily: Array<{
@@ -73,26 +74,39 @@ export default function TicketAnalysisPanel() {
       {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="card-glass p-4 text-center">
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Ticket Médio</div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+            Ticket Médio<InfoHint term="avgTicket" />
+          </div>
           <div className="text-xl font-bold gradient-text">{fmt(data.avgTicket)}</div>
         </div>
         <div className="card-glass p-4 text-center">
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Médio Local</div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+            Médio Local<InfoHint term="avgTicketDineIn" />
+          </div>
           <div className="text-xl font-bold text-foreground">{fmt(data.avgDineIn)}</div>
         </div>
         <div className="card-glass p-4 text-center">
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Médio Takeaway</div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+            Médio Takeaway<InfoHint term="avgTicketTakeaway" />
+          </div>
           <div className="text-xl font-bold text-foreground">{fmt(data.avgTakeaway)}</div>
         </div>
         <div className="card-glass p-4 text-center">
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Total Tickets</div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+            Total Tickets<InfoHint term="totalTickets" />
+          </div>
           <div className="text-xl font-bold text-foreground">{data.totalTickets}</div>
         </div>
       </div>
 
       {/* Chart */}
       <div className="card-glass p-6">
-        <h3 className="text-lg font-bold text-foreground mb-6">{t('charts.titleAvgTicket')}</h3>
+        <h3 className="text-lg font-bold text-foreground mb-1">
+          {t('charts.titleAvgTicket')}<InfoHint term="avgTicket" />
+        </h3>
+        {/* A chart of three near-identical lines needs to say what separates
+            them before the legend colours mean anything. */}
+        <p className="text-xs text-muted-foreground mb-5">{t('charts.subAvgTicket')}</p>
         <div className="h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>

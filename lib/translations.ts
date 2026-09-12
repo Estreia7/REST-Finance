@@ -147,6 +147,16 @@ export const translations = {
       titleMonthlyComparison: 'Comparação mensal (6 meses)',
       titleMonthlyDetail: 'Detalhe mensal',
       titleAvgTicket: 'Evolução do ticket médio',
+      // One line under each chart title saying what the reader is looking at.
+      // A chart of three near-identical lines means nothing until something
+      // says what separates them.
+      subAvgTicket:
+        'Quanto gastou cada cliente, dia a dia. A linha grossa é a média de todos; as finas separam quem comeu cá dentro de quem levou para fora.',
+      subMonthlyComparison:
+        'Os últimos 6 meses lado a lado. Para cada mês: o que vendeu, o que gastou, e o que sobrou.',
+      subMonthlyDetail: 'Os mesmos meses em números, para ler linha a linha.',
+      subRevenueByChannel: 'Quanto veio de quem comeu cá dentro e quanto veio do take-away, mês a mês.',
+      subSalesChannel: 'A repartição das vendas deste mês entre sala e take-away.',
     },
     // Dashboard navigation
     nav: {
@@ -295,6 +305,15 @@ export const translations = {
         cta: 'Pedir acesso',
         ctaSecondary: 'Já tenho conta',
         note: 'Gratuito durante a beta. Sem cartão.',
+      },
+      // Texto alternativo das fotografias. Descreve o que se vê, para quem
+      // usa leitor de ecrã — não repete a mensagem da secção.
+      photos: {
+        hero: 'A sala de um pequeno restaurante na hora antes do serviço, com a luz da tarde a entrar pelas janelas.',
+        invoices: 'Faturas de fornecedores espalhadas num balcão de aço, com uma caneta, uma calculadora e uma chávena de café.',
+        owner: 'O dono de um restaurante, de avental, a fechar as contas num livro de registos à luz de uma lâmpada de mesa.',
+        delivery: 'Caixas de fruta e legumes acabadas de entregar à porta de serviço de um restaurante.',
+        kitchen: 'Uma bancada de cozinha profissional com recipientes de preparação alinhados e uma faca sobre uma tábua de madeira.',
       },
       problem: {
         title: 'O mês fecha e a margem é uma surpresa',
@@ -504,6 +523,13 @@ export const translations = {
       titleMonthlyComparison: 'Monthly comparison (6 months)',
       titleMonthlyDetail: 'Monthly detail',
       titleAvgTicket: 'Average ticket over time',
+      subAvgTicket:
+        'What each customer spent, day by day. The thick line is the average across everyone; the thin ones separate those who ate in from those who took away.',
+      subMonthlyComparison:
+        'The last 6 months side by side. For each month: what you sold, what you spent, and what was left.',
+      subMonthlyDetail: 'The same months as figures, to read line by line.',
+      subRevenueByChannel: 'How much came from eating in and how much from takeaway, month by month.',
+      subSalesChannel: "This month's sales split between the dining room and takeaway.",
     },
     // Dashboard navigation
     nav: {
@@ -652,6 +678,15 @@ export const translations = {
         cta: 'Request access',
         ctaSecondary: 'Sign in',
         note: 'Free during the beta. No card required.',
+      },
+      // Alt text for the photography. Describes what is shown, for screen
+      // reader users — it does not restate the section's message.
+      photos: {
+        hero: 'The dining room of a small restaurant in the quiet hour before service, afternoon light coming through the windows.',
+        invoices: 'Supplier invoices spread across a steel counter with a pen, a calculator and a coffee cup.',
+        owner: 'A restaurant owner in an apron closing the books in a paper ledger by the light of a desk lamp.',
+        delivery: 'Crates of fruit and vegetables just delivered at a restaurant’s back door.',
+        kitchen: 'A professional kitchen bench with prep containers lined up and a knife resting on a wooden board.',
       },
       problem: {
         title: 'The month closes and the margin is a surprise',
