@@ -32,3 +32,8 @@ coverage
 
 # local machine settings
 .claude/settings.local.json
+
+# local debugging scripts
+*.mjs
+!next.config.mjs
+!postcss.config.mjs
