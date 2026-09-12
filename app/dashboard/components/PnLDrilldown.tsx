@@ -20,6 +20,7 @@ export type DrillTarget = {
   month: number;
   kind: 'revenue' | 'cogs' | 'opex';
   categoryId?: string;
+  channel?: 'total' | 'dineIn' | 'takeaway';
   /** What was clicked, so the dialog can name it. */
   label: string;
   expected: number;
@@ -61,6 +62,7 @@ export default function PnLDrilldown({
       month: target.month,
       kind: target.kind,
       categoryId: target.categoryId,
+      channel: target.channel,
     }).then((result) => {
       if ('data' in result && result.data) setEntries(result.data.entries as Entry[]);
       else if ('error' in result) setError(result.error);

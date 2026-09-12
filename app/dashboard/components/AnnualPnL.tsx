@@ -11,7 +11,11 @@ type Line = {
   months: number[];
   total: number;
   percentOfRevenue: number | null;
-  drill: { kind: 'revenue' | 'cogs' | 'opex'; categoryId?: string } | null;
+  drill: {
+    kind: 'revenue' | 'cogs' | 'opex';
+    categoryId?: string;
+    channel?: 'total' | 'dineIn' | 'takeaway';
+  } | null;
 };
 
 type Annual = {
@@ -65,6 +69,7 @@ export default function AnnualPnL() {
       month: monthIndex === null ? 0 : monthIndex + 1,
       kind: line.drill.kind,
       categoryId: line.drill.categoryId,
+      channel: line.drill.channel,
       label: line.label,
       expected: amount,
     });
@@ -125,7 +130,7 @@ export default function AnnualPnL() {
       </th>
 
       {MONTH_ABBR.map((_, i) => (
-        <td key={i} className="px-3 py-2 text-right">
+        <td key={i} className="px-2.5 py-2 text-right">
           <Cell line={line} monthIndex={i} bold={bold} />
         </td>
       ))}
@@ -162,9 +167,11 @@ export default function AnnualPnL() {
   return (
     <>
       <div className="card-glass p-6">
-        <div className="flex items-center justify-between gap-4 mb-5">
-          <div>
-            <h3 className="font-bold text-foreground">Demonstração de resultados {year}</h3>
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
+          <div className="min-w-0">
+            <h3 className="font-bold text-foreground">
+              Demonstração de resultados {year}
+            </h3>
             <p className="mt-0.5 text-sm text-muted-foreground">
               Clica num valor para ver os lançamentos que o compõem.
             </p>
@@ -173,7 +180,7 @@ export default function AnnualPnL() {
           <select
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
-            className="input-field !py-2 !text-sm w-[110px] shrink-0"
+            className="input-field !py-2 !text-sm !w-[110px] shrink-0"
             aria-label="Ano"
           >
             {years.map((y) => (
@@ -184,7 +191,7 @@ export default function AnnualPnL() {
 
         {/* The table is wider than a phone; it scrolls rather than the page. */}
         <div className="overflow-x-auto -mx-6 px-6">
-          <table className="w-full text-sm border-collapse">
+          <table className="min-w-full w-max text-sm border-collapse">
             <caption className="sr-only">
               Demonstração de resultados de {year}, por mês, com percentagem da receita
             </caption>
@@ -194,7 +201,7 @@ export default function AnnualPnL() {
                   &nbsp;
                 </th>
                 {MONTH_ABBR.map((m) => (
-                  <th key={m} scope="col" className="px-3 py-2 text-right font-medium">{m}</th>
+                  <th key={m} scope="col" className="px-2.5 py-2 text-right font-medium">{m}</th>
                 ))}
                 <th scope="col" className="px-4 py-2 text-right font-medium border-l border-border-subtle">
                   Total

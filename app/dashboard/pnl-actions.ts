@@ -14,6 +14,9 @@ import { toClientError } from '@/lib/errors';
  * it was mistyped.
  */
 
+/** Which part of a daily summary a revenue line refers to. */
+export type RevenueChannel = 'total' | 'dineIn' | 'takeaway';
+
 export type PnLLine = {
   label: string;
   /** Twelve months, January first. Missing months are 0, not absent. */
@@ -22,7 +25,11 @@ export type PnLLine = {
   /** Share of annual revenue. Null for the revenue line itself. */
   percentOfRevenue: number | null;
   /** Identifies what to fetch when the figure is clicked. */
-  drill: { kind: 'revenue' | 'cogs' | 'opex'; categoryId?: string } | null;
+  drill: {
+    kind: 'revenue' | 'cogs' | 'opex';
+    categoryId?: string;
+    channel?: RevenueChannel;
+  } | null;
 };
 
 function emptyMonths(): number[] {
@@ -162,9 +169,9 @@ export async function getAnnualPnL(year: number) {
       success: true,
       data: {
         year,
-        revenue: line('Receita total', revenue, { kind: 'revenue' }, false),
-        dineIn: line('Local', dineIn, { kind: 'revenue' }),
-        takeaway: line('Take-away', takeaway, { kind: 'revenue' }),
+        revenue: line('Receita total', revenue, { kind: 'revenue', channel: 'total' }, false),
+        dineIn: line('Local', dineIn, { kind: 'revenue', channel: 'dineIn' }),
+        takeaway: line('Take-away', takeaway, { kind: 'revenue', channel: 'takeaway' }),
         cogs: line('Mercadorias', cogsTotal, { kind: 'cogs' }),
         cogsLines: categoryLines('COGS'),
         grossProfit: line('Lucro bruto', grossProfit, null),
@@ -190,12 +197,13 @@ export async function getPnLEntries(params: {
   month: number;
   kind: 'revenue' | 'cogs' | 'opex';
   categoryId?: string;
+  channel?: RevenueChannel;
 }) {
   try {
     const member = await requireMember();
     if (isAuthError(member)) return { error: member.error };
 
-    const { year, month, kind, categoryId } = params;
+    const { year, month, kind, categoryId, channel = 'total' } = params;
 
     if (!Number.isInteger(year) || year < 2000 || year > 2100) {
       return { error: 'Ano inválido' };
@@ -232,16 +240,37 @@ export async function getPnLEntries(params: {
         success: true,
         data: {
           kind: 'revenue' as const,
-          entries: rows.map((r) => ({
-            id: r.id,
-            date: r.date,
-            amount: Number(r.revenueTotal),
-            detail: `Local ${Number(r.dineInRevenue).toFixed(2)} · Take-away ${Number(
-              r.takeawayRevenue
-            ).toFixed(2)}`,
-            tickets: r.dineInTickets + r.takeawayTickets,
-            notes: r.notes,
-          })),
+          entries: rows
+            .map((r) => {
+              // The amount has to match the line that was clicked, or the
+              // dialog reconciles against the wrong figure.
+              const amount =
+                channel === 'dineIn'
+                  ? Number(r.dineInRevenue)
+                  : channel === 'takeaway'
+                  ? Number(r.takeawayRevenue)
+                  : Number(r.revenueTotal);
+
+              const tickets =
+                channel === 'dineIn'
+                  ? r.dineInTickets
+                  : channel === 'takeaway'
+                  ? r.takeawayTickets
+                  : r.dineInTickets + r.takeawayTickets;
+
+              const detail =
+                channel === 'total'
+                  ? `Local ${Number(r.dineInRevenue).toFixed(2)} · Take-away ${Number(
+                      r.takeawayRevenue
+                    ).toFixed(2)}`
+                  : channel === 'dineIn'
+                  ? 'Receita de sala'
+                  : 'Receita take-away';
+
+              return { id: r.id, date: r.date, amount, detail, tickets, notes: r.notes };
+            })
+            // A day with no takeaway is noise in a takeaway breakdown.
+            .filter((e) => e.amount !== 0),
         },
       };
     }
