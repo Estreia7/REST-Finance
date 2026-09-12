@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { getAnnualPnL } from '../pnl-actions';
 import { formatMoney, formatPercent } from '@/lib/format';
 import PnLDrilldown, { type DrillTarget } from './PnLDrilldown';
+import { rate, bandLabel, type PtBenchmarkKey } from '@/lib/benchmarks';
 
 type Line = {
   label: string;
@@ -25,10 +26,14 @@ type Annual = {
   takeaway: Line;
   cogs: Line;
   cogsLines: Line[];
-  grossProfit: Line;
+  labour: Line;
+  labourLines: Line[];
+  primeCost: Line;
   opex: Line;
   opexLines: Line[];
-  labour: Line;
+  controllableIncome: Line;
+  occupancy: Line;
+  occupancyLines: Line[];
   netIncome: Line;
 };
 
@@ -43,7 +48,7 @@ const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set
  * pale: the figures are the content, and a band that competes with them has
  * gone too far.
  */
-type Section = 'revenue' | 'cogs' | 'opex' | 'result';
+type Section = 'revenue' | 'cogs' | 'labour' | 'opex' | 'occupancy' | 'result';
 
 const SECTION: Record<
   Section,
@@ -65,12 +70,26 @@ const SECTION: Record<
     accent: 'bg-pnl-cogs',
     rule: 'border-pnl-cogs/25',
   },
+  labour: {
+    head: 'bg-pnl-labour-bg text-pnl-labour',
+    body: 'bg-pnl-labour-bg/40',
+    bodySolid: 'bg-[hsl(var(--pnl-labour-bg))]',
+    accent: 'bg-pnl-labour',
+    rule: 'border-pnl-labour/25',
+  },
   opex: {
     head: 'bg-pnl-opex-bg text-pnl-opex',
     body: 'bg-pnl-opex-bg/40',
     bodySolid: 'bg-[hsl(var(--pnl-opex-bg))]',
     accent: 'bg-pnl-opex',
     rule: 'border-pnl-opex/25',
+  },
+  occupancy: {
+    head: 'bg-pnl-occupancy-bg text-pnl-occupancy',
+    body: 'bg-pnl-occupancy-bg/40',
+    bodySolid: 'bg-[hsl(var(--pnl-occupancy-bg))]',
+    accent: 'bg-pnl-occupancy',
+    rule: 'border-pnl-occupancy/25',
   },
   result: {
     head: 'bg-pnl-result-bg text-foreground',
@@ -79,6 +98,21 @@ const SECTION: Record<
     accent: 'bg-accent',
     rule: 'border-border',
   },
+};
+
+/** Reuses the lamp tokens, so a red here means what a red means elsewhere. */
+const HEALTH_DOT: Record<string, string> = {
+  good: 'bg-lamp-success',
+  watch: 'bg-lamp-warning',
+  bad: 'bg-lamp-danger',
+  unknown: 'bg-muted-foreground/30',
+};
+
+const HEALTH_TEXT: Record<string, string> = {
+  good: 'text-success',
+  watch: 'text-warning',
+  bad: 'text-danger',
+  unknown: 'text-muted-foreground',
 };
 
 /**
@@ -160,14 +194,26 @@ export default function AnnualPnL() {
     section,
     heading = false,
     indent = false,
+    benchmark,
+    higherIsBetter = false,
   }: {
     line: Line;
     section: Section;
     /** The band's own total line, which carries its colour and weight. */
     heading?: boolean;
     indent?: boolean;
+    /** Rates the share against its band, for the subtotals worth judging. */
+    benchmark?: PtBenchmarkKey;
+    higherIsBetter?: boolean;
   }) => {
     const style = SECTION[section];
+
+    // A ratio means little without a target: 34% food cost reads differently
+    // depending on whether you were aiming at 30% or 38%.
+    const health =
+      benchmark && line.percentOfRevenue !== null
+        ? rate(benchmark, line.percentOfRevenue / 100, { higherIsBetter })
+        : 'unknown';
 
     return (
       <tr className={heading ? `${style.head} border-t ${style.rule}` : style.body}>
@@ -186,6 +232,17 @@ export default function AnnualPnL() {
             />
           )}
           {line.label}
+
+          {benchmark && (
+            <span
+              className={`ml-2 align-middle inline-flex items-center gap-1 text-[11px] font-normal
+                          ${HEALTH_TEXT[health]}`}
+              title={bandLabel(benchmark, higherIsBetter)}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${HEALTH_DOT[health]}`} aria-hidden="true" />
+              {bandLabel(benchmark, higherIsBetter)}
+            </span>
+          )}
         </th>
 
         {MONTH_ABBR.map((_, i) => (
@@ -302,14 +359,43 @@ export default function AnnualPnL() {
                 <Row key={l.label} line={l} section="cogs" indent />
               ))}
 
-              <Row line={data.grossProfit} section="result" heading />
+              <Row line={data.labour} section="labour" heading />
+              {data.labourLines.map((l) => (
+                <Row key={l.label} line={l} section="labour" indent />
+              ))}
+
+              {/* USAR's headline subtotal: cost of sales plus labour, before
+                  anything else. There is deliberately no gross-profit line —
+                  a margin taken before labour does not predict much. */}
+              <Row line={data.primeCost} section="result" heading benchmark="primeCostPct" />
 
               <Row line={data.opex} section="opex" heading />
               {data.opexLines.map((l) => (
                 <Row key={l.label} line={l} section="opex" indent />
               ))}
 
-              <Row line={data.netIncome} section="result" heading />
+              <Row
+                line={data.controllableIncome}
+                section="result"
+                heading
+                benchmark="controllableIncomePct"
+                higherIsBetter
+              />
+
+              {/* Below the controllable line, because the lease is not
+                  something this month's decisions can change. */}
+              <Row line={data.occupancy} section="occupancy" heading />
+              {data.occupancyLines.map((l) => (
+                <Row key={l.label} line={l} section="occupancy" indent />
+              ))}
+
+              <Row
+                line={data.netIncome}
+                section="result"
+                heading
+                benchmark="netIncomePct"
+                higherIsBetter
+              />
             </tbody>
           </table>
         </div>

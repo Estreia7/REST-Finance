@@ -240,6 +240,13 @@ model Category {
   /// understated by roughly half — for any restaurant using its own names.
   isLabour Boolean @default(false) @map("is_labour")
 
+  /// Marks a cost category as occupancy (rent, property tax, building
+  /// insurance). USAR puts occupancy below controllable income, because a
+  /// manager cannot renegotiate the lease this month: leaving rent among the
+  /// controllable costs makes a good operator in an expensive location look
+  /// like a bad one.
+  isOccupancy Boolean @default(false) @map("is_occupancy")
+
   costEntries CostEntry[]
 
   @@index([restaurantId, isActive])

@@ -127,6 +127,43 @@ export async function renameCategory(id: string, name: string) {
   }
 }
 
+/**
+ * Flags or unflags a category as occupancy: rent, property tax, building
+ * insurance.
+ *
+ * USAR reports these below controllable income, because the lease is not
+ * something this month's decisions can change. Marking them keeps rent out of
+ * the figure a manager is judged on — which matters more in Portugal than in
+ * the US data most benchmarks come from, where urban rents run far lower as a
+ * share of turnover.
+ */
+export async function setCategoryOccupancy(id: string, isOccupancy: boolean) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const category = await prisma.category.findFirst({
+      where: { id, restaurantId: owner.restaurantId },
+      select: { id: true, type: true },
+    });
+    if (!category) return { error: 'Categoria não encontrada' };
+
+    if (category.type !== 'OPEX' && isOccupancy) {
+      return { error: 'Só as despesas operacionais podem ser ocupação.' };
+    }
+
+    await prisma.category.update({
+      where: { id },
+      data: { isOccupancy, ...(isOccupancy ? { isLabour: false } : {}) },
+    });
+
+    revalidatePath('/dashboard');
+    return { success: true };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to update category', error, 'write') };
+  }
+}
+
 /** Flags or unflags a category as labour, which Prime Cost depends on. */
 export async function setCategoryLabour(id: string, isLabour: boolean) {
   try {
@@ -143,7 +180,12 @@ export async function setCategoryLabour(id: string, isLabour: boolean) {
       return { error: 'Só as despesas operacionais podem ser pessoal.' };
     }
 
-    await prisma.category.update({ where: { id }, data: { isLabour } });
+    // Clearing occupancy is not tidiness: a category counted in both sections
+    // would be added twice, and the bands would no longer sum to revenue.
+    await prisma.category.update({
+      where: { id },
+      data: { isLabour, ...(isLabour ? { isOccupancy: false } : {}) },
+    });
 
     revalidatePath('/dashboard');
     return { success: true };

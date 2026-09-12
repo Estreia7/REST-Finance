@@ -2,7 +2,8 @@
 
 import { prisma } from '@/lib/prisma';
 import { requireMember, isAuthError } from '@/lib/auth-helpers';
-import { calculateKpis, toPercent } from '@/lib/kpi';
+import { toPercent } from '@/lib/kpi';
+import { buildUsarStatement } from '@/lib/kpi-extended';
 import { toClientError } from '@/lib/errors';
 
 /**
@@ -67,7 +68,7 @@ export async function getAnnualPnL(year: number) {
       }),
       prisma.category.findMany({
         where: { restaurantId: member.restaurantId },
-        select: { id: true, name: true, type: true, isLabour: true },
+        select: { id: true, name: true, type: true, isLabour: true, isOccupancy: true },
       }),
     ]);
 
@@ -89,6 +90,7 @@ export async function getAnnualPnL(year: number) {
     const cogsTotal = emptyMonths();
     const opexTotal = emptyMonths();
     const labourTotal = emptyMonths();
+    const occupancyTotal = emptyMonths();
     const byCategory = new Map<string, number[]>();
 
     for (const c of costs) {
@@ -100,6 +102,7 @@ export async function getAnnualPnL(year: number) {
       else opexTotal[m] += amount;
 
       if (category?.isLabour) labourTotal[m] += amount;
+      if (category?.isOccupancy) occupancyTotal[m] += amount;
 
       const key = c.categoryId ?? `__uncategorised_${c.type}`;
       if (!byCategory.has(key)) byCategory.set(key, emptyMonths());
@@ -125,11 +128,30 @@ export async function getAnnualPnL(year: number) {
       drill,
     });
 
-    const categoryLines = (type: 'COGS' | 'OPEX'): PnLLine[] =>
+    /**
+     * The detail lines under one band.
+     *
+     * `bucket` splits OPEX three ways, because USAR reports labour and
+     * occupancy as their own sections. Without it a wage category would be
+     * listed twice — once under Pessoal and again under operating costs — and
+     * the section totals would no longer add up to revenue.
+     */
+    const categoryLines = (
+      type: 'COGS' | 'OPEX',
+      bucket: 'all' | 'labour' | 'occupancy' | 'other' = 'all'
+    ): PnLLine[] =>
       [...byCategory.entries()]
         .filter(([key]) => {
-          if (key.startsWith('__uncategorised_')) return key.endsWith(type);
-          return categoryById.get(key)?.type === type;
+          if (key.startsWith('__uncategorised_')) {
+            // An uncategorised cost belongs to none of the special buckets.
+            return key.endsWith(type) && (bucket === 'all' || bucket === 'other');
+          }
+          const category = categoryById.get(key);
+          if (category?.type !== type) return false;
+          if (bucket === 'all') return true;
+          if (bucket === 'labour') return Boolean(category.isLabour);
+          if (bucket === 'occupancy') return Boolean(category.isOccupancy);
+          return !category.isLabour && !category.isOccupancy;
         })
         .map(([key, months]) => ({
           label: key.startsWith('__uncategorised_')
@@ -145,24 +167,28 @@ export async function getAnnualPnL(year: number) {
         }))
         .sort((a, b) => b.total - a.total);
 
-    // Gross and net come from the KPI engine, so the annual view agrees with
-    // the monthly statement rather than reimplementing the arithmetic.
-    const grossProfit = emptyMonths();
+    // Operating expenses in the USAR sense: what is left of OPEX once labour
+    // and occupancy have been lifted into their own sections. Floored at zero
+    // so a mis-flagged category cannot produce a negative band.
+    const otherOpex = emptyMonths();
+    const primeCost = emptyMonths();
+    const controllableIncome = emptyMonths();
     const netIncome = emptyMonths();
 
     for (let m = 0; m < 12; m += 1) {
-      const kpis = calculateKpis({
-        revenueTotal: revenue[m],
-        cogsTotal: cogsTotal[m],
-        labourTotal: labourTotal[m],
-        opexTotal: Math.max(opexTotal[m] - labourTotal[m], 0),
-        dineInRevenue: dineIn[m],
-        takeawayRevenue: takeaway[m],
-        dineInTickets: 0,
-        takeawayTickets: 0,
+      otherOpex[m] = Math.max(opexTotal[m] - labourTotal[m] - occupancyTotal[m], 0);
+
+      const statement = buildUsarStatement({
+        revenue: revenue[m],
+        costOfSales: cogsTotal[m],
+        labour: labourTotal[m],
+        operatingExpenses: otherOpex[m],
+        occupancy: occupancyTotal[m],
       });
-      grossProfit[m] = kpis.grossProfit;
-      netIncome[m] = kpis.netIncome;
+
+      primeCost[m] = statement.primeCost;
+      controllableIncome[m] = statement.controllableIncome;
+      netIncome[m] = statement.netIncome;
     }
 
     return {
@@ -172,13 +198,26 @@ export async function getAnnualPnL(year: number) {
         revenue: line('Receita total', revenue, { kind: 'revenue', channel: 'total' }, false),
         dineIn: line('Local', dineIn, { kind: 'revenue', channel: 'dineIn' }),
         takeaway: line('Take-away', takeaway, { kind: 'revenue', channel: 'takeaway' }),
-        cogs: line('Mercadorias', cogsTotal, { kind: 'cogs' }),
+
+        cogs: line('Custo das mercadorias', cogsTotal, { kind: 'cogs' }),
         cogsLines: categoryLines('COGS'),
-        grossProfit: line('Lucro bruto', grossProfit, null),
-        opex: line('Despesas operacionais', opexTotal, { kind: 'opex' }),
-        opexLines: categoryLines('OPEX'),
-        labour: line('Dos quais pessoal', labourTotal, { kind: 'opex' }),
-        netIncome: line('Lucro líquido', netIncome, null),
+
+        labour: line('Pessoal', labourTotal, { kind: 'opex' }),
+        labourLines: categoryLines('OPEX', 'labour'),
+
+        // USAR's headline subtotal, and the reason the standard omits a gross
+        // profit line: this is the figure that predicts survival.
+        primeCost: line('Prime cost', primeCost, null),
+
+        opex: line('Despesas operacionais', otherOpex, null),
+        opexLines: categoryLines('OPEX', 'other'),
+
+        controllableIncome: line('Resultado controlável', controllableIncome, null),
+
+        occupancy: line('Renda e ocupação', occupancyTotal, { kind: 'opex' }),
+        occupancyLines: categoryLines('OPEX', 'occupancy'),
+
+        netIncome: line('Resultado líquido', netIncome, null),
       },
     };
   } catch (error: unknown) {

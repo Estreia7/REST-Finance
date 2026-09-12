@@ -86,6 +86,10 @@
     --pnl-cogs-bg:        28 55% 96%;
     --pnl-opex:           215 45% 40%;
     --pnl-opex-bg:        215 45% 96%;
+    --pnl-labour:         280 35% 42%;
+    --pnl-labour-bg:      280 35% 97%;
+    --pnl-occupancy:      200 35% 36%;
+    --pnl-occupancy-bg:   200 35% 96%;
     --pnl-result-bg:      40 30% 94%;
 
     --destructive:        0 70% 45%;
@@ -147,6 +151,10 @@
     --pnl-cogs-bg:        28 30% 14%;
     --pnl-opex:           215 60% 66%;
     --pnl-opex-bg:        215 32% 15%;
+    --pnl-labour:         280 45% 72%;
+    --pnl-labour-bg:      280 25% 16%;
+    --pnl-occupancy:      200 50% 66%;
+    --pnl-occupancy-bg:   200 28% 15%;
     --pnl-result-bg:      220 20% 17%;
 
     --destructive:        0 72% 58%;

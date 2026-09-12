@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Check, Loader2, Pencil, Plus, Tag, Users, X, EyeOff, Eye } from 'lucide-react';
+import { Building2, Check, Loader2, Pencil, Plus, Tag, Users, X, EyeOff, Eye } from 'lucide-react';
 import {
   getAllCategories,
   createCategory,
   renameCategory,
   setCategoryLabour,
+  setCategoryOccupancy,
   deactivateCategory,
 } from '../category-actions';
 import { useLanguage } from '@/lib/language-context';
@@ -18,6 +19,7 @@ type Category = {
   type: 'COGS' | 'OPEX' | 'REVENUE';
   isActive: boolean;
   isLabour: boolean;
+  isOccupancy: boolean;
   entryCount: number;
 };
 
@@ -69,6 +71,18 @@ export default function CategoryManager() {
   const handleToggleLabour = async (category: Category) => {
     setBusyId(category.id);
     const result = await setCategoryLabour(category.id, !category.isLabour);
+    setBusyId(null);
+
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    load();
+  };
+
+  const handleToggleOccupancy = async (category: Category) => {
+    setBusyId(category.id);
+    const result = await setCategoryOccupancy(category.id, !category.isOccupancy);
     setBusyId(null);
 
     if (result.error) {
@@ -238,6 +252,13 @@ export default function CategoryManager() {
                           </span>
                         )}
 
+                        {category.isOccupancy && (
+                          <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                            <Building2 className="w-3 h-3" aria-hidden="true" />
+                            Ocupação
+                          </span>
+                        )}
+
                         {category.entryCount > 0 && (
                           <span className="shrink-0 figure text-xs text-muted-foreground">
                             {category.entryCount}
@@ -260,6 +281,26 @@ export default function CategoryManager() {
                             title="Contar como pessoal no Prime Cost"
                           >
                             <Users className="w-4 h-4" aria-hidden="true" />
+                          </button>
+                        )}
+
+                        {/* Occupancy sits below controllable income on the
+                            statement, so rent never counts against what a
+                            manager could actually influence this month. */}
+                        {type === 'OPEX' && (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleOccupancy(category)}
+                            disabled={busyId === category.id}
+                            className="shrink-0 p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md"
+                            aria-label={
+                              category.isOccupancy
+                                ? `Deixar de marcar ${category.name} como ocupação`
+                                : `Marcar ${category.name} como ocupação`
+                            }
+                            title="Contar como renda e ocupação"
+                          >
+                            <Building2 className="w-4 h-4" aria-hidden="true" />
                           </button>
                         )}
 

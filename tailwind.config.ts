@@ -71,6 +71,10 @@ const config: Config = {
         'pnl-cogs-bg':    'hsl(var(--pnl-cogs-bg))',
         'pnl-opex':       'hsl(var(--pnl-opex))',
         'pnl-opex-bg':    'hsl(var(--pnl-opex-bg))',
+        'pnl-labour':       'hsl(var(--pnl-labour))',
+        'pnl-labour-bg':    'hsl(var(--pnl-labour-bg))',
+        'pnl-occupancy':    'hsl(var(--pnl-occupancy))',
+        'pnl-occupancy-bg': 'hsl(var(--pnl-occupancy-bg))',
         'pnl-result-bg':  'hsl(var(--pnl-result-bg))',
         info:         'hsl(var(--info))',
         destructive: {

@@ -246,10 +246,16 @@ const DEFAULT_COGS_CATEGORIES = [
   'Diversos',
 ] as const;
 
-const DEFAULT_OPEX_CATEGORIES: ReadonlyArray<{ name: string; isLabour?: boolean }> = [
+const DEFAULT_OPEX_CATEGORIES: ReadonlyArray<{
+  name: string;
+  isLabour?: boolean;
+  isOccupancy?: boolean;
+}> = [
   { name: 'Ordenados', isLabour: true },
   { name: 'Segurança Social', isLabour: true },
-  { name: 'Renda' },
+  // Occupancy, so the statement puts it below controllable income from the
+  // first day rather than waiting for someone to flag it in settings.
+  { name: 'Renda', isOccupancy: true },
   { name: 'Luz' },
   { name: 'Água' },
   { name: 'Gás' },
@@ -290,6 +296,7 @@ async function initializeDefaultCategories(restaurantId: string) {
           sortOrder: i + 1,
           isActive: true,
           isLabour: cat.isLabour ?? false,
+          isOccupancy: cat.isOccupancy ?? false,
         })),
       ],
       skipDuplicates: true,
