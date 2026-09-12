@@ -12,6 +12,8 @@ import { encryptSecret, decryptSecret } from '@/lib/crypto';
 export const SETTING_KEYS = {
   googleClientId: 'auth.google.clientId',
   googleClientSecret: 'auth.google.clientSecret',
+  /** Whether anyone can create an account, or only an admin can. */
+  openRegistration: 'auth.openRegistration',
 } as const;
 
 /** Which settings hold secrets, and therefore must be encrypted. */
@@ -57,6 +59,18 @@ export async function setSetting(key: string, value: string, updatedBy?: string)
 
 export async function deleteSetting(key: string): Promise<void> {
   await prisma.appSetting.deleteMany({ where: { key } });
+}
+
+/**
+ * Whether self-service registration is open.
+ *
+ * Closed by default: during the private beta accounts are created by an
+ * administrator after an access request, and a public signup form on a
+ * discoverable domain contradicts that.
+ */
+export async function isRegistrationOpen(): Promise<boolean> {
+  const value = await getSetting(SETTING_KEYS.openRegistration);
+  return value === 'true';
 }
 
 /** Google OAuth credentials, from the database or the environment. */

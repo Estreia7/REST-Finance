@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { registerSchema, formatZodError } from '@/lib/validations';
 import { toClientError, isUniqueConstraintError } from '@/lib/errors';
 import { signIn } from '@/lib/auth-config';
+import { isRegistrationOpen } from '@/lib/settings';
 
 /**
  * Account creation.
@@ -20,6 +21,14 @@ export async function registerUser(data: {
   restaurantName: string;
 }) {
   try {
+    // Checked here rather than only hiding the form: the action is reachable
+    // directly, so the UI is not the control.
+    if (!(await isRegistrationOpen())) {
+      return {
+        error: 'O registo está fechado durante a beta. Pede acesso e criamos a tua conta.',
+      };
+    }
+
     const parsed = registerSchema.safeParse(data);
     if (!parsed.success) {
       return { error: formatZodError(parsed.error) };

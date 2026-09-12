@@ -2,7 +2,7 @@
 
 import { requireAdmin, isAuthError } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
-import { getSetting, setSetting, deleteSetting, SETTING_KEYS } from '@/lib/settings';
+import { getSetting, setSetting, deleteSetting, SETTING_KEYS, isRegistrationOpen } from '@/lib/settings';
 import { maskSecret } from '@/lib/crypto';
 import { toClientError } from '@/lib/errors';
 
@@ -43,10 +43,38 @@ export async function getAuthSettings() {
         updatedAt: row?.updatedAt ?? null,
         // Shown in the UI so the value can be pasted into Google Cloud.
         redirectUri: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/api/auth/callback/google`,
+        registrationOpen: await isRegistrationOpen(),
       },
     };
   } catch (error: unknown) {
     return { error: toClientError('Failed to read auth settings', error, 'read') };
+  }
+}
+
+/**
+ * Opens or closes self-service registration.
+ *
+ * Closed during the private beta: a public signup form on a discoverable
+ * domain means anyone who finds it can create an account.
+ */
+export async function setRegistrationOpen(open: boolean) {
+  try {
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
+
+    await setSetting(SETTING_KEYS.openRegistration, open ? 'true' : 'false', admin.userId);
+
+    await prisma.auditLog.create({
+      data: {
+        action: open ? 'admin.settings.registration_opened' : 'admin.settings.registration_closed',
+        actorUserId: admin.userId,
+        metadata: {},
+      },
+    });
+
+    return { success: true };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to update registration setting', error, 'write') };
   }
 }
 

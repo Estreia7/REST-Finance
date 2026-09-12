@@ -7,6 +7,7 @@ import {
   getAuthSettings,
   saveGoogleCredentials,
   clearGoogleCredentials,
+  setRegistrationOpen,
 } from '../settings-actions';
 
 type Settings = {
@@ -16,6 +17,7 @@ type Settings = {
   fromDatabase: boolean;
   updatedAt: Date | null;
   redirectUri: string;
+  registrationOpen: boolean;
 };
 
 /**
@@ -79,6 +81,23 @@ export default function AuthSettingsPanel() {
     load();
   };
 
+  const handleToggleRegistration = async () => {
+    if (!settings) return;
+    const next = !settings.registrationOpen;
+
+    if (next && !confirm('Abrir o registo permite que qualquer pessoa crie uma conta. Continuar?')) {
+      return;
+    }
+
+    const result = await setRegistrationOpen(next);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(next ? 'Registo aberto.' : 'Registo fechado.');
+    load();
+  };
+
   const copyRedirect = async () => {
     if (!settings) return;
     await navigator.clipboard.writeText(settings.redirectUri);
@@ -96,6 +115,37 @@ export default function AuthSettingsPanel() {
   }
 
   return (
+    <>
+    <div className="card-glass p-6 max-w-2xl mb-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="font-semibold text-foreground">Registo público</h3>
+          <p className="mt-1 text-sm text-muted-foreground max-w-[52ch]">
+            Fechado durante a beta: as contas são criadas por ti depois de um
+            pedido de acesso. Aberto, qualquer pessoa que encontre o site pode
+            criar uma conta.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings?.registrationOpen ?? false}
+          onClick={handleToggleRegistration}
+          className={`shrink-0 relative w-11 h-6 rounded-full transition-colors ${
+            settings?.registrationOpen ? 'bg-primary' : 'bg-muted'
+          }`}
+          aria-label="Permitir registo público"
+        >
+          <span
+            className={`absolute top-0.5 w-5 h-5 rounded-full bg-card shadow transition-transform ${
+              settings?.registrationOpen ? 'translate-x-[22px]' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      </div>
+    </div>
+
     <div className="card-glass p-6 max-w-2xl">
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -213,5 +263,6 @@ export default function AuthSettingsPanel() {
         </p>
       )}
     </div>
+    </>
   );
 }
