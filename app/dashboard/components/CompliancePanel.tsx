@@ -280,10 +280,8 @@ export default function CompliancePanel() {
               </caption>
               <thead>
                 <tr className="text-xs text-muted-foreground border-b border-border">
-                  <th scope="col" className="py-2 pr-3 text-left font-medium w-8">
-                    <span className="sr-only">Estado</span>
-                  </th>
                   <th scope="col" className="py-2 pr-4 text-left font-medium">Documento</th>
+                  <th scope="col" className="py-2 pr-4 text-left font-medium">Estado</th>
                   <th scope="col" className="py-2 pr-4 text-left font-medium">Tipo</th>
                   <th scope="col" className="py-2 pr-4 text-left font-medium">Renovação</th>
                   <th scope="col" className="py-2 pr-4 text-left font-medium whitespace-nowrap">
@@ -302,22 +300,25 @@ export default function CompliancePanel() {
 
                   return (
                     <tr key={doc.id}>
-                      <td className="py-3 pr-3 align-top">
-                        {/* The lamp. Colour is the glance; the wording in the
-                            validity column carries the same meaning for anyone
-                            who cannot rely on it. The halo is what makes a red
-                            one findable while scrolling past twenty rows. */}
-                        <span
-                          className={`block mt-1 w-2.5 h-2.5 rounded-full ${style.dot} ${style.glow}`}
-                          aria-hidden="true"
-                        />
-                      </td>
-
                       <td className="py-3 pr-4 align-top">
                         <span className="block font-medium text-foreground">{doc.name}</span>
                         {doc.reference && (
                           <span className="block text-xs text-muted-foreground">{doc.reference}</span>
                         )}
+                      </td>
+
+                      <td className="py-3 pr-4 align-top">
+                        {/* The lamp with its status in words. Colour is the
+                            glance; the label is what carries the meaning for
+                            anyone who cannot rely on it. The halo is what makes
+                            a red one findable while scrolling past twenty rows. */}
+                        <span className="flex items-center gap-2 whitespace-nowrap">
+                          <span
+                            className={`shrink-0 w-2.5 h-2.5 rounded-full ${style.dot} ${style.glow}`}
+                            aria-hidden="true"
+                          />
+                          <span className={`text-xs font-medium ${style.text}`}>{style.label}</span>
+                        </span>
                       </td>
 
                       <td className="py-3 pr-4 align-top text-muted-foreground whitespace-nowrap">
@@ -332,9 +333,12 @@ export default function CompliancePanel() {
                         <span className="block figure text-foreground">
                           {formatDate(doc.expiresAt)}
                         </span>
-                        <span className={`block text-xs ${style.text}`}>
-                          {phrase ?? style.label}
-                        </span>
+                        {/* Only the countdown: the status column already names
+                            the state, and a document with no expiry would
+                            otherwise read "Sem validade" twice across. */}
+                        {phrase && (
+                          <span className={`block text-xs ${style.text}`}>{phrase}</span>
+                        )}
                       </td>
 
                       <td className="py-3 align-top text-right whitespace-nowrap">
