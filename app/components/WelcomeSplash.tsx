@@ -7,6 +7,13 @@ import {
   quoteAt,
   type WelcomeAudience,
 } from '@/lib/welcome-quotes';
+import {
+  EXIT_MS,
+  MAX_MS,
+  barProgress,
+  exitDelay,
+  fadeDuration,
+} from '@/lib/welcome-timing';
 
 /**
  * The screen shown between signing in and the dashboard being usable.
@@ -21,13 +28,6 @@ import {
  * bar never reaches the end while work is still outstanding. When the data
  * arrives late the bar holds just short of full instead of jumping backwards.
  */
-
-/** Floor for the whole splash: long enough to read the line, short enough not to annoy. */
-const MIN_MS = 3200;
-/** Length of the fade-out once both the floor and the data are done. */
-const EXIT_MS = 520;
-/** Where the bar waits when the data is still loading past the floor. */
-const STALL_AT = 0.94;
 
 interface WelcomeSplashProps {
   audience: WelcomeAudience;
@@ -70,12 +70,9 @@ export default function WelcomeSplash({ audience, name, ready, onDone }: Welcome
     let frame = 0;
     const tick = () => {
       const elapsed = Date.now() - startedAt.current;
-      const linear = Math.min(elapsed / MIN_MS, 1);
-      // Ease out, so the bar moves confidently at first and settles at the end
-      // rather than crawling the whole way at one speed.
-      const eased = 1 - Math.pow(1 - linear, 2.2);
-      setProgress(ready ? eased : Math.min(eased, STALL_AT));
-      if (linear < 1 || !ready) frame = requestAnimationFrame(tick);
+      const next = barProgress(elapsed, ready);
+      setProgress(next);
+      if (next < 1) frame = requestAnimationFrame(tick);
     };
 
     frame = requestAnimationFrame(tick);
@@ -83,23 +80,54 @@ export default function WelcomeSplash({ audience, name, ready, onDone }: Welcome
   }, [ready, reducedMotion]);
 
   // ── Leaving ──────────────────────────────────────────────────────────────
+  // Callers pass an inline arrow, so `onDone` is a new function on every
+  // render. Held in a ref and kept out of the dependencies below: listing it
+  // would tear down and rebuild the timers on each render, cancelling the
+  // exit before it ever fired and leaving the splash on screen for good.
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  });
+
   useEffect(() => {
     if (!ready || doneRef.current) return;
 
-    const floor = reducedMotion ? 0 : MIN_MS;
-    const remaining = Math.max(floor - (Date.now() - startedAt.current), 0);
+    const remaining = exitDelay(Date.now() - startedAt.current, reducedMotion);
+
+    // Both timers are cleared together: the inner one must be reachable from
+    // the effect's cleanup, not returned from inside the outer callback,
+    // where it would simply be discarded.
+    let toDone: ReturnType<typeof setTimeout> | undefined;
 
     const toExit = setTimeout(() => {
       setLeaving(true);
-      const toDone = setTimeout(() => {
+      toDone = setTimeout(() => {
         doneRef.current = true;
-        onDone();
-      }, reducedMotion ? 0 : EXIT_MS);
-      return () => clearTimeout(toDone);
+        onDoneRef.current();
+      }, fadeDuration(reducedMotion));
     }, remaining);
 
-    return () => clearTimeout(toExit);
-  }, [ready, reducedMotion, onDone]);
+    return () => {
+      clearTimeout(toExit);
+      if (toDone) clearTimeout(toDone);
+    };
+  }, [ready, reducedMotion]);
+
+  // Hard ceiling, independent of `ready`.
+  //
+  // The splash covers the whole viewport, so anything that stops it from
+  // lifting leaves a blank page with no way out. A slow or hanging fetch must
+  // degrade to the dashboard's own loading and empty states, never to a dead
+  // screen — so this fires regardless of what the rest of the component did.
+  useEffect(() => {
+    const bail = setTimeout(() => {
+      if (doneRef.current) return;
+      doneRef.current = true;
+      onDoneRef.current();
+    }, MAX_MS);
+
+    return () => clearTimeout(bail);
+  }, []);
 
   const greeting = name
     ? `${t('welcome.greeting')}, ${name}`
