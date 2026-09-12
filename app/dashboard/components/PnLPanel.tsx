@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 import { getPnLStatement } from '../actions';
+import AnnualPnL from './AnnualPnL';
+import { formatMoneyExact } from '@/lib/format';
 
 interface PnLData {
   month: number; year: number;
@@ -20,6 +22,7 @@ export default function PnLPanel() {
   const [year, setYear] = useState(now.getFullYear());
   const [data, setData] = useState<PnLData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<'month' | 'year'>('month');
 
   useEffect(() => {
     setLoading(true);
@@ -29,7 +32,9 @@ export default function PnLPanel() {
     });
   }, [month, year]);
 
-  const fmt = (n: number) => `€${n.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}`;
+  // Shared formatter: the local one set a minimum with no maximum, the same
+  // defect that made a figure elsewhere read as millions.
+  const fmt = formatMoneyExact;
 
   const months = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -38,6 +43,27 @@ export default function PnLPanel() {
 
   return (
     <div className="space-y-4">
+      {/* Monthly statement, or the twelve-month view with percentages. */}
+      <div className="flex items-center gap-1 p-1 rounded-xl bg-muted w-fit">
+        {([['month', 'Mensal'], ['year', 'Anual']] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setView(value)}
+            className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              view === value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+            aria-pressed={view === value}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'year' ? (
+        <AnnualPnL />
+      ) : (
+      <>
       {/* Month selector */}
       <div className="flex items-center gap-3">
         <select value={month} onChange={e => setMonth(Number(e.target.value))} className="input-field !py-2 !text-sm w-[160px]">
@@ -140,6 +166,8 @@ export default function PnLPanel() {
             ))}
           </div>
         </>
+      )}
+      </>
       )}
     </div>
   );
