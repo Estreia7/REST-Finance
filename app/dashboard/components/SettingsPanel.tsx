@@ -9,6 +9,7 @@ import {
   uploadProfilePicture, removeProfilePicture,
 } from '../image-actions';
 import ImageUpload from './ImageUpload';
+import CategoryManager from './CategoryManager';
 
 interface SettingsPanelProps {
   pendingTheme:      'light' | 'dark';
@@ -181,6 +182,9 @@ export default function SettingsPanel({
           </div>
         </div>
       )}
+
+      {/* Categories */}
+      {restaurant && <CategoryManager />}
 
       {/* Appearance */}
       <div className="card-glass p-6">

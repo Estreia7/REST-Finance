@@ -396,6 +396,7 @@ function DashboardPageInner() {
                   onCostChange={setCostForm}
                   onSubmitRevenue={handleSubmitRevenue}
                   onSubmitCost={handleSubmitCost}
+                  onCategoryCreated={loadCategories}
                 />
               )}
               {revenueSubView === 'scan' && (
@@ -427,6 +428,7 @@ function DashboardPageInner() {
                   onCostChange={setCostForm}
                   onSubmitRevenue={handleSubmitRevenue}
                   onSubmitCost={handleSubmitCost}
+                  onCategoryCreated={loadCategories}
                 />
               )}
               {costSubView === 'scan' && (

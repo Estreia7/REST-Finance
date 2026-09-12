@@ -1,6 +1,9 @@
 'use client';
 
-import { Save, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Save, Loader2, Plus, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { createCategory } from '../category-actions';
 import { useLanguage } from '@/lib/language-context';
 
 type CostType = 'COGS' | 'OPEX';
@@ -34,6 +37,8 @@ interface QuickEntryPanelProps {
   revenueForm:       RevenueForm;
   costForm:          CostForm;
   categories:        Category[];
+  /** Called after a category is added, so the parent can reload the list. */
+  onCategoryCreated?: () => void;
   isSubmitting:      boolean;
   onRevenueChange:   (form: RevenueForm) => void;
   onCostChange:      (form: CostForm) => void;
@@ -45,10 +50,40 @@ const today = new Date().toISOString().split('T')[0];
 
 export default function QuickEntryPanel({
   activeTab, revenueForm, costForm, categories, isSubmitting,
-  onRevenueChange, onCostChange, onSubmitRevenue, onSubmitCost,
+  onRevenueChange, onCostChange, onSubmitRevenue, onSubmitCost, onCategoryCreated,
 }: QuickEntryPanelProps) {
   const { t } = useLanguage();
   const filteredCategories = (categories ?? []).filter(c => c.type === costForm.type);
+
+  // Adding a category without leaving the entry form: a cost that does not
+  // fit an existing category otherwise means abandoning what was typed.
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [savingCategory, setSavingCategory] = useState(false);
+
+  const handleCreateCategory = async () => {
+    const name = newCategoryName.trim();
+    if (name.length < 2 || !costForm.type) return;
+
+    setSavingCategory(true);
+    const result = await createCategory({ name, type: costForm.type as CostType });
+    setSavingCategory(false);
+
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+
+    // Select it straight away, which is why it was created.
+    if (result.data) {
+      onCostChange({ ...costForm, categoryId: result.data.id });
+      onCategoryCreated?.();
+    }
+
+    setCreatingCategory(false);
+    setNewCategoryName('');
+    toast.success(t('owner.costForm.categoryCreated'));
+  };
 
   const inputClass = 'input-field';
 
@@ -183,18 +218,61 @@ export default function QuickEntryPanel({
 
           {costForm.type && (
             <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-2">{t('owner.costForm.category')}</label>
-              <select
-                value={costForm.categoryId}
-                onChange={e => onCostChange({ ...costForm, categoryId: e.target.value })}
-                className={inputClass}
-                required
-              >
-                <option value="">{t('owner.costForm.selectCategory')}</option>
-                {filteredCategories.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-medium text-muted-foreground">{t('owner.costForm.category')}</label>
+                <button
+                  type="button"
+                  onClick={() => setCreatingCategory(true)}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary-ink hover:underline"
+                >
+                  <Plus className="w-3 h-3" aria-hidden="true" />
+                  {t('owner.costForm.newCategory')}
+                </button>
+              </div>
+
+              {creatingCategory ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    value={newCategoryName}
+                    onChange={e => setNewCategoryName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { e.preventDefault(); handleCreateCategory(); }
+                      if (e.key === 'Escape') { setCreatingCategory(false); setNewCategoryName(''); }
+                    }}
+                    placeholder={t('owner.costForm.newCategoryPlaceholder')}
+                    className={inputClass}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreateCategory}
+                    disabled={savingCategory || newCategoryName.trim().length < 2}
+                    className="cta-button shrink-0 px-4 py-2 text-xs disabled:opacity-50"
+                  >
+                    {savingCategory ? '...' : t('common.save')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCreatingCategory(false); setNewCategoryName(''); }}
+                    className="shrink-0 p-2 text-muted-foreground hover:text-foreground"
+                    aria-label={t('common.cancel')}
+                  >
+                    <X className="w-4 h-4" aria-hidden="true" />
+                  </button>
+                </div>
+              ) : (
+                <select
+                  value={costForm.categoryId}
+                  onChange={e => onCostChange({ ...costForm, categoryId: e.target.value })}
+                  className={inputClass}
+                  required
+                >
+                  <option value="">{t('owner.costForm.selectCategory')}</option>
+                  {filteredCategories.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
           )}
 
