@@ -6,6 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { getComparativeData } from '../actions';
 import { useChartTheme, tooltipProps } from '@/lib/chart-theme';
 import { useLanguage } from '@/lib/language-context';
+import { formatMoney } from '@/lib/format';
 
 interface MonthData {
   label: string;
@@ -29,7 +30,7 @@ export default function ComparativePanel() {
     });
   }, []);
 
-  const fmt = (n: number) => `€${n.toLocaleString('pt-PT', { minimumFractionDigits: 0 })}`;
+  const fmt = (n: number) => formatMoney(n);
 
   if (loading) {
     return <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;

@@ -24,6 +24,7 @@ import {
 } from 'recharts';
 import { Plan } from '@prisma/client';
 import Logo from '@/app/components/Logo';
+import { formatMoney } from '@/lib/format';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type Tab = 'dashboard' | 'clientes' | 'users' | 'activity' | 'settings';
@@ -68,7 +69,7 @@ function ChartTooltip({ active, payload, label }: any) {
   return (
     <div className="bg-card-elevated border border-border rounded-xl px-3 py-2 shadow-modal text-xs">
       <p className="text-muted-foreground mb-1">{label}</p>
-      <p className="font-semibold text-foreground">€{payload[0].value.toLocaleString('pt-PT', { minimumFractionDigits: 0 })}</p>
+      <p className="font-semibold text-foreground">{formatMoney(Number(payload[0].value))}</p>
     </div>
   );
 }

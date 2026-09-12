@@ -3,6 +3,7 @@
 import { TrendingUp, TrendingDown, DollarSign, BarChart3, Target, Activity, AlertTriangle } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts';
 import { useChartTheme } from '@/lib/chart-theme';
+import { formatMoney } from '@/lib/format';
 
 interface KPICardsProps {
   stats: {
@@ -56,7 +57,7 @@ function Sparkline({ data }: { data: Array<{ date: string; revenue: number }> })
             content={({ active, payload }) =>
               active && payload?.[0] ? (
                 <div className="px-2 py-1 rounded-lg bg-card border border-border text-xs font-semibold text-foreground">
-                  €{Number(payload[0].value).toLocaleString('pt-PT', { minimumFractionDigits: 0 })}
+                  {formatMoney(Number(payload[0].value))}
                 </div>
               ) : null
             }
@@ -197,7 +198,7 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
         <div className="flex items-end gap-4 mt-3">
           <div>
             <div className="text-3xl font-black tabular-nums text-foreground">
-              €{Math.abs(advancedStats.netIncome).toLocaleString('pt-PT', { minimumFractionDigits: 0 })}
+              {formatMoney(Math.abs(advancedStats.netIncome))}
             </div>
             <div className="text-xs text-muted-foreground mt-1">Lucro Líquido</div>
           </div>
@@ -237,13 +238,13 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
           <div className="bg-muted rounded-lg p-2.5">
             <div className="text-[10px] text-muted-foreground">Receita</div>
             <div className="text-sm font-bold text-foreground mt-0.5">
-              €{stats.revenue.toLocaleString('pt-PT', { minimumFractionDigits: 0 })}
+              {formatMoney(stats.revenue)}
             </div>
           </div>
           <div className="bg-muted rounded-lg p-2.5">
             <div className="text-[10px] text-muted-foreground">Custos</div>
             <div className="text-sm font-bold text-foreground mt-0.5">
-              €{stats.costs.toLocaleString('pt-PT', { minimumFractionDigits: 0 })}
+              {formatMoney(stats.costs)}
             </div>
           </div>
         </div>
