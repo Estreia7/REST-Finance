@@ -34,8 +34,14 @@ export default function MobileBottomNav({ activeTab, onTabChange }: { activeTab:
             return (
               <button
                 key={id}
+                type="button"
                 onClick={() => onTabChange(id)}
-                className="relative flex flex-col items-center gap-0.5 flex-1 py-2 rounded-xl transition-all duration-200"
+                aria-current={active ? 'page' : undefined}
+                // touch-manipulation drops the 300ms double-tap-to-zoom wait,
+                // which is the delay that makes a tap feel like it was missed.
+                className="relative flex flex-col items-center gap-0.5 flex-1 py-2 min-h-[48px]
+                           rounded-xl transition-all duration-200 touch-manipulation
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
                 <div
                   className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 ${

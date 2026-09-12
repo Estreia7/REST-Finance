@@ -77,6 +77,30 @@ export const CHANGELOG: Release[] = [
         title: 'Fotografias na página inicial',
       },
       {
+        kind: 'improvement',
+        title: 'Pode instalar a app no telemóvel',
+        detail:
+          'No telemóvel, abra o menu de partilha e escolha "Adicionar ao ecrã principal". Passa a abrir sem as barras do browser, o que dá mais espaço e evita ter de tocar duas vezes nos botões de baixo.',
+      },
+      {
+        kind: 'fix',
+        title: 'As Novidades apareciam mal no telemóvel',
+        detail:
+          'Este painel aparecia como um bloco de texto atrás da página em vez de abrir por cima.',
+      },
+      {
+        kind: 'fix',
+        title: 'Botões que pareciam precisar de dois toques',
+        detail:
+          'No telemóvel havia uma espera antes de o toque fazer efeito, e o fundo da página ficava por baixo da barra do browser.',
+      },
+      {
+        kind: 'fix',
+        title: 'O ecrã de espera já não parece parado',
+        detail:
+          'Ao abrir ou actualizar o painel aparece agora a animação, em vez de uma letra fixa.',
+      },
+      {
         kind: 'fix',
         title: 'As explicações já não ficavam cortadas no ecrã',
         detail:

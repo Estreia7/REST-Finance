@@ -530,7 +530,7 @@ function SettingsDialog({
       <div
         role="dialog" aria-modal="true" aria-label="Pressupostos"
         className="relative w-full sm:max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl
-                   p-5 shadow-modal max-h-[90vh] overflow-y-auto
+                   p-5 shadow-modal max-h-[90dvh] overflow-y-auto overscroll-contain
                    pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-5"
       >
         <div className="flex items-start justify-between gap-3 mb-4">

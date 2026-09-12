@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Sparkles, X, Plus, ArrowUpRight, Wrench } from 'lucide-react';
 import {
   CHANGELOG, CHANGELOG_VERSION, KIND_LABEL, KIND_LABEL_EN,
@@ -33,6 +34,17 @@ export default function WhatsNew() {
   const { language } = useLanguage();
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(false);
+  /**
+   * The panel is portalled to <body>.
+   *
+   * The top bar it sits in carries `backdrop-blur`, and a backdrop filter
+   * makes an element a containing block for its fixed-position descendants.
+   * Without the portal the panel is trapped inside a 56px-tall header and
+   * renders as a strip of text behind the page — which is exactly what it did
+   * on a phone, where there is no width to hide the damage.
+   */
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     // Wrapped: private windows and blocked site data both throw here, and a
@@ -83,7 +95,7 @@ export default function WhatsNew() {
         )}
       </button>
 
-      {open && (
+      {open && mounted && createPortal(
         <div className="fixed inset-0 z-50 flex items-end sm:items-start sm:justify-end">
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -96,8 +108,9 @@ export default function WhatsNew() {
             aria-modal="true"
             aria-label={title}
             className="relative w-full sm:w-[420px] sm:m-4 bg-card border border-border
-                       rounded-t-2xl sm:rounded-2xl shadow-modal max-h-[85vh] sm:max-h-[80vh]
-                       flex flex-col overflow-hidden"
+                       rounded-t-2xl sm:rounded-2xl shadow-modal
+                       flex flex-col overflow-hidden
+                       max-h-[85dvh] sm:max-h-[80dvh]"
           >
             <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border-subtle shrink-0">
               <h3 className="font-bold text-foreground flex items-center gap-2">
@@ -114,7 +127,11 @@ export default function WhatsNew() {
               </button>
             </div>
 
-            <div className="overflow-y-auto px-5 py-4 space-y-6 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4">
+            {/* overscroll-contain stops a scroll that reaches the end of this
+                list from carrying on into the page behind it, which on a phone
+                reads as the sheet fighting the browser. */}
+            <div className="overflow-y-auto overscroll-contain px-5 py-4 space-y-6
+                            pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4">
               {CHANGELOG.map((release) => (
                 <section key={release.version}>
                   <div className="flex items-baseline justify-between gap-3 mb-3">
@@ -171,7 +188,8 @@ export default function WhatsNew() {
               ))}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

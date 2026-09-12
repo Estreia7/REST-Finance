@@ -102,7 +102,7 @@ export default function PnLDrilldown({
         aria-modal="true"
         aria-labelledby="drill-title"
         onClick={(e) => e.stopPropagation()}
-        className="w-full sm:max-w-2xl max-h-[85vh] flex flex-col rounded-t-2xl sm:rounded-2xl border border-border bg-card shadow-modal"
+        className="w-full sm:max-w-2xl max-h-[85dvh] flex flex-col rounded-t-2xl sm:rounded-2xl border border-border bg-card shadow-modal"
       >
         <div className="flex items-start justify-between gap-4 p-5 border-b border-border-subtle">
           <div className="min-w-0">

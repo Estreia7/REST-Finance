@@ -168,9 +168,33 @@
   }
   html {
     @apply scroll-smooth;
+    /* Stops mobile Safari inflating type in landscape, which reflows a
+       carefully sized dashboard into something else entirely. */
+    -webkit-text-size-adjust: 100%;
   }
   body {
     @apply bg-background text-foreground antialiased;
+  }
+
+  /*
+    Touch behaviour for anything tappable.
+
+    `touch-action: manipulation` removes the 300ms wait mobile browsers keep
+    in case a tap turns into a double-tap zoom. That wait is why a control can
+    feel like it needs pressing twice: the first press registers, the page
+    just does not react until the browser gives up waiting for a second one.
+
+    The transparent tap highlight removes the grey flash iOS paints over the
+    element, which reads as a misfire next to our own active states.
+  */
+  button,
+  a,
+  [role='button'],
+  label,
+  select,
+  summary {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
@@ -606,6 +630,21 @@ details > summary::-webkit-details-marker {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Indeterminate bar for the plain loading screen. The wait has no known
+   length, so nothing here pretends to measure progress. */
+.loading-sweep {
+  height: 100%;
+  width: 40%;
+  border-radius: 9999px;
+  background: hsl(var(--primary));
+  animation: loadingSweep 1.25s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes loadingSweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
 /* Chart bars: grow up out of the baseline. */
 .welcome-bar {
   animation: welcomeBar 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -679,7 +718,8 @@ details > summary::-webkit-details-marker {
   .welcome-steam,
   .welcome-node,
   .welcome-orbit,
-  .welcome-check {
+  .welcome-check,
+  .loading-sweep {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;

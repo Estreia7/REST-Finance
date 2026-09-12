@@ -435,7 +435,7 @@ export default function AuthModal({ open, onOpenChange, defaultTab = 'login' }: 
         <div
           ref={contentRef}
           className="relative w-full max-w-md bg-card border border-border rounded-2xl shadow-modal p-6 sm:p-8 outline-none
-                     transition-all duration-300 ease-out max-h-[90vh] overflow-y-auto no-scrollbar"
+                     transition-all duration-300 ease-out max-h-[90dvh] overflow-y-auto overscroll-contain no-scrollbar"
           style={{
             opacity: animating ? 1 : 0,
             transform: animating ? 'scale(1)' : 'scale(0.95)',

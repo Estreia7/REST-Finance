@@ -57,7 +57,7 @@ export default function UpgradeWall({ reason, restaurantId }: UpgradeWallProps) 
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+    <div className="min-h-dvh flex items-center justify-center p-6 bg-background">
       {/* Glow */}
       
 

@@ -215,7 +215,8 @@ export default function WelcomeSplash({ audience, name, ready, onDone }: Welcome
  * Drawn inline rather than loaded as a file: it is themed with the design
  * tokens, and a splash screen must not wait on a second request.
  */
-function WelcomeMark({
+/** Exported so the plain loading screen can reuse the same animated mark. */
+export function WelcomeMark({
   audience,
   reducedMotion,
 }: {

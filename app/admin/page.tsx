@@ -8,6 +8,7 @@ import { useLanguage } from '@/lib/language-context';
 import { greetingName } from '@/lib/welcome-quotes';
 import { consumeJustSignedIn } from '@/lib/welcome-signal';
 import WelcomeSplash from '@/app/components/WelcomeSplash';
+import DashboardLoading from '@/app/components/DashboardLoading';
 import {
   LayoutDashboard, Users, LogOut, Menu, X,
   Building2, TrendingUp, TrendingDown, CreditCard,
@@ -231,20 +232,11 @@ export default function AdminPage() {
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl gradient-bg flex items-center justify-center shadow-glow animate-pulse-slow">
-            <span className="text-white font-black text-lg">R</span>
-          </div>
-          <div className="text-sm text-muted-foreground">A carregar...</div>
-        </div>
-      </div>
-    );
+    return <DashboardLoading audience="admin" />;
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-dvh bg-background">
       {/* ── Sidebar ────────────────────────────────────────────────────────── */}
       <>
         {/* Mobile overlay */}
@@ -321,7 +313,7 @@ export default function AdminPage() {
       </>
 
       {/* ── Main ───────────────────────────────────────────────────────────── */}
-      <div className="md:ml-60 flex flex-col min-h-screen">
+      <div className="md:ml-60 flex flex-col min-h-dvh">
         {/* Top bar */}
         <header className="sticky top-0 z-20 h-14 flex items-center gap-3 px-4 md:px-6 bg-background/80 backdrop-blur-xl border-b border-border-subtle">
           <button

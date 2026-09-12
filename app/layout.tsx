@@ -84,13 +84,29 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="REST Finance" />
+        {/*
+          `default`, not `black-translucent`. Translucent draws the page
+          underneath the status bar, which on a light-first app puts dark
+          system text on the off-white background and leaves the top of the
+          screen feeling like it belongs to the browser rather than the app.
+        */}
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        {/* iOS ignores the manifest's icons for Add to Home Screen. */}
+        <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
-      <body className="min-h-screen bg-background text-foreground antialiased">
+      {/*
+        min-h-dvh, not min-h-screen: `vh` on mobile Safari is the height with
+        the browser chrome hidden, so a full-height page always overflows by
+        the height of the toolbar. That overflow is what makes the first tap
+        near the bottom scroll the page and reveal the bar instead of hitting
+        the control — the "everything needs two taps" problem.
+      */}
+      <body className="min-h-dvh bg-background text-foreground antialiased">
         <SessionProvider>
         <ThemeProvider>
           <LanguageProvider>
-            <div className="flex min-h-screen flex-col">
+            <div className="flex min-h-dvh flex-col">
               <ConditionalNavbar />
               {children}
             </div>

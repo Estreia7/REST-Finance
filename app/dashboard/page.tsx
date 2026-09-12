@@ -24,6 +24,7 @@ import { useLanguage } from '@/lib/language-context';
 import { greetingName } from '@/lib/welcome-quotes';
 import { consumeJustSignedIn } from '@/lib/welcome-signal';
 import WelcomeSplash from '@/app/components/WelcomeSplash';
+import DashboardLoading from '@/app/components/DashboardLoading';
 import { Plus, ChevronDown, ChevronUp, Rocket, TrendingUp as TrendingUpIcon, DollarSign as DollarSignIcon } from 'lucide-react';
 
 // Components
@@ -301,22 +302,17 @@ function DashboardPageInner() {
     );
   }
 
+  // Not the welcome splash: that one greets someone who just signed in, and
+  // replaying it on every refresh would wear thin. This is the same animated
+  // mark without the greeting, so a slow load on mobile data does not look
+  // like a stuck screen.
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl gradient-bg flex items-center justify-center shadow-glow animate-pulse-slow">
-            <span className="text-white font-black text-lg">R</span>
-          </div>
-          <div className="text-sm text-muted-foreground">A carregar...</div>
-        </div>
-      </div>
-    );
+    return <DashboardLoading audience="owner" />;
   }
 
   // ── Layout ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-dvh bg-background">
       {/* Sidebar */}
       <Sidebar
         activeTab={activeTab}
@@ -331,7 +327,7 @@ function DashboardPageInner() {
       />
 
       {/* Main */}
-      <div className="md:ml-60 flex flex-col min-h-screen pb-20 md:pb-0">
+      <div className="md:ml-60 flex flex-col min-h-dvh pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
         {/* Top bar */}
         <TopBar
           activeTab={activeTab}
