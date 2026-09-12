@@ -4,6 +4,7 @@ import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { getSetting, SETTING_KEYS } from '@/lib/settings';
 
 /**
  * Authentication.
@@ -22,119 +23,133 @@ import { prisma } from '@/lib/prisma';
  * revoking access takes effect immediately rather than when a token expires.
  */
 
-const googleId = process.env.GOOGLE_CLIENT_ID;
-const googleSecret = process.env.GOOGLE_CLIENT_SECRET;
+/**
+ * Google credentials come from the database when an administrator has entered
+ * them, falling back to the environment.
+ *
+ * The whole config is built per request (Auth.js accepts a function), so
+ * credentials saved in the admin console take effect immediately. Reading
+ * them at module load would require a restart after every change.
+ */
+export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
+  const [googleId, googleSecret] = await Promise.all([
+    getSetting(SETTING_KEYS.googleClientId),
+    getSetting(SETTING_KEYS.googleClientSecret),
+  ]);
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
+  return {
+    adapter: PrismaAdapter(prisma),
 
-  session: {
-    // Auth.js supports the Credentials provider only with JWT sessions, so
-    // the token carries identity and nothing else. Roles and membership are
-    // still read from the database on every request (lib/auth-helpers.ts),
-    // which is what makes deactivating a member take effect immediately
-    // rather than when their token expires.
-    strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-    updateAge: 24 * 60 * 60, // refresh at most once a day
-  },
+    session: {
+      // Auth.js supports the Credentials provider only with JWT sessions, so
+      // the token carries identity and nothing else. Roles and membership are
+      // still read from the database on every request (lib/auth-helpers.ts),
+      // which is what makes deactivating a member take effect immediately
+      // rather than when their token expires.
+      strategy: 'jwt',
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+      updateAge: 24 * 60 * 60, // refresh at most once a day
+    },
 
-  pages: {
-    signIn: '/login',
-    error: '/login',
-  },
+    pages: {
+      signIn: '/login',
+      error: '/login',
+    },
 
-  providers: [
-    // Only registered when configured, so a missing client ID does not break
-    // password sign-in for everyone.
-    ...(googleId && googleSecret
-      ? [
-          Google({
-            clientId: googleId,
-            clientSecret: googleSecret,
-            allowDangerousEmailAccountLinking: true,
-          }),
-        ]
-      : []),
+    providers: [
+      // Registered only when configured, so an unconfigured Google button
+      // cannot send people to a broken consent screen.
+      ...(googleId && googleSecret
+        ? [
+            Google({
+              clientId: googleId,
+              clientSecret: googleSecret,
+              // Google verifies the address, so an existing account with that
+              // email is the same person and is linked rather than duplicated.
+              allowDangerousEmailAccountLinking: true,
+            }),
+          ]
+        : []),
 
-    Credentials({
-      name: 'credentials',
-      credentials: {
-        email: { label: 'Email', type: 'email' },
-        password: { label: 'Palavra-passe', type: 'password' },
-      },
-      async authorize(raw) {
-        const email = typeof raw?.email === 'string' ? raw.email.trim().toLowerCase() : '';
-        const password = typeof raw?.password === 'string' ? raw.password : '';
-        if (!email || !password) return null;
+      Credentials({
+        name: 'credentials',
+        credentials: {
+          email: { label: 'Email', type: 'email' },
+          password: { label: 'Palavra-passe', type: 'password' },
+        },
+        async authorize(raw) {
+          const email = typeof raw?.email === 'string' ? raw.email.trim().toLowerCase() : '';
+          const password = typeof raw?.password === 'string' ? raw.password : '';
+          if (!email || !password) return null;
 
-        const user = await prisma.user.findUnique({
-          where: { email },
-          select: { id: true, email: true, name: true, image: true, passwordHash: true },
+          const user = await prisma.user.findUnique({
+            where: { email },
+            select: { id: true, email: true, name: true, image: true, passwordHash: true },
+          });
+
+          // Compare against a dummy hash when the account is missing or has no
+          // password, so the response takes the same time either way and does
+          // not reveal which addresses are registered.
+          const hash =
+            user?.passwordHash ??
+            '$2a$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalidixx';
+
+          const ok = await bcrypt.compare(password, hash);
+          if (!ok || !user?.passwordHash) return null;
+
+          return { id: user.id, email: user.email, name: user.name, image: user.image };
+        },
+      }),
+    ],
+
+    callbacks: {
+      /**
+       * Google verifies the address, so an existing account with that email is
+       * the same person. Linking here means signing in with Google after
+       * registering with a password reaches the same account rather than
+       * creating a duplicate with no restaurant attached.
+       */
+      async signIn({ user, account }) {
+        if (account?.provider !== 'google') return true;
+        if (!user.email) return false;
+
+        const existing = await prisma.user.findUnique({
+          where: { email: user.email.toLowerCase() },
+          select: { id: true },
         });
 
-        // Compare against a dummy hash when the account is missing or has no
-        // password, so the response takes the same time either way and does
-        // not reveal which addresses are registered.
-        const hash =
-          user?.passwordHash ??
-          '$2a$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalidixx';
-
-        const ok = await bcrypt.compare(password, hash);
-        if (!ok || !user?.passwordHash) return null;
-
-        return { id: user.id, email: user.email, name: user.name, image: user.image };
+        // The adapter links by email when the account is new; nothing else to do.
+        return Boolean(existing) || true;
       },
-    }),
-  ],
 
-  callbacks: {
-    /**
-     * Google verifies the address, so an existing account with that email is
-     * the same person. Linking here means signing in with Google after
-     * registering with a password reaches the same account rather than
-     * creating a duplicate with no restaurant attached.
-     */
-    async signIn({ user, account }) {
-      if (account?.provider !== 'google') return true;
-      if (!user.email) return false;
+      // With a JWT strategy the adapter does not populate `user`, so the id is
+      // carried on the token instead.
+      async jwt({ token, user }) {
+        if (user?.id) token.sub = user.id;
+        return token;
+      },
 
-      const existing = await prisma.user.findUnique({
-        where: { email: user.email.toLowerCase() },
-        select: { id: true },
-      });
+      async session({ session, token }) {
+        if (!session.user || !token.sub) return session;
 
-      // The adapter links by email when the account is new; nothing else to do.
-      return Boolean(existing) || true;
+        session.user.id = token.sub;
+
+        // Read the role on each session fetch rather than baking it into the
+        // token: a revoked admin loses the flag immediately, and the UI needs
+        // it to send platform admins to /admin instead of a restaurant
+        // dashboard they do not have.
+        const membership = await prisma.membership.findFirst({
+          where: { userId: token.sub, active: true },
+          orderBy: { role: 'asc' },
+          select: { role: true },
+        });
+
+        session.user.role = membership?.role ?? null;
+        return session;
+      },
     },
 
-    // With a JWT strategy the adapter does not populate `user`, so the id is
-    // carried on the token instead.
-    async jwt({ token, user }) {
-      if (user?.id) token.sub = user.id;
-      return token;
-    },
-
-    async session({ session, token }) {
-      if (!session.user || !token.sub) return session;
-
-      session.user.id = token.sub;
-
-      // Read the role on each session fetch rather than baking it into the
-      // token: a revoked admin loses the flag immediately, and the UI needs
-      // it to send platform admins to /admin instead of a restaurant
-      // dashboard they do not have.
-      const membership = await prisma.membership.findFirst({
-        where: { userId: token.sub, active: true },
-        orderBy: { role: 'asc' },
-        select: { role: true },
-      });
-
-      session.user.role = membership?.role ?? null;
-      return session;
-    },
-  },
-
-  // Auth.js needs an absolute URL behind a reverse proxy to build callbacks.
-  trustHost: true,
+    // Auth.js needs an absolute URL behind a reverse proxy to build callbacks.
+    trustHost: true,
+  };
 });

@@ -150,6 +150,19 @@ model Session {
   @@map("sessions")
 }
 
+/// Platform-wide settings an administrator can change without a redeploy.
+/// Values marked `encrypted` are stored as AES-256-GCM ciphertext (lib/crypto.ts)
+/// so a database dump does not expose third-party credentials in plain text.
+model AppSetting {
+  key       String   @id
+  value     String
+  encrypted Boolean  @default(false)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  @@map("app_settings")
+}
+
 /// Auth.js: short-lived tokens for email verification and password resets.
 model VerificationToken {
   identifier String

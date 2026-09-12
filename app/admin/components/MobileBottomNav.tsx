@@ -2,7 +2,7 @@
 
 import { LayoutDashboard, Building2, Users, ClipboardList } from 'lucide-react';
 
-type Tab = 'dashboard' | 'clientes' | 'users' | 'activity';
+type Tab = 'dashboard' | 'clientes' | 'users' | 'activity' | 'settings';
 
 const items = [
   { id: 'dashboard' as Tab, icon: LayoutDashboard, label: 'Dashboard' },
