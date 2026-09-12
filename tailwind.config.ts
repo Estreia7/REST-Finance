@@ -65,6 +65,13 @@ const config: Config = {
         'lamp-success': 'hsl(var(--lamp-success))',
         'lamp-warning': 'hsl(var(--lamp-warning))',
         'lamp-danger':  'hsl(var(--lamp-danger))',
+        'pnl-revenue':    'hsl(var(--pnl-revenue))',
+        'pnl-revenue-bg': 'hsl(var(--pnl-revenue-bg))',
+        'pnl-cogs':       'hsl(var(--pnl-cogs))',
+        'pnl-cogs-bg':    'hsl(var(--pnl-cogs-bg))',
+        'pnl-opex':       'hsl(var(--pnl-opex))',
+        'pnl-opex-bg':    'hsl(var(--pnl-opex-bg))',
+        'pnl-result-bg':  'hsl(var(--pnl-result-bg))',
         info:         'hsl(var(--info))',
         destructive: {
           DEFAULT:    'hsl(var(--destructive))',

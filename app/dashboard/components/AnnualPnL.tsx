@@ -35,6 +35,44 @@ type Annual = {
 const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 /**
+ * How each band of the statement is painted.
+ *
+ * Colour here means "which part of the statement is this", never "is this good
+ * or bad" — a red row would collide with the compliance indicators, and on a
+ * P&L a large cost figure is not itself a problem. The tints are deliberately
+ * pale: the figures are the content, and a band that competes with them has
+ * gone too far.
+ */
+type Section = 'revenue' | 'cogs' | 'opex' | 'result';
+
+const SECTION: Record<Section, { head: string; body: string; accent: string; rule: string }> = {
+  revenue: {
+    head: 'bg-pnl-revenue-bg text-pnl-revenue',
+    body: 'bg-pnl-revenue-bg/40',
+    accent: 'bg-pnl-revenue',
+    rule: 'border-pnl-revenue/25',
+  },
+  cogs: {
+    head: 'bg-pnl-cogs-bg text-pnl-cogs',
+    body: 'bg-pnl-cogs-bg/40',
+    accent: 'bg-pnl-cogs',
+    rule: 'border-pnl-cogs/25',
+  },
+  opex: {
+    head: 'bg-pnl-opex-bg text-pnl-opex',
+    body: 'bg-pnl-opex-bg/40',
+    accent: 'bg-pnl-opex',
+    rule: 'border-pnl-opex/25',
+  },
+  result: {
+    head: 'bg-pnl-result-bg text-foreground',
+    body: 'bg-pnl-result-bg/50',
+    accent: 'bg-accent',
+    rule: 'border-border',
+  },
+};
+
+/**
  * Twelve months across, with each figure showing its share of annual revenue.
  *
  * Percentages are what make a P&L readable: 30% food cost means something to
@@ -110,40 +148,57 @@ export default function AnnualPnL() {
 
   const Row = ({
     line,
+    section,
+    heading = false,
     indent = false,
-    bold = false,
-    emphasis = false,
   }: {
     line: Line;
+    section: Section;
+    /** The band's own total line, which carries its colour and weight. */
+    heading?: boolean;
     indent?: boolean;
-    bold?: boolean;
-    emphasis?: boolean;
-  }) => (
-    <tr className={emphasis ? 'border-t border-border' : ''}>
-      <th
-        scope="row"
-        className={`sticky left-0 z-10 bg-card text-left px-4 py-2 font-normal whitespace-nowrap
-                    ${indent ? 'pl-8 text-muted-foreground' : 'text-foreground'}
-                    ${bold ? 'font-semibold' : ''}`}
-      >
-        {line.label}
-      </th>
+  }) => {
+    const style = SECTION[section];
 
-      {MONTH_ABBR.map((_, i) => (
-        <td key={i} className="px-2.5 py-2 text-right">
-          <Cell line={line} monthIndex={i} bold={bold} />
+    return (
+      <tr className={heading ? `${style.head} border-t ${style.rule}` : style.body}>
+        <th
+          scope="row"
+          className={`sticky left-0 z-10 text-left px-4 py-2 whitespace-nowrap
+                      ${heading ? `${style.head} font-semibold` : `${style.body} font-normal`}
+                      ${indent ? 'pl-8 text-muted-foreground' : ''}`}
+        >
+          {/* A colour stripe on the band's own line, so the section is legible
+              even where the tint is too faint to survive a projector. */}
+          {heading && (
+            <span
+              className={`inline-block align-middle mr-2 w-1 h-3.5 rounded-full ${style.accent}`}
+              aria-hidden="true"
+            />
+          )}
+          {line.label}
+        </th>
+
+        {MONTH_ABBR.map((_, i) => (
+          <td key={i} className="px-2.5 py-2 text-right">
+            <Cell line={line} monthIndex={i} bold={heading} />
+          </td>
+        ))}
+
+        <td className={`px-4 py-2 text-right border-l ${style.rule}`}>
+          <Cell line={line} monthIndex={null} bold />
         </td>
-      ))}
 
-      <td className="px-4 py-2 text-right border-l border-border-subtle">
-        <Cell line={line} monthIndex={null} bold />
-      </td>
-
-      <td className="px-4 py-2 text-right text-muted-foreground figure whitespace-nowrap">
-        {line.percentOfRevenue === null ? '' : formatPercent(line.percentOfRevenue)}
-      </td>
-    </tr>
-  );
+        <td
+          className={`sticky right-0 z-10 px-4 py-2 text-right figure whitespace-nowrap
+                      border-l ${style.rule}
+                      ${heading ? `${style.head} font-semibold` : `${style.body} text-muted-foreground`}`}
+        >
+          {line.percentOfRevenue === null ? '' : formatPercent(line.percentOfRevenue)}
+        </td>
+      </tr>
+    );
+  };
 
   if (loading) {
     return (
@@ -189,7 +244,10 @@ export default function AnnualPnL() {
           </select>
         </div>
 
-        {/* The table is wider than a phone; it scrolls rather than the page. */}
+        {/* Wider than a phone, and wider than most laptops once twelve months
+            and a total are across. The label and the percentage are pinned to
+            either edge so a figure in the middle always has both its name and
+            its share of revenue in view. */}
         <div className="overflow-x-auto -mx-6 px-6">
           <table className="min-w-full w-max text-sm border-collapse">
             <caption className="sr-only">
@@ -206,28 +264,33 @@ export default function AnnualPnL() {
                 <th scope="col" className="px-4 py-2 text-right font-medium border-l border-border-subtle">
                   Total
                 </th>
-                <th scope="col" className="px-4 py-2 text-right font-medium">% rec.</th>
+                <th
+                  scope="col"
+                  className="sticky right-0 z-10 bg-card px-4 py-2 text-right font-medium border-l border-border-subtle"
+                >
+                  % rec.
+                </th>
               </tr>
             </thead>
 
             <tbody>
-              <Row line={data.revenue} bold />
-              <Row line={data.dineIn} indent />
-              <Row line={data.takeaway} indent />
+              <Row line={data.revenue} section="revenue" heading />
+              <Row line={data.dineIn} section="revenue" indent />
+              <Row line={data.takeaway} section="revenue" indent />
 
-              <Row line={data.cogs} bold emphasis />
+              <Row line={data.cogs} section="cogs" heading />
               {data.cogsLines.map((l) => (
-                <Row key={l.label} line={l} indent />
+                <Row key={l.label} line={l} section="cogs" indent />
               ))}
 
-              <Row line={data.grossProfit} bold emphasis />
+              <Row line={data.grossProfit} section="result" heading />
 
-              <Row line={data.opex} bold emphasis />
+              <Row line={data.opex} section="opex" heading />
               {data.opexLines.map((l) => (
-                <Row key={l.label} line={l} indent />
+                <Row key={l.label} line={l} section="opex" indent />
               ))}
 
-              <Row line={data.netIncome} bold emphasis />
+              <Row line={data.netIncome} section="result" heading />
             </tbody>
           </table>
         </div>
