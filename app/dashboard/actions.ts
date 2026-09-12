@@ -22,9 +22,13 @@ export async function getRestaurant() {
     const owner = await requireOwner();
     if (isAuthError(owner)) return { error: owner.error };
 
+    // Keyed on the restaurant requireOwner resolved, not on whichever
+    // membership the database returns first: re-querying by user alone
+    // ignored the active-restaurant choice and showed the wrong name.
     const membership = await prisma.membership.findFirst({
       where: {
         userId: owner.userId,
+        restaurantId: owner.restaurantId,
         role: 'OWNER',
         active: true,
       },
@@ -929,11 +933,6 @@ export async function updateStaffPermissions(membershipId: string, permissions: 
     const owner = await requireOwner();
     if (isAuthError(owner)) return { error: owner.error };
 
-    const ownerMembership = await prisma.membership.findFirst({
-      where: { userId: owner.userId, role: 'OWNER', active: true },
-    });
-    if (!ownerMembership) return { error: 'Not an owner' };
-
     // Verify the target membership belongs to the same restaurant
     const targetMembership = await prisma.membership.findFirst({
       where: { id: membershipId, restaurantId: owner.restaurantId },
@@ -955,11 +954,6 @@ export async function removeStaff(membershipId: string) {
   try {
     const owner = await requireOwner();
     if (isAuthError(owner)) return { error: owner.error };
-
-    const ownerMembership = await prisma.membership.findFirst({
-      where: { userId: owner.userId, role: 'OWNER', active: true },
-    });
-    if (!ownerMembership) return { error: 'Not an owner' };
 
     const targetMembership = await prisma.membership.findFirst({
       where: { id: membershipId, restaurantId: owner.restaurantId, role: 'STAFF' },
