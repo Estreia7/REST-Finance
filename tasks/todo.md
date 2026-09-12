@@ -1,63 +1,59 @@
-# Glossário e tooltips na tab Análises
+# Tab de Horários
 
-## Objetivo
-Qualquer dono de restaurante, sem formação financeira, deve perceber cada número
-e cada sigla sem sair do ecrã. Decisões do utilizador (2026-09-12):
-- Formato: ícone (i) + tooltip on hover/toque.
-- Conteúdo: **só a definição** do termo, sem julgar o número.
-- Âmbito: os 6 sub-painéis de Análises + séries/eixos dos gráficos + KPICards.
+## Decisões (2026-09-12)
+- Colaboradores próprios do horário, **sem login**.
+- Turnos: atalhos pré-definidos **e** horas livres.
+- Só para o dono (requireOwner em todas as actions).
+- Export JPG por semana para WhatsApp.
 
-## Plano
+## Feito
 
-- [x] 1. `lib/glossary.ts` — 38 termos, pt + en.
-- [x] 2. `app/components/InfoHint.tsx` — o ícone (i) acessível.
-- [x] 3. Generalizar `app/components/Tooltip.tsx` (contenção horizontal, Escape).
-- [x] 4. Aplicar nos painéis (P&L mensal e anual, Comparação, Tickets, Metas,
-      Preços, Relatório).
-- [x] 5. Gráficos: subtítulo por baixo de cada título.
-- [x] 6. KPICards no Dashboard.
-- [x] 7. Traduções en/pt.
-- [x] 8. Verificação: tsc, 190 testes, build, e screenshots reais.
+- [x] Schema: ScheduleEmployee, ShiftTemplate, Shift, ScheduleClosure +
+      migração SQL manual.
+- [x] `lib/schedule.ts` — aritmética pura de semanas/horas (24 testes).
+- [x] `app/dashboard/schedule-actions.ts` — todas com requireOwner.
+- [x] Grelha semanal desktop + vista por dia no telemóvel.
+- [x] Fechar um dia num toque; repetir a semana X vezes.
+- [x] Adicionar/editar/remover colaboradores (soft delete).
+- [x] Export JPG via sharp (6 testes).
+- [x] Tab + sidebar + TopBar + traduções pt/en.
 
 ## Review
 
-### O que mudou
-- **`lib/glossary.ts`** (novo) — a fonte única. 38 termos em pt e en, cada um
-  com `term`, `expansion` (a sigla por extenso) e `plain` (a explicação). A
-  regra de escrita: nomear coisas que o dono toca — facturas, ordenados, renda —
-  e nunca definir um termo usando outro termo do mesmo ficheiro.
-- **`app/components/InfoHint.tsx`** (novo) — o ícone (i). Botão focável por
-  teclado, com aria-label, SVG desenhado à mão porque o ícone do lucide fica
-  meio pixel descentrado a 13px.
-- **`app/components/Tooltip.tsx`** — passou a conter-se na horizontal (antes
-  cortava fora do ecrã nas colunas extremas), a fechar com Escape e a abrir
-  com foco de teclado, não só com o rato.
-- 9 componentes com hints + 5 subtítulos de gráfico em `lib/translations.ts`.
-- **`tests/glossary.test.ts`** (novo) — 6 testes.
-
 ### Decisões que vale a pena registar
-- **Um glossário central, não strings espalhadas.** COGS aparece em 4 sítios;
-  com o dicionário central a definição é a mesma em todos e muda num só lugar.
-- **`cogsPct` é uma entrada separada de `cogs`.** "COGS %" precisa que se diga
-  qual é o denominador — a definição de COGS sozinha nunca diz "de cada 100 €
-  que vendeu".
-- **Sem julgamento do número.** Isso já vive em `lib/benchmarks.ts`, com as
-  fontes portuguesas (NRA, AHRESP, Banco de Portugal). Duplicar era arriscar
-  que os dois lados se contradissessem.
-- **Só os totais de banda levam ícone na tabela anual.** As linhas de detalhe
-  são as categorias que o próprio dono criou; um ícone em cada linha enterrava
-  os números.
+- **ScheduleEmployee não é User.** O copeiro entra no horário e nunca abre a
+  app. Obrigar a email e convite tornava a feature inútil para metade da
+  equipa que ela existe para organizar.
+- **Minutos desde a meia-noite, não timestamps.** Uma grelha que se repete
+  toda a semana não tem nada a ver com fusos nem com a mudança da hora: um
+  turno "09:00–17:00" continua 09:00–17:00 para quem o trabalha.
+- **Turno que passa da meia-noite.** 17:00→02:00 dá 9h, não −15h. Se fosse
+  negativo, o total semanal encolhia à medida que alguém trabalha até mais
+  tarde. Está testado.
+- **Remover alguém é soft delete.** Os turnos passados ficam; um horário que
+  reescreve a história quando uma pessoa sai não é registo de nada. Só os
+  turnos futuros é que são apagados, para não mandar à equipa uma imagem com
+  o nome de quem já não vem.
+- **Copiar semanas não sobrepõe sem avisar.** Deitar fora em silêncio uma
+  semana que alguém passou tempo a montar é destruição que nenhum undo
+  resolve aqui — pergunta primeiro.
+- **Dia fechado é tabela própria.** É um facto sobre o restaurante, não sobre
+  uma pessoa, e tem de sobreviver a todos os colaboradores saírem desse dia.
+- **A imagem existe porque é assim que os horários circulam.** Uma imagem
+  chega à conversa que a equipa já lê e funciona no telemóvel mais velho da
+  cozinha; um link exigia conta a toda a gente.
 
-### Verificação feita
-- `tsc --noEmit` limpo; `next build` limpo.
-- 190 testes passam (184 antes + 6 novos).
-- Screenshots reais com Playwright a 1440px e a 390px, com hover aplicado:
-  os balões ficam dentro do ecrã nos dois extremos (no telemóvel o balão da
-  direita desliza para x=122 em vez de cortar) e a seta continua a apontar
-  para o ícone. Corrigido o alinhamento do ícone, que assentava abaixo da
-  linha de base do texto.
+### Verificação
+- tsc limpo, `next build` limpo, 220 testes (30 novos).
+- Imagem JPG gerada e inspeccionada: acentos, "&" escapado, dia fechado como
+  banda contínua, totais semanais em coluna própria.
+- Grelha verificada a 1440px e 390px — sem scroll horizontal.
+- Detector de design da skill impeccable: limpo.
 
-### Fica por fazer
-- Os `<option>` do seletor de limiar de preços continuam a ser "+5%", "+10%".
-  O rótulo "Avisar a partir de" já os enquadra, mas se quiser algo mais
-  explícito ("subidas acima de 5%") é uma alteração de uma linha.
+### Por fazer / a confirmar
+- **A migração ainda não correu** — a base de dados está em standby. Corre no
+  próximo `prisma migrate deploy`.
+- O painel foi verificado com dados de exemplo, não com dados reais.
+- Templates de turno: as actions existem (saveTemplate/deleteTemplate) mas
+  ainda não há ecrã para os gerir; por agora usam-se os três por omissão
+  (Manhã/Tarde/Noite). É o passo seguinte natural.

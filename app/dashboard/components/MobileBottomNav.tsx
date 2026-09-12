@@ -2,7 +2,7 @@
 
 import { LayoutDashboard, TrendingUp, DollarSign, Settings, BarChart3 } from 'lucide-react';
 
-type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'compliance' | 'users' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'compliance' | 'schedule' | 'users' | 'billing' | 'settings';
 
 const items = [
   { id: 'dashboard' as Tab, icon: LayoutDashboard, label: 'Dashboard' },

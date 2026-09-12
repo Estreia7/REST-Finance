@@ -98,6 +98,10 @@ model Restaurant {
   vendors        Vendor[]
   invoiceItems   InvoiceItem[]
   complianceDocs ComplianceDoc[]
+  scheduleEmployees ScheduleEmployee[]
+  shiftTemplates    ShiftTemplate[]
+  shifts            Shift[]
+  scheduleClosures  ScheduleClosure[]
 
   @@map("restaurants")
 }
@@ -475,4 +479,115 @@ model InvoiceItem {
   @@index([restaurantId, normalizedName, vendorId, invoiceDate])
   @@index([restaurantId, invoiceDate])
   @@map("invoice_items")
+}
+
+/// A person on the roster.
+///
+/// Deliberately not a User. The people who appear on a restaurant's schedule
+/// are not the people who log into its accounting: the kitchen porter and the
+/// weekend server need to be on the rota and will never open the app. Forcing
+/// an email and an invite on them would make the schedule unusable for the
+/// half of the team it exists to organise.
+model ScheduleEmployee {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  name String
+  /// Free text rather than an enum: every restaurant names its own stations.
+  role String?
+
+  /// Identifies the person at a glance on a dense grid, and survives being
+  /// printed or sent as an image where hover is not available.
+  color String @default("slate")
+
+  /// Ordering on the grid, so the owner can group the kitchen together.
+  sortOrder Int @default(0) @map("sort_order")
+
+  /// Someone who has left keeps their past shifts: a schedule that rewrites
+  /// history when a person leaves is not a record of anything. They simply
+  /// stop appearing on new weeks.
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  shifts Shift[]
+
+  @@index([restaurantId, active, sortOrder])
+  @@map("schedule_employees")
+}
+
+/// A named shift the restaurant uses often, such as "Manhã 09:00–17:00".
+///
+/// The owner still types free hours for the days that break the pattern; the
+/// template is a shortcut, not a constraint.
+model ShiftTemplate {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  label     String
+  /// Minutes from midnight. Integers compare and sum without timezone or
+  /// DST trouble, which a DateTime on a recurring weekly grid invites.
+  startMin  Int    @map("start_min")
+  endMin    Int    @map("end_min")
+  sortOrder Int    @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([restaurantId, sortOrder])
+  @@map("shift_templates")
+}
+
+/// One person working one day.
+///
+/// Keyed by calendar date rather than by week plus weekday: copying a week
+/// forward then becomes ordinary row creation, and a shift always knows the
+/// real day it belongs to without the caller reconstructing it.
+model Shift {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  employee   ScheduleEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId String           @map("employee_id")
+
+  /// Midnight UTC on the day worked. Stored as a date, not an instant.
+  date DateTime @db.Date
+
+  startMin Int @map("start_min")
+  endMin   Int @map("end_min")
+
+  /// "Fecho", "Só até às 15h" — whatever the owner needs the team to read.
+  note String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// One shift per person per day. A split shift is expressed with a note
+  /// rather than two rows, which keeps the grid one cell per cell.
+  @@unique([employeeId, date])
+  @@index([restaurantId, date])
+  @@map("shifts")
+}
+
+/// A day the restaurant does not open.
+///
+/// Its own table rather than a flag on Shift: a closed day is a fact about
+/// the restaurant, not about any one person, and it has to survive every
+/// employee being removed from that day.
+model ScheduleClosure {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  date   DateTime @db.Date
+  /// "Feriado", "Férias", "Obras" — shown on the image sent to the team.
+  reason String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([restaurantId, date])
+  @@index([restaurantId, date])
+  @@map("schedule_closures")
 }
