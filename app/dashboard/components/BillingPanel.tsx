@@ -3,18 +3,24 @@
 import { useState } from 'react';
 import { CreditCard, CheckCircle2, ChevronRight, ExternalLink, Loader2, Crown, ShieldCheck } from 'lucide-react';
 import { STRIPE_PRICES, PLAN_PRICES } from '@/lib/stripe';
+import { useLanguage } from '@/lib/language-context';
 
 interface BillingPanelProps {
   restaurant: any;
 }
 
-const PLAN_FEATURES: Record<string, string[]> = {
-  TRIAL:   ['1 restaurante', 'KPIs em tempo real', 'Exportação CSV', '14 dias gratuitos'],
-  MONTHLY: ['1 restaurante', 'Até 2 colaboradores', 'Relatórios PDF mensais', 'Alertas de custo', 'Suporte prioritário'],
-  YEARLY:  ['1 restaurante', 'Até 2 colaboradores', 'Relatórios PDF mensais', 'Alertas de custo', 'Suporte prioritário', '2 meses gratuitos'],
+/**
+ * Which features each plan carries. Keys rather than sentences, so the list
+ * reads in the owner's own language.
+ */
+const PLAN_FEATURE_KEYS: Record<string, string[]> = {
+  TRIAL:   ['oneRestaurant', 'liveKpis', 'csvExport', 'fourteenDaysFree'],
+  MONTHLY: ['oneRestaurant', 'upToTwoStaff', 'monthlyPdf', 'costAlerts', 'prioritySupport'],
+  YEARLY:  ['oneRestaurant', 'upToTwoStaff', 'monthlyPdf', 'costAlerts', 'prioritySupport', 'twoMonthsFree'],
 };
 
 export default function BillingPanel({ restaurant }: BillingPanelProps) {
+  const { t } = useLanguage();
   const [loading, setLoading] = useState<string | null>(null);
 
   const plan   = restaurant?.plan ?? 'TRIAL';
@@ -60,16 +66,16 @@ export default function BillingPanel({ restaurant }: BillingPanelProps) {
   };
 
   const planLabels: Record<string, string> = {
-    TRIAL:   'Trial Gratuito',
-    MONTHLY: 'Standard',
-    YEARLY:  'Standard Anual',
+    TRIAL:   t('billing.planTrial'),
+    MONTHLY: t('billing.planStandard'),
+    YEARLY:  t('billing.planStandardYearly'),
   };
 
   const statusLabels: Record<string, { label: string; className: string }> = {
-    active:     { label: 'Activo',     className: 'badge-success' },
-    trialing:   { label: 'Trial',      className: 'badge-info' },
-    past_due:   { label: 'Pagamento em atraso', className: 'badge-danger' },
-    canceled:   { label: 'Cancelado',  className: 'badge-muted' },
+    active:     { label: t('billing.statusActive'),   className: 'badge-success' },
+    trialing:   { label: t('billing.statusTrialing'), className: 'badge-info' },
+    past_due:   { label: t('billing.statusPastDue'),  className: 'badge-danger' },
+    canceled:   { label: t('billing.statusCanceled'), className: 'badge-muted' },
   };
 
   return (
@@ -77,7 +83,7 @@ export default function BillingPanel({ restaurant }: BillingPanelProps) {
       {/* Current plan */}
       <div className="card-glass p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-foreground">Plano Actual</h2>
+          <h2 className="text-lg font-bold text-foreground">{t('billing.currentPlan')}</h2>
           {status && statusLabels[status] && (
             <span className={`badge ${statusLabels[status].className}`}>{statusLabels[status].label}</span>
           )}
@@ -90,21 +96,25 @@ export default function BillingPanel({ restaurant }: BillingPanelProps) {
           <div className="flex-1">
             <div className="font-bold text-foreground text-lg">{planLabels[plan] ?? plan}</div>
             <div className="text-sm text-muted-foreground">
-              {isTrial && trialEnd ? `Trial até ${trialEnd}` :
-               periodEnd ? `Renova em ${periodEnd}` : '—'}
+              {isTrial && trialEnd ? `${t('billing.trialUntil')} ${trialEnd}` :
+               periodEnd ? `${t('billing.renewsOn')} ${periodEnd}` : '—'}
             </div>
           </div>
           <div className="text-right">
             <div className="text-2xl font-black text-foreground">
-              {isTrial ? 'Grátis' : plan === 'MONTHLY' ? '€29/mês' : '€290/ano'}
+              {isTrial
+                ? t('billing.free')
+                : plan === 'MONTHLY'
+                  ? `€29/${t('billing.perMonth')}`
+                  : `€290/${t('billing.perYear')}`}
             </div>
           </div>
         </div>
 
         <ul className="space-y-2 mb-6">
-          {(PLAN_FEATURES[plan] ?? []).map(f => (
-            <li key={f} className="flex items-center gap-2.5 text-sm text-muted-foreground">
-              <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />{f}
+          {(PLAN_FEATURE_KEYS[plan] ?? []).map(key => (
+            <li key={key} className="flex items-center gap-2.5 text-sm text-muted-foreground">
+              <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />{t(`billing.feature.${key}`)}
             </li>
           ))}
         </ul>
@@ -116,7 +126,7 @@ export default function BillingPanel({ restaurant }: BillingPanelProps) {
             className="cta-button-secondary flex items-center gap-2"
           >
             {loading === 'portal' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-            Gerir faturação (Stripe)
+            {t('billing.manageBilling')}
           </button>
         ) : null}
       </div>
@@ -124,35 +134,35 @@ export default function BillingPanel({ restaurant }: BillingPanelProps) {
       {/* Upgrade options — only shown on trial */}
       {isTrial && (
         <div className="card-glass p-6">
-          <h2 className="text-lg font-bold text-foreground mb-6">Fazer Upgrade</h2>
+          <h2 className="text-lg font-bold text-foreground mb-6">{t('billing.upgrade')}</h2>
           <div className="grid md:grid-cols-2 gap-4">
             {[
               {
-                name:    'Standard',
+                name:    t('billing.planStandard'),
                 price:   PLAN_PRICES.STANDARD_MONTHLY,
                 priceId: STRIPE_PRICES.STANDARD_MONTHLY,
-                features: ['1 restaurante', 'Até 2 colaboradores', 'Relatórios PDF', 'Alertas de custo'],
+                featureKeys: ['oneRestaurant', 'upToTwoStaff', 'pdfReports', 'costAlerts'],
               },
               {
-                name:    'Pro',
+                name:    t('billing.planPro'),
                 price:   PLAN_PRICES.PRO_MONTHLY,
                 priceId: STRIPE_PRICES.PRO_MONTHLY,
                 recommended: true,
-                features: ['Até 3 restaurantes', 'Colaboradores ilimitados', 'Comparação anual', 'Gestor dedicado'],
+                featureKeys: ['upToThreeRestaurants', 'unlimitedStaff', 'annualComparison', 'dedicatedManager'],
               },
             ].map(p => (
               <div key={p.name} className={`rounded-xl p-5 ${p.recommended ? 'glow-border bg-primary-subtle' : 'bg-surface border border-border'}`}>
                 {p.recommended && (
-                  <div className="text-xs font-bold gradient-text mb-2">Recomendado</div>
+                  <div className="text-xs font-bold gradient-text mb-2">{t('billing.recommended')}</div>
                 )}
                 <div className="font-bold text-foreground mb-1">{p.name}</div>
                 <div className="text-2xl font-black text-foreground mb-4">
-                  €{p.price}<span className="text-sm font-normal text-muted-foreground">/mês</span>
+                  €{p.price}<span className="text-sm font-normal text-muted-foreground">/{t('billing.perMonth')}</span>
                 </div>
                 <ul className="space-y-1.5 mb-5">
-                  {p.features.map(f => (
-                    <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-green-400 shrink-0" />{f}
+                  {p.featureKeys.map(key => (
+                    <li key={key} className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-green-400 shrink-0" />{t(`billing.feature.${key}`)}
                     </li>
                   ))}
                 </ul>
@@ -163,7 +173,7 @@ export default function BillingPanel({ restaurant }: BillingPanelProps) {
                 >
                   {loading === p.priceId
                     ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <><ChevronRight className="w-4 h-4" />Escolher {p.name}</>
+                    : <><ChevronRight className="w-4 h-4" />{t('billing.choose')} {p.name}</>
                   }
                 </button>
               </div>
@@ -171,7 +181,7 @@ export default function BillingPanel({ restaurant }: BillingPanelProps) {
           </div>
           <p className="text-xs text-muted-foreground mt-5 flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-green-400" />
-            Pagamento seguro via Stripe · Cancela quando quiseres
+            {t('billing.secureNote')}
           </p>
         </div>
       )}

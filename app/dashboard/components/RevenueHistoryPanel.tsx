@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Pencil, Trash2, Loader2, X, Check, Calendar, Download } from 'lucide-react';
 import { getRevenueHistory, updateDailySummary, deleteDailySummary } from '../actions';
+import { useLanguage } from '@/lib/language-context';
 
 interface RevenueEntry {
   id: string;
@@ -18,6 +19,8 @@ interface RevenueEntry {
 }
 
 export default function RevenueHistoryPanel({ onDataChange }: { onDataChange?: () => void }) {
+  const { t, language } = useLanguage();
+  const locale = language === 'pt' ? 'pt-PT' : 'en-GB';
   const [entries, setEntries] = useState<RevenueEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -67,12 +70,12 @@ export default function RevenueHistoryPanel({ onDataChange }: { onDataChange?: (
       notes: editForm.notes ?? undefined,
     });
     if (result.success) {
-      toast.success('Entrada atualizada!');
+      toast.success(t('revenueHistory.toast.updated'));
       setEditingId(null);
       await loadEntries();
       onDataChange?.();
     } else {
-      toast.error(result.error || 'Erro ao atualizar');
+      toast.error(result.error || t('revenueHistory.toast.updateFailed'));
     }
     setSaving(false);
   };
@@ -81,11 +84,11 @@ export default function RevenueHistoryPanel({ onDataChange }: { onDataChange?: (
     setDeletingId(id);
     const result = await deleteDailySummary(id);
     if (result.success) {
-      toast.success('Entrada eliminada!');
+      toast.success(t('revenueHistory.toast.deleted'));
       await loadEntries();
       onDataChange?.();
     } else {
-      toast.error(result.error || 'Erro ao eliminar');
+      toast.error(result.error || t('revenueHistory.toast.deleteFailed'));
     }
     setDeletingId(null);
   };
@@ -101,19 +104,19 @@ export default function RevenueHistoryPanel({ onDataChange }: { onDataChange?: (
     { dineIn: 0, takeaway: 0, total: 0, dineInTickets: 0, takeawayTickets: 0 }
   );
 
-  const fmt = (n: number) => `€${n.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}`;
-  const fmtDate = (d: Date) => new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
+  const fmt = (n: number) => `€${n.toLocaleString(locale, { minimumFractionDigits: 2 })}`;
+  const fmtDate = (d: Date) => new Date(d).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
 
   return (
     <div className="card-glass p-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <h2 className="text-xl font-bold text-foreground">Historial de Receita</h2>
+        <h2 className="text-xl font-bold text-foreground">{t('revenueHistory.title')}</h2>
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-muted-foreground" />
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="input-field !py-1.5 !text-xs w-[130px]" />
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} aria-label={t('revenueHistory.dateFrom')} className="input-field !py-1.5 !text-xs w-[130px]" />
           <span className="text-muted-foreground text-xs">—</span>
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="input-field !py-1.5 !text-xs w-[130px]" />
-          <a href={`/api/export/csv?type=revenue&from=${dateFrom}&to=${dateTo}`} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Exportar CSV">
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} aria-label={t('revenueHistory.dateTo')} className="input-field !py-1.5 !text-xs w-[130px]" />
+          <a href={`/api/export/csv?type=revenue&from=${dateFrom}&to=${dateTo}`} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={t('revenueHistory.exportCsv')} aria-label={t('revenueHistory.exportCsv')}>
             <Download className="w-4 h-4" />
           </a>
         </div>
@@ -125,18 +128,18 @@ export default function RevenueHistoryPanel({ onDataChange }: { onDataChange?: (
         </div>
       ) : entries.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground text-sm">
-          Sem entradas para este período.
+          {t('revenueHistory.empty')}
         </div>
       ) : (
         <div className="overflow-x-auto -mx-6 px-6">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border-subtle">
-                <th className="text-left py-3 text-xs font-medium text-muted-foreground">Data</th>
-                <th className="text-right py-3 text-xs font-medium text-muted-foreground">Local</th>
-                <th className="text-right py-3 text-xs font-medium text-muted-foreground">Takeaway</th>
-                <th className="text-right py-3 text-xs font-medium text-muted-foreground">Total</th>
-                <th className="text-right py-3 text-xs font-medium text-muted-foreground hidden sm:table-cell">Tickets</th>
+                <th className="text-left py-3 text-xs font-medium text-muted-foreground">{t('revenueHistory.col.date')}</th>
+                <th className="text-right py-3 text-xs font-medium text-muted-foreground">{t('revenueHistory.col.dineIn')}</th>
+                <th className="text-right py-3 text-xs font-medium text-muted-foreground">{t('revenueHistory.col.takeaway')}</th>
+                <th className="text-right py-3 text-xs font-medium text-muted-foreground">{t('revenueHistory.col.total')}</th>
+                <th className="text-right py-3 text-xs font-medium text-muted-foreground hidden sm:table-cell">{t('revenueHistory.col.tickets')}</th>
                 <th className="text-right py-3 text-xs font-medium text-muted-foreground w-24"></th>
               </tr>
             </thead>
@@ -147,26 +150,26 @@ export default function RevenueHistoryPanel({ onDataChange }: { onDataChange?: (
                     <>
                       <td className="py-3 text-foreground font-medium">{fmtDate(entry.date)}</td>
                       <td className="py-3 text-right">
-                        <input type="number" step="0.01" value={editForm.dineInRevenue ?? ''} onChange={e => setEditForm({ ...editForm, dineInRevenue: parseFloat(e.target.value) || 0 })} className="input-field !py-1 !text-xs !text-right w-24 ml-auto" />
+                        <input type="number" step="0.01" value={editForm.dineInRevenue ?? ''} onChange={e => setEditForm({ ...editForm, dineInRevenue: parseFloat(e.target.value) || 0 })} aria-label={t('revenueHistory.col.dineIn')} className="input-field !py-1 !text-xs !text-right w-24 ml-auto" />
                       </td>
                       <td className="py-3 text-right">
-                        <input type="number" step="0.01" value={editForm.takeawayRevenue ?? ''} onChange={e => setEditForm({ ...editForm, takeawayRevenue: parseFloat(e.target.value) || 0 })} className="input-field !py-1 !text-xs !text-right w-24 ml-auto" />
+                        <input type="number" step="0.01" value={editForm.takeawayRevenue ?? ''} onChange={e => setEditForm({ ...editForm, takeawayRevenue: parseFloat(e.target.value) || 0 })} aria-label={t('revenueHistory.col.takeaway')} className="input-field !py-1 !text-xs !text-right w-24 ml-auto" />
                       </td>
                       <td className="py-3 text-right font-semibold text-foreground">
                         {fmt((editForm.dineInRevenue || 0) + (editForm.takeawayRevenue || 0))}
                       </td>
                       <td className="py-3 text-right hidden sm:table-cell">
                         <div className="flex gap-1 justify-end">
-                          <input type="number" value={editForm.dineInTickets ?? ''} onChange={e => setEditForm({ ...editForm, dineInTickets: parseInt(e.target.value) || 0 })} className="input-field !py-1 !text-xs !text-right w-16" />
-                          <input type="number" value={editForm.takeawayTickets ?? ''} onChange={e => setEditForm({ ...editForm, takeawayTickets: parseInt(e.target.value) || 0 })} className="input-field !py-1 !text-xs !text-right w-16" />
+                          <input type="number" value={editForm.dineInTickets ?? ''} onChange={e => setEditForm({ ...editForm, dineInTickets: parseInt(e.target.value) || 0 })} aria-label={t('revenueHistory.dineInTickets')} className="input-field !py-1 !text-xs !text-right w-16" />
+                          <input type="number" value={editForm.takeawayTickets ?? ''} onChange={e => setEditForm({ ...editForm, takeawayTickets: parseInt(e.target.value) || 0 })} aria-label={t('revenueHistory.takeawayTickets')} className="input-field !py-1 !text-xs !text-right w-16" />
                         </div>
                       </td>
                       <td className="py-3 text-right">
                         <div className="flex gap-1 justify-end">
-                          <button onClick={handleSave} disabled={saving} className="p-1.5 rounded-lg bg-success/20 text-green-400 hover:bg-success/30 transition-colors">
+                          <button onClick={handleSave} disabled={saving} aria-label={t('revenueHistory.action.save')} className="p-1.5 rounded-lg bg-success/20 text-green-400 hover:bg-success/30 transition-colors">
                             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                           </button>
-                          <button onClick={() => setEditingId(null)} className="p-1.5 rounded-lg bg-muted text-muted-foreground hover:bg-muted transition-colors">
+                          <button onClick={() => setEditingId(null)} aria-label={t('revenueHistory.action.cancel')} className="p-1.5 rounded-lg bg-muted text-muted-foreground hover:bg-muted transition-colors">
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -183,10 +186,10 @@ export default function RevenueHistoryPanel({ onDataChange }: { onDataChange?: (
                       </td>
                       <td className="py-3 text-right">
                         <div className="flex gap-1 justify-end">
-                          <button onClick={() => handleEdit(entry)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                          <button onClick={() => handleEdit(entry)} aria-label={t('revenueHistory.action.edit')} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => handleDelete(entry.id)} disabled={deletingId === entry.id} className="p-1.5 rounded-lg hover:bg-danger/10 text-muted-foreground hover:text-red-400 transition-colors">
+                          <button onClick={() => handleDelete(entry.id)} disabled={deletingId === entry.id} aria-label={t('revenueHistory.action.delete')} className="p-1.5 rounded-lg hover:bg-danger/10 text-muted-foreground hover:text-red-400 transition-colors">
                             {deletingId === entry.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                           </button>
                         </div>
@@ -198,7 +201,7 @@ export default function RevenueHistoryPanel({ onDataChange }: { onDataChange?: (
             </tbody>
             <tfoot>
               <tr className="border-t border-border">
-                <td className="py-3 text-xs font-bold text-foreground">Total</td>
+                <td className="py-3 text-xs font-bold text-foreground">{t('revenueHistory.col.total')}</td>
                 <td className="py-3 text-right text-xs font-bold text-foreground">{fmt(totals.dineIn)}</td>
                 <td className="py-3 text-right text-xs font-bold text-foreground">{fmt(totals.takeaway)}</td>
                 <td className="py-3 text-right text-xs font-bold gradient-text">{fmt(totals.total)}</td>

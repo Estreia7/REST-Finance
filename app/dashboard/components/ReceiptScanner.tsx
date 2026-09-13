@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { Camera, Loader2, Check, X, RotateCcw, Receipt, FileText } from 'lucide-react';
 import { createDailySummary, createCostEntry, getCategories } from '../actions';
+import { useLanguage } from '@/lib/language-context';
 
 type ScanType = 'COST_RECEIPT' | 'DAILY_REPORT';
 
@@ -29,6 +30,7 @@ interface DailyReportData {
 type ExtractionResult = CostReceiptData | DailyReportData;
 
 export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
+  const { t } = useLanguage();
   const [scanType, setScanType] = useState<ScanType>('DAILY_REPORT');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -73,12 +75,12 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
       if (result.success) {
         setExtracted(result.data);
         setEditData(result.data);
-        toast.success('Dados extraídos! Revise e confirme.');
+        toast.success(t('scanner.extracted'));
       } else {
-        toast.error(result.error || 'Erro ao processar imagem');
+        toast.error(result.error || t('scanner.scanFailed'));
       }
     } catch {
-      toast.error('Erro ao processar imagem');
+      toast.error(t('scanner.scanFailed'));
     }
 
     setScanning(false);
@@ -99,11 +101,11 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
           takeawayTickets: d.takeawayTickets,
         });
         if (result.success) {
-          toast.success('Receita do dia registada!');
+          toast.success(t('scanner.revenueSaved'));
           resetState();
           onSaved?.();
         } else {
-          toast.error(result.error || 'Erro ao guardar');
+          toast.error(result.error || t('scanner.saveFailed'));
         }
       } else {
         const d = editData as CostReceiptData;
@@ -121,15 +123,15 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
           description: `${d.vendor} - ${d.items.map(i => i.product).join(', ')}`,
         });
         if (result.success) {
-          toast.success('Custo registado!');
+          toast.success(t('scanner.costSaved'));
           resetState();
           onSaved?.();
         } else {
-          toast.error(result.error || 'Erro ao guardar');
+          toast.error(result.error || t('scanner.saveFailed'));
         }
       }
     } catch {
-      toast.error('Erro ao guardar dados');
+      toast.error(t('scanner.saveFailed'));
     }
 
     setSaving(false);
@@ -144,7 +146,7 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
 
   return (
     <div className="card-glass p-6">
-      <h2 className="text-xl font-bold text-foreground mb-6">Digitalizar Recibo</h2>
+      <h2 className="text-xl font-bold text-foreground mb-6">{t('scanner.title')}</h2>
 
       {/* Scan type selector */}
       <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle mb-6">
@@ -152,13 +154,13 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
           onClick={() => { setScanType('DAILY_REPORT'); resetState(); }}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${scanType === 'DAILY_REPORT' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}
         >
-          <FileText className="w-3.5 h-3.5" /> Relatório Diário
+          <FileText className="w-3.5 h-3.5" /> {t('scanner.dailyReport')}
         </button>
         <button
           onClick={() => { setScanType('COST_RECEIPT'); resetState(); }}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${scanType === 'COST_RECEIPT' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}
         >
-          <Receipt className="w-3.5 h-3.5" /> Recibo de Custo
+          <Receipt className="w-3.5 h-3.5" /> {t('scanner.costReceipt')}
         </button>
       </div>
 
@@ -170,9 +172,11 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
           </div>
           <div className="text-center">
             <div className="text-sm font-semibold text-foreground">
-              {scanType === 'DAILY_REPORT' ? 'Fotografar relatório do dia' : 'Fotografar fatura/recibo'}
+              {scanType === 'DAILY_REPORT'
+                ? t('scanner.photographDailyReport')
+                : t('scanner.photographReceipt')}
             </div>
-            <div className="text-xs text-muted-foreground mt-1">Toque para abrir a câmara ou escolher ficheiro</div>
+            <div className="text-xs text-muted-foreground mt-1">{t('scanner.tapToOpenCamera')}</div>
           </div>
           <input
             ref={fileRef}
@@ -194,8 +198,8 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
           <div className="flex gap-3">
             <button onClick={handleScan} disabled={scanning} className="cta-button flex-1 justify-center">
               {scanning
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> A processar...</>
-                : <><Camera className="w-4 h-4" /> Extrair dados</>
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('scanner.processing')}</>
+                : <><Camera className="w-4 h-4" /> {t('scanner.extractData')}</>
               }
             </button>
             <button onClick={resetState} className="px-4 py-2.5 rounded-xl bg-muted text-muted-foreground hover:bg-muted transition-colors">
@@ -209,53 +213,53 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
       {editData && (
         <div className="space-y-4 mt-4">
           <div className="p-4 rounded-xl bg-success/5 border border-success/20">
-            <div className="text-xs font-semibold text-green-400 mb-3">Dados extraídos — revise antes de guardar</div>
+            <div className="text-xs font-semibold text-green-400 mb-3">{t('scanner.reviewBeforeSaving')}</div>
 
             {editData.type === 'daily_report' ? (
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Data</label>
+                  <label className="text-xs text-muted-foreground block mb-1">{t('scanner.date')}</label>
                   <input type="date" value={(editData as DailyReportData).date} onChange={e => setEditData({ ...editData, date: e.target.value } as any)} className="input-field !py-1.5 !text-xs" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Receita Local (€)</label>
+                    <label className="text-xs text-muted-foreground block mb-1">{t('scanner.dineInRevenue')} (€)</label>
                     <input type="number" step="0.01" value={(editData as DailyReportData).dineInRevenue} onChange={e => setEditData({ ...editData, dineInRevenue: parseFloat(e.target.value) || 0 } as any)} className="input-field !py-1.5 !text-xs" />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Receita Takeaway (€)</label>
+                    <label className="text-xs text-muted-foreground block mb-1">{t('scanner.takeawayRevenue')} (€)</label>
                     <input type="number" step="0.01" value={(editData as DailyReportData).takeawayRevenue} onChange={e => setEditData({ ...editData, takeawayRevenue: parseFloat(e.target.value) || 0 } as any)} className="input-field !py-1.5 !text-xs" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Tickets Local</label>
+                    <label className="text-xs text-muted-foreground block mb-1">{t('scanner.dineInTickets')}</label>
                     <input type="number" value={(editData as DailyReportData).dineInTickets} onChange={e => setEditData({ ...editData, dineInTickets: parseInt(e.target.value) || 0 } as any)} className="input-field !py-1.5 !text-xs" />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Tickets Takeaway</label>
+                    <label className="text-xs text-muted-foreground block mb-1">{t('scanner.takeawayTickets')}</label>
                     <input type="number" value={(editData as DailyReportData).takeawayTickets} onChange={e => setEditData({ ...editData, takeawayTickets: parseInt(e.target.value) || 0 } as any)} className="input-field !py-1.5 !text-xs" />
                   </div>
                 </div>
                 <div className="p-3 rounded-lg bg-muted text-sm font-bold text-foreground">
-                  Total: €{((editData as DailyReportData).dineInRevenue + (editData as DailyReportData).takeawayRevenue).toFixed(2)}
+                  {t('scanner.total')}: €{((editData as DailyReportData).dineInRevenue + (editData as DailyReportData).takeawayRevenue).toFixed(2)}
                 </div>
               </div>
             ) : (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Data</label>
+                    <label className="text-xs text-muted-foreground block mb-1">{t('scanner.date')}</label>
                     <input type="date" value={(editData as CostReceiptData).date} onChange={e => setEditData({ ...editData, date: e.target.value } as any)} className="input-field !py-1.5 !text-xs" />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Fornecedor</label>
+                    <label className="text-xs text-muted-foreground block mb-1">{t('scanner.vendor')}</label>
                     <input type="text" value={(editData as CostReceiptData).vendor} onChange={e => setEditData({ ...editData, vendor: e.target.value } as any)} className="input-field !py-1.5 !text-xs" />
                   </div>
                 </div>
                 {/* Items list */}
                 <div className="space-y-2">
-                  <div className="text-xs text-muted-foreground">Itens</div>
+                  <div className="text-xs text-muted-foreground">{t('scanner.items')}</div>
                   {(editData as CostReceiptData).items.map((item, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs bg-muted rounded-lg p-2">
                       <span className="flex-1 text-foreground">{item.product}</span>
@@ -266,14 +270,14 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Tipo</label>
+                    <label className="text-xs text-muted-foreground block mb-1">{t('scanner.type')}</label>
                     <select value={(editData as CostReceiptData).suggestedType} onChange={e => setEditData({ ...editData, suggestedType: e.target.value } as any)} className="input-field !py-1.5 !text-xs">
                       <option value="COGS">COGS</option>
                       <option value="OPEX">OPEX</option>
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Total (€)</label>
+                    <label className="text-xs text-muted-foreground block mb-1">{t('scanner.total')} (€)</label>
                     <input type="number" step="0.01" value={(editData as CostReceiptData).grandTotal} onChange={e => setEditData({ ...editData, grandTotal: parseFloat(e.target.value) || 0 } as any)} className="input-field !py-1.5 !text-xs" />
                   </div>
                 </div>
@@ -284,8 +288,8 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
           <div className="flex gap-3">
             <button onClick={handleConfirmSave} disabled={saving} className="cta-button flex-1 justify-center">
               {saving
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> A guardar...</>
-                : <><Check className="w-4 h-4" /> Confirmar e guardar</>
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('scanner.saving')}</>
+                : <><Check className="w-4 h-4" /> {t('scanner.confirmAndSave')}</>
               }
             </button>
             <button onClick={resetState} className="px-4 py-2.5 rounded-xl bg-muted text-muted-foreground hover:bg-muted text-sm transition-colors">

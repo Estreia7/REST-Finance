@@ -5,11 +5,12 @@ import { formatMoney, formatPercent } from '@/lib/format';
 import { rate, bandLabel, type PtBenchmarkKey } from '@/lib/benchmarks';
 import InfoHint from '@/app/components/InfoHint';
 import { type GlossaryKey } from '@/lib/glossary';
+import { useLanguage } from '@/lib/language-context';
 import {
   type Annual,
   type Line,
   type Section,
-  MONTH_FULL,
+  MONTH_KEYS,
   SECTION,
   HEALTH_DOT,
   HEALTH_TEXT,
@@ -44,6 +45,7 @@ interface Props {
 }
 
 export default function AnnualPnLMobile({ data, month, onMonthChange, onDrill }: Props) {
+  const { t } = useLanguage();
   const monthRevenue = data.revenue.months[month];
 
   return (
@@ -52,8 +54,8 @@ export default function AnnualPnLMobile({ data, month, onMonthChange, onDrill }:
 
       {monthRevenue === 0 && (
         <p className="mt-4 rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
-          Sem receita registada em {MONTH_FULL[month]}. As percentagens só
-          aparecem quando houver vendas no mês.
+          {t('annualPnl.noRevenueIn')} {t(`annualPnl.monthFull.${MONTH_KEYS[month]}`)}.{' '}
+          {t('annualPnl.noRevenueHint')}
         </p>
       )}
 
@@ -127,6 +129,7 @@ export default function AnnualPnLMobile({ data, month, onMonthChange, onDrill }:
  * while holding a phone one-handed.
  */
 function MonthNav({ month, onChange }: { month: number; onChange: (m: number) => void }) {
+  const { t } = useLanguage();
   const step = (delta: number) => onChange(Math.min(11, Math.max(0, month + delta)));
 
   return (
@@ -138,7 +141,7 @@ function MonthNav({ month, onChange }: { month: number; onChange: (m: number) =>
         className="w-11 h-11 shrink-0 rounded-xl border border-border flex items-center justify-center
                    text-muted-foreground disabled:opacity-30 active:bg-muted transition-colors
                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label="Mês anterior"
+        aria-label={t('annualPnl.previousMonth')}
       >
         <ChevronLeft className="w-5 h-5" aria-hidden="true" />
       </button>
@@ -149,10 +152,10 @@ function MonthNav({ month, onChange }: { month: number; onChange: (m: number) =>
           onChange={(e) => onChange(Number(e.target.value))}
           className="w-full h-11 appearance-none rounded-xl bg-muted text-center text-sm font-semibold
                      text-foreground px-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Mês"
+          aria-label={t('annualPnl.month')}
         >
-          {MONTH_FULL.map((m, i) => (
-            <option key={m} value={i}>{m}</option>
+          {MONTH_KEYS.map((m, i) => (
+            <option key={m} value={i}>{t(`annualPnl.monthFull.${m}`)}</option>
           ))}
         </select>
         <ChevronDown
@@ -168,7 +171,7 @@ function MonthNav({ month, onChange }: { month: number; onChange: (m: number) =>
         className="w-11 h-11 shrink-0 rounded-xl border border-border flex items-center justify-center
                    text-muted-foreground disabled:opacity-30 active:bg-muted transition-colors
                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label="Mês seguinte"
+        aria-label={t('annualPnl.nextMonth')}
       >
         <ChevronRight className="w-5 h-5" aria-hidden="true" />
       </button>
@@ -202,6 +205,7 @@ function Row({
   higherIsBetter = false,
   term,
 }: RowProps) {
+  const { t } = useLanguage();
   const style = SECTION[section];
   const amount = line.months[month];
   const share = monthRevenue !== 0 ? (amount / monthRevenue) * 100 : null;
@@ -229,7 +233,9 @@ function Row({
               names, and "Bebidas com nomes muito l…" loses the word that
               distinguishes it from the category above. The figure keeps its
               own column either way. */}
-          <span className="[overflow-wrap:anywhere]">{line.label}</span>
+          <span className="[overflow-wrap:anywhere]">
+            {line.labelKey ? t(`annualPnl.line.${line.labelKey}`) : line.label}
+          </span>
           {term && <InfoHint term={term} />}
         </span>
 

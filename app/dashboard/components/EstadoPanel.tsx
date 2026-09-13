@@ -13,6 +13,7 @@ import {
 import type { SalesMix } from '@/lib/tax-calc';
 import { SALES_VAT_CLASSES, DERRAMA_MUNICIPAL_MAX } from '@/lib/tax-rules';
 import { formatMoneyExact, formatPercent } from '@/lib/format';
+import { useLanguage } from '@/lib/language-context';
 
 /**
  * IVA and IRC, as an owner needs to see them.
@@ -30,7 +31,7 @@ interface VatData {
   year: number;
   quarter: Quarter;
   salesLines: Array<{ key: string; label: string; rate: number; sharePercent: number; gross: number; net: number; vat: number }>;
-  purchaseLines: Array<{ label: string; gross: number; vatRate: number; vatCharged: number; vatDeductible: number }>;
+  purchaseLines: Array<{ labelKey: string; gross: number; vatRate: number; vatCharged: number; vatDeductible: number }>;
   outputVat: number;
   deductibleVat: number;
   balance: number;
@@ -65,6 +66,7 @@ interface IrcData {
 }
 
 export default function EstadoPanel() {
+  const { t } = useLanguage();
   const now = new Date();
   const [view, setView] = useState<'iva' | 'irc'>('iva');
   const [year, setYear] = useState(now.getUTCFullYear());
@@ -125,7 +127,7 @@ export default function EstadoPanel() {
                      hover:text-foreground px-2 py-1.5 rounded-lg hover:bg-muted transition-colors"
         >
           <Settings2 className="w-3.5 h-3.5" aria-hidden="true" />
-          Pressupostos
+          {t('estado.assumptions')}
         </button>
       </div>
 
@@ -133,16 +135,16 @@ export default function EstadoPanel() {
       <div className="rounded-xl border border-info/25 bg-info/5 p-3 flex items-start gap-2.5">
         <Info className="w-4 h-4 text-info shrink-0 mt-0.5" aria-hidden="true" />
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Estes valores são uma <strong className="text-foreground">estimativa</strong>, calculada
-          a partir das vendas e custos que registou. Servem para saber o que aí vem, não
-          substituem a declaração — quem a entrega é o seu contabilista.
+          {t('estado.disclaimerBefore')}{' '}
+          <strong className="text-foreground">{t('estado.disclaimerWord')}</strong>
+          {t('estado.disclaimerAfter')}
         </p>
       </div>
 
       {loading ? (
         <div className="card-glass p-6 flex items-center gap-3 text-muted-foreground">
           <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-          A calcular...
+          {t('estado.calculating')}
         </div>
       ) : view === 'iva' ? (
         <VatView
@@ -163,11 +165,11 @@ export default function EstadoPanel() {
           onSave={async (input) => {
             const result = await saveTaxSettings(input);
             if (result.success) {
-              toast.success('Pressupostos guardados');
+              toast.success(t('estado.assumptionsSaved'));
               setShowSettings(false);
               load();
             } else {
-              toast.error(result.error || 'Não foi possível guardar');
+              toast.error(result.error || t('estado.saveFailed'));
             }
           }}
         />
@@ -187,6 +189,7 @@ function VatView({
   onStep: (delta: number) => void;
   onToday: () => void;
 }) {
+  const { t, language } = useLanguage();
   const nowQuarter = quarterOf(new Date());
   const isCurrent = year === new Date().getUTCFullYear() && quarter === nowQuarter;
 
@@ -199,7 +202,7 @@ function VatView({
             className="w-11 h-11 shrink-0 rounded-xl border border-border flex items-center justify-center
                        text-muted-foreground hover:text-foreground hover:bg-muted transition-colors
                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Trimestre anterior"
+            aria-label={t('estado.previousQuarter')}
           >
             <ChevronLeft className="w-5 h-5" aria-hidden="true" />
           </button>
@@ -208,13 +211,13 @@ function VatView({
             className="w-11 h-11 shrink-0 rounded-xl border border-border flex items-center justify-center
                        text-muted-foreground hover:text-foreground hover:bg-muted transition-colors
                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Trimestre seguinte"
+            aria-label={t('estado.nextQuarter')}
           >
             <ChevronRight className="w-5 h-5" aria-hidden="true" />
           </button>
 
           <h3 className="font-bold text-foreground min-w-0 flex-1 truncate">
-            {quarterLabel(year, quarter, 'pt')}
+            {quarterLabel(year, quarter, language)}
           </h3>
 
           {!isCurrent && (
@@ -222,7 +225,7 @@ function VatView({
               type="button" onClick={onToday}
               className="text-xs font-semibold text-primary hover:underline px-2 py-1 shrink-0"
             >
-              Trimestre atual
+              {t('estado.currentQuarter')}
             </button>
           )}
         </div>
@@ -232,15 +235,14 @@ function VatView({
 
       {!data?.hasData ? (
         <div className="card-glass p-8 text-center text-sm text-muted-foreground">
-          Sem vendas nem custos registados neste trimestre.
+          {t('estado.noDataQuarter')}
         </div>
       ) : (
         <>
           <div className="card-glass p-4 sm:p-5">
-            <h4 className="font-semibold text-foreground mb-1">IVA liquidado</h4>
+            <h4 className="font-semibold text-foreground mb-1">{t('estado.outputVatTitle')}</h4>
             <p className="text-xs text-muted-foreground mb-4">
-              O que cobrou aos clientes. A repartição por taxa vem dos pressupostos
-              que definiu — corrija-a se não bater certo com a sua casa.
+              {t('estado.outputVatHint')}
             </p>
 
             <div className="-mx-4 sm:-mx-5 divide-y divide-border-subtle border-y border-border-subtle">
@@ -249,7 +251,7 @@ function VatView({
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm text-foreground truncate">{line.label}</span>
                     <span className="block text-[11px] text-muted-foreground">
-                      {formatPercent(line.sharePercent, 0)} das vendas · IVA {formatPercent(line.rate, 0)}
+                      {formatPercent(line.sharePercent, 0)} {t('estado.ofSales')} · IVA {formatPercent(line.rate, 0)}
                     </span>
                   </span>
                   <span className="shrink-0 text-right">
@@ -257,7 +259,7 @@ function VatView({
                       {formatMoneyExact(line.vat)}
                     </span>
                     <span className="block text-[11px] text-muted-foreground tabular-nums">
-                      de {formatMoneyExact(line.gross)}
+                      {t('estado.outOf')} {formatMoneyExact(line.gross)}
                     </span>
                   </span>
                 </div>
@@ -265,7 +267,7 @@ function VatView({
             </div>
 
             <div className="pt-3 flex items-baseline justify-between">
-              <span className="text-sm font-semibold text-foreground">Total liquidado</span>
+              <span className="text-sm font-semibold text-foreground">{t('estado.totalOutput')}</span>
               <span className="font-bold text-foreground tabular-nums">
                 {formatMoneyExact(data.outputVat)}
               </span>
@@ -273,19 +275,18 @@ function VatView({
           </div>
 
           <div className="card-glass p-4 sm:p-5">
-            <h4 className="font-semibold text-foreground mb-1">IVA dedutível</h4>
+            <h4 className="font-semibold text-foreground mb-1">{t('estado.deductibleVatTitle')}</h4>
             <p className="text-xs text-muted-foreground mb-4">
-              O que pagou aos fornecedores e pode recuperar. As mercadorias para revenda
-              dão dedução total; representação e deslocações não dão nenhuma.
+              {t('estado.deductibleVatHint')}
             </p>
 
             <div className="-mx-4 sm:-mx-5 divide-y divide-border-subtle border-y border-border-subtle">
               {data.purchaseLines.map((line) => (
-                <div key={line.label} className="px-4 sm:px-5 py-2.5 flex items-center gap-3">
+                <div key={line.labelKey} className="px-4 sm:px-5 py-2.5 flex items-center gap-3">
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm text-foreground truncate">{line.label}</span>
+                    <span className="block text-sm text-foreground truncate">{t(line.labelKey)}</span>
                     <span className="block text-[11px] text-muted-foreground">
-                      {formatMoneyExact(line.gross)} · IVA {formatPercent(line.vatRate, 0)} estimado
+                      {formatMoneyExact(line.gross)} · IVA {formatPercent(line.vatRate, 0)} {t('estado.estimated')}
                     </span>
                   </span>
                   <span className="shrink-0 text-sm font-semibold text-foreground tabular-nums">
@@ -296,7 +297,7 @@ function VatView({
             </div>
 
             <div className="pt-3 flex items-baseline justify-between">
-              <span className="text-sm font-semibold text-foreground">Total dedutível</span>
+              <span className="text-sm font-semibold text-foreground">{t('estado.totalDeductible')}</span>
               <span className="font-bold text-foreground tabular-nums">
                 {formatMoneyExact(data.deductibleVat)}
               </span>
@@ -306,7 +307,7 @@ function VatView({
           <div className={`card-glass p-5 border ${data.payable > 0 ? 'border-warning/30' : 'border-success/30'}`}>
             <div className="flex items-baseline justify-between gap-3">
               <span className="font-semibold text-foreground">
-                {data.payable > 0 ? 'A entregar ao Estado' : 'Crédito a reportar'}
+                {data.payable > 0 ? t('estado.payableToState') : t('estado.creditToCarry')}
               </span>
               <span className={`text-2xl font-black tabular-nums ${data.payable > 0 ? 'text-foreground' : 'text-green-400'}`}>
                 {formatMoneyExact(data.payable > 0 ? data.payable : data.credit)}
@@ -314,8 +315,8 @@ function VatView({
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
               {data.payable > 0
-                ? `${formatMoneyExact(data.outputVat)} liquidado menos ${formatMoneyExact(data.deductibleVat)} dedutível.`
-                : 'Pagou mais IVA do que cobrou. O crédito transita para os períodos seguintes.'}
+                ? `${formatMoneyExact(data.outputVat)} ${t('estado.balanceOutput')} ${formatMoneyExact(data.deductibleVat)} ${t('estado.balanceDeductible')}`
+                : t('estado.creditExplain')}
             </p>
           </div>
         </>
@@ -325,12 +326,13 @@ function VatView({
 }
 
 function DeadlineNotice({ deadline }: { deadline: { submit: string; pay: string } }) {
+  const { t, language } = useLanguage();
   const days = daysUntil(deadline.submit);
   const past = days < 0;
   const soon = days >= 0 && days <= 15;
 
   const format = (iso: string) =>
-    new Date(`${iso}T00:00:00Z`).toLocaleDateString('pt-PT', {
+    new Date(`${iso}T00:00:00Z`).toLocaleDateString(language === 'pt' ? 'pt-PT' : 'en-GB', {
       day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
     });
 
@@ -346,13 +348,13 @@ function DeadlineNotice({ deadline }: { deadline: { submit: string; pay: string 
       <div className="text-xs">
         <p className={soon && !past ? 'text-warning font-semibold' : 'text-foreground'}>
           {past
-            ? `O prazo terminou a ${format(deadline.submit)}.`
+            ? `${t('estado.deadlinePassed')} ${format(deadline.submit)}.`
             : days === 0
-            ? 'A declaração entrega-se hoje.'
-            : `Faltam ${days} dias para entregar a declaração.`}
+            ? t('estado.deadlineToday')
+            : `${t('estado.deadlineInDaysBefore')} ${days} ${t('estado.deadlineInDaysAfter')}`}
         </p>
         <p className="text-muted-foreground mt-0.5">
-          Declaração até {format(deadline.submit)} · pagamento até {format(deadline.pay)}
+          {t('estado.submitBy')} {format(deadline.submit)} · {t('estado.payBy')} {format(deadline.pay)}
         </p>
       </div>
     </div>
@@ -366,17 +368,18 @@ function IrcView({
   year: number;
   onYear: (y: number) => void;
 }) {
+  const { t } = useLanguage();
   const years = Array.from({ length: 5 }, (_, i) => new Date().getUTCFullYear() - 3 + i);
 
   return (
     <>
       <div className="card-glass p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="font-bold text-foreground">Estimativa de IRC</h3>
+        <h3 className="font-bold text-foreground">{t('estado.ircEstimateTitle')}</h3>
         <select
           value={year}
           onChange={(e) => onYear(Number(e.target.value))}
           className="input-field !py-2 !text-sm !w-[110px]"
-          aria-label="Ano"
+          aria-label={t('estado.year')}
         >
           {years.map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
@@ -384,39 +387,39 @@ function IrcView({
 
       {!data?.hasData ? (
         <div className="card-glass p-8 text-center text-sm text-muted-foreground">
-          Sem vendas nem custos registados em {year}.
+          {t('estado.noDataYear')} {year}.
         </div>
       ) : (
         <>
           <div className="card-glass p-4 sm:p-5">
-            <h4 className="font-semibold text-foreground mb-1">Do resultado ao lucro tributável</h4>
+            <h4 className="font-semibold text-foreground mb-1">{t('estado.toTaxableProfitTitle')}</h4>
             <p className="text-xs text-muted-foreground mb-4">
-              O IRC incide sobre o lucro sem IVA — o IVA cobrado nunca foi dinheiro seu.
+              {t('estado.toTaxableProfitHint')}
             </p>
 
             <div className="space-y-1.5 text-sm">
-              <Line label="Vendas (com IVA)" value={formatMoneyExact(data.grossRevenue)} muted />
-              <Line label="Vendas sem IVA" value={formatMoneyExact(data.netRevenue)} />
-              <Line label="Custos" value={`-${formatMoneyExact(data.totalCosts)}`} tone="text-red-400" />
+              <Line label={t('estado.salesWithVat')} value={formatMoneyExact(data.grossRevenue)} muted />
+              <Line label={t('estado.salesExVat')} value={formatMoneyExact(data.netRevenue)} />
+              <Line label={t('estado.costs')} value={`-${formatMoneyExact(data.totalCosts)}`} tone="text-red-400" />
               <div className="pt-1.5 border-t border-border">
                 <Line
-                  label="Resultado do exercício"
+                  label={t('estado.resultForYear')}
                   value={formatMoneyExact(data.accountingProfit)}
                   tone={data.accountingProfit < 0 ? 'text-red-400' : 'text-green-400'}
                   bold
                 />
               </div>
               {data.lossesUsed > 0 && (
-                <Line label="Prejuízos anteriores usados" value={`-${formatMoneyExact(data.lossesUsed)}`} muted />
+                <Line label={t('estado.lossesUsed')} value={`-${formatMoneyExact(data.lossesUsed)}`} muted />
               )}
             </div>
           </div>
 
           {data.bands.length > 0 && (
             <div className="card-glass p-4 sm:p-5">
-              <h4 className="font-semibold text-foreground mb-1">Colecta</h4>
+              <h4 className="font-semibold text-foreground mb-1">{t('estado.collectaTitle')}</h4>
               <p className="text-xs text-muted-foreground mb-4">
-                Em {year}, a taxa reduzida aplica-se aos primeiros 50.000 € de matéria colectável.
+                {t('estado.collectaHintBefore')} {year}{t('estado.collectaHintAfter')}
               </p>
               <div className="space-y-1.5 text-sm">
                 {data.bands.map((band) => (
@@ -427,7 +430,7 @@ function IrcView({
                   />
                 ))}
                 {data.derramaMunicipal > 0 && (
-                  <Line label="Derrama municipal" value={formatMoneyExact(data.derramaMunicipal)} />
+                  <Line label={t('estado.derramaMunicipal')} value={formatMoneyExact(data.derramaMunicipal)} />
                 )}
               </div>
             </div>
@@ -435,9 +438,9 @@ function IrcView({
 
           {data.autonomousLines.length > 0 && (
             <div className="card-glass p-4 sm:p-5">
-              <h4 className="font-semibold text-foreground mb-1">Tributações autónomas</h4>
+              <h4 className="font-semibold text-foreground mb-1">{t('estado.autonomousTitle')}</h4>
               <p className="text-xs text-muted-foreground mb-4">
-                Pagam-se sobre a despesa, haja lucro ou não.
+                {t('estado.autonomousHint')}
               </p>
               <div className="space-y-1.5 text-sm">
                 {data.autonomousLines.map((line) => (
@@ -455,26 +458,25 @@ function IrcView({
             <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 flex items-start gap-2.5">
               <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" aria-hidden="true" />
               <p className="text-xs text-warning">
-                O ano fechou com prejuízo, mas ainda assim há imposto a pagar sobre as
-                tributações autónomas.
+                {t('estado.taxDespiteLoss')}
               </p>
             </div>
           )}
 
           <div className="card-glass p-5 border border-warning/30">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="font-semibold text-foreground">IRC estimado</span>
+              <span className="font-semibold text-foreground">{t('estado.ircEstimated')}</span>
               <span className="text-2xl font-black text-foreground tabular-nums">
                 {formatMoneyExact(data.totalTax)}
               </span>
             </div>
             {!data.nextYearInstalments.exempt && data.nextYearInstalments.total > 0 && (
               <p className="mt-2 text-xs text-muted-foreground">
-                Com base nisto, os pagamentos por conta de {year + 1} seriam de{' '}
+                {t('estado.instalmentsBefore')} {year + 1} {t('estado.instalmentsMiddle')}{' '}
                 <strong className="text-foreground">
                   {formatMoneyExact(data.nextYearInstalments.perInstalment)}
                 </strong>{' '}
-                em julho, setembro e dezembro.
+                {t('estado.instalmentsAfter')}
               </p>
             )}
           </div>
@@ -510,6 +512,7 @@ function SettingsDialog({
     mix: SalesMix; derramaMunicipalRate: number; isPme: boolean;
   }) => void;
 }) {
+  const { t } = useLanguage();
   const [mix, setMix] = useState<SalesMix>(
     settings?.mix ?? { food: 72, softDrink: 12, refrigerante: 4, alcohol: 12 }
   );
@@ -528,33 +531,31 @@ function SettingsDialog({
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <div
-        role="dialog" aria-modal="true" aria-label="Pressupostos"
+        role="dialog" aria-modal="true" aria-label={t('estado.assumptions')}
         className="relative w-full sm:max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl
                    p-5 shadow-modal max-h-[90dvh] overflow-y-auto overscroll-contain
                    pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-5"
       >
         <div className="flex items-start justify-between gap-3 mb-4">
-          <h4 className="font-bold text-foreground">Pressupostos</h4>
+          <h4 className="font-bold text-foreground">{t('estado.assumptions')}</h4>
           <button
             type="button" onClick={onClose}
             className="p-1 -m-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
-            aria-label="Fechar"
+            aria-label={t('estado.close')}
           >
             <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
         <p className="text-xs text-muted-foreground mb-4">
-          As vendas são registadas como um valor único, por isso a repartição por taxa
-          de IVA tem de ser estimada. Quanto mais perto isto estiver da sua casa, melhor
-          a estimativa.
+          {t('estado.assumptionsHint')}
         </p>
 
         <div className="space-y-2.5">
           {SALES_VAT_CLASSES.map((cls) => (
             <label key={cls.key} className="block">
               <span className="flex items-baseline justify-between gap-2 mb-1">
-                <span className="text-xs text-foreground">{cls.label}</span>
+                <span className="text-xs text-foreground">{t(`estado.vatClass.${cls.key}.label`)}</span>
                 <span className="text-[10px] text-muted-foreground">
                   IVA {cls.band === 'normal' ? '23%' : cls.band === 'intermedia' ? '13%' : '6%'}
                 </span>
@@ -564,31 +565,35 @@ function SettingsDialog({
                   type="number" min={0} max={100}
                   value={mix[cls.key] ?? 0}
                   onChange={(e) => setMix({ ...mix, [cls.key]: Number(e.target.value) || 0 })}
+                  aria-label={t(`estado.vatClass.${cls.key}.label`)}
                   className="input-field !py-1.5 !text-sm w-24"
                 />
-                <span className="text-xs text-muted-foreground">% das vendas</span>
+                <span className="text-xs text-muted-foreground">{t('estado.percentOfSales')}</span>
               </span>
-              <span className="block text-[10px] text-muted-foreground mt-1">{cls.hint}</span>
+              <span className="block text-[10px] text-muted-foreground mt-1">
+                {t(`estado.vatClass.${cls.key}.hint`)}
+              </span>
             </label>
           ))}
         </div>
 
         <p className={`mt-2 text-[11px] ${Math.abs(total - 100) > 0.5 ? 'text-warning' : 'text-muted-foreground'}`}>
-          Total: {formatPercent(total, 0)}
-          {Math.abs(total - 100) > 0.5 && ' — não soma 100%, os valores serão ajustados proporcionalmente.'}
+          {t('estado.mixTotal')}: {formatPercent(total, 0)}
+          {Math.abs(total - 100) > 0.5 && ` — ${t('estado.mixNotHundred')}`}
         </p>
 
         <label className="block mt-4">
           <span className="text-xs text-muted-foreground block mb-1.5">
-            Derrama municipal
+            {t('estado.derramaMunicipal')}
             <span className="block text-[10px] opacity-70">
-              Cada município define a sua, até ao máximo de {DERRAMA_MUNICIPAL_MAX}%.
+              {t('estado.derramaHintBefore')} {DERRAMA_MUNICIPAL_MAX}%.
             </span>
           </span>
           <span className="flex items-center gap-2">
             <input
               type="number" min={0} max={DERRAMA_MUNICIPAL_MAX} step={0.1}
               value={derrama} onChange={(e) => setDerrama(e.target.value)}
+              aria-label={t('estado.derramaMunicipal')}
               className="input-field !py-1.5 !text-sm w-24"
             />
             <span className="text-xs text-muted-foreground">%</span>
@@ -601,10 +606,9 @@ function SettingsDialog({
             className="mt-0.5"
           />
           <span>
-            <span className="block text-sm text-foreground">É uma PME</span>
+            <span className="block text-sm text-foreground">{t('estado.isPme')}</span>
             <span className="block text-[11px] text-muted-foreground">
-              Dá direito à taxa reduzida nos primeiros 50.000 € de matéria colectável.
-              A maioria dos restaurantes é.
+              {t('estado.isPmeHint')}
             </span>
           </span>
         </label>
@@ -619,7 +623,7 @@ function SettingsDialog({
           className="cta-button w-full mt-5 !py-2.5 !text-sm"
         >
           <Check className="w-4 h-4" aria-hidden="true" />
-          Guardar
+          {t('estado.save')}
         </button>
       </div>
     </div>

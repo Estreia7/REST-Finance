@@ -4,16 +4,23 @@
  * Raw `error.message` must never reach the browser: Prisma errors name tables,
  * columns and constraints, and third-party SDK errors can expose internals of
  * how a request was processed. These helpers log the real error server-side and
- * return a generic Portuguese message to the caller.
+ * return a safe message to the caller.
+ *
+ * What comes back is a translation KEY, not a sentence. A server action has no
+ * React context and so cannot call `t()`, and the language belongs to the
+ * reader, not to the request: returning Portuguese here is what left English
+ * users with Portuguese toasts. The component resolves the key when it shows
+ * the message. `translateError` in `lib/error-messages.ts` does that, and falls
+ * back to showing an unrecognised string as-is so nothing is ever swallowed.
  */
 
 /** Generic fallbacks, keyed by the kind of operation that failed. */
 const MESSAGES = {
-  read: 'Não foi possível carregar os dados. Tenta novamente.',
-  write: 'Não foi possível guardar as alterações. Tenta novamente.',
-  delete: 'Não foi possível eliminar. Tenta novamente.',
-  auth: 'Sessão inválida. Inicia sessão novamente.',
-  generic: 'Ocorreu um erro. Tenta novamente.',
+  read: 'errors.read',
+  write: 'errors.write',
+  delete: 'errors.delete',
+  auth: 'errors.auth',
+  generic: 'errors.generic',
 } as const;
 
 export type ErrorKind = keyof typeof MESSAGES;

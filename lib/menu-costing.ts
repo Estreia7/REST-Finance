@@ -232,24 +232,11 @@ export function suggestedPrice(
  */
 export type MenuClass = 'star' | 'plowhorse' | 'puzzle' | 'dog';
 
-export const MENU_CLASS_LABEL: Record<MenuClass, { label: string; advice: string }> = {
-  star: {
-    label: 'Estrela',
-    advice: 'Vende muito e dá boa margem. Mantenha tal como está e dê-lhe destaque na ementa.',
-  },
-  plowhorse: {
-    label: 'Cavalo de batalha',
-    advice: 'Vende muito mas dá pouca margem. Vale a pena rever a receita ou subir um pouco o preço.',
-  },
-  puzzle: {
-    label: 'Enigma',
-    advice: 'Dá boa margem mas vende pouco. Experimente destacá-lo na ementa ou sugeri-lo à mesa.',
-  },
-  dog: {
-    label: 'Peso morto',
-    advice: 'Vende pouco e dá pouca margem. Considere tirá-lo da ementa.',
-  },
-};
+/**
+ * The names and advice for each class live in the dictionary, under
+ * `menuCalc.class.*`, because they are read by the owner and this module has
+ * no language. `MenuClassBadge` resolves them at render time.
+ */
 
 export function classify(
   grossProfit: number,

@@ -12,9 +12,10 @@ import {
 } from '../menu-actions';
 import {
   VAT_RATES, PURCHASE_UNITS, RECIPE_UNITS, suggestedPrice,
-  MENU_CLASS_LABEL, type MenuClass, type CostedLine,
+  type MenuClass, type CostedLine,
 } from '@/lib/menu-costing';
 import { formatMoneyExact, formatPercent } from '@/lib/format';
+import { useLanguage } from '@/lib/language-context';
 import InfoHint from '@/app/components/InfoHint';
 
 /**
@@ -77,6 +78,7 @@ interface MenuData {
 const TARGET_FOOD_COST = 30;
 
 export default function MenuCalculatorPanel() {
+  const { t } = useLanguage();
   const [data, setData] = useState<MenuData | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -106,7 +108,7 @@ export default function MenuCalculatorPanel() {
       if (okMsg) toast.success(okMsg);
       load();
     } else {
-      toast.error(result.error || 'Não foi possível guardar');
+      toast.error(result.error || t('menuCalc.saveFailed'));
     }
     setBusy(false);
     return result;
@@ -123,7 +125,7 @@ export default function MenuCalculatorPanel() {
     return (
       <div className="card-glass p-6 flex items-center gap-3 text-muted-foreground">
         <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-        A carregar ementa...
+        {t('menuCalc.loading')}
       </div>
     );
   }
@@ -134,7 +136,7 @@ export default function MenuCalculatorPanel() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-1 p-1 rounded-xl bg-muted w-fit">
-        {([['menu', 'Ementa'], ['ingredients', 'Ingredientes']] as const).map(([value, label]) => (
+        {([['menu', t('menuCalc.tabMenu')], ['ingredients', t('menuCalc.tabIngredients')]] as const).map(([value, label]) => (
           <button
             key={value}
             type="button"
@@ -175,7 +177,7 @@ export default function MenuCalculatorPanel() {
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
             >
               <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-              Adicionar prato
+              {t('menuCalc.addDish')}
             </button>
           </>
         )
@@ -192,15 +194,15 @@ export default function MenuCalculatorPanel() {
           item={editingItem}
           onClose={() => { setAddingItem(false); setEditingItem(null); }}
           onSave={async (input) => {
-            await run(() => saveMenuItem({ id: editingItem?.id, ...input }), 'Prato guardado');
+            await run(() => saveMenuItem({ id: editingItem?.id, ...input }), t('menuCalc.dishSaved'));
             setAddingItem(false);
             setEditingItem(null);
           }}
           onDelete={
             editingItem
               ? async () => {
-                  if (!confirm(`Remover "${editingItem.name}" da ementa?`)) return;
-                  await run(() => deleteMenuItem(editingItem.id), 'Prato removido');
+                  if (!confirm(`${t('menuCalc.confirmRemoveDish')} "${editingItem.name}"?`)) return;
+                  await run(() => deleteMenuItem(editingItem.id), t('menuCalc.dishRemoved'));
                   setEditingItem(null);
                 }
               : undefined
@@ -215,7 +217,7 @@ export default function MenuCalculatorPanel() {
           onSave={async (input) => {
             await run(
               () => saveIngredient({ id: editingIngredient?.id, ...input }),
-              'Ingrediente guardado'
+              t('menuCalc.ingredientSaved')
             );
             setAddingIngredient(false);
             setEditingIngredient(null);
@@ -225,7 +227,7 @@ export default function MenuCalculatorPanel() {
               ? async () => {
                   const result = await run(() => deleteIngredient(editingIngredient.id));
                   if (result.success) {
-                    toast.success('Ingrediente removido');
+                    toast.success(t('menuCalc.ingredientRemoved'));
                     setEditingIngredient(null);
                   }
                 }
@@ -256,6 +258,7 @@ export default function MenuCalculatorPanel() {
 // ───────────────────────────────────────────────────────────────────────────
 
 function MenuSummary({ items }: { items: MenuItem[] }) {
+  const { t } = useLanguage();
   const costed = items.filter((i) => !i.costing.incomplete && i.costing.lines.length > 0);
   if (costed.length === 0) return null;
 
@@ -276,7 +279,7 @@ function MenuSummary({ items }: { items: MenuItem[] }) {
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
       <div className="card-glass p-4">
         <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-          Pratos custeados
+          {t('menuCalc.dishesCosted')}
         </div>
         <div className="text-xl font-bold text-foreground">
           {costed.length}<span className="text-sm text-muted-foreground">/{items.length}</span>
@@ -285,7 +288,7 @@ function MenuSummary({ items }: { items: MenuItem[] }) {
 
       <div className="card-glass p-4">
         <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-          Food cost médio<InfoHint term="cogsPct" />
+          {t('menuCalc.avgFoodCost')}<InfoHint term="cogsPct" />
         </div>
         <div className={`text-xl font-bold ${avgFoodCost <= 32 ? 'text-green-400' : avgFoodCost <= 38 ? 'text-amber-400' : 'text-red-400'}`}>
           {formatPercent(avgFoodCost)}
@@ -294,19 +297,19 @@ function MenuSummary({ items }: { items: MenuItem[] }) {
 
       <div className="card-glass p-4">
         <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-          Margem estimada/mês
+          {t('menuCalc.estimatedMonthlyMargin')}
         </div>
         <div className="text-xl font-bold text-foreground">
           {withVolume.length > 0 ? formatMoneyExact(monthlyProfit) : '—'}
         </div>
         {withVolume.length === 0 && (
-          <div className="text-[10px] text-muted-foreground mt-0.5">Indique as vendas mensais</div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">{t('menuCalc.enterMonthlySales')}</div>
         )}
       </div>
 
       <div className="card-glass p-4">
         <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-          A dar prejuízo
+          {t('menuCalc.losingMoney')}
         </div>
         <div className={`text-xl font-bold ${losing.length > 0 ? 'text-red-400' : 'text-green-400'}`}>
           {losing.length}
@@ -323,6 +326,7 @@ function DishCard({
   onEdit: () => void;
   onRecipe: () => void;
 }) {
+  const { t } = useLanguage();
   const c = item.costing;
   const hasRecipe = c.lines.length > 0;
   const suggested = suggestedPrice(c.foodCost, TARGET_FOOD_COST, item.vatRate);
@@ -348,9 +352,9 @@ function DishCard({
             {item.menuClass && <MenuClassBadge menuClass={item.menuClass} />}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
-            {formatMoneyExact(item.priceGross)} na ementa · IVA {formatPercent(item.vatRate, 0)} ·{' '}
-            {formatMoneyExact(c.priceNet)} sem IVA
-            {item.monthlyVolume ? ` · ~${item.monthlyVolume}/mês` : ''}
+            {formatMoneyExact(item.priceGross)} {t('menuCalc.onTheMenu')} · {t('menuCalc.vat')}{' '}
+            {formatPercent(item.vatRate, 0)} · {formatMoneyExact(c.priceNet)} {t('menuCalc.exVat')}
+            {item.monthlyVolume ? ` · ~${item.monthlyVolume}${t('menuCalc.perMonthSuffix')}` : ''}
           </div>
         </div>
 
@@ -358,7 +362,7 @@ function DishCard({
           type="button"
           onClick={onEdit}
           className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted shrink-0"
-          aria-label={`Editar ${item.name}`}
+          aria-label={`${t('menuCalc.editAria')} ${item.name}`}
         >
           <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
         </button>
@@ -367,14 +371,14 @@ function DishCard({
       {hasRecipe ? (
         <>
           <div className="mt-3 grid grid-cols-3 gap-3">
-            <Figure label="Custo do prato" value={formatMoneyExact(c.foodCost)} />
+            <Figure label={t('menuCalc.dishCost')} value={formatMoneyExact(c.foodCost)} />
             <Figure
-              label="Margem bruta"
+              label={t('menuCalc.grossMargin')}
               value={formatMoneyExact(c.grossProfit)}
               tone={c.grossProfit <= 0 ? 'text-red-400' : 'text-green-400'}
             />
             <Figure
-              label="Food cost"
+              label={t('menuCalc.foodCost')}
               value={c.foodCostPercent === null ? '—' : formatPercent(c.foodCostPercent)}
               tone={tone}
             />
@@ -383,29 +387,31 @@ function DishCard({
           {c.incomplete && (
             <p className="mt-3 flex items-start gap-1.5 text-[11px] text-warning">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" aria-hidden="true" />
-              {c.missingCount} ingrediente{c.missingCount > 1 ? 's' : ''} sem preço — o custo real é
-              mais alto do que o mostrado.
+              {c.missingCount}{' '}
+              {c.missingCount > 1
+                ? t('menuCalc.missingPricesPlural')
+                : t('menuCalc.missingPricesSingular')}
             </p>
           )}
 
           {c.grossProfit <= 0 && (
             <p className="mt-3 flex items-start gap-1.5 text-[11px] text-red-400">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" aria-hidden="true" />
-              Este prato não paga os próprios ingredientes.
-              {suggested && ` Para 30% de food cost, teria de custar ${formatMoneyExact(suggested)}.`}
+              {t('menuCalc.dishLoses')}
+              {suggested && ` ${t('menuCalc.forTargetItWouldCost')} ${formatMoneyExact(suggested)}.`}
             </p>
           )}
 
           {c.grossProfit > 0 && (c.foodCostPercent ?? 0) > 38 && suggested && (
             <p className="mt-3 text-[11px] text-muted-foreground">
-              Para 30% de food cost, o preço seria{' '}
+              {t('menuCalc.forTargetPriceWouldBe')}{' '}
               <strong className="text-foreground">{formatMoneyExact(suggested)}</strong>.
             </p>
           )}
         </>
       ) : (
         <p className="mt-3 text-xs text-muted-foreground">
-          Sem receita — adicione os ingredientes para saber a margem.
+          {t('menuCalc.noRecipeYet')}
         </p>
       )}
 
@@ -415,7 +421,7 @@ function DishCard({
         className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
       >
         <ChefHat className="w-3.5 h-3.5" aria-hidden="true" />
-        {hasRecipe ? `Receita (${c.lines.length})` : 'Criar receita'}
+        {hasRecipe ? `${t('menuCalc.recipe')} (${c.lines.length})` : t('menuCalc.createRecipe')}
       </button>
     </div>
   );
@@ -431,19 +437,19 @@ function Figure({ label, value, tone = 'text-foreground' }: { label: string; val
 }
 
 function MenuClassBadge({ menuClass }: { menuClass: MenuClass }) {
+  const { t } = useLanguage();
   const styles: Record<MenuClass, string> = {
     star: 'bg-success/15 text-green-400',
     plowhorse: 'bg-info/15 text-info',
     puzzle: 'bg-warning/15 text-amber-400',
     dog: 'bg-danger/15 text-red-400',
   };
-  const { label, advice } = MENU_CLASS_LABEL[menuClass];
   return (
     <span
       className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${styles[menuClass]}`}
-      title={advice}
+      title={t(`menuCalc.class.${menuClass}.advice`)}
     >
-      {label}
+      {t(`menuCalc.class.${menuClass}.label`)}
     </span>
   );
 }
@@ -455,23 +461,23 @@ function EmptyMenu({
   onAdd: () => void;
   onIngredients: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="card-glass p-8 text-center">
       <ChefHat className="w-8 h-8 mx-auto text-muted-foreground/40" aria-hidden="true" />
-      <h4 className="mt-3 font-semibold text-foreground">A ementa ainda está vazia</h4>
+      <h4 className="mt-3 font-semibold text-foreground">{t('menuCalc.emptyTitle')}</h4>
       <p className="mt-1 text-sm text-muted-foreground max-w-md mx-auto">
-        Adicione um prato com o preço que está na ementa. Depois monte a receita e
-        fica a saber quanto é que ele deixa, já com o IVA descontado.
+        {t('menuCalc.emptyBody')}
       </p>
       <div className="mt-5 flex flex-wrap gap-2 justify-center">
         <button type="button" onClick={onAdd} className="cta-button !py-2 !px-4 !text-sm">
           <Plus className="w-4 h-4" aria-hidden="true" />
-          Adicionar prato
+          {t('menuCalc.addDish')}
         </button>
         {!hasIngredients && (
           <button type="button" onClick={onIngredients} className="cta-button-secondary !py-2 !px-4 !text-sm">
             <Carrot className="w-4 h-4" aria-hidden="true" />
-            Começar pelos ingredientes
+            {t('menuCalc.startWithIngredients')}
           </button>
         )}
       </div>
@@ -486,14 +492,14 @@ function IngredientList({
   onAdd: () => void;
   onEdit: (i: Ingredient) => void;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="card-glass p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
-          <h4 className="font-semibold text-foreground">Ingredientes</h4>
+          <h4 className="font-semibold text-foreground">{t('menuCalc.tabIngredients')}</h4>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Os preços vêm das facturas sempre que o nome coincide. Escreva o preço
-            à mão só para o que não passa por factura.
+            {t('menuCalc.ingredientsHint')}
           </p>
         </div>
         <button
@@ -502,13 +508,13 @@ function IngredientList({
           className="cta-button !py-2 !px-3 !text-xs shrink-0"
         >
           <Plus className="w-4 h-4" aria-hidden="true" />
-          Novo
+          {t('menuCalc.new')}
         </button>
       </div>
 
       {ingredients.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
-          Ainda não há ingredientes.
+          {t('menuCalc.noIngredients')}
         </p>
       ) : (
         <div className="-mx-4 sm:-mx-5 divide-y divide-border-subtle border-y border-border-subtle">
@@ -528,7 +534,7 @@ function IngredientList({
                   <span className="block text-sm font-medium text-foreground truncate">{ing.name}</span>
                   <span className="block text-[11px] text-muted-foreground flex items-center gap-1">
                     {cost === null ? (
-                      <span className="text-warning">Sem preço</span>
+                      <span className="text-warning">{t('menuCalc.noPrice')}</span>
                     ) : (
                       <>
                         {fromInvoice ? (
@@ -536,8 +542,9 @@ function IngredientList({
                         ) : (
                           <Tag className="w-3 h-3" aria-hidden="true" />
                         )}
-                        {fromInvoice ? 'da factura' : 'preço fixo'}
-                        {ing.wastePercent > 0 && ` · ${formatPercent(ing.wastePercent, 0)} de perda`}
+                        {fromInvoice ? t('menuCalc.fromInvoice') : t('menuCalc.fixedPrice')}
+                        {ing.wastePercent > 0 &&
+                          ` · ${formatPercent(ing.wastePercent, 0)} ${t('menuCalc.wasteSuffix')}`}
                       </>
                     )}
                   </span>
@@ -565,6 +572,7 @@ function DishDialog({
   }) => void;
   onDelete?: () => void;
 }) {
+  const { t } = useLanguage();
   const [name, setName] = useState(item?.name ?? '');
   const [category, setCategory] = useState(item?.category ?? '');
   const [price, setPrice] = useState(item ? String(item.priceGross) : '');
@@ -575,21 +583,21 @@ function DishDialog({
   const valid = name.trim().length > 0 && Number.isFinite(priceValue) && priceValue >= 0;
 
   return (
-    <Dialog onClose={onClose} title={item ? 'Editar prato' : 'Novo prato'}>
+    <Dialog onClose={onClose} title={item ? t('menuCalc.editDish') : t('menuCalc.newDish')}>
       <label className="block">
-        <span className="text-xs text-muted-foreground block mb-1.5">Nome</span>
+        <span className="text-xs text-muted-foreground block mb-1.5">{t('menuCalc.name')}</span>
         <input
           type="text" value={name} onChange={(e) => setName(e.target.value)}
-          maxLength={80} autoFocus placeholder="ex: Bacalhau à Brás"
+          maxLength={80} autoFocus placeholder={t('menuCalc.dishNamePlaceholder')}
           className="input-field !py-2"
         />
       </label>
 
       <label className="block mt-3">
-        <span className="text-xs text-muted-foreground block mb-1.5">Secção (opcional)</span>
+        <span className="text-xs text-muted-foreground block mb-1.5">{t('menuCalc.section')}</span>
         <input
           type="text" value={category} onChange={(e) => setCategory(e.target.value)}
-          maxLength={40} placeholder="ex: Peixe, Sobremesas, Bebidas"
+          maxLength={40} placeholder={t('menuCalc.sectionPlaceholder')}
           className="input-field !py-2"
         />
       </label>
@@ -597,8 +605,8 @@ function DishDialog({
       <div className="grid grid-cols-2 gap-3 mt-3">
         <label className="block">
           <span className="text-xs text-muted-foreground block mb-1.5">
-            Preço na ementa
-            <span className="block text-[10px] opacity-70">com IVA</span>
+            {t('menuCalc.menuPrice')}
+            <span className="block text-[10px] opacity-70">{t('menuCalc.incVat')}</span>
           </span>
           <input
             type="text" inputMode="decimal" value={price}
@@ -609,8 +617,8 @@ function DishDialog({
 
         <label className="block">
           <span className="text-xs text-muted-foreground block mb-1.5">
-            IVA
-            <span className="block text-[10px] opacity-70">13% comida, 23% álcool</span>
+            {t('menuCalc.vat')}
+            <span className="block text-[10px] opacity-70">{t('menuCalc.vatHint')}</span>
           </span>
           <select
             value={vatRate}
@@ -626,15 +634,15 @@ function DishDialog({
 
       <label className="block mt-3">
         <span className="text-xs text-muted-foreground block mb-1.5">
-          Quantos vende por mês? (opcional)
+          {t('menuCalc.monthlyVolume')}
           <span className="block text-[10px] opacity-70">
-            Serve para saber que pratos sustentam a casa
+            {t('menuCalc.monthlyVolumeHint')}
           </span>
         </span>
         <input
           type="number" min={0} value={volume}
           onChange={(e) => setVolume(e.target.value)}
-          placeholder="ex: 120" className="input-field !py-2 w-32"
+          placeholder={t('menuCalc.volumePlaceholder')} className="input-field !py-2 w-32"
         />
       </label>
 
@@ -654,13 +662,13 @@ function DishDialog({
           className="cta-button flex-1 !py-2.5 !text-sm disabled:opacity-40"
         >
           <Check className="w-4 h-4" aria-hidden="true" />
-          Guardar
+          {t('menuCalc.save')}
         </button>
         {onDelete && (
           <button
             type="button" onClick={onDelete}
             className="cta-button-secondary !py-2.5 !px-3 !text-sm text-danger"
-            aria-label="Remover prato"
+            aria-label={t('menuCalc.removeDish')}
           >
             <Trash2 className="w-4 h-4" aria-hidden="true" />
           </button>
@@ -680,6 +688,7 @@ function IngredientDialog({
   }) => void;
   onDelete?: () => void;
 }) {
+  const { t } = useLanguage();
   const [name, setName] = useState(ingredient?.name ?? '');
   const [unit, setUnit] = useState(ingredient?.unit ?? 'kg');
   const [useInvoice, setUseInvoice] = useState(ingredient ? ingredient.manualUnitCost === null : true);
@@ -695,30 +704,33 @@ function IngredientDialog({
     name.trim().length > 0 && (useInvoice || (Number.isFinite(costValue) && costValue >= 0));
 
   return (
-    <Dialog onClose={onClose} title={ingredient ? 'Editar ingrediente' : 'Novo ingrediente'}>
+    <Dialog
+      onClose={onClose}
+      title={ingredient ? t('menuCalc.editIngredient') : t('menuCalc.newIngredient')}
+    >
       <label className="block">
-        <span className="text-xs text-muted-foreground block mb-1.5">Nome</span>
+        <span className="text-xs text-muted-foreground block mb-1.5">{t('menuCalc.name')}</span>
         <input
           type="text" value={name} onChange={(e) => setName(e.target.value)}
-          maxLength={60} autoFocus placeholder="ex: Bacalhau"
+          maxLength={60} autoFocus placeholder={t('menuCalc.ingredientNamePlaceholder')}
           className="input-field !py-2"
         />
         <span className="block text-[10px] text-muted-foreground mt-1">
-          Use o mesmo nome que aparece nas facturas, para o preço vir de lá sozinho.
+          {t('menuCalc.ingredientNameHint')}
         </span>
       </label>
 
       <label className="block mt-3">
-        <span className="text-xs text-muted-foreground block mb-1.5">Como compra</span>
+        <span className="text-xs text-muted-foreground block mb-1.5">{t('menuCalc.howBought')}</span>
         <select value={unit} onChange={(e) => setUnit(e.target.value)} className="input-field !py-2 w-32">
           {PURCHASE_UNITS.map((u) => (
-            <option key={u} value={u}>por {u}</option>
+            <option key={u} value={u}>{t('menuCalc.per')} {u}</option>
           ))}
         </select>
       </label>
 
       <div className="mt-4 rounded-xl bg-muted/60 p-3">
-        <span className="text-xs text-muted-foreground block mb-2">Preço</span>
+        <span className="text-xs text-muted-foreground block mb-2">{t('menuCalc.price')}</span>
 
         <label className="flex items-start gap-2.5 cursor-pointer">
           <input
@@ -726,11 +738,11 @@ function IngredientDialog({
             className="mt-0.5" name="costSource"
           />
           <span className="min-w-0">
-            <span className="block text-sm text-foreground">Usar o preço das facturas</span>
+            <span className="block text-sm text-foreground">{t('menuCalc.useInvoicePrice')}</span>
             <span className="block text-[11px] text-muted-foreground">
               {ingredient?.invoiceUnitCost != null
-                ? `Actualmente ${formatMoneyExact(ingredient.invoiceUnitCost)}/${ingredient.unit}. Actualiza-se sozinho.`
-                : 'Ainda não há facturas com este nome — o preço fica em falta até haver.'}
+                ? `${t('menuCalc.currently')} ${formatMoneyExact(ingredient.invoiceUnitCost)}/${ingredient.unit}. ${t('menuCalc.updatesItself')}`
+                : t('menuCalc.noInvoiceYet')}
             </span>
           </span>
         </label>
@@ -741,9 +753,9 @@ function IngredientDialog({
             className="mt-0.5" name="costSource"
           />
           <span className="min-w-0 flex-1">
-            <span className="block text-sm text-foreground">Escrever o preço</span>
+            <span className="block text-sm text-foreground">{t('menuCalc.typeThePrice')}</span>
             <span className="block text-[11px] text-muted-foreground mb-2">
-              Para o que não passa por factura: azeite ao fio, temperos, compras a dinheiro.
+              {t('menuCalc.typeThePriceHint')}
             </span>
             {!useInvoice && (
               <span className="flex items-center gap-2">
@@ -752,7 +764,7 @@ function IngredientDialog({
                   onChange={(e) => setCost(e.target.value)}
                   placeholder="12,50" className="input-field !py-1.5 !text-sm w-28"
                 />
-                <span className="text-xs text-muted-foreground">€ por {unit}</span>
+                <span className="text-xs text-muted-foreground">€ {t('menuCalc.per')} {unit}</span>
               </span>
             )}
           </span>
@@ -761,9 +773,9 @@ function IngredientDialog({
 
       <label className="block mt-3">
         <span className="text-xs text-muted-foreground block mb-1.5">
-          Perda e desperdício
+          {t('menuCalc.waste')}
           <span className="block text-[10px] opacity-70">
-            Aparas, espinhas, cascas. 1 kg comprado não é 1 kg no prato.
+            {t('menuCalc.wasteHint')}
           </span>
         </span>
         <span className="flex items-center gap-2">
@@ -791,13 +803,13 @@ function IngredientDialog({
           className="cta-button flex-1 !py-2.5 !text-sm disabled:opacity-40"
         >
           <Check className="w-4 h-4" aria-hidden="true" />
-          Guardar
+          {t('menuCalc.save')}
         </button>
         {onDelete && (
           <button
             type="button" onClick={onDelete}
             className="cta-button-secondary !py-2.5 !px-3 !text-sm text-danger"
-            aria-label="Remover ingrediente"
+            aria-label={t('menuCalc.removeIngredient')}
           >
             <Trash2 className="w-4 h-4" aria-hidden="true" />
           </button>
@@ -818,6 +830,7 @@ function RecipeDialog({
   onRemoveLine: (ingredientId: string) => Promise<unknown>;
   onNewIngredient: () => void;
 }) {
+  const { t } = useLanguage();
   const [ingredientId, setIngredientId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [unit, setUnit] = useState('g');
@@ -828,7 +841,7 @@ function RecipeDialog({
   const canAdd = ingredientId !== '' && Number.isFinite(quantityValue) && quantityValue > 0;
 
   return (
-    <Dialog onClose={onClose} title={`Receita — ${item.name}`}>
+    <Dialog onClose={onClose} title={`${t('menuCalc.recipe')} — ${item.name}`}>
       {item.costing.lines.length > 0 && (
         <div className="-mx-5 mb-4 divide-y divide-border-subtle border-y border-border-subtle">
           {item.costing.lines.map((line) => (
@@ -838,12 +851,12 @@ function RecipeDialog({
                 <span className="block text-[11px] text-muted-foreground">
                   {line.quantity} {line.unit}
                   {line.problem === 'no-price' && (
-                    <span className="text-warning"> · sem preço</span>
+                    <span className="text-warning"> · {t('menuCalc.noPriceLower')}</span>
                   )}
                   {line.problem === 'bad-unit' && (
-                    <span className="text-warning"> · unidade incompatível</span>
+                    <span className="text-warning"> · {t('menuCalc.badUnit')}</span>
                   )}
-                  {line.source === 'invoice' && ' · da factura'}
+                  {line.source === 'invoice' && ` · ${t('menuCalc.fromInvoice')}`}
                 </span>
               </span>
               <span className="shrink-0 text-sm font-semibold text-foreground tabular-nums">
@@ -854,7 +867,7 @@ function RecipeDialog({
                 onClick={() => onRemoveLine(line.ingredientId)}
                 disabled={busy}
                 className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-danger hover:bg-muted"
-                aria-label={`Remover ${line.name}`}
+                aria-label={`${t('menuCalc.removeAria')} ${line.name}`}
               >
                 <X className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
@@ -865,7 +878,7 @@ function RecipeDialog({
 
       {available.length > 0 ? (
         <div className="rounded-xl bg-muted/60 p-3">
-          <span className="text-xs text-muted-foreground block mb-2">Adicionar ingrediente</span>
+          <span className="text-xs text-muted-foreground block mb-2">{t('menuCalc.addIngredient')}</span>
           <select
             value={ingredientId}
             onChange={(e) => {
@@ -877,7 +890,7 @@ function RecipeDialog({
             }}
             className="input-field !py-2 !text-sm w-full"
           >
-            <option value="">Escolher...</option>
+            <option value="">{t('menuCalc.choose')}</option>
             {available.map((i) => (
               <option key={i.id} value={i.id}>{i.name}</option>
             ))}
@@ -919,28 +932,30 @@ function RecipeDialog({
                      font-semibold text-primary hover:bg-muted transition-colors"
         >
           <Plus className="w-3.5 h-3.5 inline mr-1" aria-hidden="true" />
-          {ingredients.length === 0 ? 'Criar o primeiro ingrediente' : 'Criar outro ingrediente'}
+          {ingredients.length === 0
+            ? t('menuCalc.createFirstIngredient')
+            : t('menuCalc.createAnotherIngredient')}
         </button>
       )}
 
       {/* The running total, where the owner is deciding. */}
       {item.costing.lines.length > 0 && (
         <div className="mt-4 rounded-xl bg-surface border border-border-subtle p-3 space-y-1.5 text-sm">
-          <Row label="Preço na ementa" value={formatMoneyExact(item.costing.priceGross)} />
+          <Row label={t('menuCalc.menuPrice')} value={formatMoneyExact(item.costing.priceGross)} />
           <Row
-            label={`IVA ${formatPercent(item.vatRate, 0)}`}
+            label={`${t('menuCalc.vat')} ${formatPercent(item.vatRate, 0)}`}
             value={`-${formatMoneyExact(item.costing.vatAmount)}`}
             tone="text-muted-foreground"
           />
-          <Row label="Preço sem IVA" value={formatMoneyExact(item.costing.priceNet)} />
+          <Row label={t('menuCalc.priceExVat')} value={formatMoneyExact(item.costing.priceNet)} />
           <Row
-            label="Custo dos ingredientes"
+            label={t('menuCalc.ingredientCost')}
             value={`-${formatMoneyExact(item.costing.foodCost)}`}
             tone="text-red-400"
           />
           <div className="pt-1.5 border-t border-border">
             <Row
-              label="Margem bruta"
+              label={t('menuCalc.grossMargin')}
               value={formatMoneyExact(item.costing.grossProfit)}
               tone={item.costing.grossProfit <= 0 ? 'text-red-400' : 'text-green-400'}
               bold
@@ -948,7 +963,7 @@ function RecipeDialog({
           </div>
           {item.costing.foodCostPercent !== null && (
             <Row
-              label="Food cost"
+              label={t('menuCalc.foodCost')}
               value={formatPercent(item.costing.foodCostPercent)}
               tone="text-muted-foreground"
             />
@@ -982,6 +997,7 @@ function Dialog({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const { t } = useLanguage();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
@@ -1004,7 +1020,7 @@ function Dialog({
           <button
             type="button" onClick={onClose}
             className="p-1 -m-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
-            aria-label="Fechar"
+            aria-label={t('menuCalc.close')}
           >
             <X className="w-4 h-4" aria-hidden="true" />
           </button>

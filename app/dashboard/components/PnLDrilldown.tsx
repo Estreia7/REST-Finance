@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Loader2, X } from 'lucide-react';
 import { getPnLEntries } from '../pnl-actions';
 import { formatMoneyExact } from '@/lib/format';
+import { useLanguage } from '@/lib/language-context';
 
 type Entry = {
   id: string;
@@ -26,10 +27,11 @@ export type DrillTarget = {
   expected: number;
 };
 
-const MONTHS = [
-  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
-];
+/** Translated at render time. The index is the month, January first. */
+const MONTH_KEYS = [
+  'january', 'february', 'march', 'april', 'may', 'june',
+  'july', 'august', 'september', 'october', 'november', 'december',
+] as const;
 
 /**
  * The entries behind one figure on the statement.
@@ -46,6 +48,7 @@ export default function PnLDrilldown({
   target: DrillTarget | null;
   onClose: () => void;
 }) {
+  const { t } = useLanguage();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -90,7 +93,10 @@ export default function PnLDrilldown({
   // figure and its entries genuinely disagree.
   const reconciles = Math.abs(listed - target.expected) < 0.05;
 
-  const period = target.month === 0 ? `${target.year}` : `${MONTHS[target.month - 1]} ${target.year}`;
+  const period =
+    target.month === 0
+      ? `${target.year}`
+      : `${t(`drilldown.month.${MONTH_KEYS[target.month - 1]}`)} ${target.year}`;
 
   return (
     <div
@@ -110,7 +116,8 @@ export default function PnLDrilldown({
               {target.label}
             </h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              {period} · {entries.length} lançamento{entries.length === 1 ? '' : 's'}
+              {period} · {entries.length}{' '}
+              {entries.length === 1 ? t('drilldown.entry') : t('drilldown.entries')}
             </p>
           </div>
 
@@ -119,7 +126,7 @@ export default function PnLDrilldown({
             type="button"
             onClick={onClose}
             className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
-            aria-label="Fechar"
+            aria-label={t('drilldown.close')}
           >
             <X className="w-4 h-4" aria-hidden="true" />
           </button>
@@ -129,21 +136,21 @@ export default function PnLDrilldown({
           {loading ? (
             <div className="flex items-center gap-3 p-6 text-muted-foreground">
               <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-              A carregar lançamentos...
+              {t('drilldown.loading')}
             </div>
           ) : error ? (
             <p className="p-6 text-sm text-danger">{error}</p>
           ) : entries.length === 0 ? (
             <p className="p-6 text-sm text-muted-foreground">
-              Não há lançamentos neste período.
+              {t('drilldown.empty')}
             </p>
           ) : (
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-card">
                 <tr className="text-xs text-muted-foreground border-b border-border-subtle">
-                  <th scope="col" className="text-left font-medium px-5 py-2">Data</th>
-                  <th scope="col" className="text-left font-medium px-2 py-2">Detalhe</th>
-                  <th scope="col" className="text-right font-medium px-5 py-2">Valor</th>
+                  <th scope="col" className="text-left font-medium px-5 py-2">{t('drilldown.colDate')}</th>
+                  <th scope="col" className="text-left font-medium px-2 py-2">{t('drilldown.colDetail')}</th>
+                  <th scope="col" className="text-right font-medium px-5 py-2">{t('drilldown.colAmount')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-subtle">
@@ -159,7 +166,7 @@ export default function PnLDrilldown({
                       <span className="block">{entry.detail || '—'}</span>
                       {entry.tickets !== null && entry.tickets > 0 && (
                         <span className="text-xs text-muted-foreground">
-                          {entry.tickets} clientes
+                          {entry.tickets} {t('drilldown.customers')}
                         </span>
                       )}
                       {entry.notes && (
@@ -179,7 +186,7 @@ export default function PnLDrilldown({
         {!loading && !error && entries.length > 0 && (
           <div className="border-t border-border p-5">
             <div className="flex items-center justify-between gap-4">
-              <span className="text-sm font-medium text-foreground">Soma dos lançamentos</span>
+              <span className="text-sm font-medium text-foreground">{t('drilldown.sum')}</span>
               <span className="figure font-semibold text-foreground">
                 {formatMoneyExact(listed)}
               </span>
@@ -187,8 +194,8 @@ export default function PnLDrilldown({
 
             {!reconciles && (
               <p className="mt-2 text-xs text-warning">
-                Difere do valor apresentado ({formatMoneyExact(target.expected)}). Pode haver
-                lançamentos eliminados neste período.
+                {t('drilldown.mismatch')} ({formatMoneyExact(target.expected)}).{' '}
+                {t('drilldown.mismatchHint')}
               </p>
             )}
           </div>

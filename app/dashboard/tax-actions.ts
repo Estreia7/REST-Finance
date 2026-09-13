@@ -129,7 +129,9 @@ export async function getVatQuarter(year: number, quarter: Quarter) {
   const purchases = costs.map((row) => {
     const type = row.type as 'COGS' | 'OPEX';
     return {
-      label: type === 'COGS' ? 'Mercadorias' : 'Despesas de funcionamento',
+      // A key, not a sentence: this runs on the server, where the reader's
+      // language is not known. The panel translates it on display.
+      labelKey: type === 'COGS' ? 'estado.purchaseGoods' : 'estado.purchaseOperating',
       gross: Number(row._sum.amount ?? 0),
       vatRate: ASSUMED_PURCHASE_VAT[type],
       deductibility: DEFAULT_DEDUCTIBILITY[type] as DeductibilityKey,

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { getPriceAlerts, getProductPriceHistory } from '../price-actions';
 import InfoHint from '@/app/components/InfoHint';
+import { useLanguage } from '@/lib/language-context';
 
 interface PriceAlert {
   productName: string;
@@ -24,6 +25,7 @@ interface PricePoint {
 }
 
 export default function PriceTrackingPanel() {
+  const { t } = useLanguage();
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [threshold, setThreshold] = useState(5);
   const [loading, setLoading] = useState(true);
@@ -65,7 +67,7 @@ export default function PriceTrackingPanel() {
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">
           <AlertTriangle className="w-5 h-5 text-amber-400" />
-          <h3 className="font-bold text-foreground">Alertas de Preço<InfoHint term="priceAlert" /></h3>
+          <h3 className="font-bold text-foreground">{t('priceTracking.title')}<InfoHint term="priceAlert" /></h3>
           {alerts.length > 0 && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-medium">
               {alerts.length}
@@ -74,7 +76,7 @@ export default function PriceTrackingPanel() {
         </div>
         {/* A bare "+5%" dropdown says nothing about what it filters. */}
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span>Avisar a partir de<InfoHint term="priceThreshold" /></span>
+          <span>{t('priceTracking.warnFrom')}<InfoHint term="priceThreshold" /></span>
         <select
           value={threshold}
           onChange={(e) => setThreshold(Number(e.target.value))}
@@ -90,11 +92,11 @@ export default function PriceTrackingPanel() {
 
       {loading ? (
         <div className="flex items-center justify-center h-20 text-sm text-muted-foreground">
-          A carregar alertas...
+          {t('priceTracking.loading')}
         </div>
       ) : alerts.length === 0 ? (
         <div className="text-sm text-muted-foreground text-center py-8">
-          Sem alterações de preço acima de {threshold}% nos últimos 90 dias.
+          {t('priceTracking.emptyBefore')} {threshold}% {t('priceTracking.emptyAfter')}
         </div>
       ) : (
         <div className="space-y-2">
@@ -118,7 +120,7 @@ export default function PriceTrackingPanel() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-foreground truncate">{alert.productName}</div>
-                    <div className="text-xs text-muted-foreground">{alert.vendorName || 'Fornecedor desconhecido'}</div>
+                    <div className="text-xs text-muted-foreground">{alert.vendorName || t('priceTracking.unknownVendor')}</div>
                   </div>
                   <div className="text-right shrink-0">
                     <div className={`text-sm font-bold ${isIncrease ? 'text-red-400' : 'text-green-400'}`}>
@@ -138,15 +140,15 @@ export default function PriceTrackingPanel() {
                 {isExpanded && (
                   <div className="border-t border-border-subtle p-3 bg-surface">
                     {historyLoading ? (
-                      <div className="text-xs text-muted-foreground text-center py-2">A carregar histórico...</div>
+                      <div className="text-xs text-muted-foreground text-center py-2">{t('priceTracking.historyLoading')}</div>
                     ) : priceHistory.length === 0 ? (
-                      <div className="text-xs text-muted-foreground text-center py-2">Sem histórico disponível.</div>
+                      <div className="text-xs text-muted-foreground text-center py-2">{t('priceTracking.historyEmpty')}</div>
                     ) : (
                       <div className="space-y-1">
                         <div className="flex items-center justify-between text-xs font-medium text-muted-foreground mb-2">
-                          <span>Histórico de Preços</span>
+                          <span>{t('priceTracking.historyTitle')}</span>
                           <span className="font-normal">
-                            Preço unitário × quantidade<InfoHint term="unitPrice" />
+                            {t('priceTracking.unitTimesQuantity')}<InfoHint term="unitPrice" />
                           </span>
                         </div>
                         {priceHistory.map((point, j) => (

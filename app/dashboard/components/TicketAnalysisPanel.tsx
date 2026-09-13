@@ -51,7 +51,7 @@ export default function TicketAnalysisPanel() {
   }
 
   if (!data || data.daily.length === 0) {
-    return <div className="text-center py-16 text-muted-foreground text-sm">Sem dados de tickets para este período.</div>;
+    return <div className="text-center py-16 text-muted-foreground text-sm">{t('tickets.noData')}</div>;
   }
 
   const chartData = data.daily.map(d => ({

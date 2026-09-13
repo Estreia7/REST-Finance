@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Camera, Loader2, Trash2, Building2, User } from 'lucide-react';
+import { useLanguage } from '@/lib/language-context';
 
 /**
  * Picks and uploads a logo or profile picture.
@@ -33,6 +34,7 @@ export default function ImageUpload({
   onUpload: (formData: FormData) => Promise<{ error?: string; success?: boolean }>;
   onRemove: () => Promise<{ error?: string; success?: boolean }>;
 }) {
+  const { t } = useLanguage();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -47,11 +49,11 @@ export default function ImageUpload({
   const handleFile = useCallback(
     async (file: File) => {
       if (!ACCEPTED.includes(file.type)) {
-        toast.error('Formato inválido. Usa PNG, JPG ou WebP.');
+        toast.error(t('upload.badFormat'));
         return;
       }
       if (file.size > MAX_BYTES) {
-        toast.error('A imagem não pode exceder 2 MB.');
+        toast.error(t('upload.tooLarge'));
         return;
       }
 
@@ -75,9 +77,9 @@ export default function ImageUpload({
       }
 
       setPreview(null);
-      toast.success('Imagem atualizada.');
+      toast.success(t('upload.updated'));
     },
-    [onUpload]
+    [onUpload, t]
   );
 
   const handleRemove = async () => {
@@ -90,7 +92,7 @@ export default function ImageUpload({
       return;
     }
     setPreview(null);
-    toast.success('Imagem removida.');
+    toast.success(t('upload.removed'));
   };
 
   const Placeholder = kind === 'logo' ? Building2 : User;
@@ -130,7 +132,7 @@ export default function ImageUpload({
             className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-ink hover:underline disabled:opacity-50"
           >
             <Camera className="w-4 h-4" aria-hidden="true" />
-            {src ? 'Alterar' : 'Carregar'}
+            {src ? t('upload.change') : t('upload.upload')}
           </button>
 
           {currentPath && (
@@ -141,7 +143,7 @@ export default function ImageUpload({
               className="inline-flex items-center gap-1.5 text-sm text-danger hover:underline disabled:opacity-50"
             >
               <Trash2 className="w-4 h-4" aria-hidden="true" />
-              Remover
+              {t('upload.remove')}
             </button>
           )}
         </div>

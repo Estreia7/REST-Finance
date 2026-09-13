@@ -10,6 +10,7 @@ import {
 } from '../image-actions';
 import ImageUpload from './ImageUpload';
 import CategoryManager from './CategoryManager';
+import { useLanguage } from '@/lib/language-context';
 
 interface SettingsPanelProps {
   pendingTheme:      'light' | 'dark';
@@ -25,6 +26,8 @@ interface SettingsPanelProps {
 export default function SettingsPanel({
   pendingTheme, hasUnsavedChanges, onThemeChange, onSaveTheme, onCancelTheme, currentUser, restaurant, onUpdate,
 }: SettingsPanelProps) {
+  const { t } = useLanguage();
+
   // Profile
   const [name, setName] = useState(currentUser?.name || '');
   const [savingProfile, setSavingProfile] = useState(false);
@@ -44,28 +47,28 @@ export default function SettingsPanel({
   const handleSaveProfile = async () => {
     setSavingProfile(true);
     const result = await updateUserProfile(name);
-    if (result.success) { toast.success('Perfil atualizado!'); onUpdate?.(); }
-    else toast.error(result.error || 'Erro ao atualizar');
+    if (result.success) { toast.success(t('settings.profileUpdated')); onUpdate?.(); }
+    else toast.error(result.error || t('settings.updateFailed'));
     setSavingProfile(false);
   };
 
   const handleChangePassword = async () => {
-    if (newPw !== confirmPw) { toast.error('As palavras-passe não coincidem'); return; }
-    if (newPw.length < 6) { toast.error('Mínimo 6 caracteres'); return; }
+    if (newPw !== confirmPw) { toast.error(t('settings.passwordMismatch')); return; }
+    if (newPw.length < 6) { toast.error(t('settings.passwordTooShort')); return; }
     setSavingPw(true);
     const result = await changePassword(currentPw, newPw);
     if (result.success) {
-      toast.success('Palavra-passe alterada!');
+      toast.success(t('settings.passwordChanged'));
       setCurrentPw(''); setNewPw(''); setConfirmPw('');
-    } else toast.error(result.error || 'Erro ao alterar');
+    } else toast.error(result.error || t('settings.passwordChangeFailed'));
     setSavingPw(false);
   };
 
   const handleSaveRestaurant = async () => {
     setSavingRestaurant(true);
     const result = await updateRestaurantSettings({ name: restaurantName, timezone, currency });
-    if (result.success) { toast.success('Restaurante atualizado!'); onUpdate?.(); }
-    else toast.error(result.error || 'Erro ao atualizar');
+    if (result.success) { toast.success(t('settings.restaurantUpdated')); onUpdate?.(); }
+    else toast.error(result.error || t('settings.updateFailed'));
     setSavingRestaurant(false);
   };
 
@@ -75,7 +78,7 @@ export default function SettingsPanel({
       <div className="card-glass p-6">
         <div className="flex items-center gap-2 mb-5">
           <User className="w-4 h-4 text-muted-foreground" />
-          <h2 className="text-lg font-bold text-foreground">Perfil</h2>
+          <h2 className="text-lg font-bold text-foreground">{t('settings.profile')}</h2>
         </div>
         <div className="space-y-4">
           <div className="p-4 rounded-xl bg-surface border border-border-subtle">
@@ -83,8 +86,8 @@ export default function SettingsPanel({
               kind="avatar"
               shape="circle"
               currentPath={currentUser?.image ?? null}
-              label="Foto de perfil"
-              hint="PNG, JPG ou WebP, até 2 MB."
+              label={t('settings.profilePicture')}
+              hint={t('settings.imageHint')}
               onUpload={uploadProfilePicture}
               onRemove={removeProfilePicture}
             />
@@ -99,12 +102,12 @@ export default function SettingsPanel({
             <div className="text-xs text-muted-foreground">{currentUser?.email || '—'}</div>
           </div>
           <div>
-            <label htmlFor="settings-name" className="text-xs font-medium text-muted-foreground block mb-2">Nome</label>
-            <input id="settings-name" type="text" value={name} onChange={e => setName(e.target.value)} className="input-field" placeholder="O seu nome" />
+            <label htmlFor="settings-name" className="text-xs font-medium text-muted-foreground block mb-2">{t('settings.name')}</label>
+            <input id="settings-name" type="text" value={name} onChange={e => setName(e.target.value)} className="input-field" placeholder={t('settings.namePlaceholder')} />
           </div>
           <button onClick={handleSaveProfile} disabled={savingProfile || name === (currentUser?.name || '')} className="cta-button py-2 px-5 text-sm disabled:opacity-40">
             {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Guardar
+            {t('settings.save')}
           </button>
         </div>
       </div>
@@ -113,20 +116,20 @@ export default function SettingsPanel({
       <div className="card-glass p-6">
         <div className="flex items-center gap-2 mb-5">
           <Lock className="w-4 h-4 text-muted-foreground" />
-          <h2 className="text-lg font-bold text-foreground">Palavra-passe</h2>
+          <h2 className="text-lg font-bold text-foreground">{t('settings.password')}</h2>
         </div>
         <div className="space-y-4">
           <div>
-            <label htmlFor="settings-new-pw" className="text-xs font-medium text-muted-foreground block mb-2">Nova palavra-passe</label>
-            <input id="settings-new-pw" type="password" value={newPw} onChange={e => setNewPw(e.target.value)} className="input-field" placeholder="Mínimo 6 caracteres" />
+            <label htmlFor="settings-new-pw" className="text-xs font-medium text-muted-foreground block mb-2">{t('settings.newPassword')}</label>
+            <input id="settings-new-pw" type="password" value={newPw} onChange={e => setNewPw(e.target.value)} className="input-field" placeholder={t('settings.passwordMinPlaceholder')} />
           </div>
           <div>
-            <label htmlFor="settings-confirm-pw" className="text-xs font-medium text-muted-foreground block mb-2">Confirmar</label>
-            <input id="settings-confirm-pw" type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} className="input-field" placeholder="Repetir palavra-passe" />
+            <label htmlFor="settings-confirm-pw" className="text-xs font-medium text-muted-foreground block mb-2">{t('settings.confirmPassword')}</label>
+            <input id="settings-confirm-pw" type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} className="input-field" placeholder={t('settings.repeatPassword')} />
           </div>
           <button onClick={handleChangePassword} disabled={savingPw || !newPw} className="cta-button py-2 px-5 text-sm disabled:opacity-40">
             {savingPw ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-            Alterar
+            {t('settings.change')}
           </button>
         </div>
       </div>
@@ -136,37 +139,37 @@ export default function SettingsPanel({
         <div className="card-glass p-6">
           <div className="flex items-center gap-2 mb-5">
             <Building2 className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-lg font-bold text-foreground">Restaurante</h2>
+            <h2 className="text-lg font-bold text-foreground">{t('settings.restaurant')}</h2>
           </div>
           <div className="space-y-4">
             <div className="p-4 rounded-xl bg-surface border border-border-subtle">
               <ImageUpload
                 kind="logo"
                 currentPath={restaurant?.logoPath ?? null}
-                label="Logótipo do restaurante"
-                hint="Aparece no painel e nos relatórios. PNG, JPG ou WebP, até 2 MB."
+                label={t('settings.logo')}
+                hint={t('settings.logoHint')}
                 onUpload={uploadRestaurantLogo}
                 onRemove={removeRestaurantLogo}
               />
             </div>
 
             <div>
-              <label htmlFor="settings-restaurant-name" className="text-xs font-medium text-muted-foreground block mb-2">Nome do restaurante</label>
+              <label htmlFor="settings-restaurant-name" className="text-xs font-medium text-muted-foreground block mb-2">{t('settings.restaurantName')}</label>
               <input id="settings-restaurant-name" type="text" value={restaurantName} onChange={e => setRestaurantName(e.target.value)} className="input-field" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="settings-timezone" className="text-xs font-medium text-muted-foreground block mb-2">Fuso horário</label>
+                <label htmlFor="settings-timezone" className="text-xs font-medium text-muted-foreground block mb-2">{t('settings.timezone')}</label>
                 <select id="settings-timezone" value={timezone} onChange={e => setTimezone(e.target.value)} className="input-field">
-                  <option value="Europe/Lisbon">Europa/Lisboa</option>
-                  <option value="Europe/London">Europa/Londres</option>
-                  <option value="Europe/Madrid">Europa/Madrid</option>
-                  <option value="Europe/Paris">Europa/Paris</option>
-                  <option value="America/Sao_Paulo">América/São Paulo</option>
+                  <option value="Europe/Lisbon">{t('settings.tzLisbon')}</option>
+                  <option value="Europe/London">{t('settings.tzLondon')}</option>
+                  <option value="Europe/Madrid">{t('settings.tzMadrid')}</option>
+                  <option value="Europe/Paris">{t('settings.tzParis')}</option>
+                  <option value="America/Sao_Paulo">{t('settings.tzSaoPaulo')}</option>
                 </select>
               </div>
               <div>
-                <label htmlFor="settings-currency" className="text-xs font-medium text-muted-foreground block mb-2">Moeda</label>
+                <label htmlFor="settings-currency" className="text-xs font-medium text-muted-foreground block mb-2">{t('settings.currency')}</label>
                 <select id="settings-currency" value={currency} onChange={e => setCurrency(e.target.value)} className="input-field">
                   <option value="EUR">EUR (€)</option>
                   <option value="USD">USD ($)</option>
@@ -177,7 +180,7 @@ export default function SettingsPanel({
             </div>
             <button onClick={handleSaveRestaurant} disabled={savingRestaurant} className="cta-button py-2 px-5 text-sm disabled:opacity-40">
               {savingRestaurant ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Guardar
+              {t('settings.save')}
             </button>
           </div>
         </div>
@@ -190,26 +193,26 @@ export default function SettingsPanel({
       <div className="card-glass p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-lg font-bold text-foreground">Aparência</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Personaliza o tema do teu dashboard</p>
+            <h2 className="text-lg font-bold text-foreground">{t('settings.appearance')}</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">{t('settings.appearanceHint')}</p>
           </div>
           {hasUnsavedChanges && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-warning/10 rounded-lg">
               <AlertCircle className="w-4 h-4 text-amber-400" />
-              <span className="text-xs font-medium text-amber-400">Alterações por guardar</span>
+              <span className="text-xs font-medium text-amber-400">{t('settings.unsavedChanges')}</span>
             </div>
           )}
         </div>
 
         <div className="grid grid-cols-2 gap-4 mb-6">
-          {(['light', 'dark'] as const).map(t => {
-            const active = pendingTheme === t;
-            const Icon   = t === 'light' ? Sun : Moon;
-            const label  = t === 'light' ? 'Claro' : 'Escuro';
+          {(['light', 'dark'] as const).map(theme => {
+            const active = pendingTheme === theme;
+            const Icon   = theme === 'light' ? Sun : Moon;
+            const label  = t(theme === 'light' ? 'settings.themeLight' : 'settings.themeDark');
             return (
               <button
-                key={t}
-                onClick={() => onThemeChange(t)}
+                key={theme}
+                onClick={() => onThemeChange(theme)}
                 className={`relative p-5 rounded-xl border-2 transition-all text-left ${
                   active ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/30'
                 }`}
@@ -219,7 +222,7 @@ export default function SettingsPanel({
                   <span className={`text-sm font-semibold ${active ? 'text-primary' : 'text-foreground'}`}>{label}</span>
                 </div>
                 <div className={`w-full h-14 rounded-lg border flex items-center justify-center ${
-                  t === 'light' ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-700'
+                  theme === 'light' ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-700'
                 }`}>
                   <div className="w-8 h-8 rounded-lg gradient-bg shadow-glow-sm" />
                 </div>
@@ -235,10 +238,10 @@ export default function SettingsPanel({
 
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-border-subtle">
           <button onClick={onCancelTheme} disabled={!hasUnsavedChanges} className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-            Cancelar
+            {t('settings.cancel')}
           </button>
           <button onClick={onSaveTheme} disabled={!hasUnsavedChanges} className="cta-button py-2 px-5 text-sm disabled:opacity-40 disabled:cursor-not-allowed">
-            <Save className="w-4 h-4" /> Guardar
+            <Save className="w-4 h-4" /> {t('settings.save')}
           </button>
         </div>
       </div>

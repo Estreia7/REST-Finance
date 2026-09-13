@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { Check, ChevronDown, Store } from 'lucide-react';
 import { getMyRestaurants, setActiveRestaurant } from '../restaurant-actions';
+import { useLanguage } from '@/lib/language-context';
 
 type Restaurant = {
   id: string;
@@ -25,6 +26,7 @@ type Restaurant = {
  * would be worse than a moment's wait.
  */
 export default function RestaurantSwitcher() {
+  const { t } = useLanguage();
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -96,7 +98,7 @@ export default function RestaurantSwitcher() {
       >
         <Store className="w-4 h-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-          {switching ? 'A mudar...' : active.name}
+          {switching ? t('restaurantSwitcher.switching') : active.name}
         </span>
         <ChevronDown
           className={`w-4 h-4 shrink-0 text-muted-foreground transition-transform ${
@@ -109,7 +111,7 @@ export default function RestaurantSwitcher() {
       {open && (
         <ul
           role="listbox"
-          aria-label="Escolher restaurante"
+          aria-label={t('restaurantSwitcher.chooseLabel')}
           className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-lg border
                      border-border bg-card shadow-modal"
         >
@@ -126,7 +128,7 @@ export default function RestaurantSwitcher() {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-foreground">{r.name}</span>
                   {r.role === 'STAFF' && (
-                    <span className="block text-xs text-muted-foreground">Equipa</span>
+                    <span className="block text-xs text-muted-foreground">{t('restaurantSwitcher.staff')}</span>
                   )}
                 </span>
                 {r.id === active.id && (

@@ -1,18 +1,21 @@
 'use client';
 
 import { LayoutDashboard, TrendingUp, DollarSign, Settings, BarChart3 } from 'lucide-react';
+import { useLanguage } from '@/lib/language-context';
 
 type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
+/** The label is a key: the bar is short on width, so it gets its own, abbreviated wording. */
 const items = [
-  { id: 'dashboard' as Tab, icon: LayoutDashboard, label: 'Dashboard' },
-  { id: 'revenue'   as Tab, icon: TrendingUp,       label: 'Receita' },
-  { id: 'costs'     as Tab, icon: DollarSign,       label: 'Custos' },
-  { id: 'analytics' as Tab, icon: BarChart3,         label: 'Análises' },
-  { id: 'settings'  as Tab, icon: Settings,          label: 'Config.' },
+  { id: 'dashboard' as Tab, icon: LayoutDashboard, labelKey: 'mobileNav.dashboard' },
+  { id: 'revenue'   as Tab, icon: TrendingUp,      labelKey: 'mobileNav.revenue' },
+  { id: 'costs'     as Tab, icon: DollarSign,      labelKey: 'mobileNav.costs' },
+  { id: 'analytics' as Tab, icon: BarChart3,       labelKey: 'mobileNav.analytics' },
+  { id: 'settings'  as Tab, icon: Settings,        labelKey: 'mobileNav.settings' },
 ];
 
 export default function MobileBottomNav({ activeTab, onTabChange }: { activeTab: Tab; onTabChange: (t: Tab) => void }) {
+  const { t } = useLanguage();
   const activeIndex = items.findIndex(i => i.id === activeTab);
 
   return (
@@ -29,7 +32,7 @@ export default function MobileBottomNav({ activeTab, onTabChange }: { activeTab:
             }}
           />
 
-          {items.map(({ id, icon: Icon, label }) => {
+          {items.map(({ id, icon: Icon, labelKey }) => {
             const active = activeTab === id;
             return (
               <button
@@ -55,7 +58,7 @@ export default function MobileBottomNav({ activeTab, onTabChange }: { activeTab:
                     active ? 'text-primary opacity-100' : 'text-muted-foreground opacity-70'
                   }`}
                 >
-                  {label}
+                  {t(labelKey)}
                 </span>
                 {/* Active dot */}
                 <div

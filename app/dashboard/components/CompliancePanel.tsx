@@ -5,13 +5,13 @@ import { toast } from 'sonner';
 import { Download, FileText, Loader2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import {
   daysUntilExpiry as daysUntil,
-  RENEWAL_LABELS,
   type ComplianceStatus,
   type ComplianceSummary as Summary,
   type RenewalPeriod,
 } from '@/lib/compliance';
-import { TYPE_LABELS, STATUS_STYLE } from './compliance-labels';
+import { TYPE_LABEL_KEYS, STATUS_STYLE, RENEWAL_LABEL_KEYS } from './compliance-labels';
 import ComplianceSummary from './ComplianceSummary';
+import { useLanguage } from '@/lib/language-context';
 import {
   getComplianceDocs,
   uploadComplianceDoc,
@@ -33,9 +33,9 @@ type Doc = {
   status: ComplianceStatus;
 };
 
-function formatDate(value: Date | null): string {
+function formatDate(value: Date | null, locale: string): string {
   if (!value) return '—';
-  return new Date(value).toLocaleDateString('pt-PT', {
+  return new Date(value).toLocaleDateString(locale, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -43,16 +43,25 @@ function formatDate(value: Date | null): string {
 }
 
 /** The part an owner acts on: how long is left, in words. */
-function expiryPhrase(doc: Doc): string | null {
+function expiryPhrase(doc: Doc, t: (key: string) => string): string | null {
   const days = daysUntil(doc.expiresAt);
   if (days === null) return null;
 
+  // The count sits in the middle of the phrase in both languages, but the rest
+  // of the wording differs on either side of it ("expirou há 3 dias" against
+  // "expired 3 days ago"), so each phrase is one key holding a {n} slot rather
+  // than a chain of fragments that would only read correctly in Portuguese.
+  const fill = (key: string, n: number) => t(key).replace('{n}', String(n));
+
   if (days < 0) {
     const n = Math.abs(days);
-    return `expirou há ${n} ${n === 1 ? 'dia' : 'dias'}`;
+    return fill(n === 1 ? 'compliance.expiry.expiredOne' : 'compliance.expiry.expiredMany', n);
   }
-  if (days === 0) return 'expira hoje';
-  return `expira em ${days} ${days === 1 ? 'dia' : 'dias'}`;
+  if (days === 0) return t('compliance.expiry.today');
+  return fill(
+    days === 1 ? 'compliance.expiry.expiresOne' : 'compliance.expiry.expiresMany',
+    days,
+  );
 }
 
 /**
@@ -64,6 +73,8 @@ function expiryPhrase(doc: Doc): string | null {
  * any dates at all.
  */
 export default function CompliancePanel() {
+  const { t, language } = useLanguage();
+  const locale = language === 'pt' ? 'pt-PT' : 'en-GB';
   const [docs, setDocs] = useState<Doc[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [names, setNames] = useState({ owner: '', restaurant: '' });
@@ -94,7 +105,7 @@ export default function CompliancePanel() {
 
     const file = formData.get('file');
     if (!(file instanceof File) || file.size === 0) {
-      toast.error('Escolhe um ficheiro.');
+      toast.error(t('compliance.toast.pickFile'));
       return;
     }
 
@@ -109,19 +120,20 @@ export default function CompliancePanel() {
 
     form.reset();
     setAdding(false);
-    toast.success('Documento guardado.');
+    toast.success(t('compliance.toast.saved'));
     load();
   };
 
   const handleDelete = async (doc: Doc) => {
-    if (!confirm(`Remover "${doc.name}" da lista? O ficheiro mantém-se arquivado.`)) return;
+    const question = `${t('compliance.confirmDelete').replace('{n}', doc.name)}\n${t('compliance.confirmDeleteNote')}`;
+    if (!confirm(question)) return;
 
     const result = await deleteComplianceDoc(doc.id);
     if (result.error) {
       toast.error(result.error);
       return;
     }
-    toast.success('Documento removido.');
+    toast.success(t('compliance.toast.removed'));
     load();
   };
 
@@ -129,7 +141,7 @@ export default function CompliancePanel() {
     return (
       <div className="card-glass p-6 flex items-center gap-3 text-muted-foreground">
         <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-        A carregar documentos...
+        {t('compliance.loading')}
       </div>
     );
   }
@@ -149,10 +161,10 @@ export default function CompliancePanel() {
           <div>
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
-              <h2 className="text-lg font-bold text-foreground">Conformidade</h2>
+              <h2 className="text-lg font-bold text-foreground">{t('compliance.title')}</h2>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Seguros, licenças e certificados, com as datas de validade.
+              {t('compliance.subtitle')}
             </p>
           </div>
 
@@ -162,7 +174,7 @@ export default function CompliancePanel() {
             className="shrink-0 inline-flex items-center gap-1.5 text-sm font-medium text-primary-ink hover:underline"
           >
             <Plus className="w-4 h-4" aria-hidden="true" />
-            Adicionar
+            {t('compliance.add')}
           </button>
         </div>
 
@@ -171,66 +183,66 @@ export default function CompliancePanel() {
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="doc-type" className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  Tipo
+                  {t('compliance.form.type')}
                 </label>
                 <select id="doc-type" name="type" required className="input-field" defaultValue="INSURANCE">
-                  {Object.entries(TYPE_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
+                  {Object.entries(TYPE_LABEL_KEYS).map(([value, key]) => (
+                    <option key={value} value={value}>{t(key)}</option>
                   ))}
                 </select>
               </div>
 
               <div>
                 <label htmlFor="doc-name" className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  Nome
+                  {t('compliance.form.name')}
                 </label>
                 <input
                   id="doc-name"
                   name="name"
                   required
-                  placeholder="Seguro de responsabilidade civil"
+                  placeholder={t('compliance.form.namePlaceholder')}
                   className="input-field"
                 />
               </div>
 
               <div>
                 <label htmlFor="doc-renewal" className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  Renovação
+                  {t('compliance.form.renewal')}
                 </label>
                 <select id="doc-renewal" name="renewalPeriod" className="input-field" defaultValue="ANNUAL">
-                  {(Object.keys(RENEWAL_LABELS) as RenewalPeriod[]).map((value) => (
-                    <option key={value} value={value}>{RENEWAL_LABELS[value]}</option>
+                  {(Object.keys(RENEWAL_LABEL_KEYS) as RenewalPeriod[]).map((value) => (
+                    <option key={value} value={value}>{t(RENEWAL_LABEL_KEYS[value])}</option>
                   ))}
                 </select>
               </div>
 
               <div>
                 <label htmlFor="doc-reference" className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  Número da apólice ou licença
+                  {t('compliance.form.reference')}
                 </label>
                 <input id="doc-reference" name="reference" className="input-field" />
               </div>
 
               <div>
                 <label htmlFor="doc-issued" className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  Data de emissão
+                  {t('compliance.form.issuedAt')}
                 </label>
                 <input id="doc-issued" name="issuedAt" type="date" className="input-field" />
               </div>
 
               <div>
                 <label htmlFor="doc-expires" className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  Válido até
+                  {t('compliance.form.expiresAt')}
                 </label>
                 <input id="doc-expires" name="expiresAt" type="date" className="input-field" />
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Deixa em branco se não expirar.
+                  {t('compliance.form.expiresHint')}
                 </p>
               </div>
 
               <div className="sm:col-span-2">
                 <label htmlFor="doc-file" className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  Ficheiro (PDF ou imagem, até 10 MB)
+                  {t('compliance.form.file')}
                 </label>
                 <input
                   id="doc-file"
@@ -248,10 +260,10 @@ export default function CompliancePanel() {
                 {saving ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-                    A guardar...
+                    {t('compliance.form.saving')}
                   </>
                 ) : (
-                  'Guardar documento'
+                  t('compliance.form.submit')
                 )}
               </button>
               <button
@@ -259,7 +271,7 @@ export default function CompliancePanel() {
                 onClick={() => setAdding(false)}
                 className="text-sm text-muted-foreground hover:text-foreground"
               >
-                Cancelar
+                {t('compliance.form.cancel')}
               </button>
             </div>
           </form>
@@ -269,26 +281,26 @@ export default function CompliancePanel() {
           <div className="mt-6 rounded-lg border border-dashed border-border p-8 text-center">
             <FileText className="w-6 h-6 mx-auto text-muted-foreground" aria-hidden="true" />
             <p className="mt-2 text-sm text-muted-foreground">
-              Ainda não há documentos. Começa pelo seguro e pela licença de utilização.
+              {t('compliance.empty')}
             </p>
           </div>
         ) : (
           <div className="mt-6 overflow-x-auto -mx-6 px-6">
             <table className="min-w-full text-sm border-collapse">
               <caption className="sr-only">
-                Documentos de conformidade, ordenados por data de validade
+                {t('compliance.tableCaption')}
               </caption>
               <thead>
                 <tr className="text-xs text-muted-foreground border-b border-border">
-                  <th scope="col" className="py-2 pr-4 text-left font-medium">Documento</th>
-                  <th scope="col" className="py-2 pr-4 text-left font-medium">Estado</th>
-                  <th scope="col" className="py-2 pr-4 text-left font-medium">Tipo</th>
-                  <th scope="col" className="py-2 pr-4 text-left font-medium">Renovação</th>
+                  <th scope="col" className="py-2 pr-4 text-left font-medium">{t('compliance.col.document')}</th>
+                  <th scope="col" className="py-2 pr-4 text-left font-medium">{t('compliance.col.status')}</th>
+                  <th scope="col" className="py-2 pr-4 text-left font-medium">{t('compliance.col.type')}</th>
+                  <th scope="col" className="py-2 pr-4 text-left font-medium">{t('compliance.col.renewal')}</th>
                   <th scope="col" className="py-2 pr-4 text-left font-medium whitespace-nowrap">
-                    Válido até
+                    {t('compliance.col.expiresAt')}
                   </th>
                   <th scope="col" className="py-2 text-right font-medium">
-                    <span className="sr-only">Ações</span>
+                    <span className="sr-only">{t('compliance.col.actions')}</span>
                   </th>
                 </tr>
               </thead>
@@ -296,7 +308,7 @@ export default function CompliancePanel() {
               <tbody className="divide-y divide-border-subtle">
                 {docs.map((doc) => {
                   const style = STATUS_STYLE[doc.status];
-                  const phrase = expiryPhrase(doc);
+                  const phrase = expiryPhrase(doc, t);
 
                   return (
                     <tr key={doc.id}>
@@ -317,21 +329,23 @@ export default function CompliancePanel() {
                             className={`shrink-0 w-2.5 h-2.5 rounded-full ${style.dot} ${style.glow}`}
                             aria-hidden="true"
                           />
-                          <span className={`text-xs font-medium ${style.text}`}>{style.label}</span>
+                          <span className={`text-xs font-medium ${style.text}`}>{t(style.labelKey)}</span>
                         </span>
                       </td>
 
                       <td className="py-3 pr-4 align-top text-muted-foreground whitespace-nowrap">
-                        {TYPE_LABELS[doc.type] ?? doc.type}
+                        {TYPE_LABEL_KEYS[doc.type] ? t(TYPE_LABEL_KEYS[doc.type]) : doc.type}
                       </td>
 
                       <td className="py-3 pr-4 align-top text-muted-foreground whitespace-nowrap">
-                        {RENEWAL_LABELS[doc.renewalPeriod] ?? '—'}
+                        {RENEWAL_LABEL_KEYS[doc.renewalPeriod]
+                          ? t(RENEWAL_LABEL_KEYS[doc.renewalPeriod])
+                          : '—'}
                       </td>
 
                       <td className="py-3 pr-4 align-top whitespace-nowrap">
                         <span className="block figure text-foreground">
-                          {formatDate(doc.expiresAt)}
+                          {formatDate(doc.expiresAt, locale)}
                         </span>
                         {/* Only the countdown: the status column already names
                             the state, and a document with no expiry would
@@ -345,7 +359,7 @@ export default function CompliancePanel() {
                         <a
                           href={`/api/images/${doc.filePath}`}
                           className="inline-flex p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
-                          aria-label={`Descarregar ${doc.name}`}
+                          aria-label={`${t('compliance.download')} ${doc.name}`}
                         >
                           <Download className="w-4 h-4" aria-hidden="true" />
                         </a>
@@ -353,7 +367,7 @@ export default function CompliancePanel() {
                           type="button"
                           onClick={() => handleDelete(doc)}
                           className="inline-flex p-1.5 rounded-md text-muted-foreground hover:text-danger hover:bg-muted"
-                          aria-label={`Remover ${doc.name}`}
+                          aria-label={`${t('compliance.remove')} ${doc.name}`}
                         >
                           <Trash2 className="w-4 h-4" aria-hidden="true" />
                         </button>

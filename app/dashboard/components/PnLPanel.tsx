@@ -21,7 +21,7 @@ interface PnLData {
 }
 
 export default function PnLPanel() {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
@@ -82,7 +82,7 @@ export default function PnLPanel() {
       {loading ? (
         <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
       ) : !data ? (
-        <div className="text-center py-16 text-muted-foreground text-sm">Sem dados disponíveis.</div>
+        <div className="text-center py-16 text-muted-foreground text-sm">{t('pnl.noData')}</div>
       ) : (
         <>
           {/* P&L Statement */}
@@ -147,7 +147,7 @@ export default function PnLPanel() {
 
               {/* Net Income */}
               <div className="flex justify-between py-4 border-t-2 border-border mt-2">
-                <span className="text-lg font-black text-foreground">Lucro Líquido<InfoHint term="netIncome" /></span>
+                <span className="text-lg font-black text-foreground">{t('pnl.netIncome')}<InfoHint term="netIncome" /></span>
                 <div className="flex items-center gap-2">
                   <Tooltip text={glossaryText('netMargin', language)} underline={false}>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${data.netMargin >= 15 ? 'bg-success/15 text-green-400' : data.netMargin >= 5 ? 'bg-warning/15 text-amber-400' : 'bg-danger/15 text-red-400'}`}>

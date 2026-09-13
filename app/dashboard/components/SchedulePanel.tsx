@@ -17,6 +17,7 @@ import {
   parseTime, formatMinutes, weeklyMinutes,
   WEEKDAYS_PT_SHORT, EMPLOYEE_COLORS, employeeColor,
 } from '@/lib/schedule';
+import { useLanguage } from '@/lib/language-context';
 
 /**
  * The weekly rota.
@@ -72,16 +73,40 @@ interface WeekData {
  * the app deleted them. They are labelled as suggestions and carry no id, so
  * they cannot be edited or removed — applying one just fills the hours.
  */
+/**
+ * The seven column headings, in the interface language.
+ *
+ * `WEEKDAYS_PT_SHORT` is the Portuguese fallback; the translated pair lives in
+ * the dictionary so an English owner reads Mon–Sun rather than Seg–Dom.
+ */
+function weekdayShort(t: (key: string) => string, index: number): string {
+  const keys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  const label = t(`schedule.weekday.${keys[index]}`);
+  return label.startsWith('schedule.') ? WEEKDAYS_PT_SHORT[index] : label;
+}
+
+/**
+ * A colour swatch's name, for the screen reader.
+ *
+ * `EMPLOYEE_COLORS` carries the Portuguese name; the translated pair lives in
+ * the dictionary, and the Portuguese one is the fallback if a key is missing.
+ */
+function colorName(t: (key: string) => string, key: string, fallback: string): string {
+  const label = t(`schedule.color.${key}`);
+  return label.startsWith('schedule.') ? fallback : label;
+}
+
 const DEFAULT_SHIFTS = [
-  { label: 'Manhã', startMin: 9 * 60, endMin: 17 * 60, breakStartMin: null, breakEndMin: null },
-  { label: 'Tarde', startMin: 12 * 60, endMin: 20 * 60, breakStartMin: null, breakEndMin: null },
-  { label: 'Noite', startMin: 17 * 60, endMin: 24 * 60, breakStartMin: null, breakEndMin: null },
+  { labelKey: 'schedule.suggestionMorning', startMin: 9 * 60, endMin: 17 * 60, breakStartMin: null, breakEndMin: null },
+  { labelKey: 'schedule.suggestionAfternoon', startMin: 12 * 60, endMin: 20 * 60, breakStartMin: null, breakEndMin: null },
+  { labelKey: 'schedule.suggestionEvening', startMin: 17 * 60, endMin: 24 * 60, breakStartMin: null, breakEndMin: null },
   // The split shift a Portuguese restaurant actually runs: lunch service,
   // the afternoon off, then dinner.
-  { label: 'Partido', startMin: 12 * 60, endMin: 23 * 60, breakStartMin: 15 * 60, breakEndMin: 19 * 60 },
+  { labelKey: 'schedule.suggestionSplit', startMin: 12 * 60, endMin: 23 * 60, breakStartMin: 15 * 60, breakEndMin: 19 * 60 },
 ];
 
 export default function SchedulePanel() {
+  const { t, language } = useLanguage();
   const [weekStart, setWeekStart] = useState(() => dateKey(startOfWeek(new Date())));
   const [data, setData] = useState<WeekData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,7 +121,7 @@ export default function SchedulePanel() {
 
   // "7 – 13 de setembro 2026". Named in the confirmations so the owner can see
   // which week actually went to the clipboard before pasting it to the team.
-  const weekLabel = formatWeekRange(parseDateKey(weekStart), 'pt');
+  const weekLabel = formatWeekRange(parseDateKey(weekStart), language);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -130,7 +155,7 @@ export default function SchedulePanel() {
       if (okMsg) toast.success(okMsg);
       load();
     } else {
-      toast.error(result.error || 'Não foi possível guardar');
+      toast.error(result.error || t('schedule.saveFailed'));
     }
     setBusy(false);
     return result;
@@ -161,7 +186,7 @@ export default function SchedulePanel() {
 
       if (navigator.canShare?.({ files: [file] })) {
         try {
-          await navigator.share({ files: [file], title: `Horário ${weekLabel}` });
+          await navigator.share({ files: [file], title: `${t('schedule.shareTitle')} ${weekLabel}` });
           return;
         } catch (err) {
           // Dismissing the share sheet is a choice, not a failure: say nothing
@@ -182,9 +207,9 @@ export default function SchedulePanel() {
       // before the browser has finished reading the blob.
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
 
-      toast.success(`Horário de ${weekLabel} descarregado.`);
+      toast.success(`${t('schedule.downloadedPrefix')} ${weekLabel}`);
     } catch {
-      toast.error('Não foi possível descarregar a imagem.');
+      toast.error(t('schedule.downloadFailed'));
     } finally {
       setDownloading(false);
     }
@@ -204,7 +229,7 @@ export default function SchedulePanel() {
     const url = `/api/export/schedule?week=${weekStart}&format=png`;
 
     if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
-      toast.error('O seu navegador não deixa copiar imagens. Use "Descarregar".');
+      toast.error(t('schedule.copyUnsupported'));
       return;
     }
 
@@ -216,9 +241,9 @@ export default function SchedulePanel() {
       });
 
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-      toast.success(`Horário de ${weekLabel} copiado. Cole na conversa do WhatsApp.`);
+      toast.success(`${t('schedule.copiedPrefix')} ${weekLabel}. ${t('schedule.copiedHint')}`);
     } catch {
-      toast.error('Não foi possível copiar. Use "Descarregar".');
+      toast.error(t('schedule.copyFailed'));
     } finally {
       setCopying(false);
     }
@@ -228,7 +253,7 @@ export default function SchedulePanel() {
     return (
       <div className="card-glass p-6 flex items-center gap-3 text-muted-foreground">
         <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-        A carregar horário...
+        {t('schedule.loading')}
       </div>
     );
   }
@@ -247,7 +272,7 @@ export default function SchedulePanel() {
               className="w-11 h-11 rounded-xl border border-border flex items-center justify-center
                          text-muted-foreground hover:text-foreground hover:bg-muted transition-colors
                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Semana anterior"
+              aria-label={t('schedule.weekPrevious')}
             >
               <ChevronLeft className="w-5 h-5" aria-hidden="true" />
             </button>
@@ -257,7 +282,7 @@ export default function SchedulePanel() {
               className="w-11 h-11 rounded-xl border border-border flex items-center justify-center
                          text-muted-foreground hover:text-foreground hover:bg-muted transition-colors
                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Semana seguinte"
+              aria-label={t('schedule.weekNext')}
             >
               <ChevronRight className="w-5 h-5" aria-hidden="true" />
             </button>
@@ -269,8 +294,8 @@ export default function SchedulePanel() {
             </h3>
             <p className="text-xs text-muted-foreground">
               {employees.length === 0
-                ? 'Comece por adicionar quem trabalha consigo.'
-                : 'Toque numa célula para marcar o turno.'}
+                ? t('schedule.hintAddPeople')
+                : t('schedule.hintTapCell')}
             </p>
           </div>
 
@@ -280,7 +305,7 @@ export default function SchedulePanel() {
               onClick={() => setWeekStart(dateKey(startOfWeek(new Date())))}
               className="text-xs font-semibold text-primary hover:underline px-2 py-1"
             >
-              Esta semana
+              {t('schedule.thisWeek')}
             </button>
           )}
         </div>
@@ -293,7 +318,7 @@ export default function SchedulePanel() {
             className="cta-button-secondary !py-2 !px-3 !text-xs disabled:opacity-40"
           >
             <CopyPlus className="w-4 h-4" aria-hidden="true" />
-            Repetir esta semana
+            {t('schedule.repeatWeek')}
           </button>
 
           <button
@@ -305,7 +330,7 @@ export default function SchedulePanel() {
             {copying
               ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
               : <Copy className="w-4 h-4" aria-hidden="true" />}
-            Copiar imagem
+            {t('schedule.copyImage')}
           </button>
 
           <button
@@ -317,21 +342,21 @@ export default function SchedulePanel() {
             {downloading
               ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
               : <Download className="w-4 h-4" aria-hidden="true" />}
-            Descarregar
+            {t('schedule.download')}
           </button>
 
           {(data?.shifts.length ?? 0) > 0 && (
             <button
               type="button"
               onClick={() => {
-                if (!confirm('Apagar todos os turnos desta semana?')) return;
-                run(() => clearWeek(weekStart), 'Semana limpa');
+                if (!confirm(t('schedule.confirmClearWeek'))) return;
+                run(() => clearWeek(weekStart), t('schedule.weekCleared'));
               }}
               disabled={busy}
               className="cta-button-secondary !py-2 !px-3 !text-xs text-danger disabled:opacity-40"
             >
               <Eraser className="w-4 h-4" aria-hidden="true" />
-              Limpar
+              {t('schedule.clear')}
             </button>
           )}
         </div>
@@ -350,7 +375,7 @@ export default function SchedulePanel() {
                 <thead>
                   <tr>
                     <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground w-[180px]">
-                      Colaborador
+                      {t('schedule.person')}
                     </th>
                     {days.map((day, i) => {
                       const key = dateKey(day);
@@ -359,7 +384,7 @@ export default function SchedulePanel() {
                         <th key={key} className="px-1 py-2 min-w-[110px]">
                           <div className="flex flex-col items-center gap-1">
                             <span className={`text-xs font-semibold ${closed ? 'text-muted-foreground' : 'text-foreground'}`}>
-                              {WEEKDAYS_PT_SHORT[i]}
+                              {weekdayShort(t, i)}
                             </span>
                             <span className="text-[11px] text-muted-foreground">
                               {day.getUTCDate()}/{day.getUTCMonth() + 1}
@@ -371,10 +396,10 @@ export default function SchedulePanel() {
                               onClick={() => {
                                 const reason = closed
                                   ? undefined
-                                  : prompt('Motivo (opcional): feriado, férias...') ?? undefined;
+                                  : prompt(t('schedule.closureReasonPrompt')) ?? undefined;
                                 run(
                                   () => toggleClosure(key, reason),
-                                  closed ? 'Dia reaberto' : 'Dia fechado'
+                                  closed ? t('schedule.dayReopened') : t('schedule.dayClosed')
                                 );
                               }}
                               disabled={busy}
@@ -382,12 +407,12 @@ export default function SchedulePanel() {
                                 ${closed
                                   ? 'bg-warning/15 text-warning hover:bg-warning/25'
                                   : 'text-muted-foreground hover:bg-muted'}`}
-                              title={closed ? 'Reabrir este dia' : 'Marcar como fechado'}
+                              title={closed ? t('schedule.reopenDayTitle') : t('schedule.closeDayTitle')}
                             >
                               {closed ? (
-                                <><CalendarCheck className="w-3 h-3" aria-hidden="true" /> Fechado</>
+                                <><CalendarCheck className="w-3 h-3" aria-hidden="true" /> {t('schedule.closedShort')}</>
                               ) : (
-                                <><CalendarOff className="w-3 h-3" aria-hidden="true" /> Fechar</>
+                                <><CalendarOff className="w-3 h-3" aria-hidden="true" /> {t('schedule.closeShort')}</>
                               )}
                             </button>
                           </div>
@@ -395,7 +420,7 @@ export default function SchedulePanel() {
                       );
                     })}
                     <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground w-[70px]">
-                      Semana
+                      {t('schedule.weekTotal')}
                     </th>
                   </tr>
                 </thead>
@@ -426,7 +451,7 @@ export default function SchedulePanel() {
                               type="button"
                               onClick={() => setEditingPerson(emp)}
                               className="ml-auto p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted shrink-0"
-                              aria-label={`Editar ${emp.name}`}
+                              aria-label={`${t('schedule.editPerson')} ${emp.name}`}
                             >
                               <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
                             </button>
@@ -465,7 +490,7 @@ export default function SchedulePanel() {
               className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
             >
               <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-              Adicionar colaborador
+              {t('schedule.addPerson')}
             </button>
           </div>
 
@@ -481,8 +506,8 @@ export default function SchedulePanel() {
             totals={totals}
             busy={busy}
             onToggleClosure={(key, closed) => {
-              const reason = closed ? undefined : prompt('Motivo (opcional):') ?? undefined;
-              run(() => toggleClosure(key, reason), closed ? 'Dia reaberto' : 'Dia fechado');
+              const reason = closed ? undefined : prompt(t('schedule.closureReasonShortPrompt')) ?? undefined;
+              run(() => toggleClosure(key, reason), closed ? t('schedule.dayReopened') : t('schedule.dayClosed'));
             }}
             onEditCell={(employeeId, date) => setEditingCell({ employeeId, date })}
             onAddPerson={() => setShowAddPerson(true)}
@@ -507,12 +532,12 @@ export default function SchedulePanel() {
                 date: editingCell.date,
                 startMin, endMin, breakStartMin, breakEndMin, note,
               }),
-              'Turno guardado'
+              t('schedule.shiftSaved')
             );
             setEditingCell(null);
           }}
           onClear={async () => {
-            await run(() => clearShift(editingCell.employeeId, editingCell.date), 'Turno removido');
+            await run(() => clearShift(editingCell.employeeId, editingCell.date), t('schedule.shiftRemoved'));
             setEditingCell(null);
           }}
         />
@@ -524,9 +549,9 @@ export default function SchedulePanel() {
           onClose={() => { setShowAddPerson(false); setEditingPerson(null); }}
           onSave={async (name, role, color) => {
             if (editingPerson) {
-              await run(() => updateEmployee(editingPerson.id, { name, role, color }), 'Colaborador atualizado');
+              await run(() => updateEmployee(editingPerson.id, { name, role, color }), t('schedule.personUpdated'));
             } else {
-              await run(() => addEmployee({ name, role, color }), 'Colaborador adicionado');
+              await run(() => addEmployee({ name, role, color }), t('schedule.personAdded'));
             }
             setShowAddPerson(false);
             setEditingPerson(null);
@@ -534,8 +559,8 @@ export default function SchedulePanel() {
           onRemove={
             editingPerson
               ? async () => {
-                  if (!confirm(`Remover ${editingPerson.name}? Os turnos passados ficam no histórico.`)) return;
-                  await run(() => removeEmployee(editingPerson.id), 'Colaborador removido');
+                  if (!confirm(`${t('schedule.confirmRemovePersonPrefix')} ${editingPerson.name}? ${t('schedule.confirmRemovePersonSuffix')}`)) return;
+                  await run(() => removeEmployee(editingPerson.id), t('schedule.personRemoved'));
                   setEditingPerson(null);
                 }
               : undefined
@@ -545,18 +570,18 @@ export default function SchedulePanel() {
 
       {copyOpen && (
         <CopyWeeksDialog
-          weekLabel={formatWeekRange(parseDateKey(weekStart), 'pt')}
+          weekLabel={weekLabel}
           onClose={() => setCopyOpen(false)}
           onCopy={async (weeks, overwrite) => {
             const result = await copyWeekForward({ fromWeekStart: weekStart, weeks, overwrite });
             if (result.success) {
-              toast.success(`Semana repetida ${weeks}×`);
+              toast.success(`${t('schedule.weekRepeated')} ${weeks}×`);
               setCopyOpen(false);
               load();
               return { ok: true as const };
             }
             if ('conflict' in result && result.conflict) return { ok: false as const, conflict: true };
-            toast.error(result.error || 'Não foi possível copiar');
+            toast.error(result.error || t('schedule.repeatFailed'));
             return { ok: false as const };
           }}
         />
@@ -575,6 +600,8 @@ function ShiftCell({
   color: ReturnType<typeof employeeColor>;
   onClick: () => void;
 }) {
+  const { t } = useLanguage();
+
   if (closed) {
     return <div className="h-11 rounded-lg flex items-center justify-center text-[11px] text-muted-foreground">—</div>;
   }
@@ -587,7 +614,7 @@ function ShiftCell({
         className="w-full h-11 rounded-lg border border-dashed border-border text-muted-foreground/50
                    hover:border-primary hover:text-primary transition-colors
                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label="Marcar turno"
+        aria-label={t('schedule.setShift')}
       >
         <Plus className="w-3.5 h-3.5 mx-auto" aria-hidden="true" />
       </button>
@@ -624,17 +651,18 @@ function ShiftCell({
 }
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
+  const { t } = useLanguage();
+
   return (
     <div className="card-glass p-8 text-center">
       <Users className="w-8 h-8 mx-auto text-muted-foreground/40" aria-hidden="true" />
-      <h4 className="mt-3 font-semibold text-foreground">Ainda não há colaboradores</h4>
+      <h4 className="mt-3 font-semibold text-foreground">{t('schedule.emptyTitle')}</h4>
       <p className="mt-1 text-sm text-muted-foreground max-w-sm mx-auto">
-        Adicione quem trabalha consigo. Não precisam de conta nem email — são
-        apenas nomes para o horário.
+        {t('schedule.emptyBody')}
       </p>
       <button type="button" onClick={onAdd} className="cta-button mt-5 !py-2 !px-4 !text-sm mx-auto">
         <Plus className="w-4 h-4" aria-hidden="true" />
-        Adicionar colaborador
+        {t('schedule.addPerson')}
       </button>
     </div>
   );
@@ -655,6 +683,7 @@ function MobileSchedule({
   onEditCell: (employeeId: string, date: string) => void;
   onAddPerson: () => void;
 }) {
+  const { t } = useLanguage();
   const todayKey = dateKey(new Date());
   const initial = Math.max(0, days.findIndex((d) => dateKey(d) === todayKey));
   const [dayIndex, setDayIndex] = useState(initial);
@@ -680,7 +709,7 @@ function MobileSchedule({
                 ${selected ? 'bg-primary text-primary-foreground' : isClosed ? 'bg-muted text-muted-foreground' : 'bg-muted/50 text-foreground'}`}
               aria-pressed={selected}
             >
-              <span className="block text-[11px] font-semibold">{WEEKDAYS_PT_SHORT[i]}</span>
+              <span className="block text-[11px] font-semibold">{weekdayShort(t, i)}</span>
               <span className="block text-sm font-bold tabular-nums">{d.getUTCDate()}</span>
             </button>
           );
@@ -689,7 +718,9 @@ function MobileSchedule({
 
       <div className="mt-4 flex items-center justify-between gap-2">
         <span className="text-sm font-semibold text-foreground">
-          {closed ? `Fechado${closedSet.get(key) ? ` — ${closedSet.get(key)}` : ''}` : 'Turnos do dia'}
+          {closed
+            ? `${t('schedule.closedShort')}${closedSet.get(key) ? ` — ${closedSet.get(key)}` : ''}`
+            : t('schedule.shiftsToday')}
         </span>
         <button
           type="button"
@@ -699,13 +730,13 @@ function MobileSchedule({
             ${closed ? 'bg-warning/15 text-warning' : 'bg-muted text-muted-foreground'}`}
         >
           {closed ? <CalendarCheck className="w-3.5 h-3.5" /> : <CalendarOff className="w-3.5 h-3.5" />}
-          {closed ? 'Reabrir' : 'Fechar dia'}
+          {closed ? t('schedule.reopen') : t('schedule.closeDay')}
         </button>
       </div>
 
       {closed ? (
         <p className="mt-4 rounded-xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
-          O restaurante está fechado neste dia.
+          {t('schedule.closedThisDay')}
         </p>
       ) : (
         <div className="mt-2 -mx-4 divide-y divide-border-subtle border-t border-border-subtle">
@@ -737,7 +768,7 @@ function MobileSchedule({
                   </span>
                 ) : (
                   <span className="shrink-0 text-xs text-muted-foreground/60 flex items-center gap-1">
-                    <Plus className="w-3.5 h-3.5" aria-hidden="true" /> Marcar
+                    <Plus className="w-3.5 h-3.5" aria-hidden="true" /> {t('schedule.set')}
                   </span>
                 )}
               </button>
@@ -753,10 +784,10 @@ function MobileSchedule({
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary"
         >
           <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-          Adicionar colaborador
+          {t('schedule.addPerson')}
         </button>
         <span className="text-[11px] text-muted-foreground">
-          {employees.filter((e) => totals.get(e.id)).length} a trabalhar esta semana
+          {employees.filter((e) => totals.get(e.id)).length} {t('schedule.workingThisWeek')}
         </span>
       </div>
     </div>
@@ -771,8 +802,11 @@ function ShiftDialog({
   shift: Shift | null;
   /** The restaurant's own, which are the only ones that can be deleted. */
   savedTemplates: ShiftTemplate[];
-  /** Starting points. No id, so they cannot be edited or removed. */
-  suggestions: Array<Omit<ShiftTemplate, 'id'>>;
+  /**
+   * Starting points. No id, so they cannot be edited or removed, and named by
+   * a dictionary key rather than a literal so they read in both languages.
+   */
+  suggestions: Array<Omit<ShiftTemplate, 'id' | 'label'> & { labelKey: string }>;
   onClose: () => void;
   onSave: (
     startMin: number,
@@ -784,6 +818,8 @@ function ShiftDialog({
   onClear: () => void;
   onTemplatesChanged: () => void;
 }) {
+  const { t, language } = useLanguage();
+
   // A split shift is entered as the two stretches actually worked, not as a
   // long shift with a hole described separately. The owner thinks "almoço and
   // jantar", not "12:00 to 23:00 minus the afternoon"; asking for the gap made
@@ -833,27 +869,30 @@ function ShiftDialog({
     ? shiftLength(startMin!, endMin!, breakUsable ? breakStartMin : null, breakUsable ? breakEndMin : null)
     : 0;
 
+  /** The hours a saved shift or a suggestion carries — the label plays no part. */
+  type ShiftHours = Omit<ShiftTemplate, 'id' | 'label'>;
+
   /** Applies a saved shift or a suggestion, break included. */
-  const applyTemplate = (t: Omit<ShiftTemplate, 'id'>) => {
-    setStart(formatMinutes(t.startMin));
-    if (t.breakStartMin != null && t.breakEndMin != null) {
+  const applyTemplate = (tpl: ShiftHours) => {
+    setStart(formatMinutes(tpl.startMin));
+    if (tpl.breakStartMin != null && tpl.breakEndMin != null) {
       // The stored break is the gap, so it bounds the two worked stretches.
       setSplit(true);
-      setEnd(formatMinutes(t.breakStartMin));
-      setSecondStart(formatMinutes(t.breakEndMin));
-      setSecondEnd(formatMinutes(t.endMin));
+      setEnd(formatMinutes(tpl.breakStartMin));
+      setSecondStart(formatMinutes(tpl.breakEndMin));
+      setSecondEnd(formatMinutes(tpl.endMin));
     } else {
       setSplit(false);
-      setEnd(formatMinutes(t.endMin));
+      setEnd(formatMinutes(tpl.endMin));
     }
   };
 
   /** Whether a template's hours, break included, match what is in the fields. */
-  const matches = (t: Omit<ShiftTemplate, 'id'>) =>
-    startMin === t.startMin &&
-    endMin === t.endMin &&
-    (breakUsable ? breakStartMin : null) === t.breakStartMin &&
-    (breakUsable ? breakEndMin : null) === t.breakEndMin;
+  const matches = (tpl: ShiftHours) =>
+    startMin === tpl.startMin &&
+    endMin === tpl.endMin &&
+    (breakUsable ? breakStartMin : null) === tpl.breakStartMin &&
+    (breakUsable ? breakEndMin : null) === tpl.breakEndMin;
 
   /** True while the fields hold hours no saved shift already covers. */
   const isNewCombination = valid && !breakBroken && !savedTemplates.some(matches);
@@ -869,11 +908,11 @@ function ShiftDialog({
       breakEndMin: breakUsable ? breakEndMin : null,
     });
     if (result.success) {
-      toast.success('Turno guardado para reutilizar');
+      toast.success(t('schedule.templateSaved'));
       setNewLabel('');
       onTemplatesChanged();
     } else {
-      toast.error(result.error || 'Não foi possível guardar');
+      toast.error(result.error || t('schedule.saveFailed'));
     }
     setSavingTemplate(false);
   };
@@ -881,27 +920,29 @@ function ShiftDialog({
   return (
     <Dialog onClose={onClose} title={employee.name}>
       <p className="text-xs text-muted-foreground -mt-2 mb-4">
-        {formatWeekRange(parseDateKey(date), 'pt').split('–')[0].trim()} ·{' '}
-        {parseDateKey(date).toLocaleDateString('pt-PT', { weekday: 'long', timeZone: 'UTC' })}
+        {formatWeekRange(parseDateKey(date), language).split('–')[0].trim()} ·{' '}
+        {parseDateKey(date).toLocaleDateString(language === 'pt' ? 'pt-PT' : 'en-GB', {
+          weekday: 'long', timeZone: 'UTC',
+        })}
       </p>
 
       {/* The saved shifts, as one tap. The free fields below stay for the
           days that do not follow the pattern. */}
       <div className="flex flex-wrap items-center gap-2 mb-2">
-        {savedTemplates.map((t) => (
-          <span key={t.id} className="relative inline-flex">
+        {savedTemplates.map((tpl) => (
+          <span key={tpl.id} className="relative inline-flex">
             <button
               type="button"
-              onClick={() => applyTemplate(t)}
+              onClick={() => applyTemplate(tpl)}
               className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors
-                ${matches(t)
+                ${matches(tpl)
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-foreground hover:bg-primary hover:text-primary-foreground'}`}
-              aria-pressed={matches(t)}
+              aria-pressed={matches(tpl)}
             >
-              {t.label}
+              {tpl.label}
               <span className="block text-[10px] font-normal opacity-70">
-                {formatShiftTimes(t.startMin, t.endMin, t.breakStartMin, t.breakEndMin)}
+                {formatShiftTimes(tpl.startMin, tpl.endMin, tpl.breakStartMin, tpl.breakEndMin)}
               </span>
             </button>
 
@@ -909,13 +950,13 @@ function ShiftDialog({
               <button
                 type="button"
                 onClick={async () => {
-                  const result = await deleteTemplate(t.id);
-                  if (result.success) { toast.success('Turno removido'); onTemplatesChanged(); }
-                  else toast.error(result.error || 'Não foi possível remover');
+                  const result = await deleteTemplate(tpl.id);
+                  if (result.success) { toast.success(t('schedule.shiftRemoved')); onTemplatesChanged(); }
+                  else toast.error(result.error || t('schedule.removeFailed'));
                 }}
                 className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-danger text-white
                            flex items-center justify-center shadow-sm"
-                aria-label={`Remover turno ${t.label}`}
+                aria-label={`${t('schedule.removeShift')} ${tpl.label}`}
               >
                 <X className="w-3 h-3" aria-hidden="true" />
               </button>
@@ -929,7 +970,7 @@ function ShiftDialog({
             onClick={() => setManaging((v) => !v)}
             className="text-[11px] font-semibold text-muted-foreground hover:text-foreground px-1"
           >
-            {managing ? 'Concluído' : 'Gerir'}
+            {managing ? t('schedule.done') : t('schedule.manage')}
           </button>
         )}
       </div>
@@ -940,22 +981,22 @@ function ShiftDialog({
       {suggestions.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-2">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Sugestões
+            {t('schedule.suggestions')}
           </span>
-          {suggestions.map((t) => (
+          {suggestions.map((tpl) => (
             <button
-              key={t.label}
+              key={tpl.labelKey}
               type="button"
-              onClick={() => applyTemplate(t)}
+              onClick={() => applyTemplate(tpl)}
               className={`px-3 py-2 rounded-xl text-xs font-semibold border border-dashed transition-colors
-                ${matches(t)
+                ${matches(tpl)
                   ? 'bg-primary text-primary-foreground border-primary'
                   : 'border-border text-muted-foreground hover:text-foreground hover:border-primary'}`}
-              aria-pressed={matches(t)}
+              aria-pressed={matches(tpl)}
             >
-              {t.label}
+              {t(tpl.labelKey)}
               <span className="block text-[10px] font-normal opacity-70">
-                {formatShiftTimes(t.startMin, t.endMin, t.breakStartMin, t.breakEndMin)}
+                {formatShiftTimes(tpl.startMin, tpl.endMin, tpl.breakStartMin, tpl.breakEndMin)}
               </span>
             </button>
           ))}
@@ -964,22 +1005,22 @@ function ShiftDialog({
 
       {savedTemplates.length === 0 && (
         <p className="text-[11px] text-muted-foreground mb-4">
-          Aplique uma sugestão ou defina as horas abaixo. Pode guardar os seus próprios turnos para os ter sempre à mão.
+          {t('schedule.noTemplatesHint')}
         </p>
       )}
 
       <div className="grid grid-cols-2 gap-3">
         {split && (
           <p className="col-span-2 text-[11px] text-muted-foreground -mb-1">
-            Primeiro período
+            {t('schedule.firstStretch')}
           </p>
         )}
         <label className="block">
-          <span className="text-xs text-muted-foreground block mb-1.5">Entrada</span>
+          <span className="text-xs text-muted-foreground block mb-1.5">{t('schedule.startTime')}</span>
           <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="input-field !py-2" />
         </label>
         <label className="block">
-          <span className="text-xs text-muted-foreground block mb-1.5">Saída</span>
+          <span className="text-xs text-muted-foreground block mb-1.5">{t('schedule.endTime')}</span>
           <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="input-field !py-2" />
         </label>
       </div>
@@ -994,18 +1035,18 @@ function ShiftDialog({
           className="w-4 h-4 rounded accent-[hsl(var(--primary))]"
         />
         <span className="text-xs font-medium text-foreground">
-          Turno partido
-          <span className="text-muted-foreground font-normal"> — volta mais tarde</span>
+          {t('schedule.splitShift')}
+          <span className="text-muted-foreground font-normal"> — {t('schedule.splitShiftHint')}</span>
         </span>
       </label>
 
       {split && (
         <div className="grid grid-cols-2 gap-3 mt-2 rounded-xl bg-muted/60 p-3">
           <p className="col-span-2 text-[11px] text-muted-foreground -mb-1">
-            Segundo período — as horas em que volta a trabalhar.
+            {t('schedule.secondStretch')}
           </p>
           <label className="block">
-            <span className="text-xs text-muted-foreground block mb-1.5">Entrada</span>
+            <span className="text-xs text-muted-foreground block mb-1.5">{t('schedule.startTime')}</span>
             <input
               type="time"
               value={secondStart}
@@ -1014,7 +1055,7 @@ function ShiftDialog({
             />
           </label>
           <label className="block">
-            <span className="text-xs text-muted-foreground block mb-1.5">Saída</span>
+            <span className="text-xs text-muted-foreground block mb-1.5">{t('schedule.endTime')}</span>
             <input
               type="time"
               value={secondEnd}
@@ -1025,20 +1066,20 @@ function ShiftDialog({
 
           {breakBroken && (
             <p className="col-span-2 text-[11px] text-danger">
-              O segundo período tem de começar depois de o primeiro acabar.
+              {t('schedule.splitOrderError')}
             </p>
           )}
         </div>
       )}
 
       <label className="block mt-3">
-        <span className="text-xs text-muted-foreground block mb-1.5">Nota (opcional)</span>
+        <span className="text-xs text-muted-foreground block mb-1.5">{t('schedule.noteLabel')}</span>
         <input
           type="text"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           maxLength={40}
-          placeholder="ex: fecho, só até às 15h"
+          placeholder={t('schedule.notePlaceholder')}
           className="input-field !py-2"
         />
       </label>
@@ -1047,16 +1088,16 @@ function ShiftDialog({
         <p className="mt-3 text-xs text-muted-foreground">
           {breakUsable && (
             <>
-              Horário:{' '}
+              {t('schedule.hoursLabel')}:{' '}
               <strong className="text-foreground">
                 {formatShiftTimes(startMin!, endMin!, breakStartMin, breakEndMin)}
               </strong>
               {' · '}
             </>
           )}
-          Duração: <strong className="text-foreground">{formatDuration(length)}</strong>
-          {breakUsable && ' (sem a pausa)'}
-          {endMin! <= startMin! && ' · termina no dia seguinte'}
+          {t('schedule.durationLabel')}: <strong className="text-foreground">{formatDuration(length)}</strong>
+          {breakUsable && ` (${t('schedule.breakExcluded')})`}
+          {endMin! <= startMin! && ` · ${t('schedule.endsNextDay')}`}
         </p>
       )}
 
@@ -1067,7 +1108,9 @@ function ShiftDialog({
         <div className="mt-3 rounded-xl bg-muted/60 p-3">
           <label className="block">
             <span className="text-[11px] text-muted-foreground block mb-1.5">
-              Guardar {formatShiftTimes(startMin!, endMin!, breakUsable ? breakStartMin : null, breakUsable ? breakEndMin : null)} como turno reutilizável
+              {t('schedule.saveTemplatePrefix')}{' '}
+              {formatShiftTimes(startMin!, endMin!, breakUsable ? breakStartMin : null, breakUsable ? breakEndMin : null)}{' '}
+              {t('schedule.saveTemplateSuffix')}
             </span>
             <div className="flex gap-2">
               <input
@@ -1075,7 +1118,7 @@ function ShiftDialog({
                 value={newLabel}
                 onChange={(e) => setNewLabel(e.target.value)}
                 maxLength={20}
-                placeholder="ex: Almoço, Fecho"
+                placeholder={t('schedule.templateNamePlaceholder')}
                 className="input-field !py-1.5 !text-sm flex-1"
               />
               <button
@@ -1085,7 +1128,7 @@ function ShiftDialog({
                 className="cta-button-secondary !py-1.5 !px-3 !text-xs disabled:opacity-40 shrink-0"
               >
                 {savingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                Guardar
+                {t('schedule.save')}
               </button>
             </div>
           </label>
@@ -1108,14 +1151,14 @@ function ShiftDialog({
           className="cta-button flex-1 !py-2.5 !text-sm disabled:opacity-40"
         >
           <Check className="w-4 h-4" aria-hidden="true" />
-          Guardar
+          {t('schedule.save')}
         </button>
         {shift && (
           <button
             type="button"
             onClick={onClear}
             className="cta-button-secondary !py-2.5 !px-3 !text-sm text-danger"
-            aria-label="Remover turno"
+            aria-label={t('schedule.removeShift')}
           >
             <Trash2 className="w-4 h-4" aria-hidden="true" />
           </button>
@@ -1133,39 +1176,40 @@ function PersonDialog({
   onSave: (name: string, role: string, color: string) => void;
   onRemove?: () => void;
 }) {
+  const { t } = useLanguage();
   const [name, setName] = useState(employee?.name ?? '');
   const [role, setRole] = useState(employee?.role ?? '');
   const [color, setColor] = useState(employee?.color ?? 'slate');
 
   return (
-    <Dialog onClose={onClose} title={employee ? 'Editar colaborador' : 'Novo colaborador'}>
+    <Dialog onClose={onClose} title={employee ? t('schedule.editPersonTitle') : t('schedule.newPersonTitle')}>
       <label className="block">
-        <span className="text-xs text-muted-foreground block mb-1.5">Nome</span>
+        <span className="text-xs text-muted-foreground block mb-1.5">{t('schedule.nameLabel')}</span>
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={60}
           autoFocus
-          placeholder="ex: Ana Silva"
+          placeholder={t('schedule.namePlaceholder')}
           className="input-field !py-2"
         />
       </label>
 
       <label className="block mt-3">
-        <span className="text-xs text-muted-foreground block mb-1.5">Função (opcional)</span>
+        <span className="text-xs text-muted-foreground block mb-1.5">{t('schedule.roleLabel')}</span>
         <input
           type="text"
           value={role}
           onChange={(e) => setRole(e.target.value)}
           maxLength={40}
-          placeholder="ex: Cozinha, Sala, Balcão"
+          placeholder={t('schedule.rolePlaceholder')}
           className="input-field !py-2"
         />
       </label>
 
       <div className="mt-4">
-        <span className="text-xs text-muted-foreground block mb-2">Cor no horário</span>
+        <span className="text-xs text-muted-foreground block mb-2">{t('schedule.colorLabel')}</span>
         <div className="flex flex-wrap gap-2">
           {EMPLOYEE_COLORS.map((c) => (
             <button
@@ -1175,7 +1219,7 @@ function PersonDialog({
               className={`w-9 h-9 rounded-xl border-2 transition-all
                 ${color === c.key ? 'border-foreground scale-110' : 'border-transparent'}`}
               style={{ background: c.bg }}
-              aria-label={c.label}
+              aria-label={colorName(t, c.key, c.label)}
               aria-pressed={color === c.key}
             >
               <span className="block w-3 h-3 rounded-full mx-auto" style={{ background: c.dot }} />
@@ -1192,14 +1236,14 @@ function PersonDialog({
           className="cta-button flex-1 !py-2.5 !text-sm disabled:opacity-40"
         >
           <Check className="w-4 h-4" aria-hidden="true" />
-          Guardar
+          {t('schedule.save')}
         </button>
         {onRemove && (
           <button
             type="button"
             onClick={onRemove}
             className="cta-button-secondary !py-2.5 !px-3 !text-sm text-danger"
-            aria-label="Remover colaborador"
+            aria-label={t('schedule.removePerson')}
           >
             <Trash2 className="w-4 h-4" aria-hidden="true" />
           </button>
@@ -1216,6 +1260,7 @@ function CopyWeeksDialog({
   onClose: () => void;
   onCopy: (weeks: number, overwrite: boolean) => Promise<{ ok: boolean; conflict?: boolean }>;
 }) {
+  const { t } = useLanguage();
   const [weeks, setWeeks] = useState(4);
   const [conflict, setConflict] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1228,14 +1273,14 @@ function CopyWeeksDialog({
   };
 
   return (
-    <Dialog onClose={onClose} title="Repetir esta semana">
+    <Dialog onClose={onClose} title={t('schedule.repeatWeek')}>
       <p className="text-sm text-muted-foreground -mt-2">
-        Copia os turnos e os dias fechados de <strong className="text-foreground">{weekLabel}</strong> para
-        as semanas seguintes.
+        {t('schedule.repeatBodyPrefix')} <strong className="text-foreground">{weekLabel}</strong>{' '}
+        {t('schedule.repeatBodySuffix')}
       </p>
 
       <label className="block mt-4">
-        <span className="text-xs text-muted-foreground block mb-1.5">Quantas semanas?</span>
+        <span className="text-xs text-muted-foreground block mb-1.5">{t('schedule.howManyWeeks')}</span>
         <input
           type="number"
           min={1}
@@ -1255,14 +1300,14 @@ function CopyWeeksDialog({
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors
               ${weeks === n ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'}`}
           >
-            {n} semanas
+            {n} {t('schedule.weeksUnit')}
           </button>
         ))}
       </div>
 
       {conflict && (
         <div className="mt-4 rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
-          Já existem turnos marcados nessas semanas. Continuar substitui-os.
+          {t('schedule.repeatConflict')}
         </div>
       )}
 
@@ -1274,7 +1319,7 @@ function CopyWeeksDialog({
           className={`cta-button flex-1 !py-2.5 !text-sm disabled:opacity-40 ${conflict ? '!bg-warning' : ''}`}
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CopyPlus className="w-4 h-4" />}
-          {conflict ? 'Substituir na mesma' : `Repetir ${weeks}×`}
+          {conflict ? t('schedule.replaceAnyway') : `${t('schedule.repeat')} ${weeks}×`}
         </button>
       </div>
     </Dialog>
@@ -1289,6 +1334,8 @@ function Dialog({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const { t } = useLanguage();
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
@@ -1316,7 +1363,7 @@ function Dialog({
             type="button"
             onClick={onClose}
             className="p-1 -m-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
-            aria-label="Fechar"
+            aria-label={t('schedule.close')}
           >
             <X className="w-4 h-4" aria-hidden="true" />
           </button>

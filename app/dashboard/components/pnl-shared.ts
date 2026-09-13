@@ -9,7 +9,17 @@
  */
 
 export type Line = {
+  /**
+   * The line's own name.
+   *
+   * Detail rows carry the owner's own category names, which are never
+   * translated. The standard statement lines carry `labelKey` instead and the
+   * views translate it, so "Custo das mercadorias vendidas" reads as "Cost of
+   * goods sold" without a `t()` call in a non-React module.
+   */
   label: string;
+  /** Dictionary key under `annualPnl.line`, on the standard lines only. */
+  labelKey?: string;
   months: number[];
   total: number;
   percentOfRevenue: number | null;
@@ -38,13 +48,16 @@ export type Annual = {
   netIncome: Line;
 };
 
-export const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
-/** The phone shows one month at a time and has the room to name it properly. */
-export const MONTH_FULL = [
-  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
-];
+/**
+ * The months, as dictionary keys rather than words.
+ *
+ * This module is imported by both views and is not a component, so it holds
+ * keys and the views translate them. The index is the month, January first.
+ */
+export const MONTH_KEYS = [
+  'january', 'february', 'march', 'april', 'may', 'june',
+  'july', 'august', 'september', 'october', 'november', 'december',
+] as const;
 
 /**
  * How each band of the statement is painted.

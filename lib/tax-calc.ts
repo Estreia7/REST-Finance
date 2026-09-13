@@ -160,8 +160,13 @@ export function salesVat(
 }
 
 export interface PurchaseGroup {
-  /** Cost category or type, as shown to the owner. */
-  label: string;
+  /**
+   * Translation key for the cost category, resolved when it is displayed.
+   *
+   * A key rather than a sentence because this is filled in on the server,
+   * which does not know the reader's language.
+   */
+  labelKey: string;
   /** Gross spend in the period. */
   gross: number;
   /** VAT rate assumed on this spend. */

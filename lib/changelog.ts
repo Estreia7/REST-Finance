@@ -49,6 +49,12 @@ export const CHANGELOG: Release[] = [
           'Marque o almoço e o jantar como um só turno, com a tarde de folga pelo meio: entra às 12:00, pausa das 15:00 às 19:00, sai às 23:00. As horas da semana contam só o tempo trabalhado, sem a pausa, e a imagem que envia no WhatsApp mostra os dois períodos para ninguém aparecer à hora errada. Pode guardar um turno partido para reutilizar, como qualquer outro.',
       },
       {
+        kind: 'new',
+        title: 'A aplicação fala inglês, e lembra-se da sua escolha',
+        detail:
+          'Até agora só a página inicial e algumas partes estavam traduzidas; o resto aparecia sempre em português. Agora tudo funciona nas duas línguas — horários, ementas, IVA, conformidade, relatórios e mensagens de erro. A escolha fica guardada na sua conta, por isso mantém-se ao entrar noutro telemóvel ou computador, e deixa de haver aquele instante em que a página aparece na língua errada. A página inicial continua em português para quem chega de novo, e qualquer visitante pode trocar.',
+      },
+      {
         kind: 'improvement',
         title: 'Os turnos partidos indicam-se pelas horas trabalhadas',
         detail:

@@ -129,7 +129,7 @@ describe('purchaseVat', () => {
     // Article 21.º n.º 2: food bought to sell on is the exception that makes
     // a restaurant work.
     const { totalDeductible, totalCharged } = purchaseVat([
-      { label: 'Mercadorias', gross: 10_600, vatRate: 6, deductibility: 'full' },
+      { labelKey: 'Mercadorias', gross: 10_600, vatRate: 6, deductibility: 'full' },
     ]);
     expect(totalDeductible).toBeCloseTo(totalCharged, 6);
     expect(totalDeductible).toBeCloseTo(600, 2);
@@ -137,7 +137,7 @@ describe('purchaseVat', () => {
 
   it('reclaims half on diesel', () => {
     const { lines } = purchaseVat([
-      { label: 'Gasóleo', gross: 1_230, vatRate: 23, deductibility: 'fuel50' },
+      { labelKey: 'Gasóleo', gross: 1_230, vatRate: 23, deductibility: 'fuel50' },
     ]);
     expect(lines[0].vatCharged).toBeCloseTo(230, 2);
     expect(lines[0].vatDeductible).toBeCloseTo(115, 2);
@@ -145,7 +145,7 @@ describe('purchaseVat', () => {
 
   it('reclaims nothing on entertainment', () => {
     const { lines } = purchaseVat([
-      { label: 'Representação', gross: 1_230, vatRate: 23, deductibility: 'none' },
+      { labelKey: 'Representação', gross: 1_230, vatRate: 23, deductibility: 'none' },
     ]);
     expect(lines[0].vatCharged).toBeCloseTo(230, 2);
     expect(lines[0].vatDeductible).toBe(0);
@@ -153,8 +153,8 @@ describe('purchaseVat', () => {
 
   it('shows charged and deductible separately, so the loss is visible', () => {
     const { totalCharged, totalDeductible } = purchaseVat([
-      { label: 'Mercadorias', gross: 10_600, vatRate: 6, deductibility: 'full' },
-      { label: 'Representação', gross: 1_230, vatRate: 23, deductibility: 'none' },
+      { labelKey: 'Mercadorias', gross: 10_600, vatRate: 6, deductibility: 'full' },
+      { labelKey: 'Representação', gross: 1_230, vatRate: 23, deductibility: 'none' },
     ]);
     expect(totalCharged).toBeGreaterThan(totalDeductible);
   });
@@ -167,8 +167,8 @@ describe('vatReturn', () => {
     grossRevenue: 60_000,
     mix: DEFAULT_SALES_MIX,
     purchases: [
-      { label: 'Mercadorias', gross: 21_200, vatRate: 6, deductibility: 'full' as const },
-      { label: 'Despesas', gross: 12_300, vatRate: 23, deductibility: 'full' as const },
+      { labelKey: 'Mercadorias', gross: 21_200, vatRate: 6, deductibility: 'full' as const },
+      { labelKey: 'Despesas', gross: 12_300, vatRate: 23, deductibility: 'full' as const },
     ],
   };
 
@@ -184,7 +184,7 @@ describe('vatReturn', () => {
       ...base,
       grossRevenue: 1_000,
       purchases: [
-        { label: 'Obra na cozinha', gross: 61_500, vatRate: 23, deductibility: 'full' },
+        { labelKey: 'Obra na cozinha', gross: 61_500, vatRate: 23, deductibility: 'full' },
       ],
     });
     expect(result.payable).toBe(0);

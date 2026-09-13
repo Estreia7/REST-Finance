@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Plus, Loader2, Users, Trash2, Shield } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
+import { translateError } from '@/lib/error-messages';
 import { updateStaffPermissions, removeStaff } from '../actions';
 
 interface StaffMember {
@@ -21,14 +22,16 @@ interface StaffPanelProps {
   onDataChange?:() => void;
 }
 
+// Keys, not words: the labels are read by the owner and this list is module
+// scope, where there is no language to read them in.
 const PERMISSION_OPTIONS = [
-  { value: 'view', label: 'Apenas visualizar' },
-  { value: 'data_entry', label: 'Inserir dados' },
-  { value: 'full_access', label: 'Acesso total' },
+  { value: 'view', labelKey: 'staff.permissionView' },
+  { value: 'data_entry', labelKey: 'staff.permissionDataEntry' },
+  { value: 'full_access', labelKey: 'staff.permissionFullAccess' },
 ];
 
 export default function StaffPanel({ staff, staffEmail, isSubmitting, onEmailChange, onAddStaff, onDataChange }: StaffPanelProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
@@ -36,23 +39,23 @@ export default function StaffPanel({ staff, staffEmail, isSubmitting, onEmailCha
     setUpdatingId(membershipId);
     const result = await updateStaffPermissions(membershipId, [permission]);
     if (result.success) {
-      toast.success('Permissões atualizadas!');
+      toast.success(t('staff.permissionsUpdated'));
       onDataChange?.();
     } else {
-      toast.error(result.error || 'Erro ao atualizar permissões');
+      toast.error(translateError(language, result.error));
     }
     setUpdatingId(null);
   };
 
   const handleRemove = async (membershipId: string) => {
-    if (!confirm('Tem a certeza que deseja remover este colaborador?')) return;
+    if (!confirm(t('staff.confirmRemove'))) return;
     setRemovingId(membershipId);
     const result = await removeStaff(membershipId);
     if (result.success) {
-      toast.success('Colaborador removido!');
+      toast.success(t('staff.removed'));
       onDataChange?.();
     } else {
-      toast.error(result.error || 'Erro ao remover');
+      toast.error(translateError(language, result.error));
     }
     setRemovingId(null);
   };
@@ -68,20 +71,20 @@ export default function StaffPanel({ staff, staffEmail, isSubmitting, onEmailCha
     <div className="max-w-3xl space-y-6">
       {/* Add staff */}
       <div className="card-glass p-6">
-        <h2 className="text-lg font-bold text-foreground mb-5">Adicionar Colaborador</h2>
+        <h2 className="text-lg font-bold text-foreground mb-5">{t('staff.addTitle')}</h2>
         <form onSubmit={onAddStaff} className="flex gap-3">
           <input
             type="email"
             value={staffEmail}
             onChange={e => onEmailChange(e.target.value)}
             className="input-field flex-1"
-            placeholder="colaborador@restaurante.pt"
+            placeholder={t('staff.emailPlaceholder')}
             required
           />
           <button type="submit" disabled={isSubmitting} className="cta-button shrink-0">
             {isSubmitting
               ? <Loader2 className="w-4 h-4 animate-spin" />
-              : <><Plus className="w-4 h-4" />Adicionar</>
+              : <><Plus className="w-4 h-4" />{t('staff.add')}</>
             }
           </button>
         </form>
@@ -92,14 +95,14 @@ export default function StaffPanel({ staff, staffEmail, isSubmitting, onEmailCha
       <div className="card-glass p-6">
         <h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2">
           <Users className="w-5 h-5 text-muted-foreground" />
-          Equipa
+          {t('staff.teamTitle')}
           <span className="badge badge-muted">{staff.length}</span>
         </h2>
 
         {staff.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <Users className="w-10 h-10 text-muted-foreground/30 mb-3" />
-            <p className="text-sm text-muted-foreground">Nenhum colaborador adicionado ainda.</p>
+            <p className="text-sm text-muted-foreground">{t('staff.empty')}</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -124,7 +127,7 @@ export default function StaffPanel({ staff, staffEmail, isSubmitting, onEmailCha
                       className="input-field !py-1 !px-2 !text-xs w-[130px]"
                     >
                       {PERMISSION_OPTIONS.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
                       ))}
                     </select>
                   </div>
@@ -132,7 +135,7 @@ export default function StaffPanel({ staff, staffEmail, isSubmitting, onEmailCha
                     onClick={() => handleRemove(member.id)}
                     disabled={removingId === member.id}
                     className="p-1.5 rounded-lg hover:bg-danger/10 text-muted-foreground hover:text-red-400 transition-colors"
-                    aria-label={`Remover ${member.user.name || member.user.email}`}
+                    aria-label={`${t('staff.removeAria')} ${member.user.name || member.user.email}`}
                   >
                     {removingId === member.id
                       ? <Loader2 className="w-3.5 h-3.5 animate-spin" />

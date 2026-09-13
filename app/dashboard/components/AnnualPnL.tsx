@@ -9,11 +9,12 @@ import { rate, bandLabel, type PtBenchmarkKey } from '@/lib/benchmarks';
 import InfoHint from '@/app/components/InfoHint';
 import { type GlossaryKey } from '@/lib/glossary';
 import AnnualPnLMobile from './AnnualPnLMobile';
+import { useLanguage } from '@/lib/language-context';
 import {
   type Annual,
   type Line,
   type Section,
-  MONTH_ABBR,
+  MONTH_KEYS,
   SECTION,
   HEALTH_DOT,
   HEALTH_TEXT,
@@ -30,6 +31,7 @@ import {
  * month gets traced back to the day it was mistyped.
  */
 export default function AnnualPnL() {
+  const { t } = useLanguage();
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [data, setData] = useState<Annual | null>(null);
@@ -76,10 +78,19 @@ export default function AnnualPnL() {
       kind: line.drill.kind,
       categoryId: line.drill.categoryId,
       channel: line.drill.channel,
-      label: line.label,
+      label: lineLabel(line),
       expected: amount,
     });
   };
+
+  /**
+   * The line's name in the interface language.
+   *
+   * Only the standard statement lines carry a key; a detail row is the owner's
+   * own category name and stays exactly as they typed it.
+   */
+  const lineLabel = (line: Line) =>
+    line.labelKey ? t(`annualPnl.line.${line.labelKey}`) : line.label;
 
   /** A figure cell. Clickable only when there is something to show. */
   const Cell = ({
@@ -107,7 +118,7 @@ export default function AnnualPnL() {
         onClick={() => openDrill(line, monthIndex)}
         className={`${classes} hover:text-primary-ink hover:underline underline-offset-2 rounded-sm
                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
-        title="Ver lançamentos"
+        title={t('annualPnl.viewEntries')}
       >
         {formatMoney(amount)}
       </button>
@@ -163,7 +174,7 @@ export default function AnnualPnL() {
               aria-hidden="true"
             />
           )}
-          {line.label}
+          {lineLabel(line)}
           {term && <InfoHint term={term} />}
 
           {benchmark && (
@@ -178,7 +189,7 @@ export default function AnnualPnL() {
           )}
         </th>
 
-        {MONTH_ABBR.map((_, i) => (
+        {MONTH_KEYS.map((_, i) => (
           <td
             key={i}
             // The last month needs clearance, or the pinned Total sits on top
@@ -215,7 +226,7 @@ export default function AnnualPnL() {
     return (
       <div className="card-glass p-6 flex items-center gap-3 text-muted-foreground">
         <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-        A carregar demonstração anual...
+        {t('annualPnl.loading')}
       </div>
     );
   }
@@ -223,7 +234,7 @@ export default function AnnualPnL() {
   if (!data) {
     return (
       <div className="card-glass p-6 text-sm text-muted-foreground">
-        Não foi possível carregar a demonstração anual.
+        {t('annualPnl.loadError')}
       </div>
     );
   }
@@ -236,12 +247,12 @@ export default function AnnualPnL() {
         <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
           <div className="min-w-0">
             <h3 className="font-bold text-foreground">
-              Demonstração de resultados {year}
+              {t('annualPnl.title')} {year}
             </h3>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {/* The phone taps; only a desktop clicks. */}
-              <span className="hidden md:inline">Clica num valor para ver os lançamentos que o compõem.</span>
-              <span className="md:hidden">Toca numa linha para ver os lançamentos.</span>
+              <span className="hidden md:inline">{t('annualPnl.hintDesktop')}</span>
+              <span className="md:hidden">{t('annualPnl.hintMobile')}</span>
             </p>
           </div>
 
@@ -249,7 +260,7 @@ export default function AnnualPnL() {
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
             className="input-field !py-2 !text-sm !w-[110px] shrink-0"
-            aria-label="Ano"
+            aria-label={t('annualPnl.year')}
           >
             {years.map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -273,27 +284,29 @@ export default function AnnualPnL() {
         <div className="hidden md:block overflow-x-auto -mx-6 px-6">
           <table className="min-w-full w-max text-sm border-collapse">
             <caption className="sr-only">
-              Demonstração de resultados de {year}, por mês, com percentagem da receita
+              {year} · {t('annualPnl.caption')}
             </caption>
             <thead>
               <tr className="text-xs text-muted-foreground border-b border-border">
                 <th scope="col" className="sticky left-0 z-10 bg-card text-left px-4 py-2 font-medium">
                   &nbsp;
                 </th>
-                {MONTH_ABBR.map((m) => (
-                  <th key={m} scope="col" className="px-2.5 py-2 text-right font-medium">{m}</th>
+                {MONTH_KEYS.map((m) => (
+                  <th key={m} scope="col" className="px-2.5 py-2 text-right font-medium">
+                    {t(`annualPnl.monthAbbr.${m}`)}
+                  </th>
                 ))}
                 <th
                   scope="col"
                   className="sticky right-[76px] z-10 bg-card px-4 py-2 text-right font-medium border-l border-border-subtle shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.10)]"
                 >
-                  Total
+                  {t('annualPnl.total')}
                 </th>
                 <th
                   scope="col"
                   className="sticky right-0 z-10 w-[76px] bg-card px-4 py-2 text-right font-medium border-l border-border-subtle"
                 >
-                  % rec.<InfoHint term="pctOfRevenue" />
+                  {t('annualPnl.pctOfRevenue')}<InfoHint term="pctOfRevenue" />
                 </th>
               </tr>
             </thead>

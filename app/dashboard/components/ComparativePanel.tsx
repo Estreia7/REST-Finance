@@ -107,7 +107,7 @@ export default function ComparativePanel() {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <div className="card-glass p-4">
           <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-            Receita vs Mês Anterior<InfoHint term="revenueVsPrev" />
+            {t('comparative.revenueVsPrev')}<InfoHint term="revenueVsPrev" />
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-xl font-bold ${revChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -118,7 +118,7 @@ export default function ComparativePanel() {
         </div>
         <div className="card-glass p-4">
           <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-            Lucro vs Mês Anterior<InfoHint term="profitVsPrev" />
+            {t('comparative.profitVsPrev')}<InfoHint term="profitVsPrev" />
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-xl font-bold ${profitChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -129,7 +129,7 @@ export default function ComparativePanel() {
         </div>
         <div className="card-glass p-4 col-span-2 md:col-span-1">
           <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-            Média Mensal (6m)<InfoHint term="monthlyAvg" />
+            {t('comparative.monthlyAvg')}<InfoHint term="monthlyAvg" />
           </div>
           <div className="text-xl font-bold text-foreground">
             {fmt(data.reduce((s, d) => s + d.revenue, 0) / Math.max(data.length, 1))}
@@ -195,18 +195,18 @@ export default function ComparativePanel() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border-subtle">
-                <th className="text-left py-2 text-xs font-medium text-muted-foreground">Mês</th>
+                <th className="text-left py-2 text-xs font-medium text-muted-foreground">{t('comparative.month')}</th>
                 <th className="text-right py-2 text-xs font-medium text-muted-foreground">
-                  Receita<InfoHint term="revenue" />
+                  {t('charts.revenue')}<InfoHint term="revenue" />
                 </th>
                 <th className="text-right py-2 text-xs font-medium text-muted-foreground">
-                  Custos<InfoHint term="costs" />
+                  {t('charts.costs')}<InfoHint term="costs" />
                 </th>
                 <th className="text-right py-2 text-xs font-medium text-muted-foreground">
-                  Lucro<InfoHint term="netIncome" />
+                  {t('charts.profit')}<InfoHint term="netIncome" />
                 </th>
                 <th className="text-right py-2 text-xs font-medium text-muted-foreground">
-                  Margem<InfoHint term="margin" />
+                  {t('comparative.margin')}<InfoHint term="margin" />
                 </th>
               </tr>
             </thead>

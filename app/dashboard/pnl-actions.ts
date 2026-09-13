@@ -19,7 +19,14 @@ import { toClientError } from '@/lib/errors';
 export type RevenueChannel = 'total' | 'dineIn' | 'takeaway';
 
 export type PnLLine = {
+  /**
+   * The line's name. Detail rows carry the owner's own category name, which is
+   * never translated; the standard statement lines carry `labelKey` too and the
+   * views prefer it, so the statement reads in the interface language.
+   */
   label: string;
+  /** Dictionary key under `annualPnl.line`, on the standard lines only. */
+  labelKey?: string;
   /** Twelve months, January first. Missing months are 0, not absent. */
   months: number[];
   total: number;
@@ -116,12 +123,14 @@ export async function getAnnualPnL(year: number) {
       annualRevenue > 0 ? toPercent(value / annualRevenue) : 0;
 
     const line = (
+      labelKey: string,
       label: string,
       months: number[],
       drill: PnLLine['drill'],
       showPercent = true
     ): PnLLine => ({
       label,
+      labelKey,
       months,
       total: sum(months),
       percentOfRevenue: showPercent ? pct(sum(months)) : null,
@@ -153,18 +162,25 @@ export async function getAnnualPnL(year: number) {
           if (bucket === 'occupancy') return Boolean(category.isOccupancy);
           return !category.isLabour && !category.isOccupancy;
         })
-        .map(([key, months]) => ({
-          label: key.startsWith('__uncategorised_')
-            ? 'Sem categoria'
-            : categoryById.get(key)?.name ?? 'Sem categoria',
-          months,
-          total: sum(months),
-          percentOfRevenue: pct(sum(months)),
-          drill: {
-            kind: type === 'COGS' ? ('cogs' as const) : ('opex' as const),
-            categoryId: key.startsWith('__uncategorised_') ? undefined : key,
-          },
-        }))
+        .map(([key, months]) => {
+          // A cost with no category of its own is the one detail row that is not
+          // the owner's own wording, so it gets a key like the standard lines.
+          const name = key.startsWith('__uncategorised_')
+            ? undefined
+            : categoryById.get(key)?.name;
+
+          return {
+            label: name ?? 'Sem categoria',
+            labelKey: name === undefined ? 'uncategorised' : undefined,
+            months,
+            total: sum(months),
+            percentOfRevenue: pct(sum(months)),
+            drill: {
+              kind: type === 'COGS' ? ('cogs' as const) : ('opex' as const),
+              categoryId: key.startsWith('__uncategorised_') ? undefined : key,
+            },
+          };
+        })
         .sort((a, b) => b.total - a.total);
 
     // Operating expenses in the USAR sense: what is left of OPEX once labour
@@ -195,29 +211,29 @@ export async function getAnnualPnL(year: number) {
       success: true,
       data: {
         year,
-        revenue: line('Receita total', revenue, { kind: 'revenue', channel: 'total' }, false),
-        dineIn: line('Local', dineIn, { kind: 'revenue', channel: 'dineIn' }),
-        takeaway: line('Take-away', takeaway, { kind: 'revenue', channel: 'takeaway' }),
+        revenue: line('revenue', 'Receita total', revenue, { kind: 'revenue', channel: 'total' }, false),
+        dineIn: line('dineIn', 'Local', dineIn, { kind: 'revenue', channel: 'dineIn' }),
+        takeaway: line('takeaway', 'Take-away', takeaway, { kind: 'revenue', channel: 'takeaway' }),
 
-        cogs: line('Custo das mercadorias', cogsTotal, { kind: 'cogs' }),
+        cogs: line('cogs', 'Custo das mercadorias', cogsTotal, { kind: 'cogs' }),
         cogsLines: categoryLines('COGS'),
 
-        labour: line('Pessoal', labourTotal, { kind: 'opex' }),
+        labour: line('labour', 'Pessoal', labourTotal, { kind: 'opex' }),
         labourLines: categoryLines('OPEX', 'labour'),
 
         // USAR's headline subtotal, and the reason the standard omits a gross
         // profit line: this is the figure that predicts survival.
-        primeCost: line('Prime cost', primeCost, null),
+        primeCost: line('primeCost', 'Prime cost', primeCost, null),
 
-        opex: line('Despesas operacionais', otherOpex, null),
+        opex: line('opex', 'Despesas operacionais', otherOpex, null),
         opexLines: categoryLines('OPEX', 'other'),
 
-        controllableIncome: line('Resultado controlável', controllableIncome, null),
+        controllableIncome: line('controllableIncome', 'Resultado controlável', controllableIncome, null),
 
-        occupancy: line('Renda e ocupação', occupancyTotal, { kind: 'opex' }),
+        occupancy: line('occupancy', 'Renda e ocupação', occupancyTotal, { kind: 'opex' }),
         occupancyLines: categoryLines('OPEX', 'occupancy'),
 
-        netIncome: line('Resultado líquido', netIncome, null),
+        netIncome: line('netIncome', 'Resultado líquido', netIncome, null),
       },
     };
   } catch (error: unknown) {

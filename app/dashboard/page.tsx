@@ -197,8 +197,8 @@ function DashboardPageInner() {
       setActiveTab(tab);
     }
     const upgrade = searchParams.get('upgrade');
-    if (upgrade === 'success') toast.success('Subscrição activada com sucesso!');
-    if (upgrade === 'canceled') toast.info('Processo de upgrade cancelado.');
+    if (upgrade === 'success') toast.success(t('dashboard.upgradeSuccess'));
+    if (upgrade === 'canceled') toast.info(t('dashboard.upgradeCanceled'));
   }, [searchParams]);
 
   // Theme is applied by ThemeProvider; the dashboard only reads it.
@@ -211,7 +211,7 @@ function DashboardPageInner() {
 
   const handleTabChange = (tab: Tab) => {
     if (hasUnsavedChanges && activeTab === 'settings') {
-      if (!confirm('Tens alterações por guardar. Queres mesmo sair?')) return;
+      if (!confirm(t('dashboard.unsavedChanges'))) return;
       setPendingTheme(theme);
       setHasUnsavedChanges(false);
     }
