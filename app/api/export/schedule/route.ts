@@ -6,7 +6,7 @@ import { buildScheduleSvg } from '@/lib/schedule-image';
 import { startOfWeek, addDays, dateKey, parseDateKey } from '@/lib/schedule';
 
 /**
- * The week's rota as a JPEG, for sending to the team on WhatsApp.
+ * The week's rota as an image, for sending to the team on WhatsApp.
  *
  * Owner-only, like every other schedule route: the image names who works when
  * and it is the owner's decision who receives it.
@@ -15,6 +15,13 @@ import { startOfWeek, addDays, dateKey, parseDateKey } from '@/lib/schedule';
  * given, so the source is drawn generously and handed over at a quality that
  * survives one more pass — an image that is already marginal comes out of
  * their pipeline unreadable.
+ *
+ * Two formats, because the two ways out of here have different constraints:
+ *   - `?format=png` is for copying to the clipboard. The async clipboard API
+ *     takes PNG and nothing else in practice, and it is served inline so the
+ *     browser hands back a blob instead of starting a download.
+ *   - the default JPEG is for the download button, where the smaller file is
+ *     what gets attached in WhatsApp.
  */
 
 export const dynamic = 'force-dynamic';
@@ -28,6 +35,7 @@ export async function GET(request: NextRequest) {
   }
 
   const weekParam = request.nextUrl.searchParams.get('week');
+  const wantsPng = request.nextUrl.searchParams.get('format') === 'png';
   const monday = weekParam ? startOfWeek(parseDateKey(weekParam)) : startOfWeek(new Date());
 
   if (Number.isNaN(monday.getTime())) {
@@ -67,24 +75,33 @@ export async function GET(request: NextRequest) {
       date: dateKey(s.date),
       startMin: s.startMin,
       endMin: s.endMin,
+      breakStartMin: s.breakStartMin,
+      breakEndMin: s.breakEndMin,
       note: s.note,
     })),
     closures: closures.map((c) => ({ date: dateKey(c.date), reason: c.reason })),
   });
 
   try {
-    const jpeg = await sharp(Buffer.from(svg), { density: 72 * SCALE })
+    const raster = sharp(Buffer.from(svg), { density: 72 * SCALE })
       .resize(width * SCALE, height * SCALE, { fit: 'fill' })
       // A flat background, not transparency: JPEG has no alpha, and letting
-      // it default turns unpainted pixels black.
-      .flatten({ background: '#fbfaf8' })
-      .jpeg({ quality: 92, chromaSubsampling: '4:4:4' })
-      .toBuffer();
+      // it default turns unpainted pixels black. PNG is flattened to match, so
+      // the copy and the download look identical.
+      .flatten({ background: '#fbfaf8' });
 
-    return new NextResponse(new Uint8Array(jpeg), {
+    const image = wantsPng
+      ? await raster.png({ compressionLevel: 9 }).toBuffer()
+      : await raster.jpeg({ quality: 92, chromaSubsampling: '4:4:4' }).toBuffer();
+
+    return new NextResponse(new Uint8Array(image), {
       headers: {
-        'Content-Type': 'image/jpeg',
-        'Content-Disposition': `attachment; filename="horario-${dateKey(monday)}.jpg"`,
+        'Content-Type': wantsPng ? 'image/png' : 'image/jpeg',
+        // Inline for the clipboard copy, which reads the body as a blob; the
+        // download keeps `attachment` so the browser saves it with a name.
+        'Content-Disposition': wantsPng
+          ? 'inline'
+          : `attachment; filename="horario-${dateKey(monday)}.jpg"`,
         'Cache-Control': 'no-store',
       },
     });

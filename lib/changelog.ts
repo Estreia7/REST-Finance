@@ -35,9 +35,45 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.09.12';
+export const CHANGELOG_VERSION = '2026.09.13';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.09.13',
+    date: '2026-09-13',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Turnos partidos nos horários',
+        detail:
+          'Marque o almoço e o jantar como um só turno, com a tarde de folga pelo meio: entra às 12:00, pausa das 15:00 às 19:00, sai às 23:00. As horas da semana contam só o tempo trabalhado, sem a pausa, e a imagem que envia no WhatsApp mostra os dois períodos para ninguém aparecer à hora errada. Pode guardar um turno partido para reutilizar, como qualquer outro.',
+      },
+      {
+        kind: 'fix',
+        title: 'Descarregar o horário já não o tira da aplicação',
+        detail:
+          'No telemóvel, descarregar a imagem do horário abria um ecrã com o ficheiro e deixava-o preso lá, sem forma de voltar atrás. A aplicação fica agora onde estava e a imagem é guardada ou partilhada por cima.',
+      },
+      {
+        kind: 'fix',
+        title: 'Os turnos sugeridos deixam de desaparecer',
+        detail:
+          'Ao guardar o primeiro turno seu, as sugestões Manhã, Tarde e Noite desapareciam da lista, o que parecia que tinham sido apagadas. Passam a estar sempre disponíveis, ao lado dos seus, marcadas como sugestões. Nenhum turno chegou a ser apagado.',
+      },
+      {
+        kind: 'new',
+        title: 'Copiar o horário direto para o WhatsApp',
+        detail:
+          'Em Horários, o botão "Copiar imagem" põe o horário da semana na área de transferência: abre a conversa do WhatsApp e cola, sem passar por ficheiros. A confirmação diz que semana foi copiada, para não enviar a errada. Ao lado, "Descarregar" guarda a imagem — no telemóvel abre a partilha, com o WhatsApp a um toque.',
+      },
+      {
+        kind: 'improvement',
+        title: 'O gráfico de comparação mensal ficou mais fácil de ler',
+        detail:
+          'Em Análises › Comparação, as barras de cada mês eram largas de mais e sobrava espaço vazio por cima delas. Passam a ser mais estreitas e agrupadas por mês, e a escala acompanha os seus números em vez de esticar até um valor redondo muito acima do maior mês. Os meses com prejuízo aparecem agora abaixo da linha do zero, bem visíveis.',
+      },
+    ],
+  },
   {
     version: '2026.09.12',
     date: '2026-09-12',

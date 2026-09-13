@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import {
   Loader2, ChevronLeft, ChevronRight, Plus, Trash2, Pencil, X, Check,
-  CalendarOff, CalendarCheck, CopyPlus, Download, Users, Eraser,
+  CalendarOff, CalendarCheck, CopyPlus, Copy, Download, Users, Eraser,
 } from 'lucide-react';
 import {
   getWeekSchedule, addEmployee, updateEmployee, removeEmployee,
@@ -13,7 +13,7 @@ import {
 } from '../schedule-actions';
 import {
   startOfWeek, addWeeks, weekDates, dateKey, parseDateKey,
-  formatRange, formatDuration, formatWeekRange, shiftLength,
+  formatRange, formatShiftTimes, hasBreak, formatDuration, formatWeekRange, shiftLength,
   parseTime, formatMinutes, weeklyMinutes,
   WEEKDAYS_PT_SHORT, EMPLOYEE_COLORS, employeeColor,
 } from '@/lib/schedule';
@@ -42,7 +42,18 @@ interface Shift {
   date: string;
   startMin: number;
   endMin: number;
+  breakStartMin: number | null;
+  breakEndMin: number | null;
   note: string | null;
+}
+
+interface ShiftTemplate {
+  id: string;
+  label: string;
+  startMin: number;
+  endMin: number;
+  breakStartMin: number | null;
+  breakEndMin: number | null;
 }
 
 interface WeekData {
@@ -50,14 +61,24 @@ interface WeekData {
   employees: Employee[];
   shifts: Shift[];
   closures: Array<{ date: string; reason: string | null }>;
-  templates: Array<{ id: string; label: string; startMin: number; endMin: number }>;
+  templates: ShiftTemplate[];
 }
 
-/** Offered when a restaurant has not saved its own shifts yet. */
+/**
+ * Starting points, always on offer.
+ *
+ * Shown alongside saved shifts rather than only until the first one is saved:
+ * having them vanish the moment you save a shift of your own reads as though
+ * the app deleted them. They are labelled as suggestions and carry no id, so
+ * they cannot be edited or removed — applying one just fills the hours.
+ */
 const DEFAULT_SHIFTS = [
-  { label: 'Manhã', startMin: 9 * 60, endMin: 17 * 60 },
-  { label: 'Tarde', startMin: 12 * 60, endMin: 20 * 60 },
-  { label: 'Noite', startMin: 17 * 60, endMin: 24 * 60 },
+  { label: 'Manhã', startMin: 9 * 60, endMin: 17 * 60, breakStartMin: null, breakEndMin: null },
+  { label: 'Tarde', startMin: 12 * 60, endMin: 20 * 60, breakStartMin: null, breakEndMin: null },
+  { label: 'Noite', startMin: 17 * 60, endMin: 24 * 60, breakStartMin: null, breakEndMin: null },
+  // The split shift a Portuguese restaurant actually runs: lunch service,
+  // the afternoon off, then dinner.
+  { label: 'Partido', startMin: 12 * 60, endMin: 23 * 60, breakStartMin: 15 * 60, breakEndMin: 19 * 60 },
 ];
 
 export default function SchedulePanel() {
@@ -70,6 +91,12 @@ export default function SchedulePanel() {
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [editingPerson, setEditingPerson] = useState<Employee | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
+  // "7 – 13 de setembro 2026". Named in the confirmations so the owner can see
+  // which week actually went to the clipboard before pasting it to the team.
+  const weekLabel = formatWeekRange(parseDateKey(weekStart), 'pt');
 
   const load = useCallback(() => {
     setLoading(true);
@@ -87,7 +114,14 @@ export default function SchedulePanel() {
   const shiftAt = (employeeId: string, date: string) =>
     data?.shifts.find((s) => s.employeeId === employeeId && s.date === date) ?? null;
   const totals = weeklyMinutes(data?.shifts ?? []);
-  const templates = data?.templates.length ? data.templates : DEFAULT_SHIFTS;
+  // Saved shifts first, then the suggestions that are not already covered.
+  // Previously the suggestions were replaced by the saved list, so saving the
+  // first shift of your own made Manhã/Tarde/Noite disappear — which looks
+  // exactly like the app having deleted them.
+  const savedShifts = data?.templates ?? [];
+  const suggestions = DEFAULT_SHIFTS.filter(
+    (d) => !savedShifts.some((t) => t.startMin === d.startMin && t.endMin === d.endMin)
+  );
 
   const run = async (fn: () => Promise<{ success: boolean; error?: string }>, okMsg?: string) => {
     setBusy(true);
@@ -102,10 +136,92 @@ export default function SchedulePanel() {
     return result;
   };
 
-  const downloadImage = () => {
-    // A plain link rather than fetch+blob: the browser's own download is what
-    // puts the file somewhere the user can then attach in WhatsApp.
-    window.location.href = `/api/export/schedule?week=${weekStart}`;
+  /**
+   * Saves the week's image, or hands it to the phone's share sheet.
+   *
+   * Navigating to the URL would take iOS Safari off the page and leave the
+   * owner on a bare "horario.jpg" screen with no way back to the schedule, so
+   * the page never moves any more.
+   *
+   * On a phone the file goes to the native share sheet, which puts WhatsApp
+   * one tap away — the thing the owner is actually trying to do. That also
+   * steps around iOS, where a `download` link pointed at a blob has never been
+   * dependable. Elsewhere, and if sharing a file is refused, it falls back to
+   * the ordinary download link.
+   */
+  const downloadImage = async () => {
+    setDownloading(true);
+    try {
+      const res = await fetch(`/api/export/schedule?week=${weekStart}`);
+      if (!res.ok) throw new Error('fetch failed');
+
+      const blob = await res.blob();
+      const filename = `horario-${weekStart}.jpg`;
+      const file = new File([blob], filename, { type: 'image/jpeg' });
+
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: `Horário ${weekLabel}` });
+          return;
+        } catch (err) {
+          // Dismissing the share sheet is a choice, not a failure: say nothing
+          // and leave the owner where they were.
+          if (err instanceof DOMException && err.name === 'AbortError') return;
+          // Anything else falls through to the download below.
+        }
+      }
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      // Freed later, not at once: revoking immediately can cancel the download
+      // before the browser has finished reading the blob.
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+
+      toast.success(`Horário de ${weekLabel} descarregado.`);
+    } catch {
+      toast.error('Não foi possível descarregar a imagem.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  /**
+   * Puts the week's image on the clipboard, ready to paste straight into a
+   * WhatsApp conversation.
+   *
+   * The blob is handed to `ClipboardItem` as a promise rather than awaited
+   * first: Safari treats an `await` before `clipboard.write` as leaving the
+   * click that started it, and rejects the write. Passing the promise keeps
+   * the call inside the gesture. PNG because that is the one image type the
+   * clipboard accepts across browsers — the download stays JPEG.
+   */
+  const copyImage = async () => {
+    const url = `/api/export/schedule?week=${weekStart}&format=png`;
+
+    if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
+      toast.error('O seu navegador não deixa copiar imagens. Use "Descarregar".');
+      return;
+    }
+
+    setCopying(true);
+    try {
+      const blob = fetch(url).then(async (res) => {
+        if (!res.ok) throw new Error('fetch failed');
+        return res.blob();
+      });
+
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      toast.success(`Horário de ${weekLabel} copiado. Cole na conversa do WhatsApp.`);
+    } catch {
+      toast.error('Não foi possível copiar. Use "Descarregar".');
+    } finally {
+      setCopying(false);
+    }
   };
 
   if (loading && !data) {
@@ -149,7 +265,7 @@ export default function SchedulePanel() {
 
           <div className="min-w-0 flex-1">
             <h3 className="font-bold text-foreground truncate">
-              {formatWeekRange(parseDateKey(weekStart), 'pt')}
+              {weekLabel}
             </h3>
             <p className="text-xs text-muted-foreground">
               {employees.length === 0
@@ -182,12 +298,26 @@ export default function SchedulePanel() {
 
           <button
             type="button"
-            onClick={downloadImage}
-            disabled={busy || (data?.shifts.length ?? 0) === 0}
+            onClick={copyImage}
+            disabled={busy || copying || (data?.shifts.length ?? 0) === 0}
             className="cta-button !py-2 !px-3 !text-xs disabled:opacity-40"
           >
-            <Download className="w-4 h-4" aria-hidden="true" />
-            Imagem para WhatsApp
+            {copying
+              ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+              : <Copy className="w-4 h-4" aria-hidden="true" />}
+            Copiar imagem
+          </button>
+
+          <button
+            type="button"
+            onClick={downloadImage}
+            disabled={busy || downloading || (data?.shifts.length ?? 0) === 0}
+            className="cta-button-secondary !py-2 !px-3 !text-xs disabled:opacity-40"
+          >
+            {downloading
+              ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+              : <Download className="w-4 h-4" aria-hidden="true" />}
+            Descarregar
           </button>
 
           {(data?.shifts.length ?? 0) > 0 && (
@@ -366,13 +496,17 @@ export default function SchedulePanel() {
           employee={employees.find((e) => e.id === editingCell.employeeId)!}
           date={editingCell.date}
           shift={shiftAt(editingCell.employeeId, editingCell.date)}
-          templates={templates}
-          savedTemplates={data?.templates ?? []}
+          savedTemplates={savedShifts}
+          suggestions={suggestions}
           onTemplatesChanged={load}
           onClose={() => setEditingCell(null)}
-          onSave={async (startMin, endMin, note) => {
+          onSave={async (startMin, endMin, breakStartMin, breakEndMin, note) => {
             await run(
-              () => setShift({ employeeId: editingCell.employeeId, date: editingCell.date, startMin, endMin, note }),
+              () => setShift({
+                employeeId: editingCell.employeeId,
+                date: editingCell.date,
+                startMin, endMin, breakStartMin, breakEndMin, note,
+              }),
               'Turno guardado'
             );
             setEditingCell(null);
@@ -468,9 +602,22 @@ function ShiftCell({
                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       style={{ background: color.bg, color: color.ink }}
     >
-      <span className="block text-xs font-semibold tabular-nums">
-        {formatRange(shift.startMin, shift.endMin)}
-      </span>
+      {/* A split shift is stacked, not squeezed onto one line: the column is
+          too narrow for both blocks side by side at a legible size. */}
+      {hasBreak(shift.startMin, shift.endMin, shift.breakStartMin, shift.breakEndMin) ? (
+        <>
+          <span className="block text-[11px] font-semibold tabular-nums leading-tight">
+            {formatRange(shift.startMin, shift.breakStartMin!)}
+          </span>
+          <span className="block text-[11px] font-semibold tabular-nums leading-tight">
+            {formatRange(shift.breakEndMin!, shift.endMin)}
+          </span>
+        </>
+      ) : (
+        <span className="block text-xs font-semibold tabular-nums">
+          {formatRange(shift.startMin, shift.endMin)}
+        </span>
+      )}
       {shift.note && <span className="block text-[10px] truncate">{shift.note}</span>}
     </button>
   );
@@ -584,7 +731,9 @@ function MobileSchedule({
                     className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold tabular-nums"
                     style={{ background: color.bg, color: color.ink }}
                   >
-                    {formatRange(shift.startMin, shift.endMin)}
+                    {formatShiftTimes(
+                      shift.startMin, shift.endMin, shift.breakStartMin, shift.breakEndMin,
+                    )}
                   </span>
                 ) : (
                   <span className="shrink-0 text-xs text-muted-foreground/60 flex items-center gap-1">
@@ -615,22 +764,35 @@ function MobileSchedule({
 }
 
 function ShiftDialog({
-  employee, date, shift, templates, savedTemplates, onClose, onSave, onClear, onTemplatesChanged,
+  employee, date, shift, savedTemplates, suggestions, onClose, onSave, onClear, onTemplatesChanged,
 }: {
   employee: Employee;
   date: string;
   shift: Shift | null;
-  /** What to offer as one-tap buttons: the restaurant's own, or the defaults. */
-  templates: Array<{ id?: string; label: string; startMin: number; endMin: number }>;
-  /** Only the restaurant's own, which are the only ones that can be deleted. */
-  savedTemplates: Array<{ id: string; label: string; startMin: number; endMin: number }>;
+  /** The restaurant's own, which are the only ones that can be deleted. */
+  savedTemplates: ShiftTemplate[];
+  /** Starting points. No id, so they cannot be edited or removed. */
+  suggestions: Array<Omit<ShiftTemplate, 'id'>>;
   onClose: () => void;
-  onSave: (startMin: number, endMin: number, note: string | null) => void;
+  onSave: (
+    startMin: number,
+    endMin: number,
+    breakStartMin: number | null,
+    breakEndMin: number | null,
+    note: string | null,
+  ) => void;
   onClear: () => void;
   onTemplatesChanged: () => void;
 }) {
   const [start, setStart] = useState(formatMinutes(shift?.startMin ?? 9 * 60));
   const [end, setEnd] = useState(formatMinutes(shift?.endMin ?? 17 * 60));
+
+  // A shift either has a break or it does not; the two fields only exist once
+  // the owner says there is one, so an empty pair cannot be saved by accident.
+  const [split, setSplit] = useState(shift?.breakStartMin != null);
+  const [breakStart, setBreakStart] = useState(formatMinutes(shift?.breakStartMin ?? 15 * 60));
+  const [breakEnd, setBreakEnd] = useState(formatMinutes(shift?.breakEndMin ?? 19 * 60));
+
   const [note, setNote] = useState(shift?.note ?? '');
   const [managing, setManaging] = useState(false);
   const [newLabel, setNewLabel] = useState('');
@@ -639,16 +801,56 @@ function ShiftDialog({
   const startMin = parseTime(start);
   const endMin = parseTime(end);
   const valid = startMin !== null && endMin !== null;
-  const length = valid ? shiftLength(startMin, endMin) : 0;
 
-  /** True while the fields hold hours no saved template already covers. */
-  const isNewCombination =
-    valid && !savedTemplates.some((t) => t.startMin === startMin && t.endMin === endMin);
+  const breakStartMin = split ? parseTime(breakStart) : null;
+  const breakEndMin = split ? parseTime(breakEnd) : null;
+
+  // The break is only usable if it parses and sits inside the shift. An
+  // unusable one is reported below rather than silently ignored, because
+  // silently ignoring it would pay someone for an afternoon they are off.
+  const breakUsable =
+    valid && split && breakStartMin !== null && breakEndMin !== null &&
+    hasBreak(startMin!, endMin!, breakStartMin, breakEndMin);
+
+  const breakBroken = split && !breakUsable;
+
+  const length = valid
+    ? shiftLength(startMin!, endMin!, breakUsable ? breakStartMin : null, breakUsable ? breakEndMin : null)
+    : 0;
+
+  /** Applies a saved shift or a suggestion, break included. */
+  const applyTemplate = (t: Omit<ShiftTemplate, 'id'>) => {
+    setStart(formatMinutes(t.startMin));
+    setEnd(formatMinutes(t.endMin));
+    if (t.breakStartMin != null && t.breakEndMin != null) {
+      setSplit(true);
+      setBreakStart(formatMinutes(t.breakStartMin));
+      setBreakEnd(formatMinutes(t.breakEndMin));
+    } else {
+      setSplit(false);
+    }
+  };
+
+  /** Whether a template's hours, break included, match what is in the fields. */
+  const matches = (t: Omit<ShiftTemplate, 'id'>) =>
+    startMin === t.startMin &&
+    endMin === t.endMin &&
+    (breakUsable ? breakStartMin : null) === t.breakStartMin &&
+    (breakUsable ? breakEndMin : null) === t.breakEndMin;
+
+  /** True while the fields hold hours no saved shift already covers. */
+  const isNewCombination = valid && !breakBroken && !savedTemplates.some(matches);
 
   const handleSaveTemplate = async () => {
-    if (!valid || !newLabel.trim()) return;
+    if (!valid || breakBroken || !newLabel.trim()) return;
     setSavingTemplate(true);
-    const result = await saveTemplate({ label: newLabel.trim(), startMin: startMin!, endMin: endMin! });
+    const result = await saveTemplate({
+      label: newLabel.trim(),
+      startMin: startMin!,
+      endMin: endMin!,
+      breakStartMin: breakUsable ? breakStartMin : null,
+      breakEndMin: breakUsable ? breakEndMin : null,
+    });
     if (result.success) {
       toast.success('Turno guardado para reutilizar');
       setNewLabel('');
@@ -669,45 +871,40 @@ function ShiftDialog({
       {/* The saved shifts, as one tap. The free fields below stay for the
           days that do not follow the pattern. */}
       <div className="flex flex-wrap items-center gap-2 mb-2">
-        {templates.map((t) => {
-          const selected = startMin === t.startMin && endMin === t.endMin;
-          return (
-            <span key={t.id ?? t.label} className="relative inline-flex">
+        {savedTemplates.map((t) => (
+          <span key={t.id} className="relative inline-flex">
+            <button
+              type="button"
+              onClick={() => applyTemplate(t)}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors
+                ${matches(t)
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-foreground hover:bg-primary hover:text-primary-foreground'}`}
+              aria-pressed={matches(t)}
+            >
+              {t.label}
+              <span className="block text-[10px] font-normal opacity-70">
+                {formatShiftTimes(t.startMin, t.endMin, t.breakStartMin, t.breakEndMin)}
+              </span>
+            </button>
+
+            {managing && (
               <button
                 type="button"
-                onClick={() => { setStart(formatMinutes(t.startMin)); setEnd(formatMinutes(t.endMin)); }}
-                className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors
-                  ${selected
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-foreground hover:bg-primary hover:text-primary-foreground'}`}
-                aria-pressed={selected}
+                onClick={async () => {
+                  const result = await deleteTemplate(t.id);
+                  if (result.success) { toast.success('Turno removido'); onTemplatesChanged(); }
+                  else toast.error(result.error || 'Não foi possível remover');
+                }}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-danger text-white
+                           flex items-center justify-center shadow-sm"
+                aria-label={`Remover turno ${t.label}`}
               >
-                {t.label}
-                <span className="block text-[10px] font-normal opacity-70">
-                  {formatRange(t.startMin, t.endMin)}
-                </span>
+                <X className="w-3 h-3" aria-hidden="true" />
               </button>
-
-              {/* Only the restaurant's own can be removed; the three defaults
-                  are a starting point, not data the owner ever created. */}
-              {managing && t.id && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const result = await deleteTemplate(t.id!);
-                    if (result.success) { toast.success('Turno removido'); onTemplatesChanged(); }
-                    else toast.error(result.error || 'Não foi possível remover');
-                  }}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-danger text-white
-                             flex items-center justify-center shadow-sm"
-                  aria-label={`Remover turno ${t.label}`}
-                >
-                  <X className="w-3 h-3" aria-hidden="true" />
-                </button>
-              )}
-            </span>
-          );
-        })}
+            )}
+          </span>
+        ))}
 
         {savedTemplates.length > 0 && (
           <button
@@ -720,9 +917,37 @@ function ShiftDialog({
         )}
       </div>
 
+      {/* Suggestions, kept on offer rather than replaced by the saved list.
+          Visibly lighter than the saved shifts above, so it is clear which
+          ones belong to the restaurant and which are just starting points. */}
+      {suggestions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Sugestões
+          </span>
+          {suggestions.map((t) => (
+            <button
+              key={t.label}
+              type="button"
+              onClick={() => applyTemplate(t)}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold border border-dashed transition-colors
+                ${matches(t)
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-border text-muted-foreground hover:text-foreground hover:border-primary'}`}
+              aria-pressed={matches(t)}
+            >
+              {t.label}
+              <span className="block text-[10px] font-normal opacity-70">
+                {formatShiftTimes(t.startMin, t.endMin, t.breakStartMin, t.breakEndMin)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {savedTemplates.length === 0 && (
         <p className="text-[11px] text-muted-foreground mb-4">
-          Estes são os turnos sugeridos. Guarde os seus abaixo para os ter sempre à mão.
+          Aplique uma sugestão ou defina as horas abaixo. Pode guardar os seus próprios turnos para os ter sempre à mão.
         </p>
       )}
 
@@ -737,6 +962,51 @@ function ShiftDialog({
         </label>
       </div>
 
+      {/* The split shift: lunch, the afternoon off, dinner. One shift with a
+          hole rather than two, so the grid stays one cell per day and the
+          weekly total stays a single sum. */}
+      <label className="flex items-center gap-2.5 mt-3 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={split}
+          onChange={(e) => setSplit(e.target.checked)}
+          className="w-4 h-4 rounded accent-[hsl(var(--primary))]"
+        />
+        <span className="text-xs font-medium text-foreground">
+          Turno partido
+          <span className="text-muted-foreground font-normal"> — com pausa ao meio</span>
+        </span>
+      </label>
+
+      {split && (
+        <div className="grid grid-cols-2 gap-3 mt-2 rounded-xl bg-muted/60 p-3">
+          <label className="block">
+            <span className="text-xs text-muted-foreground block mb-1.5">Início da pausa</span>
+            <input
+              type="time"
+              value={breakStart}
+              onChange={(e) => setBreakStart(e.target.value)}
+              className="input-field !py-2"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs text-muted-foreground block mb-1.5">Fim da pausa</span>
+            <input
+              type="time"
+              value={breakEnd}
+              onChange={(e) => setBreakEnd(e.target.value)}
+              className="input-field !py-2"
+            />
+          </label>
+
+          {breakBroken && (
+            <p className="col-span-2 text-[11px] text-danger">
+              A pausa tem de ficar dentro do turno e terminar depois de começar.
+            </p>
+          )}
+        </div>
+      )}
+
       <label className="block mt-3">
         <span className="text-xs text-muted-foreground block mb-1.5">Nota (opcional)</span>
         <input
@@ -749,10 +1019,20 @@ function ShiftDialog({
         />
       </label>
 
-      {valid && (
+      {valid && !breakBroken && (
         <p className="mt-3 text-xs text-muted-foreground">
+          {breakUsable && (
+            <>
+              Horário:{' '}
+              <strong className="text-foreground">
+                {formatShiftTimes(startMin!, endMin!, breakStartMin, breakEndMin)}
+              </strong>
+              {' · '}
+            </>
+          )}
           Duração: <strong className="text-foreground">{formatDuration(length)}</strong>
-          {endMin! <= startMin! && ' (termina no dia seguinte)'}
+          {breakUsable && ' (sem a pausa)'}
+          {endMin! <= startMin! && ' · termina no dia seguinte'}
         </p>
       )}
 
@@ -763,7 +1043,7 @@ function ShiftDialog({
         <div className="mt-3 rounded-xl bg-muted/60 p-3">
           <label className="block">
             <span className="text-[11px] text-muted-foreground block mb-1.5">
-              Guardar {formatRange(startMin!, endMin!)} como turno reutilizável
+              Guardar {formatShiftTimes(startMin!, endMin!, breakUsable ? breakStartMin : null, breakUsable ? breakEndMin : null)} como turno reutilizável
             </span>
             <div className="flex gap-2">
               <input
@@ -791,8 +1071,16 @@ function ShiftDialog({
       <div className="mt-5 flex gap-2">
         <button
           type="button"
-          onClick={() => valid && onSave(startMin!, endMin!, note.trim() || null)}
-          disabled={!valid}
+          onClick={() =>
+            valid && !breakBroken &&
+            onSave(
+              startMin!, endMin!,
+              breakUsable ? breakStartMin : null,
+              breakUsable ? breakEndMin : null,
+              note.trim() || null,
+            )
+          }
+          disabled={!valid || breakBroken}
           className="cta-button flex-1 !py-2.5 !text-sm disabled:opacity-40"
         >
           <Check className="w-4 h-4" aria-hidden="true" />
