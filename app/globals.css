@@ -190,6 +190,23 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+
+    /*
+      Clipped here as well as on the root, because clipping the root alone does
+      not hold: the body keeps `overflow-x: visible`, so a single child wider
+      than the screen still stretches the scrollable area. The page then drags
+      sideways while the fixed nav and + button stay put, which cuts off the
+      left edge of every card — and nothing scrolls it back, so it stays that
+      way until reload.
+
+      `clip`, never `hidden`. `hidden` makes the body a scroll container, which
+      disables `position: sticky` in every descendant (the annual statement's
+      pinned columns, the sticky top bar) and traps the page's own vertical
+      scrolling. Setting only `overflow-x` leaves the y axis `visible`, so both
+      keep working — measured, not assumed.
+    */
+    overscroll-behavior-x: contain;
+    overflow-x: clip;
   }
 
   /*
