@@ -533,6 +533,12 @@ model ShiftTemplate {
   /// DST trouble, which a DateTime on a recurring weekly grid invites.
   startMin  Int    @map("start_min")
   endMin    Int    @map("end_min")
+
+  /// A saved split shift carries its break, so "Partido" reusable means the
+  /// same thing every time it is applied.
+  breakStartMin Int? @map("break_start_min")
+  breakEndMin   Int? @map("break_end_min")
+
   sortOrder Int    @default(0) @map("sort_order")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -560,14 +566,22 @@ model Shift {
   startMin Int @map("start_min")
   endMin   Int @map("end_min")
 
+  /// The unpaid gap in a split shift: in at 12:00, off from 15:00 to 19:00,
+  /// out at 23:00. Restaurants run lunch and dinner as one turno with the
+  /// afternoon off, so the day is one shift with a hole, not two shifts.
+  /// Both are set together or neither is; the hours worked deduct the gap.
+  breakStartMin Int? @map("break_start_min")
+  breakEndMin   Int? @map("break_end_min")
+
   /// "Fecho", "Só até às 15h" — whatever the owner needs the team to read.
   note String?
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  /// One shift per person per day. A split shift is expressed with a note
-  /// rather than two rows, which keeps the grid one cell per cell.
+  /// One shift per person per day. A split shift is one row with a break in
+  /// the middle rather than two rows, which keeps the grid one cell per cell
+  /// and the weekly total a single sum.
   @@unique([employeeId, date])
   @@index([restaurantId, date])
   @@map("shifts")

@@ -9,6 +9,8 @@ import {
   formatMinutes,
   parseTime,
   shiftLength,
+  breakLength,
+  formatShiftTimes,
   formatDuration,
   formatWeekRange,
   weeklyMinutes,
@@ -109,6 +111,72 @@ describe('shiftLength', () => {
   it('treats an identical start and end as a full day, not zero', () => {
     expect(shiftLength(540, 540)).toBe(1440);
   });
+
+  it('deducts the afternoon off from a split shift', () => {
+    // 12:00–23:00 with 15:00–19:00 off is 7h worked, not 11h present.
+    expect(shiftLength(720, 1380, 900, 1140)).toBe(420);
+  });
+
+  it('deducts a break from a shift that runs past midnight', () => {
+    // 19:00–03:00 with a break at 23:00–00:00: the break is four hours into
+    // the shift, not twenty hours before it started.
+    expect(shiftLength(1140, 180, 1380, 0)).toBe(420);
+  });
+});
+
+describe('breakLength', () => {
+  it('is zero when no break is set', () => {
+    expect(breakLength(720, 1380)).toBe(0);
+    expect(breakLength(720, 1380, null, null)).toBe(0);
+  });
+
+  it('ignores half a break rather than guessing the other end', () => {
+    expect(breakLength(720, 1380, 900, null)).toBe(0);
+    expect(breakLength(720, 1380, null, 1140)).toBe(0);
+  });
+
+  it('measures a break inside the shift', () => {
+    expect(breakLength(720, 1380, 900, 1140)).toBe(240);
+  });
+
+  it('ignores a break that falls outside the shift', () => {
+    // Hours worked must never exceed the span because of a stray pair.
+    expect(breakLength(720, 1380, 300, 400)).toBe(0);
+    expect(breakLength(720, 1380, 1400, 1430)).toBe(0);
+  });
+
+  it('ignores a backwards or empty break', () => {
+    expect(breakLength(720, 1380, 1140, 900)).toBe(0);
+    expect(breakLength(720, 1380, 900, 900)).toBe(0);
+  });
+
+  it('never lets worked hours go negative or exceed the span', () => {
+    const pairs = [
+      [900, 1140], [300, 400], [1140, 900], [0, 1439], [720, 1380], [900, 900],
+    ] as const;
+
+    for (const [bs, be] of pairs) {
+      const worked = shiftLength(720, 1380, bs, be);
+      expect(worked).toBeGreaterThanOrEqual(0);
+      expect(worked).toBeLessThanOrEqual(shiftLength(720, 1380));
+    }
+  });
+});
+
+describe('formatShiftTimes', () => {
+  it('shows a plain range when there is no break', () => {
+    expect(formatShiftTimes(540, 1020)).toBe('09:00–17:00');
+  });
+
+  it('shows the two blocks actually worked for a split shift', () => {
+    // The team reads when to turn up, so show the blocks rather than the
+    // span with the hole described separately.
+    expect(formatShiftTimes(720, 1380, 900, 1140)).toBe('12:00–15:00 · 19:00–23:00');
+  });
+
+  it('falls back to the plain range when the break makes no sense', () => {
+    expect(formatShiftTimes(720, 1380, 1140, 900)).toBe('12:00–23:00');
+  });
 });
 
 describe('formatDuration', () => {
@@ -144,6 +212,16 @@ describe('weeklyMinutes', () => {
     ]);
     expect(totals.get('a')).toBe(960);
     expect(totals.get('b')).toBe(540);
+  });
+
+  it('counts hours worked, not hours present, for split shifts', () => {
+    // Counting the afternoon off would overstate the week for every
+    // restaurant that runs lunch and dinner as one turno.
+    const totals = weeklyMinutes([
+      { employeeId: 'a', startMin: 720, endMin: 1380, breakStartMin: 900, breakEndMin: 1140 },
+      { employeeId: 'a', startMin: 540, endMin: 1020 },
+    ]);
+    expect(totals.get('a')).toBe(420 + 480);
   });
 
   it('is empty for a week with no shifts', () => {

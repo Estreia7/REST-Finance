@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
-import { startOfWeek, addWeeks, addDays, dateKey, parseDateKey } from '@/lib/schedule';
+import { startOfWeek, addWeeks, addDays, dateKey, parseDateKey, breakLength } from '@/lib/schedule';
 import { EMPLOYEE_COLORS } from '@/lib/schedule';
 
 /**
@@ -27,6 +27,39 @@ function fail(error: string) {
 /** Minutes must be a whole number inside a day. */
 function validMinute(value: unknown): value is number {
   return Number.isInteger(value) && (value as number) >= 0 && (value as number) < 1440;
+}
+
+/**
+ * Checks the break on a split shift and normalises it to a pair or nothing.
+ *
+ * Returns the pair to store, or an error message. Half a break is rejected
+ * rather than silently dropped: someone who typed one of the two fields meant
+ * to set a break, and storing the shift without it would quietly pay them for
+ * the afternoon they are off.
+ */
+function checkBreak(
+  startMin: number,
+  endMin: number,
+  breakStartMin?: number | null,
+  breakEndMin?: number | null,
+): { breakStartMin: number | null; breakEndMin: number | null } | { error: string } {
+  const hasStart = breakStartMin != null;
+  const hasEnd = breakEndMin != null;
+
+  if (!hasStart && !hasEnd) return { breakStartMin: null, breakEndMin: null };
+  if (hasStart !== hasEnd) return { error: 'Indique o início e o fim da pausa' };
+
+  if (!validMinute(breakStartMin) || !validMinute(breakEndMin)) {
+    return { error: 'Horas da pausa inválidas' };
+  }
+
+  // breakLength returns 0 for anything it cannot use — outside the shift,
+  // backwards, or empty — which is exactly the set to reject here.
+  if (breakLength(startMin, endMin, breakStartMin, breakEndMin) === 0) {
+    return { error: 'A pausa tem de ficar dentro do turno' };
+  }
+
+  return { breakStartMin, breakEndMin };
 }
 
 // ── Reading ────────────────────────────────────────────────────────────────
@@ -72,6 +105,8 @@ export async function getWeekSchedule(weekStartKey?: string) {
         date: dateKey(s.date),
         startMin: s.startMin,
         endMin: s.endMin,
+        breakStartMin: s.breakStartMin,
+        breakEndMin: s.breakEndMin,
         note: s.note,
       })),
       closures: closures.map((c) => ({ date: dateKey(c.date), reason: c.reason })),
@@ -80,6 +115,8 @@ export async function getWeekSchedule(weekStartKey?: string) {
         label: t.label,
         startMin: t.startMin,
         endMin: t.endMin,
+        breakStartMin: t.breakStartMin,
+        breakEndMin: t.breakEndMin,
       })),
     },
   };
@@ -205,6 +242,8 @@ export async function setShift(input: {
   date: string;
   startMin: number;
   endMin: number;
+  breakStartMin?: number | null;
+  breakEndMin?: number | null;
   note?: string | null;
 }) {
   const owner = await requireOwner();
@@ -213,6 +252,11 @@ export async function setShift(input: {
   if (!validMinute(input.startMin) || !validMinute(input.endMin)) {
     return fail('Horas inválidas');
   }
+
+  const pause = checkBreak(
+    input.startMin, input.endMin, input.breakStartMin, input.breakEndMin,
+  );
+  if ('error' in pause) return fail(pause.error);
 
   const employee = await prisma.scheduleEmployee.findFirst({
     where: { id: input.employeeId, restaurantId: owner.restaurantId, deletedAt: null },
@@ -231,11 +275,17 @@ export async function setShift(input: {
       date,
       startMin: input.startMin,
       endMin: input.endMin,
+      breakStartMin: pause.breakStartMin,
+      breakEndMin: pause.breakEndMin,
       note: input.note?.trim() || null,
     },
     update: {
       startMin: input.startMin,
       endMin: input.endMin,
+      // Written on every update, so clearing the break on an existing shift
+      // actually clears it rather than leaving the old pair in place.
+      breakStartMin: pause.breakStartMin,
+      breakEndMin: pause.breakEndMin,
       note: input.note?.trim() || null,
     },
   });
@@ -375,6 +425,8 @@ export async function copyWeekForward(input: {
       date: addDays(s.date, weekOffset),
       startMin: s.startMin,
       endMin: s.endMin,
+      breakStartMin: s.breakStartMin,
+      breakEndMin: s.breakEndMin,
       note: s.note,
     }));
   });
@@ -427,13 +479,24 @@ export async function clearWeek(weekStartKey: string) {
 
 // ── Shift templates ────────────────────────────────────────────────────────
 
-export async function saveTemplate(input: { label: string; startMin: number; endMin: number }) {
+export async function saveTemplate(input: {
+  label: string;
+  startMin: number;
+  endMin: number;
+  breakStartMin?: number | null;
+  breakEndMin?: number | null;
+}) {
   const owner = await requireOwner();
   if (isAuthError(owner)) return fail(owner.error);
 
   const label = input.label?.trim();
   if (!label) return fail('O nome do turno é obrigatório');
   if (!validMinute(input.startMin) || !validMinute(input.endMin)) return fail('Horas inválidas');
+
+  const pause = checkBreak(
+    input.startMin, input.endMin, input.breakStartMin, input.breakEndMin,
+  );
+  if ('error' in pause) return fail(pause.error);
 
   const count = await prisma.shiftTemplate.count({ where: { restaurantId: owner.restaurantId } });
   if (count >= 12) return fail('Máximo de 12 turnos guardados');
@@ -444,6 +507,8 @@ export async function saveTemplate(input: { label: string; startMin: number; end
       label,
       startMin: input.startMin,
       endMin: input.endMin,
+      breakStartMin: pause.breakStartMin,
+      breakEndMin: pause.breakEndMin,
       sortOrder: count,
     },
   });

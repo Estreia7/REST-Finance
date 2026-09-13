@@ -25,6 +25,7 @@ import {
   formatDuration,
   formatWeekRange,
   shiftLength,
+  hasBreak,
   employeeColor,
   weekDates,
   dateKey,
@@ -43,6 +44,8 @@ export interface ImageShift {
   date: string;
   startMin: number;
   endMin: number;
+  breakStartMin?: number | null;
+  breakEndMin?: number | null;
   note: string | null;
 }
 
@@ -99,6 +102,13 @@ const L = {
   totalCol: 64,
 };
 
+/**
+ * Rows are taller on a week containing split shifts, which need two lines of
+ * times rather than one. Applied to the whole grid, not just the split rows:
+ * a table whose rows change height by content reads as broken.
+ */
+const SPLIT_ROW_HEIGHT = 74;
+
 export function buildScheduleSvg(input: ImageInput): { svg: string; width: number; height: number } {
   const language = input.language ?? 'pt';
   const dayNames = language === 'pt' ? WEEKDAYS_PT_SHORT : WEEKDAYS_EN_SHORT;
@@ -114,9 +124,17 @@ export function buildScheduleSvg(input: ImageInput): { svg: string; width: numbe
   const byCell = new Map<string, ImageShift>();
   for (const s of input.shifts) byCell.set(`${s.employeeId}|${s.date}`, s);
 
+  // One height for the whole grid, decided by whether any shift this week is
+  // split. Computed per call rather than mutating L, which is module-level
+  // and shared by every schedule rendered.
+  const anySplit = input.shifts.some((s) =>
+    hasBreak(s.startMin, s.endMin, s.breakStartMin, s.breakEndMin)
+  );
+  const rowHeight = anySplit ? SPLIT_ROW_HEIGHT : L.rowHeight;
+
   const width = L.padding * 2 + L.nameCol + L.dayCol * 7 + L.totalCol;
   const gridTop = L.headerHeight + L.dayHeader;
-  const gridBottom = gridTop + Math.max(employees.length, 1) * L.rowHeight;
+  const gridBottom = gridTop + Math.max(employees.length, 1) * rowHeight;
   const height = gridBottom + L.footer + L.padding;
 
   const parts: string[] = [];
@@ -179,27 +197,27 @@ export function buildScheduleSvg(input: ImageInput): { svg: string; width: numbe
   }
 
   employees.forEach((emp, row) => {
-    const y = gridTop + row * L.rowHeight;
+    const y = gridTop + row * rowHeight;
     const color = employeeColor(emp.color);
 
     // Stops at the day columns: striping the full width would paint over the
     // closed band that was laid down first.
     if (row % 2 === 1) {
       parts.push(
-        `<rect x="${L.padding}" y="${y}" width="${L.nameCol}" height="${L.rowHeight}" fill="#ffffff"/>`
+        `<rect x="${L.padding}" y="${y}" width="${L.nameCol}" height="${rowHeight}" fill="#ffffff"/>`
       );
       days.forEach((day, i) => {
         if (closedDays.has(dateKey(day))) return;
         parts.push(
           `<rect x="${L.padding + L.nameCol + i * L.dayCol}" y="${y}" width="${L.dayCol}" height="${
-            L.rowHeight
+            rowHeight
           }" fill="#ffffff"/>`
         );
       });
     }
 
     parts.push(
-      `<rect x="${L.padding}" y="${y + 12}" width="4" height="${L.rowHeight - 24}" rx="2" fill="${color.dot}"/>`,
+      `<rect x="${L.padding}" y="${y + 12}" width="4" height="${rowHeight - 24}" rx="2" fill="${color.dot}"/>`,
       `<text x="${L.padding + 16}" y="${y + (emp.role ? 26 : 35)}" font-size="17" font-weight="600" fill="${COLORS.ink}">${esc(
         fit(emp.name, 20)
       )}</text>`
@@ -230,22 +248,42 @@ export function buildScheduleSvg(input: ImageInput): { svg: string; width: numbe
         return;
       }
 
-      weekMinutes += shiftLength(shift.startMin, shift.endMin);
+      weekMinutes += shiftLength(
+        shift.startMin, shift.endMin, shift.breakStartMin, shift.breakEndMin,
+      );
+
+      // A split shift needs both blocks, and they do not fit on one line at
+      // this column width, so it is stacked instead of shrunk to illegibility.
+      const split = hasBreak(
+        shift.startMin, shift.endMin, shift.breakStartMin, shift.breakEndMin,
+      );
+
+      const lines = split
+        ? [formatRange(shift.startMin, shift.breakStartMin!),
+           formatRange(shift.breakEndMin!, shift.endMin)]
+        : [formatRange(shift.startMin, shift.endMin)];
+
+      const boxHeight = shift.note || split ? rowHeight - 20 : 32;
 
       parts.push(
         `<rect x="${x + 8}" y="${y + 10}" width="${L.dayCol - 16}" height="${
-          shift.note ? L.rowHeight - 20 : 32
-        }" rx="7" fill="${color.bg}"/>`,
-        `<text x="${x + L.dayCol / 2}" y="${y + 31}" font-size="15" font-weight="600" text-anchor="middle" fill="${
-          color.ink
-        }">${esc(formatRange(shift.startMin, shift.endMin))}</text>`
+          boxHeight
+        }" rx="7" fill="${color.bg}"/>`
       );
+
+      lines.forEach((line, i) => {
+        parts.push(
+          `<text x="${x + L.dayCol / 2}" y="${y + 28 + i * 17}" font-size="${
+            split ? 13 : 15
+          }" font-weight="600" text-anchor="middle" fill="${color.ink}">${esc(line)}</text>`
+        );
+      });
 
       if (shift.note) {
         parts.push(
-          `<text x="${x + L.dayCol / 2}" y="${y + 47}" font-size="12" text-anchor="middle" fill="${
-            color.ink
-          }">${esc(fit(shift.note, 15))}</text>`
+          `<text x="${x + L.dayCol / 2}" y="${
+            y + 28 + lines.length * 17 + 2
+          }" font-size="12" text-anchor="middle" fill="${color.ink}">${esc(fit(shift.note, 15))}</text>`
         );
       }
     });
@@ -258,8 +296,8 @@ export function buildScheduleSvg(input: ImageInput): { svg: string; width: numbe
     );
 
     parts.push(
-      `<line x1="${L.padding}" y1="${y + L.rowHeight}" x2="${width - L.padding}" y2="${
-        y + L.rowHeight
+      `<line x1="${L.padding}" y1="${y + rowHeight}" x2="${width - L.padding}" y2="${
+        y + rowHeight
       }" stroke="${COLORS.rule}" stroke-width="1"/>`
     );
   });

@@ -84,8 +84,59 @@ export function parseTime(value: string): number | null {
  * as negative would make the weekly total shrink as someone works later, so
  * an end at or before the start is read as running into the next day.
  */
-export function shiftLength(startMin: number, endMin: number): number {
-  return endMin > startMin ? endMin - startMin : endMin + 1440 - startMin;
+export function shiftLength(
+  startMin: number,
+  endMin: number,
+  breakStartMin?: number | null,
+  breakEndMin?: number | null,
+): number {
+  const span = endMin > startMin ? endMin - startMin : endMin + 1440 - startMin;
+  return span - breakLength(startMin, endMin, breakStartMin, breakEndMin);
+}
+
+/**
+ * The unpaid gap in a split shift, in minutes.
+ *
+ * Measured in the shift's own frame rather than against the clock, because a
+ * shift that runs past midnight makes raw comparison meaningless: a break at
+ * 01:00 inside a 19:00–03:00 close is six hours in, not seventeen hours
+ * before the start. Offsets from the start are unambiguous either way.
+ *
+ * A break that is missing, incomplete, or does not sit inside the shift
+ * counts as no break at all: the hours worked must never exceed the span or
+ * go negative because of a nonsensical pair.
+ */
+export function breakLength(
+  startMin: number,
+  endMin: number,
+  breakStartMin?: number | null,
+  breakEndMin?: number | null,
+): number {
+  if (breakStartMin == null || breakEndMin == null) return 0;
+
+  const span = endMin > startMin ? endMin - startMin : endMin + 1440 - startMin;
+  const from = offsetFromStart(startMin, breakStartMin);
+  const to = offsetFromStart(startMin, breakEndMin);
+
+  if (to <= from) return 0;
+  if (from < 0 || to > span) return 0;
+
+  return to - from;
+}
+
+/** Minutes from the shift's start to `minute`, wrapping past midnight. */
+function offsetFromStart(startMin: number, minute: number): number {
+  return minute >= startMin ? minute - startMin : minute + 1440 - startMin;
+}
+
+/** Whether a shift has a usable break, for display and validation. */
+export function hasBreak(
+  startMin: number,
+  endMin: number,
+  breakStartMin?: number | null,
+  breakEndMin?: number | null,
+): boolean {
+  return breakLength(startMin, endMin, breakStartMin, breakEndMin) > 0;
 }
 
 /** "7h30" — hours as a restaurant says them, not 7.5. */
@@ -98,6 +149,26 @@ export function formatDuration(minutes: number): string {
 /** `09:00–17:00`, with an en dash because it is a range, not a hyphen. */
 export function formatRange(startMin: number, endMin: number): string {
   return `${formatMinutes(startMin)}–${formatMinutes(endMin)}`;
+}
+
+/**
+ * A split shift as the team reads it: `12:00–15:00 · 19:00–23:00`.
+ *
+ * The two blocks worked, not the span with a hole described separately —
+ * someone checking when to turn up wants the hours they are on, and reading
+ * "12:00–23:00 (pausa 15:00–19:00)" means doing the subtraction themselves.
+ * Falls back to the plain range when there is no break.
+ */
+export function formatShiftTimes(
+  startMin: number,
+  endMin: number,
+  breakStartMin?: number | null,
+  breakEndMin?: number | null,
+): string {
+  if (!hasBreak(startMin, endMin, breakStartMin, breakEndMin)) {
+    return formatRange(startMin, endMin);
+  }
+  return `${formatRange(startMin, breakStartMin!)} · ${formatRange(breakEndMin!, endMin)}`;
 }
 
 /**
@@ -130,11 +201,20 @@ export function formatWeekRange(monday: Date, language: 'pt' | 'en' = 'pt'): str
 
 /** The shifts of one week, totalled per person. */
 export function weeklyMinutes(
-  shifts: Array<{ employeeId: string; startMin: number; endMin: number }>
+  shifts: Array<{
+    employeeId: string;
+    startMin: number;
+    endMin: number;
+    breakStartMin?: number | null;
+    breakEndMin?: number | null;
+  }>
 ): Map<string, number> {
   const totals = new Map<string, number>();
   for (const s of shifts) {
-    totals.set(s.employeeId, (totals.get(s.employeeId) ?? 0) + shiftLength(s.startMin, s.endMin));
+    // Hours worked, not hours present: the afternoon off in a split shift is
+    // unpaid, and a total that counted it would overstate every week.
+    const worked = shiftLength(s.startMin, s.endMin, s.breakStartMin, s.breakEndMin);
+    totals.set(s.employeeId, (totals.get(s.employeeId) ?? 0) + worked);
   }
   return totals;
 }

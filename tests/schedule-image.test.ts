@@ -60,6 +60,50 @@ describe('buildScheduleSvg', () => {
     expect(svg).toContain('Sem turnos marcados');
   });
 
+  it('draws both blocks of a split shift, not the span', () => {
+    // The team reads when to turn up. Showing 12:00–23:00 for someone who is
+    // off all afternoon would have half the kitchen arriving at the wrong hour.
+    const { svg } = buildScheduleSvg({
+      ...base,
+      shifts: [
+        { employeeId: 'a', date: '2026-09-14', startMin: 720, endMin: 1380,
+          breakStartMin: 900, breakEndMin: 1140, note: null },
+      ],
+    });
+
+    expect(svg).toContain('12:00–15:00');
+    expect(svg).toContain('19:00–23:00');
+    expect(svg).not.toContain('12:00–23:00');
+  });
+
+  it('counts a split shift as hours worked in the weekly total', () => {
+    const { svg } = buildScheduleSvg({
+      ...base,
+      shifts: [
+        { employeeId: 'a', date: '2026-09-14', startMin: 720, endMin: 1380,
+          breakStartMin: 900, breakEndMin: 1140, note: null },
+      ],
+    });
+    // 7h worked, not the 11h between clocking in and out.
+    expect(svg).toContain('7h');
+    expect(svg).not.toContain('11h');
+  });
+
+  it('gives the grid room for two lines when a week has a split shift', () => {
+    const straight = buildScheduleSvg({
+      ...base,
+      shifts: [{ employeeId: 'a', date: '2026-09-14', startMin: 720, endMin: 1380, note: null }],
+    });
+    const split = buildScheduleSvg({
+      ...base,
+      shifts: [
+        { employeeId: 'a', date: '2026-09-14', startMin: 720, endMin: 1380,
+          breakStartMin: 900, breakEndMin: 1140, note: null },
+      ],
+    });
+    expect(split.height).toBeGreaterThan(straight.height);
+  });
+
   it('rasterises to a real JPEG', async () => {
     const { svg, width, height } = buildScheduleSvg(base);
     const jpeg = await sharp(Buffer.from(svg), { density: 144 })
