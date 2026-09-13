@@ -11,6 +11,7 @@ import {
 import ImageUpload from './ImageUpload';
 import CategoryManager from './CategoryManager';
 import { useLanguage } from '@/lib/language-context';
+import { MIN_PASSWORD_LENGTH } from '@/lib/validations';
 
 interface SettingsPanelProps {
   pendingTheme:      'light' | 'dark';
@@ -54,7 +55,7 @@ export default function SettingsPanel({
 
   const handleChangePassword = async () => {
     if (newPw !== confirmPw) { toast.error(t('settings.passwordMismatch')); return; }
-    if (newPw.length < 6) { toast.error(t('settings.passwordTooShort')); return; }
+    if (newPw.length < MIN_PASSWORD_LENGTH) { toast.error(t('settings.passwordTooShort')); return; }
     setSavingPw(true);
     const result = await changePassword(currentPw, newPw);
     if (result.success) {

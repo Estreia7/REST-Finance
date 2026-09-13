@@ -2,8 +2,14 @@
 
 import { Globe } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
-import { Language } from '@/lib/translations';
 
+/**
+ * Switches between the two languages.
+ *
+ * The label and title are deliberately not translated: each is written in the
+ * language it switches TO, so someone stranded in a language they cannot read
+ * can still find their way out.
+ */
 export default function LanguageSelector() {
   const { language, setLanguage } = useLanguage();
 

@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Check, Copy, Loader2, ShieldCheck, Trash2 } from 'lucide-react';
+import { useLanguage } from '@/lib/language-context';
+import { translateError } from '@/lib/error-messages';
 import {
   getAuthSettings,
   saveGoogleCredentials,
@@ -28,6 +30,7 @@ type Settings = {
  * credential is in place without it appearing in a response or a screenshot.
  */
 export default function AuthSettingsPanel() {
+  const { t, language } = useLanguage();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -41,10 +44,10 @@ export default function AuthSettingsPanel() {
       setSettings(result.data);
       setClientId(result.data.googleClientId);
     } else if ('error' in result) {
-      toast.error(result.error);
+      toast.error(translateError(language, result.error));
     }
     setLoading(false);
-  }, []);
+  }, [language]);
 
   useEffect(() => {
     load();
@@ -57,25 +60,25 @@ export default function AuthSettingsPanel() {
     setSaving(false);
 
     if (result.error) {
-      toast.error(result.error);
+      toast.error(translateError(language, result.error));
       return;
     }
 
-    toast.success('Credenciais guardadas. O início de sessão com Google está ativo.');
+    toast.success(t('admin.auth.saved'));
     setClientSecret('');
     load();
   };
 
   const handleClear = async () => {
-    if (!confirm('Remover as credenciais do Google? O botão deixa de funcionar.')) return;
+    if (!confirm(t('admin.auth.clearConfirm'))) return;
 
     const result = await clearGoogleCredentials();
     if (result.error) {
-      toast.error(result.error);
+      toast.error(translateError(language, result.error));
       return;
     }
 
-    toast.success('Credenciais removidas.');
+    toast.success(t('admin.auth.cleared'));
     setClientId('');
     setClientSecret('');
     load();
@@ -85,16 +88,16 @@ export default function AuthSettingsPanel() {
     if (!settings) return;
     const next = !settings.registrationOpen;
 
-    if (next && !confirm('Abrir o registo permite que qualquer pessoa crie uma conta. Continuar?')) {
+    if (next && !confirm(t('admin.auth.registrationOpenConfirm'))) {
       return;
     }
 
     const result = await setRegistrationOpen(next);
     if (result.error) {
-      toast.error(result.error);
+      toast.error(translateError(language, result.error));
       return;
     }
-    toast.success(next ? 'Registo aberto.' : 'Registo fechado.');
+    toast.success(next ? t('admin.auth.registrationOpened') : t('admin.auth.registrationClosed'));
     load();
   };
 
@@ -109,7 +112,7 @@ export default function AuthSettingsPanel() {
     return (
       <div className="card-glass p-6 flex items-center gap-3 text-muted-foreground">
         <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-        A carregar definições...
+        {t('admin.auth.loading')}
       </div>
     );
   }
@@ -119,11 +122,9 @@ export default function AuthSettingsPanel() {
     <div className="card-glass p-6 max-w-2xl mb-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="font-semibold text-foreground">Registo público</h3>
+          <h3 className="font-semibold text-foreground">{t('admin.auth.registrationTitle')}</h3>
           <p className="mt-1 text-sm text-muted-foreground max-w-[52ch]">
-            Fechado durante a beta: as contas são criadas por ti depois de um
-            pedido de acesso. Aberto, qualquer pessoa que encontre o site pode
-            criar uma conta.
+            {t('admin.auth.registrationDescription')}
           </p>
         </div>
 
@@ -135,7 +136,7 @@ export default function AuthSettingsPanel() {
           className={`shrink-0 relative w-11 h-6 rounded-full transition-colors ${
             settings?.registrationOpen ? 'bg-primary' : 'bg-muted'
           }`}
-          aria-label="Permitir registo público"
+          aria-label={t('admin.auth.registrationToggle')}
         >
           <span
             className={`absolute top-0.5 w-5 h-5 rounded-full bg-card shadow transition-transform ${
@@ -151,10 +152,10 @@ export default function AuthSettingsPanel() {
         <div>
           <h3 className="font-semibold text-foreground flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-primary-ink" aria-hidden="true" />
-            Início de sessão com Google
+            {t('admin.auth.googleTitle')}
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Guardado encriptado na base de dados. Nunca aparece em texto simples.
+            {t('admin.auth.googleDescription')}
           </p>
         </div>
 
@@ -165,7 +166,7 @@ export default function AuthSettingsPanel() {
               : 'bg-muted text-muted-foreground'
           }`}
         >
-          {settings?.configured ? 'Ativo' : 'Não configurado'}
+          {settings?.configured ? t('admin.auth.statusActive') : t('admin.auth.statusNotConfigured')}
         </span>
       </div>
 
@@ -173,7 +174,7 @@ export default function AuthSettingsPanel() {
           shown here rather than left for the administrator to assemble. */}
       <div className="mt-5 rounded-lg border border-border bg-surface p-3">
         <div className="text-xs text-muted-foreground mb-1.5">
-          URI de redirecionamento autorizado (cola no Google Cloud)
+          {t('admin.auth.redirectLabel')}
         </div>
         <div className="flex items-center gap-2">
           <code className="flex-1 text-xs text-foreground break-all">
@@ -183,7 +184,7 @@ export default function AuthSettingsPanel() {
             type="button"
             onClick={copyRedirect}
             className="shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors"
-            aria-label="Copiar URI de redirecionamento"
+            aria-label={t('admin.auth.copyRedirect')}
           >
             {copied ? (
               <Check className="w-4 h-4 text-success" aria-hidden="true" />
@@ -197,7 +198,7 @@ export default function AuthSettingsPanel() {
       <form onSubmit={handleSave} className="mt-5 space-y-4">
         <div>
           <label htmlFor="google-client-id" className="block text-sm font-medium text-foreground mb-1.5">
-            Client ID
+            {t('admin.auth.clientId')}
           </label>
           <input
             id="google-client-id"
@@ -212,7 +213,7 @@ export default function AuthSettingsPanel() {
 
         <div>
           <label htmlFor="google-client-secret" className="block text-sm font-medium text-foreground mb-1.5">
-            Client Secret
+            {t('admin.auth.clientSecret')}
           </label>
           <input
             id="google-client-secret"
@@ -227,7 +228,8 @@ export default function AuthSettingsPanel() {
           />
           {settings?.googleClientSecretPreview && (
             <p className="mt-1.5 text-xs text-muted-foreground">
-              Guardado: {settings.googleClientSecretPreview}. Deixa em branco para manter.
+              {t('admin.auth.secretStored')}: {settings.googleClientSecretPreview}.{' '}
+              {t('admin.auth.secretKeepBlank')}
             </p>
           )}
         </div>
@@ -237,10 +239,10 @@ export default function AuthSettingsPanel() {
             {saving ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-                A guardar...
+                {t('admin.auth.saving')}
               </>
             ) : (
-              'Guardar'
+              t('admin.auth.save')
             )}
           </button>
 
@@ -251,7 +253,7 @@ export default function AuthSettingsPanel() {
               className="inline-flex items-center gap-1.5 text-sm text-danger hover:underline"
             >
               <Trash2 className="w-4 h-4" aria-hidden="true" />
-              Remover
+              {t('admin.auth.clear')}
             </button>
           )}
         </div>
@@ -259,7 +261,8 @@ export default function AuthSettingsPanel() {
 
       {settings?.updatedAt && (
         <p className="mt-4 text-xs text-muted-foreground">
-          Atualizado em {new Date(settings.updatedAt).toLocaleString('pt-PT')}
+          {t('admin.auth.updatedAt')}{' '}
+          {new Date(settings.updatedAt).toLocaleString(language === 'pt' ? 'pt-PT' : 'en-GB')}
         </p>
       )}
     </div>

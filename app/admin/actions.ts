@@ -7,6 +7,7 @@ import { requireAuth, requireAdmin, isAuthError } from '@/lib/auth-helpers';
 import { Plan } from '@prisma/client';
 import { z } from 'zod';
 import { toClientError, isUniqueConstraintError } from '@/lib/errors';
+import { MIN_PASSWORD_LENGTH } from '@/lib/validations';
 
 /**
  * Admin edits are bounded exactly like an owner's own edits. Without this the
@@ -424,8 +425,8 @@ export async function changeUserPassword(userId: string, newPassword: string) {
     const admin = await requireAdmin();
     if (isAuthError(admin)) return { error: admin.error };
 
-    if (newPassword.length < 8) {
-      return { error: 'A palavra-passe deve ter pelo menos 8 caracteres.' };
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      return { error: 'register.errors.passwordTooShort' };
     }
 
     const user = await prisma.user.findUnique({

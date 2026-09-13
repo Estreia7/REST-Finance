@@ -2,8 +2,11 @@
 
 import { useState } from 'react';
 import { Mail, Phone, MapPin, Send, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useLanguage } from '@/lib/language-context';
+import { translateError } from '@/lib/error-messages';
 
 export default function ContactPage() {
+  const { t, language } = useLanguage();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -12,6 +15,7 @@ export default function ContactPage() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  /** Holds a translation key, resolved at display. See `lib/error-messages.ts`. */
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -19,7 +23,7 @@ export default function ContactPage() {
     setError(null);
     setIsLoading(true);
 
-    // TODO: Implementar envio de email
+    // TODO: send the email for real
     setTimeout(() => {
       setIsLoading(false);
       setIsSubmitted(true);
@@ -34,6 +38,13 @@ export default function ContactPage() {
     });
   };
 
+  const subjectOptions = [
+    { value: 'support',     labelKey: 'contactPage.subjectSupport' },
+    { value: 'sales',       labelKey: 'contactPage.subjectSales' },
+    { value: 'partnership', labelKey: 'contactPage.subjectPartnership' },
+    { value: 'other',       labelKey: 'contactPage.subjectOther' },
+  ];
+
   return (
     <main className="flex-1 min-h-screen pt-16 md:pt-20">
       <div className="container py-12 md:py-20">
@@ -41,22 +52,25 @@ export default function ContactPage() {
           {/* Hero Section */}
           <section className="text-center space-y-6">
             <h1 className="text-4xl md:text-6xl font-bold">
-              Entre em <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Contacto</span>
+              {t('contactPage.heroTitleLead')}{' '}
+              <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                {t('contactPage.heroTitleAccent')}
+              </span>
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Tem alguma questão? Estamos aqui para ajudar. Entre em contacto e responderemos o mais rápido possível.
+              {t('contactPage.heroSubtitle')}
             </p>
           </section>
 
           <div className="grid md:grid-cols-2 gap-12">
             {/* Contact Form */}
             <section className="card p-8 space-y-6">
-              <h2 className="text-2xl font-bold">Envie-nos uma Mensagem</h2>
-              
+              <h2 className="text-2xl font-bold">{t('contactPage.formTitle')}</h2>
+
               {error && (
                 <div className="flex items-center gap-3 p-4 rounded-lg bg-danger/10 border border-danger/30 text-danger">
                   <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                  <p className="text-sm">{error}</p>
+                  <p className="text-sm">{translateError(language, error)}</p>
                 </div>
               )}
 
@@ -66,23 +80,23 @@ export default function ContactPage() {
                     <CheckCircle2 className="w-8 h-8 text-success" />
                   </div>
                   <div className="space-y-2">
-                    <h3 className="text-xl font-bold">Mensagem Enviada!</h3>
+                    <h3 className="text-xl font-bold">{t('contactPage.sentTitle')}</h3>
                     <p className="text-muted-foreground">
-                      Obrigado pelo seu contacto. Responderemos em breve.
+                      {t('contactPage.sentBody')}
                     </p>
                   </div>
                   <button
                     onClick={() => setIsSubmitted(false)}
                     className="text-primary hover:text-accent transition-colors text-sm font-medium"
                   >
-                    Enviar outra mensagem
+                    {t('contactPage.sendAnother')}
                   </button>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="space-y-2">
                     <label htmlFor="name" className="text-sm font-semibold text-foreground">
-                      Nome
+                      {t('contactPage.nameLabel')}
                     </label>
                     <input
                       id="name"
@@ -92,13 +106,13 @@ export default function ContactPage() {
                       onChange={handleChange}
                       required
                       className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                      placeholder="O seu nome"
+                      placeholder={t('contactPage.namePlaceholder')}
                     />
                   </div>
 
                   <div className="space-y-2">
                     <label htmlFor="email" className="text-sm font-semibold text-foreground">
-                      Email
+                      {t('contactPage.emailLabel')}
                     </label>
                     <input
                       id="email"
@@ -108,13 +122,13 @@ export default function ContactPage() {
                       onChange={handleChange}
                       required
                       className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                      placeholder="seu@email.com"
+                      placeholder={t('contactPage.emailPlaceholder')}
                     />
                   </div>
 
                   <div className="space-y-2">
                     <label htmlFor="subject" className="text-sm font-semibold text-foreground">
-                      Assunto
+                      {t('contactPage.subjectLabel')}
                     </label>
                     <select
                       id="subject"
@@ -124,17 +138,16 @@ export default function ContactPage() {
                       required
                       className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                     >
-                      <option value="">Selecione um assunto</option>
-                      <option value="support">Suporte Técnico</option>
-                      <option value="sales">Vendas</option>
-                      <option value="partnership">Parcerias</option>
-                      <option value="other">Outro</option>
+                      <option value="">{t('contactPage.subjectPlaceholder')}</option>
+                      {subjectOptions.map(({ value, labelKey }) => (
+                        <option key={value} value={value}>{t(labelKey)}</option>
+                      ))}
                     </select>
                   </div>
 
                   <div className="space-y-2">
                     <label htmlFor="message" className="text-sm font-semibold text-foreground">
-                      Mensagem
+                      {t('contactPage.messageLabel')}
                     </label>
                     <textarea
                       id="message"
@@ -144,7 +157,7 @@ export default function ContactPage() {
                       required
                       rows={6}
                       className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all resize-none"
-                      placeholder="Como podemos ajudá-lo?"
+                      placeholder={t('contactPage.messagePlaceholder')}
                     />
                   </div>
 
@@ -156,12 +169,12 @@ export default function ContactPage() {
                     {isLoading ? (
                       <>
                         <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin"></div>
-                        <span>A enviar...</span>
+                        <span>{t('contactPage.sending')}</span>
                       </>
                     ) : (
                       <>
                         <Send className="w-5 h-5" />
-                        <span>Enviar Mensagem</span>
+                        <span>{t('contactPage.send')}</span>
                       </>
                     )}
                   </button>
@@ -172,9 +185,9 @@ export default function ContactPage() {
             {/* Contact Information */}
             <section className="space-y-8">
               <div className="card p-8 space-y-6">
-                <h2 className="text-2xl font-bold">Informações de Contacto</h2>
+                <h2 className="text-2xl font-bold">{t('contactPage.infoTitle')}</h2>
                 <p className="text-muted-foreground">
-                  Prefere falar diretamente? Utilize uma das opções abaixo.
+                  {t('contactPage.infoSubtitle')}
                 </p>
               </div>
 
@@ -184,19 +197,19 @@ export default function ContactPage() {
                     <Phone className="w-6 h-6 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-lg mb-2">Telefone</h3>
+                    <h3 className="font-semibold text-lg mb-2">{t('contactPage.phoneTitle')}</h3>
                     <div className="space-y-1 text-muted-foreground">
                       <p>
                         <a href="tel:+1-555-234-5678" className="text-primary hover:text-accent transition-colors">
                           +1 (555) 234-5678
                         </a>
-                        {' '}— Vendas
+                        {' '}— {t('contactPage.phoneSales')}
                       </p>
                       <p>
                         <a href="tel:+1-555-234-5679" className="text-primary hover:text-accent transition-colors">
                           +1 (555) 234-5679
                         </a>
-                        {' '}— Suporte
+                        {' '}— {t('contactPage.phoneSupport')}
                       </p>
                     </div>
                   </div>
@@ -207,19 +220,19 @@ export default function ContactPage() {
                     <Mail className="w-6 h-6 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-lg mb-2">Email</h3>
+                    <h3 className="font-semibold text-lg mb-2">{t('contactPage.emailTitle')}</h3>
                     <div className="space-y-1 text-muted-foreground">
                       <p>
                         <a href="mailto:hello@restfinance.com" className="text-primary hover:text-accent transition-colors break-all">
                           hello@restfinance.com
                         </a>
-                        {' '}— Geral
+                        {' '}— {t('contactPage.emailGeneral')}
                       </p>
                       <p>
                         <a href="mailto:support@restfinance.com" className="text-primary hover:text-accent transition-colors break-all">
                           support@restfinance.com
                         </a>
-                        {' '}— Suporte
+                        {' '}— {t('contactPage.emailSupport')}
                       </p>
                     </div>
                   </div>
@@ -230,7 +243,8 @@ export default function ContactPage() {
                     <MapPin className="w-6 h-6 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-lg mb-2">Escritório</h3>
+                    <h3 className="font-semibold text-lg mb-2">{t('contactPage.officeTitle')}</h3>
+                    {/* A postal address reads the same in both languages. */}
                     <p className="text-muted-foreground leading-relaxed">
                       1247 Market Street<br />
                       Suite 450<br />

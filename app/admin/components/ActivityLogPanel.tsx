@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Loader2, ClipboardList, RefreshCw } from 'lucide-react';
+import { useLanguage } from '@/lib/language-context';
 import { getAuditLogs } from '../actions';
 
 interface LogEntry {
@@ -14,6 +15,7 @@ interface LogEntry {
 }
 
 export default function ActivityLogPanel() {
+  const { t, language } = useLanguage();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -26,7 +28,22 @@ export default function ActivityLogPanel() {
 
   useEffect(() => { load(); }, [load]);
 
-  const fmtDate = (d: Date) => new Date(d).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const fmtDate = (d: Date) =>
+    new Date(d).toLocaleString(language === 'pt' ? 'pt-PT' : 'en-GB', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+
+  /**
+   * Audit actions are stored identifiers such as `admin.cost.delete`. The ones
+   * we know about read as a sentence; anything we do not recognise is shown
+   * verbatim rather than hidden, so a newly added action still appears in the
+   * log instead of vanishing from it.
+   */
+  const actionLabel = (action: string) => {
+    const key = `admin.auditAction.${action.replace(/\./g, '_')}`;
+    const translated = t(key);
+    return translated === key ? action : translated;
+  };
 
   if (loading) {
     return <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
@@ -35,26 +52,31 @@ export default function ActivityLogPanel() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-foreground">Registo de Atividade</h2>
-        <button onClick={load} className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-          <RefreshCw className="w-4 h-4" />
+        <h2 className="text-lg font-bold text-foreground">{t('admin.activity.title')}</h2>
+        <button
+          onClick={load}
+          aria-label={t('admin.activity.refresh')}
+          title={t('admin.activity.refresh')}
+          className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
 
       {logs.length === 0 ? (
         <div className="text-center py-16">
-          <ClipboardList className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">Sem registos de atividade.</p>
+          <ClipboardList className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">{t('admin.activity.empty')}</p>
         </div>
       ) : (
         <div className="card-glass rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border-subtle">
-                <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Data</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Utilizador</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground hidden md:table-cell">Restaurante</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Ação</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">{t('admin.activity.colDate')}</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">{t('admin.activity.colUser')}</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground hidden md:table-cell">{t('admin.activity.colRestaurant')}</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">{t('admin.activity.colAction')}</th>
               </tr>
             </thead>
             <tbody>
@@ -63,7 +85,7 @@ export default function ActivityLogPanel() {
                   <td className="py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">{fmtDate(log.createdAt)}</td>
                   <td className="py-2 px-4 text-xs text-foreground">{log.actor?.name || log.actor?.email || '—'}</td>
                   <td className="py-2 px-4 text-xs text-muted-foreground hidden md:table-cell">{log.restaurant?.name || '—'}</td>
-                  <td className="py-2 px-4 text-xs text-foreground font-medium">{log.action}</td>
+                  <td className="py-2 px-4 text-xs text-foreground font-medium">{actionLabel(log.action)}</td>
                 </tr>
               ))}
             </tbody>

@@ -1,17 +1,23 @@
 'use client';
 
 import { LayoutDashboard, Building2, Users, ClipboardList } from 'lucide-react';
+import { useLanguage } from '@/lib/language-context';
 
 type Tab = 'dashboard' | 'clientes' | 'users' | 'activity' | 'suporte' | 'apresentacao' | 'settings';
 
-const items = [
-  { id: 'dashboard' as Tab, icon: LayoutDashboard, label: 'Dashboard' },
-  { id: 'clientes'  as Tab, icon: Building2,       label: 'Clientes' },
-  { id: 'users'     as Tab, icon: Users,            label: 'Users' },
-  { id: 'activity'  as Tab, icon: ClipboardList,    label: 'Atividade' },
+/**
+ * Module scope cannot call `t()`, so each item carries the key and the label is
+ * resolved at render, once the language is known.
+ */
+const items: Array<{ id: Tab; icon: typeof LayoutDashboard; labelKey: string }> = [
+  { id: 'dashboard', icon: LayoutDashboard, labelKey: 'admin.nav.dashboard' },
+  { id: 'clientes',  icon: Building2,       labelKey: 'admin.nav.clients' },
+  { id: 'users',     icon: Users,           labelKey: 'admin.nav.users' },
+  { id: 'activity',  icon: ClipboardList,   labelKey: 'admin.nav.activity' },
 ];
 
 export default function AdminMobileBottomNav({ activeTab, onTabChange }: { activeTab: Tab; onTabChange: (t: Tab) => void }) {
+  const { t } = useLanguage();
   const activeIndex = items.findIndex(i => i.id === activeTab);
 
   return (
@@ -25,8 +31,9 @@ export default function AdminMobileBottomNav({ activeTab, onTabChange }: { activ
               left: `${(activeIndex / items.length) * 100}%`,
             }}
           />
-          {items.map(({ id, icon: Icon, label }) => {
+          {items.map(({ id, icon: Icon, labelKey }) => {
             const active = activeTab === id;
+            const label = t(labelKey);
             return (
               <button
                 key={id}

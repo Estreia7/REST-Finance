@@ -2,66 +2,87 @@
 
 import Link from 'next/link';
 import { Check, ArrowRight, Zap, Star, Crown } from 'lucide-react';
+import { useLanguage } from '@/lib/language-context';
 
 export default function PlansPage() {
+  const { t } = useLanguage();
+
+  /**
+   * `href` is carried on the plan rather than derived from its name: the name is
+   * translated now, so branching on it would have sent English visitors to the
+   * wrong page.
+   */
   const plans = [
     {
-      name: 'Free Trial',
-      description: 'Perfeito para experimentar todas as funcionalidades',
-      price: 'Grátis',
-      period: '14 dias',
+      id: 'trial',
+      nameKey: 'plansPage.trialName',
+      descriptionKey: 'plansPage.trialDescription',
+      priceKey: 'plansPage.trialPrice',
+      periodKey: 'plansPage.trialPeriod',
       icon: Zap,
-      features: [
-        'Acesso completo a todas as funcionalidades',
-        'Até 1 restaurante',
-        'KPIs em tempo real',
-        'Funciona offline',
-        'Suporte por email',
-        '14 dias de teste grátis',
+      featureKeys: [
+        'plansPage.trialFeature1',
+        'plansPage.trialFeature2',
+        'plansPage.trialFeature3',
+        'plansPage.trialFeature4',
+        'plansPage.trialFeature5',
+        'plansPage.trialFeature6',
       ],
-      cta: 'Começar Teste Grátis',
+      ctaKey: 'plansPage.trialCta',
+      href: '/register',
       popular: false,
       gradient: 'from-muted to-muted/50',
     },
     {
-      name: 'REST Finance Standard',
-      description: 'Ideal para restaurantes individuais',
+      id: 'standard',
+      nameKey: 'plansPage.standardName',
+      descriptionKey: 'plansPage.standardDescription',
       price: '€29',
-      period: 'por mês',
+      periodKey: 'plansPage.standardPeriod',
       icon: Star,
-      features: [
-        'Tudo do Free Trial',
-        'Até 2 restaurantes',
-        'Relatórios avançados',
-        'Exportação de dados',
-        'Suporte prioritário',
-        'Atualizações automáticas',
-        'Backup automático',
+      featureKeys: [
+        'plansPage.standardFeature1',
+        'plansPage.standardFeature2',
+        'plansPage.standardFeature3',
+        'plansPage.standardFeature4',
+        'plansPage.standardFeature5',
+        'plansPage.standardFeature6',
+        'plansPage.standardFeature7',
       ],
-      cta: 'Começar Agora',
+      ctaKey: 'plansPage.standardCta',
+      href: '/contact',
       popular: true,
       gradient: 'from-primary to-accent',
     },
     {
-      name: 'REST Finance Pro',
-      description: 'Para restaurantes que querem o máximo',
+      id: 'pro',
+      nameKey: 'plansPage.proName',
+      descriptionKey: 'plansPage.proDescription',
       price: '€79',
-      period: 'por mês',
+      periodKey: 'plansPage.proPeriod',
       icon: Crown,
-      features: [
-        'Tudo do Standard',
-        'Restaurantes ilimitados',
-        'API de integração',
-        'Análises preditivas',
-        'Suporte 24/7',
-        'Gestor de conta dedicado',
-        'Treinamento personalizado',
-        'Relatórios personalizados',
+      featureKeys: [
+        'plansPage.proFeature1',
+        'plansPage.proFeature2',
+        'plansPage.proFeature3',
+        'plansPage.proFeature4',
+        'plansPage.proFeature5',
+        'plansPage.proFeature6',
+        'plansPage.proFeature7',
+        'plansPage.proFeature8',
       ],
-      cta: 'Contactar Vendas',
+      ctaKey: 'plansPage.proCta',
+      href: '/contact',
       popular: false,
       gradient: 'from-accent to-primary',
     },
+  ];
+
+  const faqs = [
+    { questionKey: 'plansPage.faq1Question', answerKey: 'plansPage.faq1Answer' },
+    { questionKey: 'plansPage.faq2Question', answerKey: 'plansPage.faq2Answer' },
+    { questionKey: 'plansPage.faq3Question', answerKey: 'plansPage.faq3Answer' },
+    { questionKey: 'plansPage.faq4Question', answerKey: 'plansPage.faq4Answer' },
   ];
 
   return (
@@ -71,20 +92,24 @@ export default function PlansPage() {
           {/* Hero Section */}
           <section className="text-center space-y-6">
             <h1 className="text-4xl md:text-6xl font-bold">
-              Escolha o <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Plano</span> Ideal
+              {t('plansPage.heroTitleLead')}{' '}
+              <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                {t('plansPage.heroTitleAccent')}
+              </span>{' '}
+              {t('plansPage.heroTitleTail')}
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Planos flexíveis para restaurantes de todos os tamanhos. Comece grátis e atualize quando precisar.
+              {t('plansPage.heroSubtitle')}
             </p>
           </section>
 
           {/* Plans Grid */}
           <section className="grid md:grid-cols-3 gap-8">
-            {plans.map((plan, index) => {
+            {plans.map((plan) => {
               const Icon = plan.icon;
               return (
                 <div
-                  key={index}
+                  key={plan.id}
                   className={`card p-8 space-y-6 relative ${
                     plan.popular
                       ? 'border-primary/50 border-2 scale-105 md:scale-110'
@@ -94,7 +119,7 @@ export default function PlansPage() {
                   {plan.popular && (
                     <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
                       <span className="px-4 py-1 bg-gradient-to-r from-primary to-accent text-primary-foreground text-sm font-bold rounded-full">
-                        Mais Popular
+                        {t('plansPage.mostPopular')}
                       </span>
                     </div>
                   )}
@@ -104,38 +129,38 @@ export default function PlansPage() {
                       <Icon className="w-7 h-7 text-primary-foreground" />
                     </div>
                     <div>
-                      <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
-                      <p className="text-muted-foreground text-sm">{plan.description}</p>
+                      <h3 className="text-2xl font-bold mb-2">{t(plan.nameKey)}</h3>
+                      <p className="text-muted-foreground text-sm">{t(plan.descriptionKey)}</p>
                     </div>
                   </div>
 
                   <div className="space-y-2">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-4xl font-bold">{plan.price}</span>
-                      {plan.period && (
-                        <span className="text-muted-foreground">/{plan.period}</span>
-                      )}
+                      <span className="text-4xl font-bold">
+                        {plan.priceKey ? t(plan.priceKey) : plan.price}
+                      </span>
+                      <span className="text-muted-foreground">/{t(plan.periodKey)}</span>
                     </div>
                   </div>
 
                   <ul className="space-y-3 flex-1">
-                    {plan.features.map((feature, featureIndex) => (
-                      <li key={featureIndex} className="flex items-start gap-3">
+                    {plan.featureKeys.map((featureKey) => (
+                      <li key={featureKey} className="flex items-start gap-3">
                         <Check className="w-5 h-5 text-success mt-0.5 flex-shrink-0" />
-                        <span className="text-sm text-muted-foreground">{feature}</span>
+                        <span className="text-sm text-muted-foreground">{t(featureKey)}</span>
                       </li>
                     ))}
                   </ul>
 
                   <Link
-                    href={plan.name === 'Free Trial' ? '/register' : '/contact'}
+                    href={plan.href}
                     className={`w-full block text-center py-3 px-6 rounded-lg font-semibold transition-all duration-300 ${
                       plan.popular
                         ? 'cta-button'
                         : 'cta-button-secondary'
                     }`}
                   >
-                    {plan.cta}
+                    {t(plan.ctaKey)}
                     <ArrowRight className="inline-block ml-2 w-4 h-4" />
                   </Link>
                 </div>
@@ -145,50 +170,28 @@ export default function PlansPage() {
 
           {/* FAQ Section */}
           <section className="card p-8 md:p-12 space-y-6">
-            <h2 className="text-3xl font-bold text-center mb-8">Perguntas Frequentes</h2>
+            <h2 className="text-3xl font-bold text-center mb-8">{t('plansPage.faqTitle')}</h2>
             <div className="space-y-6">
-              <div className="space-y-2">
-                <h3 className="text-lg font-semibold">Posso mudar de plano depois?</h3>
-                <p className="text-muted-foreground">
-                  Sim! Pode atualizar ou fazer downgrade do seu plano a qualquer momento. 
-                  As alterações serão aplicadas no próximo ciclo de faturação.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-lg font-semibold">O que acontece após o período de teste?</h3>
-                <p className="text-muted-foreground">
-                  Após os 14 dias de teste grátis, pode escolher um dos nossos planos pagos 
-                  ou cancelar sem compromisso. Não cobramos nada se decidir não continuar.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-lg font-semibold">Os dados são seguros?</h3>
-                <p className="text-muted-foreground">
-                  Absolutamente. Todos os dados são criptografados e armazenados de forma segura. 
-                  Fazemos backups regulares e nunca partilhamos os seus dados com terceiros.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-lg font-semibold">Preciso de cartão de crédito para o teste?</h3>
-                <p className="text-muted-foreground">
-                  Não! O teste de 14 dias é completamente grátis e não requer cartão de crédito. 
-                  Só pedimos os seus dados de pagamento se decidir continuar após o período de teste.
-                </p>
-              </div>
+              {faqs.map(({ questionKey, answerKey }) => (
+                <div key={questionKey} className="space-y-2">
+                  <h3 className="text-lg font-semibold">{t(questionKey)}</h3>
+                  <p className="text-muted-foreground">{t(answerKey)}</p>
+                </div>
+              ))}
             </div>
           </section>
 
           {/* CTA Section */}
           <section className="text-center space-y-6">
-            <h2 className="text-3xl font-bold">Ainda tem dúvidas?</h2>
+            <h2 className="text-3xl font-bold">{t('plansPage.ctaTitle')}</h2>
             <p className="text-lg text-muted-foreground">
-              A nossa equipa está pronta para ajudar. Entre em contacto e responderemos todas as suas questões.
+              {t('plansPage.ctaSubtitle')}
             </p>
             <Link
               href="/contact"
               className="cta-button-secondary inline-flex items-center gap-2"
             >
-              Falar com Vendas
+              {t('plansPage.ctaButton')}
               <ArrowRight className="w-5 h-5" />
             </Link>
           </section>

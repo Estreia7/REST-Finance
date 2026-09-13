@@ -59,11 +59,21 @@ export const invoiceItemSchema = z.object({
 
 export type InvoiceItemInput = z.infer<typeof invoiceItemSchema>;
 
+/**
+ * Shortest password we accept, everywhere.
+ *
+ * One constant because the forms and the server had drifted apart: the
+ * client let a six-character password through and the server rejected it at
+ * eight, so the person got an error for something the form had just told
+ * them was fine.
+ */
+export const MIN_PASSWORD_LENGTH = 8;
+
 // === Registration ===
 export const registerSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').max(100),
   email: z.string().email('Email inválido'),
-  password: z.string().min(8, 'Palavra-passe deve ter pelo menos 8 caracteres').max(128),
+  password: z.string().min(MIN_PASSWORD_LENGTH, 'Palavra-passe deve ter pelo menos 8 caracteres').max(128),
   restaurantName: z.string().min(2, 'Nome do restaurante deve ter pelo menos 2 caracteres').max(200),
 });
 

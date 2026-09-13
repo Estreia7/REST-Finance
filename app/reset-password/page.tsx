@@ -4,10 +4,14 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Eye, EyeOff, ArrowLeft, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { useLanguage } from '@/lib/language-context';
+import { translateError } from '@/lib/error-messages';
 import { resetPasswordWithToken } from '@/app/forgot-password/actions';
+import { MIN_PASSWORD_LENGTH } from '@/lib/validations';
 
 function ResetPasswordForm() {
   const router = useRouter();
+  const { t, language } = useLanguage();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -29,12 +33,13 @@ function ResetPasswordForm() {
     e.preventDefault();
     setError('');
 
+    // The same two rules the sign-up form states, so they read identically.
     if (password !== confirmPassword) {
-      setError('As palavras-passe não coincidem.');
+      setError(t('register.errors.passwordsDontMatch'));
       return;
     }
-    if (password.length < 6) {
-      setError('A palavra-passe deve ter pelo menos 6 caracteres.');
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(t('register.errors.passwordTooShort'));
       return;
     }
 
@@ -44,7 +49,7 @@ function ResetPasswordForm() {
       const result = await resetPasswordWithToken(token, password);
 
       if (result.error) {
-        setError(result.error);
+        setError(translateError(language, result.error));
         return;
       }
 
@@ -54,7 +59,7 @@ function ResetPasswordForm() {
         router.refresh();
       }, 2000);
     } catch {
-      setError('Erro inesperado. Tente novamente.');
+      setError(t('resetPassword.unexpectedError'));
     } finally {
       setIsLoading(false);
     }
@@ -74,12 +79,12 @@ function ResetPasswordForm() {
             </span>
           </Link>
           <h1 className="text-3xl md:text-4xl font-bold">
-            {success ? 'Palavra-passe atualizada!' : 'Nova palavra-passe'}
+            {success ? t('resetPassword.titleSuccess') : t('resetPassword.title')}
           </h1>
           <p className="text-muted-foreground">
             {success
-              ? 'A redirecionar para o dashboard...'
-              : 'Escolhe uma nova palavra-passe para a tua conta'}
+              ? t('resetPassword.subtitleSuccess')
+              : t('resetPassword.subtitle')}
           </p>
         </div>
 
@@ -89,7 +94,7 @@ function ResetPasswordForm() {
               <CheckCircle2 className="w-8 h-8 text-green-400" />
             </div>
             <p className="text-muted-foreground">
-              Palavra-passe atualizada com sucesso.
+              {t('resetPassword.successBody')}
             </p>
             <div className="w-full bg-border rounded-full h-1 overflow-hidden">
               <div className="h-full bg-primary rounded-full" style={{ width: '100%', transition: 'width 2s ease' }} />
@@ -98,7 +103,7 @@ function ResetPasswordForm() {
         ) : !sessionReady ? (
           <div className="card p-8 text-center space-y-4">
             <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
-            <p className="text-muted-foreground text-sm">A verificar o link de recuperação...</p>
+            <p className="text-muted-foreground text-sm">{t('resetPassword.verifyingLink')}</p>
           </div>
         ) : (
           <div className="card p-8 space-y-6">
@@ -111,14 +116,14 @@ function ResetPasswordForm() {
               )}
 
               <div className="space-y-2">
-                <label htmlFor="new-password" className="text-sm font-semibold text-foreground">Nova palavra-passe</label>
+                <label htmlFor="new-password" className="text-sm font-semibold text-foreground">{t('resetPassword.newPasswordLabel')}</label>
                 <div className="relative">
                   <input
                     id="new-password"
                     type={showPass ? 'text' : 'password'}
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder={t('resetPassword.newPasswordPlaceholder')}
                     required
                     autoComplete="new-password"
                     className="input-field pr-11"
@@ -127,7 +132,7 @@ function ResetPasswordForm() {
                     type="button"
                     onClick={() => setShowPass(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label={showPass ? 'Ocultar palavra-passe' : 'Mostrar palavra-passe'}
+                    aria-label={showPass ? t('resetPassword.hidePassword') : t('resetPassword.showPassword')}
                   >
                     {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -135,14 +140,14 @@ function ResetPasswordForm() {
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="confirm-password" className="text-sm font-semibold text-foreground">Confirmar palavra-passe</label>
+                <label htmlFor="confirm-password" className="text-sm font-semibold text-foreground">{t('resetPassword.confirmPasswordLabel')}</label>
                 <div className="relative">
                   <input
                     id="confirm-password"
                     type={showConfirm ? 'text' : 'password'}
                     value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)}
-                    placeholder="Repete a palavra-passe"
+                    placeholder={t('resetPassword.confirmPasswordPlaceholder')}
                     required
                     autoComplete="new-password"
                     className="input-field pr-11"
@@ -151,7 +156,7 @@ function ResetPasswordForm() {
                     type="button"
                     onClick={() => setShowConfirm(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label={showConfirm ? 'Ocultar confirmação de palavra-passe' : 'Mostrar confirmação de palavra-passe'}
+                    aria-label={showConfirm ? t('resetPassword.hideConfirmPassword') : t('resetPassword.showConfirmPassword')}
                   >
                     {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -160,9 +165,9 @@ function ResetPasswordForm() {
 
               <button type="submit" disabled={isLoading} className="w-full cta-button flex items-center justify-center gap-2">
                 {isLoading ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" />A atualizar...</>
+                  <><Loader2 className="w-4 h-4 animate-spin" />{t('resetPassword.submitting')}</>
                 ) : (
-                  'Guardar nova palavra-passe'
+                  t('resetPassword.submit')
                 )}
               </button>
             </form>
@@ -173,7 +178,7 @@ function ResetPasswordForm() {
                 className="flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
-                <span>Voltar para o login</span>
+                <span>{t('resetPassword.backToLogin')}</span>
               </Link>
             </div>
           </div>
@@ -184,7 +189,7 @@ function ResetPasswordForm() {
             href="/"
             className="text-sm text-muted-foreground hover:text-primary transition-colors"
           >
-            ← Voltar para a página inicial
+            {t('resetPassword.backHome')}
           </Link>
         </div>
       </div>

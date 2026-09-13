@@ -64,7 +64,13 @@ export const CHANGELOG: Release[] = [
         kind: 'new',
         title: 'A aplicação fala inglês, e lembra-se da sua escolha',
         detail:
-          'Até agora só a página inicial e algumas partes estavam traduzidas; o resto aparecia sempre em português. Agora tudo funciona nas duas línguas — horários, ementas, IVA, conformidade, relatórios e mensagens de erro. A escolha fica guardada na sua conta, por isso mantém-se ao entrar noutro telemóvel ou computador, e deixa de haver aquele instante em que a página aparece na língua errada. A página inicial continua em português para quem chega de novo, e qualquer visitante pode trocar.',
+          'Até agora só a página inicial e algumas partes estavam traduzidas; o resto aparecia sempre em português. Agora funciona tudo nas duas línguas — horários, ementas, IVA, conformidade, relatórios, planos, contactos, recuperação de palavra-passe e mensagens de erro. A escolha fica guardada na sua conta, por isso mantém-se ao entrar noutro telemóvel ou computador, e deixa de haver aquele instante em que a página aparece na língua errada. A página inicial continua em português para quem chega de novo, e qualquer visitante pode trocar.',
+      },
+      {
+        kind: 'fix',
+        title: 'A palavra-passe já pede o mesmo em todo o lado',
+        detail:
+          'Ao criar ou alterar a palavra-passe, o formulário aceitava seis caracteres mas depois era recusada por serem precisos oito — sem explicação clara. Passa a pedir oito desde o início, em todos os ecrãs.',
       },
       {
         kind: 'improvement',

@@ -8,6 +8,7 @@ import { loginWithPassword } from '@/app/login/actions';
 import { registerUser } from '@/app/register/actions';
 import { useLanguage } from '@/lib/language-context';
 import { markJustSignedIn } from '@/lib/welcome-signal';
+import { MIN_PASSWORD_LENGTH } from '@/lib/validations';
 
 type AuthTab = 'login' | 'register';
 
@@ -189,7 +190,7 @@ function RegisterForm({ onSwitchTab }: { onSwitchTab: () => void }) {
       setError('As palavras-passe não coincidem.');
       return;
     }
-    if (form.password.length < 6) {
+    if (form.password.length < MIN_PASSWORD_LENGTH) {
       setError('A palavra-passe deve ter pelo menos 6 caracteres.');
       return;
     }

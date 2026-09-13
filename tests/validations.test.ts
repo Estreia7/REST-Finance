@@ -193,3 +193,35 @@ describe('formatZodError', () => {
     }
   });
 });
+
+describe('password minimum', () => {
+  it('is one number, used everywhere', async () => {
+    // The forms once validated at six while the server rejected at eight, so
+    // a password the form had just accepted came back as an error. This fails
+    // if any client-side check goes back to hardcoding its own limit.
+    const { readFileSync, readdirSync, statSync } = await import('node:fs');
+    const { join } = await import('node:path');
+
+    const walk = (dir: string, out: string[] = []): string[] => {
+      for (const entry of readdirSync(dir)) {
+        if (entry === 'node_modules' || entry.startsWith('.')) continue;
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) walk(full, out);
+        else if (/\.(tsx|ts)$/.test(entry)) out.push(full);
+      }
+      return out;
+    };
+
+    const offenders = walk('app')
+      .filter((f) => {
+        const src = readFileSync(f, 'utf8');
+        return /(?:password|Password|newPw)\.length\s*<\s*\d/.test(src);
+      })
+      .map((f) => f.replace(/\\/g, '/'));
+
+    expect(
+      offenders,
+      `Hardcoded password length. Use MIN_PASSWORD_LENGTH:\n${offenders.join('\n')}`,
+    ).toEqual([]);
+  });
+});

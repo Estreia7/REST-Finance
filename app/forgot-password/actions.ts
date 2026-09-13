@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { toClientError } from '@/lib/errors';
+import { MIN_PASSWORD_LENGTH } from '@/lib/validations';
 
 /**
  * Starts a password reset.
@@ -46,8 +47,8 @@ export async function resetPasswordWithToken(token: string, newPassword: string)
   const bcrypt = await import('bcryptjs');
 
   try {
-    if (newPassword.length < 8) {
-      return { error: 'A palavra-passe deve ter pelo menos 8 caracteres.' };
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      return { error: 'register.errors.passwordTooShort' };
     }
 
     const record = await prisma.verificationToken.findUnique({ where: { token } });

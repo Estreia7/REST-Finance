@@ -113,10 +113,15 @@ This project is a a app for the finance of restaurant owner's to have control in
 
 ## Both languages, always — no new hardcoded strings
 
-The app ships in Portuguese and English. Every string a user can read goes
-through the dictionary, in both languages, in the same commit as the feature.
-This is not a translation pass to do later: doing it later is how the dashboard
-ended up with ~200 Portuguese strings baked into the JSX.
+The app ships in Portuguese and English — **all of it**: the dashboard, the
+admin console, the public pages, the sign-in and password flows. Every string a
+user can read goes through the dictionary, in both languages, in the same commit
+as the feature.
+
+This is not a translation pass to do later. Doing it later is how the dashboard
+ended up with ~200 Portuguese strings baked into the JSX, and how the admin
+console stayed Portuguese-only for months after the dictionary was complete.
+"It is only internal" is not an exemption: internal screens get demonstrated.
 
 **The rule**
 
@@ -126,6 +131,11 @@ ended up with ~200 Portuguese strings baked into the JSX.
    added together. `tests/translations-parity.test.ts` fails the build if one
    side is missing, empty, or the English value still carries Portuguese
    accents.
+   `tests/no-hardcoded-strings.test.ts` catches the other half: Portuguese
+   written straight into the markup, which a balanced dictionary says nothing
+   about. If it flags a file, move the text into the dictionary — do not add
+   the file to its exemption list unless the Portuguese genuinely belongs in
+   the source (legal text, tax terms, the dictionary itself), and say why.
 3. This includes the things that are easy to forget: `toast.success` /
    `toast.error` messages, `aria-label`s, `placeholder`s, button labels, empty
    states, confirm dialogs, and date or number formatting that differs by

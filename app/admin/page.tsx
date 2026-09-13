@@ -6,10 +6,12 @@ import { signOut } from 'next-auth/react';
 import { getClientStats, getClients, getMonthlyRevenue, getCurrentUser, bulkUpdateRestaurants } from './actions';
 import { getAllTickets } from '@/app/dashboard/support-actions';
 import { useLanguage } from '@/lib/language-context';
+import type { Language } from '@/lib/translations';
 import { greetingName } from '@/lib/welcome-quotes';
 import { consumeJustSignedIn } from '@/lib/welcome-signal';
 import WelcomeSplash from '@/app/components/WelcomeSplash';
 import DashboardLoading from '@/app/components/DashboardLoading';
+import LanguageSelector from '@/app/components/LanguageSelector';
 import {
   LayoutDashboard, Users, LogOut, Menu, X,
   Building2, TrendingUp, TrendingDown, CreditCard,
@@ -36,7 +38,15 @@ import { formatMoney } from '@/lib/format';
 // ─── Types ──────────────────────────────────────────────────────────────────
 type Tab = 'dashboard' | 'clientes' | 'users' | 'activity' | 'suporte' | 'apresentacao' | 'settings';
 
-const MONTH_NAMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+/**
+ * Chart axis labels, per language. Module scope cannot call `t()`, and twelve
+ * month abbreviations are not worth twenty-four dictionary keys, so they live
+ * here and are picked by the active language at render.
+ */
+const MONTH_NAMES: Record<Language, string[]> = {
+  pt: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
+  en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+};
 
 interface ClientRestaurant {
   id: string;
@@ -57,15 +67,15 @@ function calcMRR(monthly: number, yearly: number) {
 }
 
 function PlanBadge({ plan }: { plan: Plan }) {
-  const map: Record<Plan, { label: string; className: string }> = {
-    TRIAL:   { label: 'Trial',   className: 'bg-warning/10 text-warning border-warning/20' },
-    MONTHLY: { label: 'Mensal',  className: 'bg-info/10 text-info border-info/20' },
-    YEARLY:  { label: 'Anual',   className: 'bg-success/10 text-success border-success/20' },
+  const { t } = useLanguage();
+  const classNames: Record<Plan, string> = {
+    TRIAL:   'bg-warning/10 text-warning border-warning/20',
+    MONTHLY: 'bg-info/10 text-info border-info/20',
+    YEARLY:  'bg-success/10 text-success border-success/20',
   };
-  const { label, className } = map[plan];
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border ${className}`}>
-      {label}
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border ${classNames[plan]}`}>
+      {t(`admin.plan.${plan}`)}
     </span>
   );
 }
@@ -84,7 +94,7 @@ function ChartTooltip({ active, payload, label }: any) {
 // ─── Page ────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const router = useRouter();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const [isLoading, setIsLoading]     = useState(true);
   const [activeTab, setActiveTab]     = useState<Tab>('dashboard');
@@ -116,12 +126,13 @@ export default function AdminPage() {
   const loadChartData = useCallback(async (year: number) => {
     const result = await getMonthlyRevenue(year);
     if (result.success && result.data) {
+      const months = MONTH_NAMES[language];
       const formatted = result.data
         .sort((a, b) => a.month - b.month)
-        .map((d) => ({ month: MONTH_NAMES[d.month], revenue: d.revenue }));
+        .map((d) => ({ month: months[d.month], revenue: d.revenue }));
       setChartData(formatted);
     }
-  }, []);
+  }, [language]);
 
   const loadData = useCallback(async () => {
     const [statsResult, clientsResult, userResult, ticketsResult] = await Promise.all([
@@ -168,6 +179,8 @@ export default function AdminPage() {
   };
 
   // ── Derived metrics ──────────────────────────────────────────────────────
+  /** Thousands separators and dates follow the language being read. */
+  const numberLocale = language === 'pt' ? 'pt-PT' : 'en-GB';
   const mrr = calcMRR(stats.monthly, stats.yearly);
   const arr = mrr * 12;
   const conversionRate = stats.total > 0
@@ -222,17 +235,18 @@ export default function AdminPage() {
   const navItems: Array<{
     id: Tab;
     icon: typeof LayoutDashboard;
-    label: string;
+    /** A dictionary key, resolved below — this array is built before render. */
+    labelKey: string;
     /** Shown only when above zero. */
     badge?: number;
   }> = [
-    { id: 'dashboard' as Tab, icon: LayoutDashboard,  label: 'Dashboard' },
-    { id: 'clientes'  as Tab, icon: Building2,        label: 'Clientes' },
-    { id: 'users'     as Tab, icon: Users,             label: 'Utilizadores' },
-    { id: 'activity'  as Tab, icon: ClipboardList,     label: 'Atividade' },
-    { id: 'suporte'   as Tab, icon: LifeBuoy,          label: 'Suporte', badge: openTickets },
-    { id: 'apresentacao' as Tab, icon: Presentation,   label: 'Apresentação' },
-    { id: 'settings'  as Tab, icon: Settings,          label: 'Definições' },
+    { id: 'dashboard',    icon: LayoutDashboard, labelKey: 'admin.nav.dashboard' },
+    { id: 'clientes',     icon: Building2,       labelKey: 'admin.nav.clients' },
+    { id: 'users',        icon: Users,           labelKey: 'admin.nav.users' },
+    { id: 'activity',     icon: ClipboardList,   labelKey: 'admin.nav.activity' },
+    { id: 'suporte',      icon: LifeBuoy,        labelKey: 'admin.nav.support', badge: openTickets },
+    { id: 'apresentacao', icon: Presentation,    labelKey: 'admin.nav.presentation' },
+    { id: 'settings',     icon: Settings,        labelKey: 'admin.nav.settings' },
   ];
 
   // ── Welcome ──────────────────────────────────────────────────────────────
@@ -279,36 +293,40 @@ export default function AdminPage() {
             <div>
               <span className="font-bold text-sm text-foreground">REST Finance</span>
               <div className="flex items-center gap-1">
-                <Shield className="w-2.5 h-2.5 text-primary" />
-                <span className="text-[10px] text-primary font-medium">Admin</span>
+                <Shield className="w-2.5 h-2.5 text-primary" aria-hidden="true" />
+                <span className="text-[10px] text-primary font-medium">{t('admin.nav.roleLabel')}</span>
               </div>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
+              aria-label={t('admin.nav.closeSidebar')}
               className="md:hidden ml-auto p-1 rounded-lg text-muted-foreground hover:text-foreground"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
 
           {/* Nav */}
           <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-            <p className="section-label px-2 pt-2 pb-1">Plataforma</p>
-            {navItems.map(({ id, icon: Icon, label, badge }) => (
+            <p className="section-label px-2 pt-2 pb-1">{t('admin.nav.section')}</p>
+            {navItems.map(({ id, icon: Icon, labelKey, badge }) => (
               <button
                 key={id}
                 onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
                 className={`nav-item w-full ${activeTab === id ? 'active' : ''}`}
               >
-                <Icon className="w-4 h-4" />
-                <span>{label}</span>
+                <Icon className="w-4 h-4" aria-hidden="true" />
+                <span>{t(labelKey)}</span>
                 {badge !== undefined && badge > 0 && (
-                  <span className="ml-auto text-[10px] font-bold text-warning bg-warning/10 px-1.5 py-0.5 rounded-full tabular-nums">
+                  <span
+                    className="ml-auto text-[10px] font-bold text-warning bg-warning/10 px-1.5 py-0.5 rounded-full tabular-nums"
+                    aria-label={`${badge} ${t('admin.nav.badgeLabel')}`}
+                  >
                     {badge}
                   </span>
                 )}
                 {activeTab === id && (
-                  <ChevronRight className={`w-3 h-3 opacity-50 ${badge !== undefined && badge > 0 ? 'ml-1' : 'ml-auto'}`} />
+                  <ChevronRight className={`w-3 h-3 opacity-50 ${badge !== undefined && badge > 0 ? 'ml-1' : 'ml-auto'}`} aria-hidden="true" />
                 )}
               </button>
             ))}
@@ -323,7 +341,8 @@ export default function AdminPage() {
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-foreground truncate">{currentUser?.name ?? 'Admin'}</p>
+                {/* The admin's own name, falling back to a generic label. */}
+                <p className="text-xs font-medium text-foreground truncate">{currentUser?.name ?? t('admin.nav.fallbackName')}</p>
                 <p className="text-[10px] text-muted-foreground truncate">{currentUser?.email}</p>
               </div>
             </div>
@@ -331,8 +350,8 @@ export default function AdminPage() {
               onClick={handleLogout}
               className="nav-item w-full mt-1 text-muted-foreground hover:text-danger"
             >
-              <LogOut className="w-4 h-4" />
-              <span>Terminar sessão</span>
+              <LogOut className="w-4 h-4" aria-hidden="true" />
+              <span>{t('admin.nav.signOut')}</span>
             </button>
           </div>
         </aside>
@@ -344,32 +363,52 @@ export default function AdminPage() {
         <header className="sticky top-0 z-20 h-14 flex items-center gap-3 px-4 md:px-6 bg-background/80 backdrop-blur-xl border-b border-border-subtle">
           <button
             onClick={() => setSidebarOpen(true)}
+            aria-label={t('admin.nav.openSidebar')}
             className="md:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="w-5 h-5" aria-hidden="true" />
           </button>
           <div>
             <h1 className="text-sm font-semibold text-foreground">
-              {{ dashboard: 'Visão Geral', clientes: 'Clientes', users: 'Utilizadores', activity: 'Atividade', suporte: 'Suporte', apresentacao: 'Apresentação', settings: 'Definições' }[activeTab]}
+              {{
+                dashboard: t('admin.heading.dashboard'),
+                clientes: t('admin.heading.clients'),
+                users: t('admin.heading.users'),
+                activity: t('admin.heading.activity'),
+                suporte: t('admin.heading.support'),
+                apresentacao: t('admin.heading.presentation'),
+                settings: t('admin.heading.settings'),
+              }[activeTab]}
             </h1>
             <p className="text-xs text-muted-foreground hidden md:block">
-              {{ dashboard: 'Métricas da plataforma', clientes: `${clients.length} restaurantes registados`, users: 'Gestão de utilizadores', activity: 'Registo de ações', suporte: 'Pedidos dos clientes', apresentacao: 'Demonstração para clientes', settings: 'Configuração da plataforma' }[activeTab]}
+              {{
+                dashboard: t('admin.heading.dashboardSub'),
+                clientes: `${clients.length} ${t('admin.heading.clientsSub')}`,
+                users: t('admin.heading.usersSub'),
+                activity: t('admin.heading.activitySub'),
+                suporte: t('admin.heading.supportSub'),
+                apresentacao: t('admin.heading.presentationSub'),
+                settings: t('admin.heading.settingsSub'),
+              }[activeTab]}
             </p>
           </div>
 
-          {activeTab === 'dashboard' && (
-            <div className="ml-auto">
+          {/* Pushed right together, so neither fights the other for the edge. */}
+          <div className="ml-auto flex items-center gap-2">
+            {activeTab === 'dashboard' && (
               <select
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                aria-label={t('admin.heading.yearLabel')}
                 className="input-field py-1.5 text-xs w-24"
               >
                 {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>
-            </div>
-          )}
+            )}
+            <LanguageSelector />
+          </div>
         </header>
 
         <main className="flex-1 p-4 md:p-6 space-y-6">
@@ -387,16 +426,16 @@ export default function AdminPage() {
                       <DollarSign className="w-4 h-4 text-primary" />
                     </div>
                     <span className="flex items-center gap-1 text-xs text-success font-medium bg-success/10 px-2 py-0.5 rounded-full">
-                      <ArrowUpRight className="w-3 h-3" />
-                      MRR
+                      <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+                      {t('admin.kpi.mrrBadge')}
                     </span>
                   </div>
                   <div>
-                    <p className="text-2xl font-black tabular-nums text-foreground">€{mrr.toLocaleString('pt-PT')}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Receita mensal recorrente</p>
+                    <p className="text-2xl font-black tabular-nums text-foreground">€{mrr.toLocaleString(numberLocale)}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{t('admin.kpi.mrrCaption')}</p>
                   </div>
                   <div className="pt-1 border-t border-border-subtle">
-                    <p className="text-xs text-muted-foreground">ARR estimado: <span className="text-foreground font-medium">€{arr.toLocaleString('pt-PT')}</span></p>
+                    <p className="text-xs text-muted-foreground">{t('admin.kpi.arrEstimate')}: <span className="text-foreground font-medium">€{arr.toLocaleString(numberLocale)}</span></p>
                   </div>
                 </div>
 
@@ -404,18 +443,18 @@ export default function AdminPage() {
                 <div className="card-glass p-5 rounded-2xl space-y-3 animate-fade-up-2">
                   <div className="flex items-start justify-between">
                     <div className="w-9 h-9 rounded-xl bg-success/10 flex items-center justify-center">
-                      <Building2 className="w-4 h-4 text-success" />
+                      <Building2 className="w-4 h-4 text-success" aria-hidden="true" />
                     </div>
-                    <span className="text-xs text-muted-foreground font-medium bg-muted px-2 py-0.5 rounded-full">Total</span>
+                    <span className="text-xs text-muted-foreground font-medium bg-muted px-2 py-0.5 rounded-full">{t('admin.kpi.totalBadge')}</span>
                   </div>
                   <div>
                     <p className="text-2xl font-black tabular-nums text-foreground">{stats.total}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Restaurantes registados</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{t('admin.kpi.totalCaption')}</p>
                   </div>
                   <div className="pt-1 border-t border-border-subtle flex gap-3 text-xs">
-                    <span className="text-warning">{stats.trial} trial</span>
-                    <span className="text-muted-foreground">·</span>
-                    <span className="text-success">{paidCount} pagantes</span>
+                    <span className="text-warning">{stats.trial} {t('admin.kpi.trialSuffix')}</span>
+                    <span className="text-muted-foreground" aria-hidden="true">·</span>
+                    <span className="text-success">{paidCount} {t('admin.kpi.payingSuffix')}</span>
                   </div>
                 </div>
 
@@ -423,13 +462,13 @@ export default function AdminPage() {
                 <div className="card-glass p-5 rounded-2xl space-y-3 animate-fade-up-3">
                   <div className="flex items-start justify-between">
                     <div className="w-9 h-9 rounded-xl bg-info/10 flex items-center justify-center">
-                      <TrendingUp className="w-4 h-4 text-info" />
+                      <TrendingUp className="w-4 h-4 text-info" aria-hidden="true" />
                     </div>
-                    <span className="text-xs text-muted-foreground font-medium bg-muted px-2 py-0.5 rounded-full">Conversão</span>
+                    <span className="text-xs text-muted-foreground font-medium bg-muted px-2 py-0.5 rounded-full">{t('admin.kpi.conversionBadge')}</span>
                   </div>
                   <div>
                     <p className="text-2xl font-black tabular-nums text-foreground">{conversionRate}%</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Trial → pago</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{t('admin.kpi.conversionCaption')}</p>
                   </div>
                   <div className="w-full bg-muted rounded-full h-1.5">
                     <div
@@ -443,18 +482,18 @@ export default function AdminPage() {
                 <div className="card-glass p-5 rounded-2xl space-y-3 animate-fade-up-4">
                   <div className="flex items-start justify-between">
                     <div className="w-9 h-9 rounded-xl bg-warning/10 flex items-center justify-center">
-                      <CreditCard className="w-4 h-4 text-warning" />
+                      <CreditCard className="w-4 h-4 text-warning" aria-hidden="true" />
                     </div>
-                    <span className="text-xs text-muted-foreground font-medium bg-muted px-2 py-0.5 rounded-full">Planos</span>
+                    <span className="text-xs text-muted-foreground font-medium bg-muted px-2 py-0.5 rounded-full">{t('admin.kpi.plansBadge')}</span>
                   </div>
                   <div>
                     <p className="text-2xl font-black tabular-nums text-foreground">{paidCount}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Subscritores activos</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{t('admin.kpi.plansCaption')}</p>
                   </div>
                   <div className="pt-1 border-t border-border-subtle flex gap-3 text-xs">
-                    <span className="text-info">{stats.monthly} mensal</span>
-                    <span className="text-muted-foreground">·</span>
-                    <span className="text-success">{stats.yearly} anual</span>
+                    <span className="text-info">{stats.monthly} {t('admin.kpi.monthlySuffix')}</span>
+                    <span className="text-muted-foreground" aria-hidden="true">·</span>
+                    <span className="text-success">{stats.yearly} {t('admin.kpi.yearlySuffix')}</span>
                   </div>
                 </div>
 
@@ -464,12 +503,12 @@ export default function AdminPage() {
               <div className="card-glass rounded-2xl p-5 md:p-6">
                 <div className="flex items-start justify-between mb-5">
                   <div>
-                    <h2 className="text-base font-bold text-foreground">Receita da Plataforma</h2>
-                    <p className="text-xs text-muted-foreground mt-0.5">Receita estimada por mês · {selectedYear}</p>
+                    <h2 className="text-base font-bold text-foreground">{t('admin.chart.title')}</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">{t('admin.chart.subtitle')} · {selectedYear}</p>
                   </div>
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-lg">
-                    <Activity className="w-3 h-3" />
-                    <span>MRR estimado</span>
+                    <Activity className="w-3 h-3" aria-hidden="true" />
+                    <span>{t('admin.chart.badge')}</span>
                   </div>
                 </div>
 
@@ -499,7 +538,7 @@ export default function AdminPage() {
                   </ResponsiveContainer>
                 ) : (
                   <div className="h-60 flex items-center justify-center text-sm text-muted-foreground">
-                    Sem dados para {selectedYear}
+                    {t('admin.chart.empty')} {selectedYear}
                   </div>
                 )}
               </div>
@@ -508,28 +547,28 @@ export default function AdminPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="card-glass rounded-xl p-4 flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center">
-                    <BarChart2 className="w-4 h-4 text-warning" />
+                    <BarChart2 className="w-4 h-4 text-warning" aria-hidden="true" />
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Trials activos</p>
+                    <p className="text-xs text-muted-foreground">{t('admin.kpi.activeTrials')}</p>
                     <p className="text-lg font-black text-foreground">{stats.trial}</p>
                   </div>
                 </div>
                 <div className="card-glass rounded-xl p-4 flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-info/10 flex items-center justify-center">
-                    <CreditCard className="w-4 h-4 text-info" />
+                    <CreditCard className="w-4 h-4 text-info" aria-hidden="true" />
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Plano mensal</p>
+                    <p className="text-xs text-muted-foreground">{t('admin.kpi.monthlyPlan')}</p>
                     <p className="text-lg font-black text-foreground">{stats.monthly} <span className="text-xs text-muted-foreground font-normal">× €29</span></p>
                   </div>
                 </div>
                 <div className="card-glass rounded-xl p-4 flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
-                    <TrendingUp className="w-4 h-4 text-success" />
+                    <TrendingUp className="w-4 h-4 text-success" aria-hidden="true" />
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Plano anual</p>
+                    <p className="text-xs text-muted-foreground">{t('admin.kpi.yearlyPlan')}</p>
                     <p className="text-lg font-black text-foreground">{stats.yearly} <span className="text-xs text-muted-foreground font-normal">× €290</span></p>
                   </div>
                 </div>
@@ -549,10 +588,11 @@ export default function AdminPage() {
                 {/* Filters */}
                 <div className="flex flex-col sm:flex-row gap-3">
                   <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
                     <input
                       type="text"
-                      placeholder="Pesquisar restaurante, email..."
+                      placeholder={t('admin.clientList.searchPlaceholder')}
+                      aria-label={t('admin.clientList.searchPlaceholder')}
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       className="input-field pl-9 w-full"
@@ -560,7 +600,7 @@ export default function AdminPage() {
                   </div>
                   <div className="flex gap-1.5 shrink-0">
                     {(['all', 'TRIAL', 'MONTHLY', 'YEARLY'] as const).map((f) => {
-                      const labels: Record<string, string> = { all: 'Todos', TRIAL: 'Trial', MONTHLY: 'Mensal', YEARLY: 'Anual' };
+                      const label = f === 'all' ? t('admin.clientList.filterAll') : t(`admin.plan.${f}`);
                       return (
                         <button
                           key={f}
@@ -571,7 +611,7 @@ export default function AdminPage() {
                               : 'bg-muted text-muted-foreground hover:bg-muted hover:text-foreground'
                           }`}
                         >
-                          {labels[f]}
+                          {label}
                         </button>
                       );
                     })}
@@ -581,18 +621,23 @@ export default function AdminPage() {
                 {/* Bulk actions */}
                 {selectedIds.size > 0 && (
                   <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/20">
-                    <span className="text-xs font-medium text-foreground">{selectedIds.size} selecionado{selectedIds.size > 1 ? 's' : ''}</span>
-                    <select value={bulkAction} onChange={e => setBulkAction(e.target.value)} className="input-field !py-1.5 !text-xs w-auto">
-                      <option value="">Ação em massa...</option>
-                      <option value="TRIAL">Mudar para Trial</option>
-                      <option value="MONTHLY">Mudar para Mensal</option>
-                      <option value="YEARLY">Mudar para Anual</option>
-                      <option value="EXTEND_TRIAL_30">Estender trial +30 dias</option>
+                    <span className="text-xs font-medium text-foreground">
+                      {selectedIds.size}{' '}
+                      {selectedIds.size > 1
+                        ? t('admin.clientList.selectedMany')
+                        : t('admin.clientList.selectedOne')}
+                    </span>
+                    <select value={bulkAction} onChange={e => setBulkAction(e.target.value)} aria-label={t('admin.clientList.bulkPlaceholder')} className="input-field !py-1.5 !text-xs w-auto">
+                      <option value="">{t('admin.clientList.bulkPlaceholder')}</option>
+                      <option value="TRIAL">{t('admin.clientList.bulkToTrial')}</option>
+                      <option value="MONTHLY">{t('admin.clientList.bulkToMonthly')}</option>
+                      <option value="YEARLY">{t('admin.clientList.bulkToYearly')}</option>
+                      <option value="EXTEND_TRIAL_30">{t('admin.clientList.bulkExtendTrial')}</option>
                     </select>
                     <button onClick={handleBulkAction} disabled={!bulkAction || bulkSaving} className="cta-button !py-1.5 !px-3 text-xs disabled:opacity-40">
-                      {bulkSaving ? 'A aplicar...' : 'Aplicar'}
+                      {bulkSaving ? t('admin.clientList.bulkApplying') : t('admin.clientList.bulkApply')}
                     </button>
-                    <button onClick={() => setSelectedIds(new Set())} className="text-xs text-muted-foreground hover:text-foreground">Limpar</button>
+                    <button onClick={() => setSelectedIds(new Set())} className="text-xs text-muted-foreground hover:text-foreground">{t('admin.clientList.bulkClear')}</button>
                   </div>
                 )}
 
@@ -603,14 +648,14 @@ export default function AdminPage() {
                       <thead>
                         <tr className="border-b border-border-subtle">
                           <th className="py-3 px-3 w-8">
-                            <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={toggleAll} className="rounded border-border" />
+                            <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={toggleAll} aria-label={t('admin.clientList.selectAll')} className="rounded border-border" />
                           </th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Restaurante</th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Proprietário</th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground hidden md:table-cell">Email</th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Plano</th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground hidden lg:table-cell">Registado</th>
-                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground hidden lg:table-cell">Trial até</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">{t('admin.clientList.colRestaurant')}</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">{t('admin.clientList.colOwner')}</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground hidden md:table-cell">{t('admin.clientList.colEmail')}</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">{t('admin.clientList.colPlan')}</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground hidden lg:table-cell">{t('admin.clientList.colRegistered')}</th>
+                          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground hidden lg:table-cell">{t('admin.clientList.colTrialUntil')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -619,7 +664,7 @@ export default function AdminPage() {
                           return (
                             <tr key={r.id} className="border-b border-border-subtle hover:bg-muted transition-colors cursor-pointer group">
                               <td className="py-3 px-3" onClick={e => e.stopPropagation()}>
-                                <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded border-border" />
+                                <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} aria-label={t('admin.clientList.selectRow')} className="rounded border-border" />
                               </td>
                               <td className="py-3 px-4" onClick={() => setSelectedRestaurantId(r.id)}>
                                 <div className="flex items-center gap-2.5">
@@ -634,10 +679,10 @@ export default function AdminPage() {
                               <td className="py-3 px-4 text-muted-foreground hidden md:table-cell" onClick={() => setSelectedRestaurantId(r.id)}>{owner?.email || '—'}</td>
                               <td className="py-3 px-4" onClick={() => setSelectedRestaurantId(r.id)}><PlanBadge plan={r.plan} /></td>
                               <td className="py-3 px-4 text-muted-foreground hidden lg:table-cell text-xs" onClick={() => setSelectedRestaurantId(r.id)}>
-                                {r.createdAt ? new Date(r.createdAt).toLocaleDateString('pt-PT') : '—'}
+                                {r.createdAt ? new Date(r.createdAt).toLocaleDateString(numberLocale) : '—'}
                               </td>
                               <td className="py-3 px-4 text-muted-foreground hidden lg:table-cell text-xs" onClick={() => setSelectedRestaurantId(r.id)}>
-                                {r.trialEndsAt ? new Date(r.trialEndsAt).toLocaleDateString('pt-PT') : '—'}
+                                {r.trialEndsAt ? new Date(r.trialEndsAt).toLocaleDateString(numberLocale) : '—'}
                               </td>
                             </tr>
                           );
@@ -647,9 +692,11 @@ export default function AdminPage() {
 
                     {filtered.length === 0 && (
                       <div className="py-16 text-center">
-                        <Building2 className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
+                        <Building2 className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" aria-hidden="true" />
                         <p className="text-sm text-muted-foreground">
-                          {search || planFilter !== 'all' ? 'Nenhum resultado encontrado.' : 'Sem clientes registados.'}
+                          {search || planFilter !== 'all'
+                            ? t('admin.clientList.emptyFiltered')
+                            : t('admin.clientList.empty')}
                         </p>
                       </div>
                     )}
@@ -657,8 +704,12 @@ export default function AdminPage() {
 
                   {filtered.length > 0 && (
                     <div className="px-4 py-3 border-t border-border-subtle text-xs text-muted-foreground">
-                      {filtered.length} {filtered.length === 1 ? 'resultado' : 'resultados'}
-                      {(search || planFilter !== 'all') && ` de ${clients.length} total`}
+                      {filtered.length}{' '}
+                      {filtered.length === 1
+                        ? t('admin.clientList.countOne')
+                        : t('admin.clientList.countMany')}
+                      {(search || planFilter !== 'all') &&
+                        ` ${t('admin.clientList.countOf')} ${clients.length} ${t('admin.clientList.countTotal')}`}
                     </div>
                   )}
                 </div>

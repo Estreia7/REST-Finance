@@ -3,9 +3,12 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Mail, ArrowRight, ArrowLeft, AlertCircle } from 'lucide-react';
+import { useLanguage } from '@/lib/language-context';
+import { translateError } from '@/lib/error-messages';
 import { requestPasswordReset } from './actions';
 
 export default function ForgotPasswordPage() {
+  const { t, language } = useLanguage();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -20,13 +23,13 @@ export default function ForgotPasswordPage() {
       const result = await requestPasswordReset(email);
 
       if (result.error) {
-        setError(result.error);
+        setError(translateError(language, result.error));
         return;
       }
 
       setIsSubmitted(true);
     } catch {
-      setError('Erro inesperado. Tente novamente.');
+      setError(t('forgotPassword.unexpectedError'));
     } finally {
       setIsLoading(false);
     }
@@ -46,12 +49,12 @@ export default function ForgotPasswordPage() {
             </span>
           </Link>
           <h1 className="text-3xl md:text-4xl font-bold">
-            Recuperar palavra-passe
+            {t('forgotPassword.title')}
           </h1>
           <p className="text-muted-foreground">
-            {isSubmitted 
-              ? 'Verifique o seu email para redefinir a sua palavra-passe'
-              : 'Digite o seu email e enviaremos um link para redefinir a sua palavra-passe'}
+            {isSubmitted
+              ? t('forgotPassword.subtitleSubmitted')
+              : t('forgotPassword.subtitle')}
           </p>
         </div>
 
@@ -68,7 +71,7 @@ export default function ForgotPasswordPage() {
               {/* Email */}
               <div className="space-y-2">
                 <label htmlFor="email" className="text-sm font-semibold text-foreground">
-                  Email
+                  {t('forgotPassword.emailLabel')}
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -77,7 +80,7 @@ export default function ForgotPasswordPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seu@email.com"
+                    placeholder={t('forgotPassword.emailPlaceholder')}
                     required
                     className="w-full pl-10 pr-4 py-3 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   />
@@ -93,11 +96,11 @@ export default function ForgotPasswordPage() {
                 {isLoading ? (
                   <>
                     <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin"></div>
-                    <span>A enviar...</span>
+                    <span>{t('forgotPassword.submitting')}</span>
                   </>
                 ) : (
                   <>
-                    <span>Enviar link de recuperação</span>
+                    <span>{t('forgotPassword.submit')}</span>
                     <ArrowRight className="w-5 h-5" />
                   </>
                 )}
@@ -111,7 +114,7 @@ export default function ForgotPasswordPage() {
                 className="flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
-                <span>Voltar para o login</span>
+                <span>{t('forgotPassword.backToLogin')}</span>
               </Link>
             </div>
           </div>
@@ -121,9 +124,9 @@ export default function ForgotPasswordPage() {
               <Mail className="w-8 h-8 text-success" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-xl font-bold">Email enviado!</h2>
+              <h2 className="text-xl font-bold">{t('forgotPassword.sentTitle')}</h2>
               <p className="text-muted-foreground">
-                Enviamos um link de recuperação para <strong className="text-foreground">{email}</strong>
+                {t('forgotPassword.sentBody')} <strong className="text-foreground">{email}</strong>
               </p>
             </div>
             <div className="pt-4 border-t border-border space-y-3">
@@ -132,7 +135,7 @@ export default function ForgotPasswordPage() {
                 className="w-full cta-button-secondary flex items-center justify-center gap-2"
               >
                 <ArrowLeft className="w-5 h-5" />
-                <span>Voltar para o login</span>
+                <span>{t('forgotPassword.backToLogin')}</span>
               </Link>
             </div>
           </div>
@@ -144,7 +147,7 @@ export default function ForgotPasswordPage() {
             href="/"
             className="text-sm text-muted-foreground hover:text-primary transition-colors"
           >
-            ← Voltar para a página inicial
+            {t('forgotPassword.backHome')}
           </Link>
         </div>
       </div>
