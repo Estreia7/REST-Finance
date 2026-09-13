@@ -144,6 +144,47 @@ device.
 Before finishing any UI work, run `npx vitest run tests/translations-parity.test.ts`
 and switch the language in the app to look at what you built.
 
+## The walkthrough — keep it current, keep it short
+
+New clients are shown a guided tour on first login (`lib/tour.ts`,
+`app/dashboard/components/Walkthrough.tsx`). It points at real controls via
+`data-tour` attributes.
+
+**When you add a feature, decide — and say which:**
+
+- **A place an owner must find to use the app** (a new main tab, a new daily
+  habit) → add a step. Put a `data-tour="..."` on the anchor element and a step
+  in `TOUR_STEPS`, with `pt` and `en` copy.
+- **Anything else** (a refinement, a setting, a second-order screen) → no step.
+  The changelog already tells existing owners about it.
+
+**Rules for steps**
+
+1. **Keep it under ~8 steps.** This runs when patience is lowest. If a step
+   earns its place, consider whether an older one has stopped earning its own.
+2. One idea per step, two short sentences at most. Say what the owner does
+   there, not what the screen contains.
+3. Anchor by `data-tour`, never by CSS class or DOM position. A step whose
+   anchor is missing is skipped automatically, so a feature that is not on
+   every plan or screen size degrades quietly.
+4. Set `tab` so the tour navigates there itself.
+5. Bump `TOUR_VERSION` when steps change meaningfully.
+6. Never make the tour required reading: **Skip must always work**, and
+   skipping counts as seen.
+
+Check it by running the demo account's "Replay the tour" button, which is the
+only way back in once seen.
+
+## The presentation — keep it true
+
+`app/admin/components/PresentationPanel.tsx` is what the app is sold with. When
+a change alters **what we can tell a restaurant owner we do** — a new capability,
+a materially better one, or one that has gone away — update the presentation in
+the same commit, in both languages.
+
+Refinements and fixes do not belong there; it is a sales deck, not a changelog.
+Never add a number, a claim or a customer we cannot stand behind.
+
 ## Changelog — required for every user-facing change
 
 Every change a restaurant owner would notice gets an entry in

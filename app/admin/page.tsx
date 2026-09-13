@@ -14,13 +14,14 @@ import {
   Building2, TrendingUp, TrendingDown, CreditCard,
   Search, ChevronRight, Activity, DollarSign,
   BarChart2, ArrowUpRight, ArrowDownRight, Shield,
-  ClipboardList, Settings,
+  ClipboardList, Settings, Presentation,
 } from 'lucide-react';
 import UserManagementPanel from './components/UserManagementPanel';
 import RestaurantDetailPanel from './components/RestaurantDetailPanel';
 import AuthSettingsPanel from './components/AuthSettingsPanel';
 import DemoAccountPanel from './components/DemoAccountPanel';
 import ActivityLogPanel from './components/ActivityLogPanel';
+import PresentationPanel from './components/PresentationPanel';
 import AdminMobileBottomNav from './components/MobileBottomNav';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -31,7 +32,7 @@ import Logo from '@/app/components/Logo';
 import { formatMoney } from '@/lib/format';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-type Tab = 'dashboard' | 'clientes' | 'users' | 'activity' | 'settings';
+type Tab = 'dashboard' | 'clientes' | 'users' | 'activity' | 'apresentacao' | 'settings';
 
 const MONTH_NAMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -213,6 +214,7 @@ export default function AdminPage() {
     { id: 'clientes'  as Tab, icon: Building2,        label: 'Clientes' },
     { id: 'users'     as Tab, icon: Users,             label: 'Utilizadores' },
     { id: 'activity'  as Tab, icon: ClipboardList,     label: 'Atividade' },
+    { id: 'apresentacao' as Tab, icon: Presentation,   label: 'Apresentação' },
     { id: 'settings'  as Tab, icon: Settings,          label: 'Definições' },
   ];
 
@@ -324,10 +326,10 @@ export default function AdminPage() {
           </button>
           <div>
             <h1 className="text-sm font-semibold text-foreground">
-              {{ dashboard: 'Visão Geral', clientes: 'Clientes', users: 'Utilizadores', activity: 'Atividade', settings: 'Definições' }[activeTab]}
+              {{ dashboard: 'Visão Geral', clientes: 'Clientes', users: 'Utilizadores', activity: 'Atividade', apresentacao: 'Apresentação', settings: 'Definições' }[activeTab]}
             </h1>
             <p className="text-xs text-muted-foreground hidden md:block">
-              {{ dashboard: 'Métricas da plataforma', clientes: `${clients.length} restaurantes registados`, users: 'Gestão de utilizadores', activity: 'Registo de ações', settings: 'Configuração da plataforma' }[activeTab]}
+              {{ dashboard: 'Métricas da plataforma', clientes: `${clients.length} restaurantes registados`, users: 'Gestão de utilizadores', activity: 'Registo de ações', apresentacao: 'Demonstração para clientes', settings: 'Configuração da plataforma' }[activeTab]}
             </p>
           </div>
 
@@ -645,6 +647,9 @@ export default function AdminPage() {
 
           {/* ── Activity Tab ───────────────────────────────────────────────── */}
           {activeTab === 'activity' && <ActivityLogPanel />}
+
+          {/* ── Presentation Tab ───────────────────────────────────────────── */}
+          {activeTab === 'apresentacao' && <PresentationPanel />}
 
           {activeTab === 'settings' && (
             <div className="space-y-6">
