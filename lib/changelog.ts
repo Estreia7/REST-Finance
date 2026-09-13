@@ -96,6 +96,12 @@ export const CHANGELOG: Release[] = [
       },
       {
         kind: 'fix',
+        title: 'A página já não desliza para o lado',
+        detail:
+          'No telemóvel, arrastar de lado deslocava o ecrã e deixava os botões fora do sítio. O botão + também aparecia cortado na margem.',
+      },
+      {
+        kind: 'fix',
         title: 'O ecrã de espera já não parece parado',
         detail:
           'Ao abrir ou actualizar o painel aparece agora a animação, em vez de uma letra fixa.',

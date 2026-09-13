@@ -539,11 +539,22 @@ function DashboardPageInner() {
       {/* Mobile FAB — quick entry shortcut */}
       {activeTab === 'dashboard' && (
         <button
+          type="button"
           onClick={() => handleTabChange('revenue')}
-          className="fixed right-4 bottom-24 z-40 md:hidden w-14 h-14 rounded-2xl gradient-bg shadow-glow flex items-center justify-center active:scale-95 transition-transform"
+          // Positioned off the safe area, not off the viewport edge: on a
+          // phone with rounded corners `right-4` puts a 56px button partly
+          // under the curve, which is what clipped it. The bottom offset
+          // clears the nav bar plus the home indicator for the same reason.
+          style={{
+            right: 'calc(1rem + env(safe-area-inset-right))',
+            bottom: 'calc(6rem + env(safe-area-inset-bottom))',
+          }}
+          className="fixed z-40 md:hidden w-14 h-14 rounded-2xl gradient-bg shadow-glow
+                     flex items-center justify-center active:scale-95 transition-transform
+                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Registar receita"
         >
-          <Plus className="w-6 h-6 text-white" />
+          <Plus className="w-6 h-6 text-white" aria-hidden="true" />
         </button>
       )}
 

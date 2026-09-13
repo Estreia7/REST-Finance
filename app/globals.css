@@ -171,6 +171,22 @@
     /* Stops mobile Safari inflating type in landscape, which reflows a
        carefully sized dashboard into something else entirely. */
     -webkit-text-size-adjust: 100%;
+
+    /*
+      A sideways drag must do nothing.
+
+      Nothing on the dashboard is wider than the screen, but iOS still lets a
+      horizontal drag rubber-band the whole page — the layout slides out from
+      under the fixed elements, which stay put, and the result looks broken
+      rather than elastic. `contain` keeps the gesture inside the page without
+      disabling the vertical scroll that the page actually needs.
+
+      `overflow-x: clip`, not `hidden`: `hidden` on the root makes `position:
+      sticky` stop working in every descendant, which would silently break the
+      annual statement's pinned columns and the sticky top bar.
+    */
+    overscroll-behavior-x: contain;
+    overflow-x: clip;
   }
   body {
     @apply bg-background text-foreground antialiased;
