@@ -784,30 +784,45 @@ function ShiftDialog({
   onClear: () => void;
   onTemplatesChanged: () => void;
 }) {
+  // A split shift is entered as the two stretches actually worked, not as a
+  // long shift with a hole described separately. The owner thinks "almoço and
+  // jantar", not "12:00 to 23:00 minus the afternoon"; asking for the gap made
+  // them work the times out backwards. Stored as a break either way, so the
+  // grid keeps one cell per day and the weekly total stays a single sum.
   const [start, setStart] = useState(formatMinutes(shift?.startMin ?? 9 * 60));
-  const [end, setEnd] = useState(formatMinutes(shift?.endMin ?? 17 * 60));
+  const [end, setEnd] = useState(
+    formatMinutes(shift?.breakStartMin ?? shift?.endMin ?? 17 * 60),
+  );
 
-  // A shift either has a break or it does not; the two fields only exist once
-  // the owner says there is one, so an empty pair cannot be saved by accident.
   const [split, setSplit] = useState(shift?.breakStartMin != null);
-  const [breakStart, setBreakStart] = useState(formatMinutes(shift?.breakStartMin ?? 15 * 60));
-  const [breakEnd, setBreakEnd] = useState(formatMinutes(shift?.breakEndMin ?? 19 * 60));
+  // The second stretch: from the end of the break to the end of the shift.
+  const [secondStart, setSecondStart] = useState(formatMinutes(shift?.breakEndMin ?? 19 * 60));
+  const [secondEnd, setSecondEnd] = useState(
+    formatMinutes(shift?.breakStartMin != null ? shift.endMin : 23 * 60),
+  );
 
   const [note, setNote] = useState(shift?.note ?? '');
   const [managing, setManaging] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [savingTemplate, setSavingTemplate] = useState(false);
 
-  const startMin = parseTime(start);
-  const endMin = parseTime(end);
+  const firstStartMin = parseTime(start);
+  const firstEndMin = parseTime(end);
+  const secondStartMin = split ? parseTime(secondStart) : null;
+  const secondEndMin = split ? parseTime(secondEnd) : null;
+
+  // What gets stored: the shift runs from the start of the first stretch to
+  // the end of the last, and the gap between them becomes the break.
+  const startMin = firstStartMin;
+  const endMin = split ? secondEndMin : firstEndMin;
+  const breakStartMin = split ? firstEndMin : null;
+  const breakEndMin = split ? secondStartMin : null;
+
   const valid = startMin !== null && endMin !== null;
 
-  const breakStartMin = split ? parseTime(breakStart) : null;
-  const breakEndMin = split ? parseTime(breakEnd) : null;
-
-  // The break is only usable if it parses and sits inside the shift. An
-  // unusable one is reported below rather than silently ignored, because
-  // silently ignoring it would pay someone for an afternoon they are off.
+  // The two stretches have to be in order and not overlap. A broken pair is
+  // reported below rather than silently ignored, because ignoring it would pay
+  // someone for an afternoon they are off.
   const breakUsable =
     valid && split && breakStartMin !== null && breakEndMin !== null &&
     hasBreak(startMin!, endMin!, breakStartMin, breakEndMin);
@@ -821,13 +836,15 @@ function ShiftDialog({
   /** Applies a saved shift or a suggestion, break included. */
   const applyTemplate = (t: Omit<ShiftTemplate, 'id'>) => {
     setStart(formatMinutes(t.startMin));
-    setEnd(formatMinutes(t.endMin));
     if (t.breakStartMin != null && t.breakEndMin != null) {
+      // The stored break is the gap, so it bounds the two worked stretches.
       setSplit(true);
-      setBreakStart(formatMinutes(t.breakStartMin));
-      setBreakEnd(formatMinutes(t.breakEndMin));
+      setEnd(formatMinutes(t.breakStartMin));
+      setSecondStart(formatMinutes(t.breakEndMin));
+      setSecondEnd(formatMinutes(t.endMin));
     } else {
       setSplit(false);
+      setEnd(formatMinutes(t.endMin));
     }
   };
 
@@ -952,6 +969,11 @@ function ShiftDialog({
       )}
 
       <div className="grid grid-cols-2 gap-3">
+        {split && (
+          <p className="col-span-2 text-[11px] text-muted-foreground -mb-1">
+            Primeiro período
+          </p>
+        )}
         <label className="block">
           <span className="text-xs text-muted-foreground block mb-1.5">Entrada</span>
           <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="input-field !py-2" />
@@ -962,9 +984,8 @@ function ShiftDialog({
         </label>
       </div>
 
-      {/* The split shift: lunch, the afternoon off, dinner. One shift with a
-          hole rather than two, so the grid stays one cell per day and the
-          weekly total stays a single sum. */}
+      {/* The split shift, entered as the second stretch actually worked. The
+          gap between the two is what gets stored as the break. */}
       <label className="flex items-center gap-2.5 mt-3 cursor-pointer select-none">
         <input
           type="checkbox"
@@ -974,34 +995,37 @@ function ShiftDialog({
         />
         <span className="text-xs font-medium text-foreground">
           Turno partido
-          <span className="text-muted-foreground font-normal"> — com pausa ao meio</span>
+          <span className="text-muted-foreground font-normal"> — volta mais tarde</span>
         </span>
       </label>
 
       {split && (
         <div className="grid grid-cols-2 gap-3 mt-2 rounded-xl bg-muted/60 p-3">
+          <p className="col-span-2 text-[11px] text-muted-foreground -mb-1">
+            Segundo período — as horas em que volta a trabalhar.
+          </p>
           <label className="block">
-            <span className="text-xs text-muted-foreground block mb-1.5">Início da pausa</span>
+            <span className="text-xs text-muted-foreground block mb-1.5">Entrada</span>
             <input
               type="time"
-              value={breakStart}
-              onChange={(e) => setBreakStart(e.target.value)}
+              value={secondStart}
+              onChange={(e) => setSecondStart(e.target.value)}
               className="input-field !py-2"
             />
           </label>
           <label className="block">
-            <span className="text-xs text-muted-foreground block mb-1.5">Fim da pausa</span>
+            <span className="text-xs text-muted-foreground block mb-1.5">Saída</span>
             <input
               type="time"
-              value={breakEnd}
-              onChange={(e) => setBreakEnd(e.target.value)}
+              value={secondEnd}
+              onChange={(e) => setSecondEnd(e.target.value)}
               className="input-field !py-2"
             />
           </label>
 
           {breakBroken && (
             <p className="col-span-2 text-[11px] text-danger">
-              A pausa tem de ficar dentro do turno e terminar depois de começar.
+              O segundo período tem de começar depois de o primeiro acabar.
             </p>
           )}
         </div>

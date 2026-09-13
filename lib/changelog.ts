@@ -49,6 +49,18 @@ export const CHANGELOG: Release[] = [
           'Marque o almoço e o jantar como um só turno, com a tarde de folga pelo meio: entra às 12:00, pausa das 15:00 às 19:00, sai às 23:00. As horas da semana contam só o tempo trabalhado, sem a pausa, e a imagem que envia no WhatsApp mostra os dois períodos para ninguém aparecer à hora errada. Pode guardar um turno partido para reutilizar, como qualquer outro.',
       },
       {
+        kind: 'improvement',
+        title: 'Os turnos partidos indicam-se pelas horas trabalhadas',
+        detail:
+          'Antes marcava a entrada, a saída e depois descrevia a pausa ao meio, o que obrigava a fazer as contas ao contrário. Agora indica simplesmente os dois períodos em que a pessoa trabalha — 09:00–15:00 e 19:00–00:00 — e a pausa fica subentendida. As horas da semana continuam a contar só o tempo trabalhado.',
+      },
+      {
+        kind: 'fix',
+        title: 'O zoom já não desalinha a aplicação no telemóvel',
+        detail:
+          'Um toque com dois dedos sem querer deixava a aplicação ampliada e torta, com o topo cortado e os botões de baixo fora do ecrã, sem forma óbvia de voltar ao normal.',
+      },
+      {
         kind: 'fix',
         title: 'Descarregar o horário já não o tira da aplicação',
         detail:
