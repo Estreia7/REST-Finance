@@ -50,6 +50,12 @@ export const CHANGELOG: Release[] = [
       },
       {
         kind: 'new',
+        title: 'Pedir ajuda sem sair da aplicação',
+        detail:
+          'Em Definições › Suporte pode escrever-nos: uma dúvida, um problema, uma sugestão ou algo sobre a faturação. A resposta aparece nessa mesma página, por baixo do pedido, com a indicação de se já foi vista, está a ser tratada ou ficou resolvida.',
+      },
+      {
+        kind: 'new',
         title: 'Uma visita guiada para quem entra pela primeira vez',
         detail:
           'Quem abre a conta pela primeira vez passa por uma visita curta que aponta para os sítios que interessam: onde se lança a receita do dia, onde entram as faturas, onde estão as margens e os horários. São poucos passos e pode saltar a qualquer momento — se saltar, não volta a aparecer.',

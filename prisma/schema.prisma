@@ -104,6 +104,7 @@ model Restaurant {
   scheduleClosures  ScheduleClosure[]
   ingredients       Ingredient[]
   menuItems         MenuItem[]
+  supportTickets    SupportTicket[]
 
   @@map("restaurants")
 }
@@ -159,6 +160,8 @@ model User {
   notifications    Notification[]
   receiptScans     ReceiptScan[]
   complianceDocs   ComplianceDoc[] @relation("ComplianceUploadedBy")
+  supportTickets   SupportTicket[] @relation("SupportRequester")
+  supportReplies   SupportTicket[] @relation("SupportResponder")
 
   @@map("users")
 }
@@ -727,4 +730,54 @@ model RecipeLine {
   @@unique([menuItemId, ingredientId])
   @@index([menuItemId])
   @@map("recipe_lines")
+}
+
+/// Where a support request stands.
+///
+/// Deliberately short. Three states are what an owner can understand from the
+/// outside — we have not looked yet, we are on it, it is done — and anything
+/// finer is internal triage that would only confuse the person waiting.
+enum SupportStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum SupportCategory {
+  QUESTION
+  PROBLEM
+  SUGGESTION
+  BILLING
+}
+
+/// A request for help, raised by an owner and answered by an administrator.
+///
+/// The restaurant is recorded alongside the user because the same person can
+/// own several: knowing which one they were looking at is usually half the
+/// answer, and asking them afterwards wastes a round trip.
+model SupportTicket {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+  user         User       @relation("SupportRequester", fields: [userId], references: [id])
+  userId       String     @map("user_id")
+
+  subject  String
+  message  String
+  category SupportCategory @default(QUESTION)
+  status   SupportStatus   @default(OPEN)
+
+  /// The administrator's answer, shown to the owner once written.
+  reply       String?
+  repliedAt   DateTime? @map("replied_at")
+  repliedBy   User?     @relation("SupportResponder", fields: [repliedById], references: [id])
+  repliedById String?   @map("replied_by_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// Newest first is the only order either side reads these in.
+  @@index([restaurantId, createdAt])
+  @@index([status, createdAt])
+  @@map("support_tickets")
 }

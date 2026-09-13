@@ -44,6 +44,7 @@ import SchedulePanel from './components/SchedulePanel';
 import MenuCalculatorPanel from './components/MenuCalculatorPanel';
 import EstadoPanel from './components/EstadoPanel';
 import SettingsPanel    from './components/SettingsPanel';
+import SupportPanel     from './components/SupportPanel';
 import Walkthrough      from './components/Walkthrough';
 import TrialBanner      from '@/app/components/TrialBanner';
 
@@ -140,6 +141,7 @@ function DashboardPageInner() {
   const [revenueSubView, setRevenueSubView] = useState<'entry' | 'history' | 'scan'>('entry');
   const [costSubView, setCostSubView] = useState<'entry' | 'history' | 'scan'>('entry');
   const [analyticsSubView, setAnalyticsSubView] = useState<'pnl' | 'compare' | 'tickets' | 'menu' | 'goals' | 'report' | 'prices'>('pnl');
+  const [settingsSubView, setSettingsSubView] = useState<'account' | 'support'>('account');
 
   // ── Load all data ────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -557,6 +559,15 @@ function DashboardPageInner() {
           {activeTab === 'estado' && <EstadoPanel />}
 
           {activeTab === 'settings' && (
+            <div className="space-y-4">
+              {/* Account and support live under the same tab: both are about
+                  the account rather than the restaurant's numbers. */}
+              <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle">
+                <button onClick={() => setSettingsSubView('account')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${settingsSubView === 'account' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.account')}</button>
+                <button onClick={() => setSettingsSubView('support')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${settingsSubView === 'support' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.support')}</button>
+              </div>
+
+              {settingsSubView === 'support' ? <SupportPanel /> : (
             <SettingsPanel
               pendingTheme={pendingTheme}
               hasUnsavedChanges={hasUnsavedChanges}
@@ -567,6 +578,8 @@ function DashboardPageInner() {
               restaurant={restaurant}
               onUpdate={loadData}
             />
+              )}
+            </div>
           )}
         </main>
       </div>

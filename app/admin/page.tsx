@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { getClientStats, getClients, getMonthlyRevenue, getCurrentUser, bulkUpdateRestaurants } from './actions';
+import { getAllTickets } from '@/app/dashboard/support-actions';
 import { useLanguage } from '@/lib/language-context';
 import { greetingName } from '@/lib/welcome-quotes';
 import { consumeJustSignedIn } from '@/lib/welcome-signal';
@@ -14,7 +15,7 @@ import {
   Building2, TrendingUp, TrendingDown, CreditCard,
   Search, ChevronRight, Activity, DollarSign,
   BarChart2, ArrowUpRight, ArrowDownRight, Shield,
-  ClipboardList, Settings, Presentation,
+  ClipboardList, Settings, Presentation, LifeBuoy,
 } from 'lucide-react';
 import UserManagementPanel from './components/UserManagementPanel';
 import RestaurantDetailPanel from './components/RestaurantDetailPanel';
@@ -22,6 +23,7 @@ import AuthSettingsPanel from './components/AuthSettingsPanel';
 import DemoAccountPanel from './components/DemoAccountPanel';
 import ActivityLogPanel from './components/ActivityLogPanel';
 import PresentationPanel from './components/PresentationPanel';
+import SupportQueuePanel from './components/SupportQueuePanel';
 import AdminMobileBottomNav from './components/MobileBottomNav';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -32,7 +34,7 @@ import Logo from '@/app/components/Logo';
 import { formatMoney } from '@/lib/format';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-type Tab = 'dashboard' | 'clientes' | 'users' | 'activity' | 'apresentacao' | 'settings';
+type Tab = 'dashboard' | 'clientes' | 'users' | 'activity' | 'suporte' | 'apresentacao' | 'settings';
 
 const MONTH_NAMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -107,6 +109,8 @@ export default function AdminPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState('');
   const [bulkSaving, setBulkSaving] = useState(false);
+  /** Unanswered support requests, for the badge on the sidebar item. */
+  const [openTickets, setOpenTickets] = useState(0);
 
   // ── Load data ────────────────────────────────────────────────────────────
   const loadChartData = useCallback(async (year: number) => {
@@ -120,14 +124,20 @@ export default function AdminPage() {
   }, []);
 
   const loadData = useCallback(async () => {
-    const [statsResult, clientsResult, userResult] = await Promise.all([
+    const [statsResult, clientsResult, userResult, ticketsResult] = await Promise.all([
       getClientStats(),
       getClients(),
       getCurrentUser(),
+      // Only for the sidebar badge: an unanswered request should be visible
+      // from the dashboard, not only once the support tab is opened.
+      getAllTickets(),
     ]);
     if (statsResult.success && statsResult.data) setStats(statsResult.data);
     if (clientsResult.success && clientsResult.data) setClients(clientsResult.data as ClientRestaurant[]);
     if (userResult.success && userResult.data) setCurrentUser(userResult.data);
+    if (ticketsResult.success && ticketsResult.data) {
+      setOpenTickets(ticketsResult.data.filter((tk) => tk.status !== 'RESOLVED').length);
+    }
     await loadChartData(selectedYear);
   }, [selectedYear, loadChartData]);
 
@@ -209,11 +219,18 @@ export default function AdminPage() {
   });
 
   // ── Sidebar nav ──────────────────────────────────────────────────────────
-  const navItems = [
+  const navItems: Array<{
+    id: Tab;
+    icon: typeof LayoutDashboard;
+    label: string;
+    /** Shown only when above zero. */
+    badge?: number;
+  }> = [
     { id: 'dashboard' as Tab, icon: LayoutDashboard,  label: 'Dashboard' },
     { id: 'clientes'  as Tab, icon: Building2,        label: 'Clientes' },
     { id: 'users'     as Tab, icon: Users,             label: 'Utilizadores' },
     { id: 'activity'  as Tab, icon: ClipboardList,     label: 'Atividade' },
+    { id: 'suporte'   as Tab, icon: LifeBuoy,          label: 'Suporte', badge: openTickets },
     { id: 'apresentacao' as Tab, icon: Presentation,   label: 'Apresentação' },
     { id: 'settings'  as Tab, icon: Settings,          label: 'Definições' },
   ];
@@ -277,7 +294,7 @@ export default function AdminPage() {
           {/* Nav */}
           <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
             <p className="section-label px-2 pt-2 pb-1">Plataforma</p>
-            {navItems.map(({ id, icon: Icon, label }) => (
+            {navItems.map(({ id, icon: Icon, label, badge }) => (
               <button
                 key={id}
                 onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
@@ -285,7 +302,14 @@ export default function AdminPage() {
               >
                 <Icon className="w-4 h-4" />
                 <span>{label}</span>
-                {activeTab === id && <ChevronRight className="w-3 h-3 ml-auto opacity-50" />}
+                {badge !== undefined && badge > 0 && (
+                  <span className="ml-auto text-[10px] font-bold text-warning bg-warning/10 px-1.5 py-0.5 rounded-full tabular-nums">
+                    {badge}
+                  </span>
+                )}
+                {activeTab === id && (
+                  <ChevronRight className={`w-3 h-3 opacity-50 ${badge !== undefined && badge > 0 ? 'ml-1' : 'ml-auto'}`} />
+                )}
               </button>
             ))}
           </nav>
@@ -326,10 +350,10 @@ export default function AdminPage() {
           </button>
           <div>
             <h1 className="text-sm font-semibold text-foreground">
-              {{ dashboard: 'Visão Geral', clientes: 'Clientes', users: 'Utilizadores', activity: 'Atividade', apresentacao: 'Apresentação', settings: 'Definições' }[activeTab]}
+              {{ dashboard: 'Visão Geral', clientes: 'Clientes', users: 'Utilizadores', activity: 'Atividade', suporte: 'Suporte', apresentacao: 'Apresentação', settings: 'Definições' }[activeTab]}
             </h1>
             <p className="text-xs text-muted-foreground hidden md:block">
-              {{ dashboard: 'Métricas da plataforma', clientes: `${clients.length} restaurantes registados`, users: 'Gestão de utilizadores', activity: 'Registo de ações', apresentacao: 'Demonstração para clientes', settings: 'Configuração da plataforma' }[activeTab]}
+              {{ dashboard: 'Métricas da plataforma', clientes: `${clients.length} restaurantes registados`, users: 'Gestão de utilizadores', activity: 'Registo de ações', suporte: 'Pedidos dos clientes', apresentacao: 'Demonstração para clientes', settings: 'Configuração da plataforma' }[activeTab]}
             </p>
           </div>
 
@@ -647,6 +671,9 @@ export default function AdminPage() {
 
           {/* ── Activity Tab ───────────────────────────────────────────────── */}
           {activeTab === 'activity' && <ActivityLogPanel />}
+
+          {/* ── Support Tab ────────────────────────────────────────────────── */}
+          {activeTab === 'suporte' && <SupportQueuePanel onOpenCountChange={setOpenTickets} />}
 
           {/* ── Presentation Tab ───────────────────────────────────────────── */}
           {activeTab === 'apresentacao' && <PresentationPanel />}
