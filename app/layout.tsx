@@ -64,6 +64,12 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // The app is a fixed-layout tool with its own bottom bar, not a page to read.
+  // A stray pinch on the schedule grid left it zoomed in with no obvious way
+  // back, the header cut off and the nav half off-screen. Text is sized for
+  // the phone already, so nothing here needs zooming to be legible.
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: 'cover',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#faf8f5' },
