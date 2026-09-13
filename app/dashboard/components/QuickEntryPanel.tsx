@@ -90,7 +90,8 @@ export default function QuickEntryPanel({
   if (activeTab === 'revenue') {
     const isToday = revenueForm.date === today;
     return (
-      <div className="max-w-2xl">
+      // Anchors the walkthrough's "this is the daily habit" step. See lib/tour.ts.
+      <div className="max-w-2xl" data-tour="quick-entry">
         <div className="card-glass p-6 md:p-8">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-foreground">{t('owner.registerRevenue')}</h2>

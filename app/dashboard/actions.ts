@@ -11,6 +11,7 @@ import {
   formatZodError,
 } from '@/lib/validations';
 import { requireAuth, requireOwner, requireMember, isAuthError } from '@/lib/auth-helpers';
+import { isDemoAccount } from '@/lib/demo';
 import { calculateKpis, toPercent, safeDivide, percentChange } from '@/lib/kpi';
 // Keep these in sync with the Prisma enums in schema.prisma
 type CostType = 'COGS' | 'OPEX';
@@ -1349,5 +1350,37 @@ export async function getAdvancedDashboardStats() {
     };
   } catch (error: unknown) {
     return { error: toClientError('Failed to fetch advanced stats', error, 'read') };
+  }
+}
+
+/**
+ * Whether the first-run walkthrough should run, and whether this account may
+ * replay it.
+ *
+ * Null `tourVersion` means never seen — including accounts that existed before
+ * the tour did, who are offered it once. Skipping counts as seen, so dismissing
+ * it is respected rather than asked again on the next login.
+ */
+export async function getTourState() {
+  try {
+    const auth = await requireAuth();
+    if (isAuthError(auth)) return { error: auth.error };
+
+    const user = await prisma.user.findUnique({
+      where: { id: auth.userId },
+      select: { tourVersion: true, email: true },
+    });
+
+    return {
+      success: true,
+      data: {
+        shouldRun: user?.tourVersion == null,
+        // The demo account is the one place the tour can be replayed on
+        // demand, so it can be shown to a prospective client at any time.
+        canReplay: isDemoAccount(user?.email),
+      },
+    };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to read tour state', error, 'read') };
   }
 }

@@ -81,6 +81,7 @@ export default function WhatsNew() {
       <button
         type="button"
         onClick={openPanel}
+        data-tour="whats-new"
         className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all
                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label={title}

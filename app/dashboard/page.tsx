@@ -9,6 +9,7 @@ import {
   getRestaurant, getStaff, addStaff, createDailySummary, createCostEntry,
   getCategories, getDashboardStats, getCurrentUser, getLast7DaysRevenue,
   getMonthlyRevenueBreakdown, getCategoryPerformance, getAdvancedDashboardStats,
+  getTourState,
 } from './actions';
 import RevenueHistoryPanel from './components/RevenueHistoryPanel';
 import CostHistoryPanel from './components/CostHistoryPanel';
@@ -25,7 +26,7 @@ import { greetingName } from '@/lib/welcome-quotes';
 import { consumeJustSignedIn } from '@/lib/welcome-signal';
 import WelcomeSplash from '@/app/components/WelcomeSplash';
 import DashboardLoading from '@/app/components/DashboardLoading';
-import { Plus, ChevronDown, ChevronUp, Rocket, TrendingUp as TrendingUpIcon, DollarSign as DollarSignIcon } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, Rocket, PlayCircle, TrendingUp as TrendingUpIcon, DollarSign as DollarSignIcon } from 'lucide-react';
 
 // Components
 import Sidebar          from './components/Sidebar';
@@ -43,6 +44,7 @@ import SchedulePanel from './components/SchedulePanel';
 import MenuCalculatorPanel from './components/MenuCalculatorPanel';
 import EstadoPanel from './components/EstadoPanel';
 import SettingsPanel    from './components/SettingsPanel';
+import Walkthrough      from './components/Walkthrough';
 import TrialBanner      from '@/app/components/TrialBanner';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -78,6 +80,11 @@ function DashboardPageInner() {
   // rather than a state initialiser so the server and the first client render
   // agree, and so the flag is not consumed twice under strict mode.
   const [showWelcome, setShowWelcome] = useState(false);
+
+  // ── First-run walkthrough. Starts only after the welcome splash has gone,
+  //    so the two never overlap.
+  const [showTour, setShowTour] = useState(false);
+  const [canReplayTour, setCanReplayTour] = useState(false);
   useEffect(() => {
     if (consumeJustSignedIn()) setShowWelcome(true);
   }, []);
@@ -189,6 +196,16 @@ function DashboardPageInner() {
 
     checkUser();
   }, [router, loadData, loadCategories]);
+
+  // ── Whether the walkthrough is due. Read once on mount; the tour records
+  //    for itself that it has been seen.
+  useEffect(() => {
+    getTourState().then((r) => {
+      if (!r.success || !r.data) return;
+      setCanReplayTour(r.data.canReplay);
+      if (r.data.shouldRun) setShowTour(true);
+    });
+  }, []);
 
   // ── Handle URL params (e.g. ?tab=billing from Stripe redirect) ───────────
   useEffect(() => {
@@ -338,6 +355,24 @@ function DashboardPageInner() {
         {/* Trial banner */}
         {restaurant?.plan === 'TRIAL' && daysLeft <= 7 && (
           <TrialBanner daysLeft={daysLeft} onUpgrade={() => handleTabChange('billing')} />
+        )}
+
+        {/*
+          Demo only: replays the walkthrough on demand, so it can be shown to a
+          prospective client at any point without creating a fresh account.
+        */}
+        {canReplayTour && !showTour && (
+          <div className="px-4 md:px-6 pt-4">
+            <button
+              type="button"
+              onClick={() => { handleTabChange('dashboard'); setShowTour(true); }}
+              className="cta-button-secondary !py-2 !px-3 !text-xs"
+              title={t('tour.replayHint')}
+            >
+              <PlayCircle className="w-4 h-4" aria-hidden="true" />
+              {t('tour.replay')}
+            </button>
+          </div>
         )}
 
         {/* Content */}
@@ -560,6 +595,13 @@ function DashboardPageInner() {
 
       {/* Mobile bottom nav */}
       <MobileBottomNav activeTab={activeTab} onTabChange={handleTabChange} />
+
+      {showTour && (
+        <Walkthrough
+          onNavigate={(tab) => handleTabChange(tab as Tab)}
+          onClose={() => setShowTour(false)}
+        />
+      )}
     </div>
   );
 }

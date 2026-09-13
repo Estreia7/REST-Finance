@@ -4,6 +4,7 @@ import { requireAdmin, isAuthError } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
 import { signIn } from '@/lib/auth-config';
 import { toClientError } from '@/lib/errors';
+import { DEMO_EMAIL } from '@/lib/demo';
 
 /**
  * Sign in as the demo restaurant.
@@ -15,7 +16,6 @@ import { toClientError } from '@/lib/errors';
  * trail, not a widening of this one.
  */
 
-const DEMO_EMAIL = 'demo@rest-finance.com';
 const DEMO_PASSWORD = 'demo-restaurant-2026';
 
 export async function signInAsDemo() {

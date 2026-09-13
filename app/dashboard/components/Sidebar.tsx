@@ -42,6 +42,9 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
   const NavItem = ({ id, icon: Icon, label }: { id: Tab; icon: any; label: string }) => (
     <button
       onClick={() => { onTabChange(id); onClose(); }}
+      // Anchors the walkthrough. See lib/tour.ts — steps find their target by
+      // this attribute, so restyling or moving the button cannot break them.
+      data-tour={`nav-${id}`}
       className={`nav-item w-full ${activeTab === id ? 'active' : ''}`}
     >
       <Icon className="w-4 h-4 shrink-0" />

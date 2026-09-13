@@ -50,6 +50,12 @@ export const CHANGELOG: Release[] = [
       },
       {
         kind: 'new',
+        title: 'Uma visita guiada para quem entra pela primeira vez',
+        detail:
+          'Quem abre a conta pela primeira vez passa por uma visita curta que aponta para os sítios que interessam: onde se lança a receita do dia, onde entram as faturas, onde estão as margens e os horários. São poucos passos e pode saltar a qualquer momento — se saltar, não volta a aparecer.',
+      },
+      {
+        kind: 'new',
         title: 'A aplicação fala inglês, e lembra-se da sua escolha',
         detail:
           'Até agora só a página inicial e algumas partes estavam traduzidas; o resto aparecia sempre em português. Agora tudo funciona nas duas línguas — horários, ementas, IVA, conformidade, relatórios e mensagens de erro. A escolha fica guardada na sua conta, por isso mantém-se ao entrar noutro telemóvel ou computador, e deixa de haver aquele instante em que a página aparece na língua errada. A página inicial continua em português para quem chega de novo, e qualquer visitante pode trocar.',

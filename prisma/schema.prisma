@@ -143,6 +143,12 @@ model User {
   /// rather than forcing Portuguese on someone who asked for English.
   language String? @map("language")
 
+  /// Which version of the first-run walkthrough this account has finished or
+  /// skipped. Null means never seen. Kept on the account rather than in the
+  /// browser so it does not run again on a second device, and versioned so a
+  /// later rewrite can be offered without replaying it for everyone.
+  tourVersion Int? @map("tour_version")
+
   accounts Account[]
   sessions Session[]
 
