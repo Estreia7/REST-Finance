@@ -138,6 +138,11 @@ model User {
 
   notificationPrefs Json? @map("notification_prefs")
 
+  /// The account's language, "pt" or "en". Null until the owner chooses one,
+  /// which is what lets a first login fall back to the browser's preference
+  /// rather than forcing Portuguese on someone who asked for English.
+  language String? @map("language")
+
   accounts Account[]
   sessions Session[]
 

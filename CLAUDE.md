@@ -111,6 +111,39 @@ This project is a a app for the finance of restaurant owner's to have control in
 - Steps: call `resolve-library-id` → pick the best match → call `query-docs` → answer using the fetched docs with code examples.
 - Do this proactively — the user should never have to ask for it.
 
+## Both languages, always — no new hardcoded strings
+
+The app ships in Portuguese and English. Every string a user can read goes
+through the dictionary, in both languages, in the same commit as the feature.
+This is not a translation pass to do later: doing it later is how the dashboard
+ended up with ~200 Portuguese strings baked into the JSX.
+
+**The rule**
+
+1. No user-facing text written directly in JSX. Use `t('some.key')` from
+   `useLanguage()`.
+2. Every new key gets **both** a `pt` and an `en` value in `lib/translations.ts`,
+   added together. `tests/translations-parity.test.ts` fails the build if one
+   side is missing, empty, or the English value still carries Portuguese
+   accents.
+3. This includes the things that are easy to forget: `toast.success` /
+   `toast.error` messages, `aria-label`s, `placeholder`s, button labels, empty
+   states, confirm dialogs, and date or number formatting that differs by
+   locale.
+4. Server actions and route handlers cannot call `t()` — they have no React
+   context. They return a **key**, not a sentence, and the component translates
+   it. Never return a Portuguese sentence straight to a toast.
+5. The landing page is Portuguese by default and anyone may switch. From login
+   onwards the account's saved language wins, resolved on the server in
+   `lib/server-language.ts` so the first paint is never the wrong language.
+
+**Where language lives**: on the `User` row, with a cookie for signed-out
+visitors. Never in `localStorage` — it has to follow the owner to another
+device.
+
+Before finishing any UI work, run `npx vitest run tests/translations-parity.test.ts`
+and switch the language in the app to look at what you built.
+
 ## Changelog — required for every user-facing change
 
 Every change a restaurant owner would notice gets an entry in

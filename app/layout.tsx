@@ -4,6 +4,7 @@ import { Bricolage_Grotesque, Public_Sans, JetBrains_Mono } from 'next/font/goog
 import './globals.css';
 import ConditionalNavbar from './components/ConditionalNavbar';
 import { LanguageProvider } from '@/lib/language-context';
+import { getServerLanguage } from '@/lib/server-language';
 import { ThemeProvider, THEME_INIT_SCRIPT } from '@/lib/theme-context';
 import SessionProvider from './components/SessionProvider';
 import { Toaster } from 'sonner';
@@ -77,10 +78,14 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // Resolved before the first byte, so the markup is already in the right
+  // language rather than rendering Portuguese and switching after hydration.
+  const language = await getServerLanguage();
+
   return (
     <html
-      lang="pt"
+      lang={language}
       className={`h-full ${display.variable} ${sans.variable} ${mono.variable}`}
       suppressHydrationWarning
     >
@@ -111,7 +116,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="min-h-dvh bg-background text-foreground antialiased">
         <SessionProvider>
         <ThemeProvider>
-          <LanguageProvider>
+          <LanguageProvider initialLanguage={language}>
             <div className="flex min-h-dvh flex-col">
               <ConditionalNavbar />
               {children}
