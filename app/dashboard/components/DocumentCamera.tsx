@@ -35,6 +35,27 @@ interface DocumentCameraProps {
 
 /** Width the detector sees. Enough for a page outline, cheap to process. */
 const DETECT_WIDTH = 480;
+/**
+ * Detection settings.
+ *
+ * The ML detector is used because it is measurably better where it counts:
+ * on a cluttered kitchen surface, with a shadow across the page and a faded
+ * till roll, the classical pipeline loses the page and this does not. It is
+ * also faster once loaded.
+ *
+ * The model is served from our own origin rather than the library default,
+ * which is a public CDN: photographing an invoice should not depend on a
+ * third party being reachable.
+ */
+const DETECTOR_OPTIONS = {
+  detector: 'ml' as const,
+  ml: {
+    assetBaseUrl: '/scanner/',
+    modelUrl: '/scanner/doccornernet_lean.ort',
+    wasmPaths: '/scanner/',
+  },
+};
+
 /** Roughly six checks a second: responsive without pinning the CPU. */
 const DETECT_INTERVAL_MS = 160;
 
@@ -115,6 +136,10 @@ export default function DocumentCamera({ onCapture, onClose, onPickFile }: Docum
   useEffect(() => {
     let cancelled = false;
     let scanDocument: ((img: HTMLCanvasElement, opts?: unknown) => Promise<{ corners: Corners | null }>) | null = null;
+    /** Drops to the classical detector if the model cannot be loaded, so a
+     *  missing or unreachable file degrades the accuracy rather than the
+     *  camera. */
+    let useMl = true;
 
     const detect = async () => {
       const video = videoRef.current;
@@ -135,7 +160,7 @@ export default function DocumentCamera({ onCapture, onClose, onPickFile }: Docum
         const sctx = small.getContext('2d', { willReadFrequently: true });
         if (sctx) {
           sctx.drawImage(video, 0, 0, small.width, small.height);
-          const result = await scanDocument(small);
+          const result = await scanDocument(small, useMl ? DETECTOR_OPTIONS : undefined);
           if (!cancelled) {
             cornersRef.current = result?.corners ?? null;
             setFound(Boolean(result?.corners));
@@ -162,6 +187,19 @@ export default function DocumentCamera({ onCapture, onClose, onPickFile }: Docum
         // the library leaves a live preview that never outlines anything.
         const mod = await import('scanic');
         scanDocument = mod.scanDocument as typeof scanDocument;
+
+        // Load the model before the first frame rather than on it: the
+        // first call would otherwise stall while several megabytes arrive,
+        // and the outline would appear seconds after the camera does.
+        try {
+          const warm = document.createElement("canvas");
+          warm.width = 64; warm.height = 64;
+          await scanDocument?.(warm, DETECTOR_OPTIONS);
+        } catch {
+          // The model could not be loaded — carry on with the classical
+          // detector rather than leaving the camera without an outline.
+          useMl = false;
+        }
 
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {

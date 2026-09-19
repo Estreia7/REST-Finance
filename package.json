@@ -4,11 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "node scripts/copy-scanner-model.mjs && prisma generate && next build && node scripts/copy-scanner-model.mjs",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate && node scripts/copy-scanner-model.mjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
@@ -32,6 +32,7 @@
     "react-hook-form": "^7.52.0",
     "recharts": "^2.12.7",
     "scanic": "^1.6.0",
+    "scanic-ml": "^0.2.0",
     "sonner": "^1.5.0",
     "stripe": "^20.4.1",
     "tailwind-merge": "^2.5.2",

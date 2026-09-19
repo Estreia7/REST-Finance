@@ -33,7 +33,12 @@ coverage
 # local machine settings
 .claude/settings.local.json
 
-# local debugging scripts
+# local debugging scripts. Build tooling under scripts/ is part of the
+# project and is excepted below.
 *.mjs
 !next.config.mjs
 !postcss.config.mjs
+!scripts/*.mjs
+
+# Scanner model, copied from node_modules at build time (see scripts/copy-scanner-model.mjs)
+public/scanner/
