@@ -5,6 +5,9 @@ import { toast } from 'sonner';
 import { Camera, Loader2, Check, X, RotateCcw, Receipt, FileText } from 'lucide-react';
 import { createDailySummary, createCostEntry, getCategories } from '../actions';
 import { useLanguage } from '@/lib/language-context';
+import DocumentCamera from './DocumentCamera';
+import ScanPageEditor, { type ScannedPage } from './ScanPageEditor';
+import ScanTray, { type ScannedDocument, newDocumentId } from './ScanTray';
 
 type ScanType = 'COST_RECEIPT' | 'DAILY_REPORT';
 
@@ -38,6 +41,67 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
   const [extracted, setExtracted] = useState<ExtractionResult | null>(null);
   const [editData, setEditData] = useState<ExtractionResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // ── Capture flow ────────────────────────────────────────────────────────
+  // The scanner walks camera -> page editor -> tray, and the tray decides
+  // whether the next page joins this document or starts another one. Holding
+  // the stage here rather than in the children keeps one source of truth for
+  // what has been scanned and what is still being built.
+  type Stage = 'idle' | 'camera' | 'editing' | 'tray';
+  const [stage, setStage] = useState<Stage>('idle');
+  const [captured, setCaptured] = useState<{ frame: HTMLCanvasElement; corners: any } | null>(null);
+  const [currentPages, setCurrentPages] = useState<ScannedPage[]>([]);
+  const [documents, setDocuments] = useState<ScannedDocument[]>([]);
+  const [queue, setQueue] = useState<ScannedDocument[]>([]);
+
+  /** A frame arrived from the camera; hand it to the editor. */
+  const handleCaptured = (frame: HTMLCanvasElement, corners: any) => {
+    setCaptured({ frame, corners });
+    setStage('editing');
+  };
+
+  /** The owner accepted a page: it joins the document being built. */
+  const handlePageDone = (page: ScannedPage) => {
+    setCurrentPages((pages) => [...pages, page]);
+    setCaptured(null);
+    setStage('tray');
+  };
+
+  /** Closes off the document being built, if it has anything in it. */
+  const foldCurrent = (docs: ScannedDocument[], pages: ScannedPage[]) =>
+    pages.length === 0
+      ? docs
+      : [...docs, { id: newDocumentId(), pages: pages.map((p) => p.dataUrl) }];
+
+  const startNewDocument = () => {
+    setDocuments((docs) => foldCurrent(docs, currentPages));
+    setCurrentPages([]);
+    setStage('camera');
+  };
+
+  /**
+   * Finished scanning. Each document is read on its own, one after another,
+   * because the extraction takes a single image: five invoices photographed in
+   * one sitting are five separate costs, not one.
+   */
+  const handleTrayFinish = (docs: ScannedDocument[]) => {
+    if (docs.length === 0) { resetCapture(); return; }
+    setDocuments([]);
+    setCurrentPages([]);
+    setStage('idle');
+    // The first document is read now; the rest wait their turn.
+    setQueue(docs.slice(1));
+    setImagePreview(docs[0].pages[0]);
+  };
+
+  const resetCapture = () => {
+    setStage('idle');
+    setCaptured(null);
+    setCurrentPages([]);
+    setDocuments([]);
+    setQueue([]);
+  };
+
 
   const handleCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -137,11 +201,23 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
     setSaving(false);
   };
 
+  /**
+   * Clears the current reading and, if several documents were scanned in one
+   * sitting, brings up the next one rather than sending the owner back to the
+   * camera for invoices they have already photographed.
+   */
   const resetState = () => {
-    setImagePreview(null);
     setExtracted(null);
     setEditData(null);
     if (fileRef.current) fileRef.current.value = '';
+
+    if (queue.length > 0) {
+      const [next, ...rest] = queue;
+      setQueue(rest);
+      setImagePreview(next.pages[0]);
+      return;
+    }
+    setImagePreview(null);
   };
 
   return (
@@ -166,9 +242,13 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
 
       {/* Camera / upload */}
       {!imagePreview && (
-        <label className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-border rounded-2xl cursor-pointer hover:border-border transition-colors">
+        <button
+          type="button"
+          onClick={() => { setCurrentPages([]); setDocuments([]); setStage('camera'); }}
+          className="w-full flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-border rounded-2xl hover:border-primary transition-colors"
+        >
           <div className="w-14 h-14 rounded-2xl gradient-bg flex items-center justify-center shadow-glow-sm">
-            <Camera className="w-6 h-6 text-white" />
+            <Camera className="w-6 h-6 text-white" aria-hidden="true" />
           </div>
           <div className="text-center">
             <div className="text-sm font-semibold text-foreground">
@@ -178,16 +258,19 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
             </div>
             <div className="text-xs text-muted-foreground mt-1">{t('scanner.tapToOpenCamera')}</div>
           </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleCapture}
-            className="hidden"
-          />
-        </label>
+        </button>
       )}
+
+      {/* Kept for the fallback when the camera cannot be opened. */}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleCapture}
+        className="hidden"
+      />
+
 
       {/* Image preview */}
       {imagePreview && !extracted && (
@@ -297,6 +380,37 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ── Capture: camera, page editor, tray ─────────────────────────── */}
+      {stage === 'camera' && (
+        <DocumentCamera
+          onCapture={handleCaptured}
+          onClose={() => setStage(currentPages.length || documents.length ? 'tray' : 'idle')}
+          onPickFile={() => { setStage('idle'); fileRef.current?.click(); }}
+        />
+      )}
+
+      {stage === 'editing' && captured && (
+        <ScanPageEditor
+          frame={captured.frame}
+          detectedCorners={captured.corners}
+          onDone={handlePageDone}
+          onCancel={() => { setCaptured(null); setStage('camera'); }}
+        />
+      )}
+
+      {stage === 'tray' && (
+        <ScanTray
+          currentPages={currentPages}
+          documents={documents}
+          onAddPageToCurrent={() => setStage('camera')}
+          onStartNewDocument={startNewDocument}
+          onRemovePage={(i) => setCurrentPages((pages) => pages.filter((_, idx) => idx !== i))}
+          onRemoveDocument={(id) => setDocuments((docs) => docs.filter((d) => d.id !== id))}
+          onFinish={handleTrayFinish}
+          onCancel={resetCapture}
+        />
       )}
     </div>
   );

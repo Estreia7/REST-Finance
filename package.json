@@ -31,6 +31,7 @@
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.52.0",
     "recharts": "^2.12.7",
+    "scanic": "^1.6.0",
     "sonner": "^1.5.0",
     "stripe": "^20.4.1",
     "tailwind-merge": "^2.5.2",

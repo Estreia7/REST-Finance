@@ -35,9 +35,27 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.09.13';
+export const CHANGELOG_VERSION = '2026.09.19';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.09.19',
+    date: '2026-09-19',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'Digitalizar faturas ficou muito melhor',
+        detail:
+          'A câmara passa a encontrar sozinha os limites do papel enquanto aponta, e endireita a fotografia por si — mesmo que a tire de lado ou um pouco torta. Depois pode acertar o corte pelos cantos, rodar, e escolher como quer a imagem: normal, realçada (a melhor para talões de caixa desbotados), cinzentos ou preto e branco. Quanto melhor a fotografia, melhor os valores saem certos.',
+      },
+      {
+        kind: 'new',
+        title: 'Fotografar várias faturas de seguida',
+        detail:
+          'Ao fim de cada fotografia pode escolher entre juntar mais uma página à mesma fatura, ou começar uma fatura nova. Assim trata das faturas todas de uma vez, sem sair da câmara, e uma fatura de duas ou três folhas fica como um só documento. Serve tanto para faturas de fornecedor como para os fechos de caixa.',
+      },
+    ],
+  },
   {
     version: '2026.09.13',
     date: '2026-09-13',
