@@ -783,8 +783,11 @@ export async function getComparativeData() {
       const revenue = Number(rev._sum.revenueTotal || 0);
       const totalCosts = Number(costs._sum.amount || 0);
 
+      // The month goes out as figures, not as a formatted string: only the
+      // client knows the account's language, and this is read in both.
       months.push({
-        label: start.toLocaleDateString('pt-PT', { month: 'short', year: '2-digit' }),
+        year: start.getFullYear(),
+        month: start.getMonth(),
         revenue,
         costs: totalCosts,
         profit: revenue - totalCosts,

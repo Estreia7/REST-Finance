@@ -10,10 +10,38 @@ import { formatMoney } from '@/lib/format';
 import InfoHint from '@/app/components/InfoHint';
 
 interface MonthData {
-  label: string;
+  /** Four-digit year. */
+  year: number;
+  /** Zero-based, as `Date.getMonth()` returns it. */
+  month: number;
   revenue: number;
   costs: number;
   profit: number;
+}
+
+/**
+ * The month as a person would say it: "Setembro 2026", "September 2026".
+ *
+ * Name and year are formatted separately and joined by hand rather than asked
+ * for together. Portuguese returns `month: 'short'` as a *number* — which is
+ * where "04/26" came from — and spells the long form "setembro de 2026", with
+ * a connective and a lowercase name that a column of months does not want.
+ * Asking for the month on its own gets the name in both languages.
+ *
+ * Two lengths because the same six months are read in two places: the chart
+ * fits six ticks across a phone, so it gets the abbreviation, while the table
+ * has a column of its own and gets the month written out.
+ */
+function monthLabel(m: MonthData, locale: string, style: 'short' | 'long'): string {
+  const date = new Date(m.year, m.month, 1);
+  const name = date.toLocaleDateString(locale, { month: style });
+  // Portuguese month names are lowercase; at the head of a label they read as
+  // a typo. Abbreviations also carry a trailing dot ("set.") that the year
+  // would otherwise follow.
+  const titled = name.charAt(0).toUpperCase() + name.slice(1).replace(/\.$/, '');
+  // Six ticks share the width of a phone, so the chart takes the short year.
+  const year = style === 'short' ? `'${String(m.year).slice(-2)}` : m.year;
+  return `${titled} ${year}`;
 }
 
 /**
@@ -71,7 +99,8 @@ export default function ComparativePanel() {
   const chart = useChartTheme();
   // Series colours come from the theme, so they cannot live at module scope.
   const COLORS = [chart.primary, chart.info];
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const locale = language === 'pt' ? 'pt-PT' : 'en-GB';
   const [data, setData] = useState<MonthData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -93,6 +122,8 @@ export default function ComparativePanel() {
   const previous = data[data.length - 2];
   const revChange = previous?.revenue ? ((current.revenue - previous.revenue) / previous.revenue * 100) : 0;
   const profitChange = previous?.profit ? ((current.profit - previous.profit) / Math.abs(previous.profit) * 100) : 0;
+
+  const chartData = data.map(m => ({ ...m, label: monthLabel(m, locale, 'short') }));
 
   // Revenue is always the tallest series and profit the only one that can go
   // negative, so those two bracket the chart.
@@ -150,7 +181,7 @@ export default function ComparativePanel() {
               month its own cluster instead of one continuous wall.
             */}
             <BarChart
-              data={data}
+              data={chartData}
               margin={{ top: 4, right: 4, bottom: 0, left: -12 }}
               barGap={3}
               barCategoryGap="22%"
@@ -213,7 +244,9 @@ export default function ComparativePanel() {
             <tbody>
               {data.map((m, i) => (
                 <tr key={i} className="border-b border-border-subtle">
-                  <td className="py-2 text-foreground font-medium">{m.label}</td>
+                  <td className="py-2 text-foreground font-medium whitespace-nowrap">
+                    {monthLabel(m, locale, 'long')}
+                  </td>
                   <td className="py-2 text-right text-muted-foreground">{fmt(m.revenue)}</td>
                   <td className="py-2 text-right text-red-400">{fmt(m.costs)}</td>
                   <td className={`py-2 text-right font-semibold ${m.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmt(m.profit)}</td>
