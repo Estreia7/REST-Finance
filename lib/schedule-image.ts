@@ -87,6 +87,15 @@ const COLORS = {
   headBg: '#f5f4f2',
   closedBg: '#f1f0ee',
   accent: '#b45309',
+  /**
+   * The "Folga" chip. Outlined rather than filled, because every employee
+   * colour is a filled tint — including the grey one — so hue alone cannot
+   * keep a closure apart from somebody's shift. Shape can: a shift is a
+   * solid block, a closed day is an outline. It survives the JPEG
+   * recompression and the thumbnail that a tint would not.
+   */
+  offLine: '#c9c4bd',
+  offInk: '#78716c',
 };
 
 /** Sizes in px at 1x; the route renders at 2x for a crisp result on a phone. */
@@ -238,8 +247,21 @@ export function buildScheduleSvg(input: ImageInput): { svg: string; width: numbe
       const key = dateKey(day);
       const shift = byCell.get(`${emp.id}|${key}`);
 
-      // The band behind the column already says this day is shut.
-      if (closedDays.has(key)) return;
+      // A closed day is named in every row rather than left blank: an empty
+      // cell reads as "not scheduled yet", which is the opposite of settled.
+      if (closedDays.has(key)) {
+        parts.push(
+          `<rect x="${x + 8.5}" y="${y + 10.5}" width="${L.dayCol - 17}" height="31" rx="7" fill="none" stroke="${
+            COLORS.offLine
+          }" stroke-width="1" stroke-dasharray="4 3"/>`,
+          `<text x="${x + L.dayCol / 2}" y="${
+            y + 31
+          }" font-size="13" font-weight="600" text-anchor="middle" fill="${COLORS.offInk}">${
+            language === 'pt' ? 'Folga' : 'Day off'
+          }</text>`
+        );
+        return;
+      }
 
       if (!shift) {
         parts.push(
@@ -303,8 +325,13 @@ export function buildScheduleSvg(input: ImageInput): { svg: string; width: numbe
   });
 
   // ── Closed days, named at the foot ──────────────────────────────────────
+  // Named with the date, not just the weekday: the image is forwarded and
+  // read days later, and "Seg" on its own leaves the team guessing which one.
   const closedList = days
-    .map((d, i) => ({ name: dayNames[i], reason: closedDays.get(dateKey(d)) }))
+    .map((d, i) => ({
+      name: `${dayNames[i]} ${d.getUTCDate()}/${d.getUTCMonth() + 1}`,
+      reason: closedDays.get(dateKey(d)),
+    }))
     .filter((d) => d.reason !== undefined);
 
   const footY = gridBottom + 28;

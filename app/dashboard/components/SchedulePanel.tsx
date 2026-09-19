@@ -602,8 +602,17 @@ function ShiftCell({
 }) {
   const { t } = useLanguage();
 
+  // Named, not blank. An empty cell reads as "not scheduled yet"; the point
+  // of closing a day is that it is settled. Outlined rather than filled:
+  // every employee colour is a filled tint, so shape — not hue — is what
+  // keeps a closure from reading as somebody's shift.
   if (closed) {
-    return <div className="h-11 rounded-lg flex items-center justify-center text-[11px] text-muted-foreground">—</div>;
+    return (
+      <div className="h-11 rounded-lg flex items-center justify-center border border-dashed border-border
+                      text-[11px] font-semibold text-muted-foreground">
+        {t('schedule.dayOff')}
+      </div>
+    );
   }
 
   if (!shift) {

@@ -49,6 +49,18 @@ export const CHANGELOG: Release[] = [
           'A câmara passa a encontrar sozinha os limites do papel enquanto aponta, e endireita a fotografia por si — mesmo que a tire de lado ou um pouco torta. Depois pode acertar o corte pelos cantos, rodar, e escolher como quer a imagem: normal, realçada (a melhor para talões de caixa desbotados), cinzentos ou preto e branco. Quanto melhor a fotografia, melhor os valores saem certos.',
       },
       {
+        kind: 'improvement',
+        title: 'Os dias fechados já se percebem no horário',
+        detail:
+          'Nos dias em que o restaurante está fechado, cada pessoa passa a ter "Folga" escrito no lugar do turno, num quadrado tracejado que não se confunde com um turno a sério. Em baixo, a nota dos dias encerrados passa a dizer também o dia e o mês — "Seg 21/9" em vez de só "Seg" —, para que ninguém se engane na semana quando a imagem for reencaminhada no WhatsApp.',
+      },
+      {
+        kind: 'fix',
+        title: 'Os meses da comparação já se leem pelo nome',
+        detail:
+          'Em Análises › Comparação, o detalhe mensal mostrava "04/26" em vez do mês. Agora diz "Abril 2026", por extenso e com o ano à frente — e escreve o mês na língua em que está a usar a aplicação.',
+      },
+      {
         kind: 'new',
         title: 'Fotografar várias faturas de seguida',
         detail:
