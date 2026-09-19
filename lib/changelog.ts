@@ -50,6 +50,12 @@ export const CHANGELOG: Release[] = [
       },
       {
         kind: 'improvement',
+        title: 'A câmara tira a fotografia sozinha, já recortada',
+        detail:
+          'Aponte para a fatura e não faça mais nada: assim que o documento fica quieto no ecrã, a fotografia é tirada sem precisar de carregar em nada — dá jeito quando tem o telemóvel numa mão e o papel na outra. A página aparece logo recortada e endireitada, sem a mesa nem o que estiver à volta. Se o corte não ficar como queria, "Ajustar recorte" continua lá para acertar os cantos, e o botão de tirar a fotografia também, para quando preferir ser você a escolher o momento.',
+      },
+      {
+        kind: 'improvement',
         title: 'Os dias fechados já se percebem no horário',
         detail:
           'Nos dias em que o restaurante está fechado, cada pessoa passa a ter "Folga" escrito no lugar do turno, num quadrado tracejado que não se confunde com um turno a sério. Em baixo, a nota dos dias encerrados passa a dizer também o dia e o mês — "Seg 21/9" em vez de só "Seg" —, para que ninguém se engane na semana quando a imagem for reencaminhada no WhatsApp.',

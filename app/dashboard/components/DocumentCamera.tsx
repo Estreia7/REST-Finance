@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Camera, Loader2, ImageUp } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
+import { stabilityStep, type Corners, type StabilityState } from '@/lib/scan-stability';
 
 /**
  * The live camera, with the document outlined as you point at it.
@@ -16,13 +17,6 @@ import { useLanguage } from '@/lib/language-context';
  * on a weak connection should not pay for it on every dashboard visit — only
  * when the camera is actually opened.
  */
-
-interface Corners {
-  topLeft: { x: number; y: number };
-  topRight: { x: number; y: number };
-  bottomRight: { x: number; y: number };
-  bottomLeft: { x: number; y: number };
-}
 
 interface DocumentCameraProps {
   /** Receives the captured frame at full resolution, plus the detected corners
@@ -59,6 +53,17 @@ const DETECTOR_OPTIONS = {
 /** Roughly six checks a second: responsive without pinning the CPU. */
 const DETECT_INTERVAL_MS = 160;
 
+/**
+ * Auto-capture.
+ *
+ * The camera takes the photograph itself once the outline has stopped moving
+ * — the same moment a person would have pressed the button. "Stopped moving"
+ * is measured geometrically rather than from the detector's own confidence: a
+ * detector can be sure about a page that is still sliding across the frame,
+ * and the classical fallback reports no confidence at all. The rule lives in
+ * `lib/scan-stability.ts`, where it can be tested without a video stream.
+ */
+
 export default function DocumentCamera({ onCapture, onClose, onPickFile }: DocumentCameraProps) {
   const { t } = useLanguage();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -71,11 +76,19 @@ export default function DocumentCamera({ onCapture, onClose, onPickFile }: Docum
   /** Latest corners, in detector coordinates. Held in a ref so the detection
    *  loop does not re-render the component several times a second. */
   const cornersRef = useRef<Corners | null>(null);
+  /** The previous reading and when the quad was first seen to be still, in
+   *  the detection loop's own coordinates. */
+  const stabilityRef = useRef<StabilityState>({ previous: null, steadySince: null });
+  /** Auto-capture must fire once. The loop keeps running for a few frames
+   *  after it does, and a second shot would open a second editor. */
+  const capturedRef = useRef(false);
 
   const [starting, setStarting] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [found, setFound] = useState(false);
+  /** Drives the "hold still" message and the ring that fills as it settles. */
+  const [holding, setHolding] = useState(false);
 
   /** Draws the outline over the preview. */
   const paintOverlay = useCallback(() => {
@@ -116,13 +129,17 @@ export default function DocumentCamera({ onCapture, onClose, onPickFile }: Docum
     quad.slice(1).forEach((p) => ctx.lineTo(p.x, p.y));
     ctx.closePath();
 
-    ctx.fillStyle = 'rgba(245, 158, 11, 0.16)';
+    // Brightening while it settles is what makes the automatic shutter feel
+    // deliberate instead of random: the frame visibly commits before it fires.
+    const settling = stabilityRef.current.steadySince !== null;
+
+    ctx.fillStyle = settling ? 'rgba(255, 255, 255, 0.22)' : 'rgba(245, 158, 11, 0.16)';
     ctx.fill();
-    ctx.strokeStyle = 'rgb(245, 158, 11)';
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = settling ? 'rgb(255, 255, 255)' : 'rgb(245, 158, 11)';
+    ctx.lineWidth = settling ? 4 : 3;
     ctx.stroke();
 
-    ctx.fillStyle = 'rgb(245, 158, 11)';
+    ctx.fillStyle = settling ? 'rgb(255, 255, 255)' : 'rgb(245, 158, 11)';
     for (const p of quad) {
       ctx.beginPath();
       ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
@@ -135,7 +152,12 @@ export default function DocumentCamera({ onCapture, onClose, onPickFile }: Docum
   // on the phone and a battery drain the owner will notice.
   useEffect(() => {
     let cancelled = false;
-    let scanDocument: ((img: HTMLCanvasElement, opts?: unknown) => Promise<{ corners: Corners | null }>) | null = null;
+    let scanDocument:
+      | ((
+          img: HTMLCanvasElement,
+          opts?: unknown,
+        ) => Promise<{ corners: Corners | null; score?: number | null }>)
+      | null = null;
     /** Drops to the classical detector if the model cannot be loaded, so a
      *  missing or unreachable file degrades the accuracy rather than the
      *  camera. */
@@ -162,8 +184,24 @@ export default function DocumentCamera({ onCapture, onClose, onPickFile }: Docum
           sctx.drawImage(video, 0, 0, small.width, small.height);
           const result = await scanDocument(small, useMl ? DETECTOR_OPTIONS : undefined);
           if (!cancelled) {
-            cornersRef.current = result?.corners ?? null;
-            setFound(Boolean(result?.corners));
+            const corners = result?.corners ?? null;
+            cornersRef.current = corners;
+            setFound(Boolean(corners));
+
+            // ── Has it settled? ──────────────────────────────────────────
+            // A quad that is big enough, that the detector believes in, and
+            // that has not moved for long enough takes its own photograph.
+            const step = stabilityStep(
+              stabilityRef.current,
+              corners,
+              result?.score,
+              small.width,
+              small.height,
+              now,
+            );
+            stabilityRef.current = step.state;
+            setHolding(step.holding);
+            if (step.shouldCapture && !capturedRef.current) captureRef.current();
           }
         }
       } catch {
@@ -248,9 +286,13 @@ export default function DocumentCamera({ onCapture, onClose, onPickFile }: Docum
   }, [paintOverlay, t]);
 
   /** Grabs the current frame at full sensor resolution. */
-  const capture = () => {
+  const capture = useCallback(() => {
     const video = videoRef.current;
     if (!video || !video.videoWidth) return;
+    // Whether the shutter was pressed or the frame settled by itself, this
+    // runs once: the detection loop survives a few frames past the capture.
+    if (capturedRef.current) return;
+    capturedRef.current = true;
 
     const frame = document.createElement('canvas');
     frame.width = video.videoWidth;
@@ -272,7 +314,14 @@ export default function DocumentCamera({ onCapture, onClose, onPickFile }: Docum
       : null;
 
     onCapture(frame, scaled);
-  };
+  }, [onCapture]);
+
+  /** Held in a ref so the detection loop, which is started once, always
+   *  reaches the current closure without being torn down and restarted. */
+  const captureRef = useRef(capture);
+  useEffect(() => {
+    captureRef.current = capture;
+  }, [capture]);
 
   return (
     <div className="fixed inset-0 z-[90] bg-black flex flex-col" role="dialog" aria-modal="true" aria-label={t('camera.title')}>
@@ -311,7 +360,11 @@ export default function DocumentCamera({ onCapture, onClose, onPickFile }: Docum
                        bg-black/60 text-white whitespace-nowrap"
             role="status"
           >
-            {found ? t('camera.documentFound') : t('camera.searching')}
+            {holding
+              ? t('camera.holdStill')
+              : found
+                ? t('camera.documentFound')
+                : t('camera.searching')}
           </p>
         )}
       </div>

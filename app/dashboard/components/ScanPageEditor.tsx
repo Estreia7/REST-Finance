@@ -168,6 +168,45 @@ export default function ScanPageEditor({
   );
 
   /**
+   * Straightens the page before the owner ever sees it.
+   *
+   * The corners were already found while they were pointing the camera, so
+   * presenting the raw photograph — table, keyboard and all — asks them to
+   * confirm a crop the app had worked out for itself. The page arrives cut
+   * out and squared up; "Ajustar recorte" is there for when it got it wrong.
+   *
+   * Runs once, on mount. Nothing here depends on state that changes: a later
+   * crop goes through the corner editor, which starts from `frame` again.
+   */
+  useEffect(() => {
+    if (!detectedCorners) return;
+
+    let cancelled = false;
+    setBusy(true);
+
+    void (async () => {
+      try {
+        const { extractDocument } = await import('scanic');
+        const result = await extractDocument(frame, detectedCorners, { output: 'canvas' });
+        if (cancelled) return;
+        // A failure here is not worth a message. The owner has a usable
+        // photograph and a crop button; telling them the automatic step they
+        // never asked for did not happen would only be noise.
+        if (result.output instanceof HTMLCanvasElement) setPage(result.output);
+      } catch {
+        // Same reasoning: fall back to the frame as photographed.
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
    * Mounts scanic's corner editor over the original frame.
    *
    * Corners are always taken against `frame`, never against an already-cropped
