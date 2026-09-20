@@ -43,6 +43,18 @@ export const CHANGELOG: Release[] = [
     date: '2026-09-20',
     entries: [
       {
+        kind: 'fix',
+        title: '"Fotografar" abre mesmo a câmara',
+        detail:
+          'No botão +, escolher "Fotografar" levava-o para o separador e voltava a perguntar a mesma coisa, obrigando a começar de novo. Agora a câmara abre logo. E se escolheu "Despesa", abre já preparada para uma fatura de fornecedor em vez do fecho de caixa.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Escolher a fotografia sem sair da aplicação',
+        detail:
+          'Ao inserir um documento, a escolha entre câmara, fototeca e ficheiros passa a ser feita dentro da aplicação, na sua língua, em vez do menu cinzento do telemóvel. Uma fotografia escolhida da fototeca é agora recortada e endireitada tal como uma tirada na hora — antes ficava com a mesa e tudo o resto à volta.',
+      },
+      {
         kind: 'new',
         title: 'A apresentação corre sozinha numa televisão',
         detail:

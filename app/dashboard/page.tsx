@@ -141,6 +141,8 @@ function DashboardPageInner() {
   // ── Sub-views for revenue/costs/analytics
   /** The + button asks what is being added before it goes anywhere. */
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  /** Raised when "Fotografar" was chosen, so the camera opens on arrival. */
+  const [autoStartCamera, setAutoStartCamera] = useState(false);
   const [revenueSubView, setRevenueSubView] = useState<'entry' | 'history' | 'scan'>('entry');
   const [costSubView, setCostSubView] = useState<'entry' | 'history' | 'scan'>('entry');
   const [analyticsSubView, setAnalyticsSubView] = useState<'pnl' | 'compare' | 'tickets' | 'menu' | 'goals' | 'report' | 'prices'>('pnl');
@@ -250,6 +252,9 @@ function DashboardPageInner() {
   const handleQuickAdd = (kind: QuickAddKind, method: QuickAddMethod) => {
     if (kind === 'revenue') setRevenueSubView(method);
     else setCostSubView(method);
+    // "Fotografar" already answered the question the scanner's idle screen
+    // asks, so the camera opens on arrival instead of asking it again.
+    setAutoStartCamera(method === 'scan');
     setShowQuickAdd(false);
     handleTabChange(kind);
   };
@@ -492,7 +497,12 @@ function DashboardPageInner() {
               )}
               {revenueSubView === 'scan' && (
                 <div className="max-w-2xl">
-                  <ReceiptScanner onSaved={loadData} />
+                  <ReceiptScanner
+                    onSaved={loadData}
+                    defaultScanType="DAILY_REPORT"
+                    autoStart={autoStartCamera}
+                    onAutoStarted={() => setAutoStartCamera(false)}
+                  />
                 </div>
               )}
               {revenueSubView === 'history' && (
@@ -524,7 +534,12 @@ function DashboardPageInner() {
               )}
               {costSubView === 'scan' && (
                 <div className="max-w-2xl">
-                  <ReceiptScanner onSaved={loadData} />
+                  <ReceiptScanner
+                    onSaved={loadData}
+                    defaultScanType="COST_RECEIPT"
+                    autoStart={autoStartCamera}
+                    onAutoStarted={() => setAutoStartCamera(false)}
+                  />
                 </div>
               )}
               {costSubView === 'history' && (

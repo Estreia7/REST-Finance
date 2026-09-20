@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Camera, Loader2, Check, X, RotateCcw, Receipt, FileText } from 'lucide-react';
 import { createDailySummary, createCostEntry, getCategories } from '../actions';
@@ -34,9 +34,34 @@ interface DailyReportData {
 
 type ExtractionResult = CostReceiptData | DailyReportData;
 
-export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
+interface ReceiptScannerProps {
+  onSaved?: () => void;
+  /**
+   * Which document this tab is for. The scanner sits under both Receita and
+   * Custos, and a till report is not an invoice — starting on the wrong one
+   * means the reader is asked the wrong question about the page.
+   */
+  defaultScanType?: ScanType;
+  /**
+   * Opens the camera on mount rather than the idle screen.
+   *
+   * Set when the owner already said "Fotografar" on the way here. Asking
+   * again, on a screen that looks like the start of the task, reads as the
+   * first tap having failed.
+   */
+  autoStart?: boolean;
+  /** Cleared once the camera has been opened, so it does not reopen. */
+  onAutoStarted?: () => void;
+}
+
+export default function ReceiptScanner({
+  onSaved,
+  defaultScanType = 'DAILY_REPORT',
+  autoStart = false,
+  onAutoStarted,
+}: ReceiptScannerProps) {
   const { t } = useLanguage();
-  const [scanType, setScanType] = useState<ScanType>('DAILY_REPORT');
+  const [scanType, setScanType] = useState<ScanType>(defaultScanType);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -59,6 +84,35 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
   const [pickingSource, setPickingSource] = useState(false);
   /** Detecting the document in a photograph that was chosen, not taken. */
   const [readingFile, setReadingFile] = useState(false);
+
+  /**
+   * Opens the camera straight away when that is what was already chosen.
+   *
+   * The + button asks "escrever ou fotografar" before it navigates here, so
+   * arriving on the idle screen and asking again makes the first answer look
+   * like it was thrown away. The flag is consumed immediately, so coming back
+   * out of the camera leaves the owner on the tab rather than reopening it.
+   */
+  const autoStartedRef = useRef(false);
+  useEffect(() => {
+    // The ref, not just the flag: `onAutoStarted` is an inline arrow in the
+    // parent, so this effect re-runs on every render, and the flag only
+    // clears after the parent has re-rendered. Without the ref a render in
+    // between would reopen the camera over a page the owner was editing.
+    if (!autoStart) {
+      // Armed again for the next time the + button asks for the camera: this
+      // component stays mounted, so without this the second use would land
+      // on the idle screen the first one was meant to skip.
+      autoStartedRef.current = false;
+      return;
+    }
+    if (autoStartedRef.current) return;
+    autoStartedRef.current = true;
+    onAutoStarted?.();
+    setCurrentPages([]);
+    setDocuments([]);
+    setStage('camera');
+  }, [autoStart, onAutoStarted]);
 
   /**
    * Acts on the three-way choice.
