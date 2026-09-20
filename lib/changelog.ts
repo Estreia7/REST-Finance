@@ -43,6 +43,12 @@ export const CHANGELOG: Release[] = [
     date: '2026-09-20',
     entries: [
       {
+        kind: 'new',
+        title: 'Trazer o histórico de vendas do seu sistema de caixa',
+        detail:
+          'Em Receita › Importar pode carregar o ficheiro de vendas exportado do seu POS — Excel ou CSV — e a aplicação insere tudo de uma vez, dia a dia e por família de produtos. Antes de gravar mostra o que encontrou: quantos dias, quanto dinheiro, que famílias, e avisa se algum dia já tem valores diferentes dos seus, que só são substituídos se você deixar. Um ano de histórico entra em segundos em vez de ser escrito à mão.',
+      },
+      {
         kind: 'fix',
         title: '"Fotografar" abre mesmo a câmara',
         detail:

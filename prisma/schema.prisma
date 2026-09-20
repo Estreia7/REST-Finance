@@ -105,6 +105,7 @@ model Restaurant {
   ingredients       Ingredient[]
   menuItems         MenuItem[]
   supportTickets    SupportTicket[]
+  categoryRevenue   DailyCategoryRevenue[]
 
   @@map("restaurants")
 }
@@ -268,7 +269,8 @@ model Category {
   /// like a bad one.
   isOccupancy Boolean @default(false) @map("is_occupancy")
 
-  costEntries CostEntry[]
+  costEntries  CostEntry[]
+  dailyRevenue DailyCategoryRevenue[]
 
   @@index([restaurantId, isActive])
   @@map("categories")
@@ -841,4 +843,45 @@ model ExtractionTest {
   @@index([createdAt])
   @@index([scanType, createdAt])
   @@map("extraction_tests")
+}
+
+/// A day's revenue in one menu category, as the till grouped it.
+///
+/// `DailySummary` answers "what did we take today" and splits it by channel.
+/// This answers "where did it come from" — how much was comida, how much was
+/// bebida — which is the question an owner asks when a good month and a bad
+/// month have the same total.
+///
+/// Separate from `DailySummary` rather than columns on it, because the
+/// categories differ per restaurant: one groups by BEBIDAS/COMIDAS/MENUS,
+/// another by lunch/dinner/events. A column per category would mean a
+/// migration every time a restaurant renamed a section of its menu.
+///
+/// The figures are VAT-inclusive, matching `DailySummary.revenueTotal` and
+/// everything else the owner sees, so a day's categories sum to that day's
+/// takings.
+model DailyCategoryRevenue {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  date     DateTime
+  category Category @relation(fields: [categoryId], references: [id])
+  categoryId String @map("category_id")
+
+  /// Takings in this category, VAT included.
+  revenue  Decimal @default(0) @db.Decimal(12, 2)
+  /// How many items went out. Useful for spotting a category that sells a
+  /// lot of units for very little money.
+  quantity Int     @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// One row per category per day, so an import corrects rather than doubles.
+  @@unique([restaurantId, date, categoryId])
+  /// Read as "this month, by category" and "this category, over time".
+  @@index([restaurantId, date])
+  @@index([categoryId, date])
+  @@map("daily_category_revenue")
 }

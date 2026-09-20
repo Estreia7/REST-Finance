@@ -14,6 +14,7 @@ import {
 import RevenueHistoryPanel from './components/RevenueHistoryPanel';
 import CostHistoryPanel from './components/CostHistoryPanel';
 import ReceiptScanner from './components/ReceiptScanner';
+import PosImportPanel from './components/PosImportPanel';
 import PnLPanel from './components/PnLPanel';
 import ComparativePanel from './components/ComparativePanel';
 import TicketAnalysisPanel from './components/TicketAnalysisPanel';
@@ -143,7 +144,7 @@ function DashboardPageInner() {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   /** Raised when "Fotografar" was chosen, so the camera opens on arrival. */
   const [autoStartCamera, setAutoStartCamera] = useState(false);
-  const [revenueSubView, setRevenueSubView] = useState<'entry' | 'history' | 'scan'>('entry');
+  const [revenueSubView, setRevenueSubView] = useState<'entry' | 'history' | 'scan' | 'import'>('entry');
   const [costSubView, setCostSubView] = useState<'entry' | 'history' | 'scan'>('entry');
   const [analyticsSubView, setAnalyticsSubView] = useState<'pnl' | 'compare' | 'tickets' | 'menu' | 'goals' | 'report' | 'prices'>('pnl');
   const [settingsSubView, setSettingsSubView] = useState<'account' | 'support'>('account');
@@ -480,6 +481,7 @@ function DashboardPageInner() {
                 <button onClick={() => setRevenueSubView('entry')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'entry' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.entry')}</button>
                 <button onClick={() => setRevenueSubView('scan')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'scan' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.scan')}</button>
                 <button onClick={() => setRevenueSubView('history')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'history' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.history')}</button>
+                <button onClick={() => setRevenueSubView('import')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'import' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.import')}</button>
               </div>
               {revenueSubView === 'entry' && (
                 <QuickEntryPanel
@@ -503,6 +505,11 @@ function DashboardPageInner() {
                     autoStart={autoStartCamera}
                     onAutoStarted={() => setAutoStartCamera(false)}
                   />
+                </div>
+              )}
+              {revenueSubView === 'import' && (
+                <div className="max-w-2xl">
+                  <PosImportPanel onImported={loadData} />
                 </div>
               )}
               {revenueSubView === 'history' && (
