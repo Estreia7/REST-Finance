@@ -223,6 +223,112 @@ export class ImportFormatError extends Error {
 }
 
 /**
+ * What a file actually is, regardless of what it is called.
+ *
+ * ZoneSoft's "Excel" export is an HTML table saved with an .xls name — the
+ * old trick that opens in Excel without writing a real spreadsheet. The
+ * extension therefore says nothing useful, and sniffing the first bytes is
+ * the only reliable way to pick a reader.
+ */
+export type FileShape = 'xlsx' | 'html' | 'csv';
+
+export function detectShape(bytes: Uint8Array): FileShape {
+  // "PK\x03\x04": a zip, which is what a real .xlsx is.
+  if (bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04) {
+    return 'xlsx';
+  }
+
+  // "D0 CF 11 E0": a real binary .xls, which nothing here can read. Said
+  // plainly rather than left to fail somewhere further in, because the owner
+  // can fix it in seconds by exporting again — and being told "could not
+  // read the file" for a file their POS produced is infuriating.
+  if (bytes[0] === 0xd0 && bytes[1] === 0xcf && bytes[2] === 0x11 && bytes[3] === 0xe0) {
+    throw new ImportFormatError('__legacyXls');
+  }
+
+  // Enough to catch "<html", "<table", a doctype or a BOM before either.
+  const head = new TextDecoder('utf-8', { fatal: false })
+    .decode(bytes.slice(0, 512))
+    .replace(/^﻿/, '')
+    .trimStart()
+    .toLowerCase();
+
+  if (head.startsWith('<') && /<(html|table|!doctype|meta|head)/.test(head)) return 'html';
+
+  return 'csv';
+}
+
+/** HTML entities ZoneSoft's export actually uses. */
+const ENTITIES: Record<string, string> = {
+  euro: '€', nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
+  aacute: 'á', agrave: 'à', atilde: 'ã', acirc: 'â',
+  eacute: 'é', egrave: 'è', ecirc: 'ê',
+  iacute: 'í', oacute: 'ó', otilde: 'õ', ocirc: 'ô',
+  uacute: 'ú', ccedil: 'ç',
+  Aacute: 'Á', Atilde: 'Ã', Eacute: 'É', Iacute: 'Í',
+  Oacute: 'Ó', Otilde: 'Õ', Uacute: 'Ú', Ccedil: 'Ç',
+};
+
+/** Turns "Descri&ccedil;&atilde;o" and "&#237;" back into text. */
+export function decodeEntities(value: string): string {
+  return value
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
+    .replace(/&([a-z]+);/gi, (whole, name) => ENTITIES[name] ?? ENTITIES[name.toLowerCase()] ?? whole);
+}
+
+/**
+ * Reads the HTML table ZoneSoft calls an .xls.
+ *
+ * Hand-written rather than pulling in a DOM library: the markup is machine
+ * generated and utterly regular — no nesting inside cells, no scripts, no
+ * attributes that matter — and a parser dependency for one shape of one
+ * vendor's export is not worth the weight or the audit surface.
+ *
+ * Returns rows in the same shape a spreadsheet would, so everything
+ * downstream is shared.
+ */
+export function parseHtmlTable(html: string): { header: string[]; rows: SheetRow[] } {
+  const cellsOf = (rowHtml: string): string[] =>
+    [...rowHtml.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(([, inner]) =>
+      decodeEntities(
+        inner
+          // A cell may carry <b> around a label, or a <br> between lines.
+          .replace(/<br\s*\/?>/gi, ' ')
+          .replace(/<[^>]+>/g, ''),
+      )
+        .replace(/\s+/g, ' ')
+        .trim(),
+    );
+
+  const rowMatches = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
+
+  let header: string[] = [];
+  const rows: SheetRow[] = [];
+
+  for (const [index, match] of rowMatches.entries()) {
+    const cells = cellsOf(match[1]);
+    if (cells.length === 0) continue;
+
+    // The header is the first row carrying a bare "Data" cell. Everything
+    // above it is the report's title, the shop and the date range, each in
+    // its own little table.
+    if (!header.length) {
+      if (cells.some((c) => /^\s*data\s*$/i.test(c))) header = cells;
+      continue;
+    }
+
+    // `index` is the row's place in the document, which is what makes a
+    // skipped-row report meaningful to whoever has to look at it.
+    rows.push({ index: index + 1, cells });
+  }
+
+  if (!header.length) throw new ImportFormatError('Data');
+
+  return { header, rows };
+}
+
+/**
  * Finds each column by its header.
  *
  * By name rather than position, because the revenue column sits next to a

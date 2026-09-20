@@ -1921,6 +1921,7 @@ export const translations = {
       tooLarge: 'O ficheiro não pode exceder 10 MB.',
       noRows: 'Não foram encontradas vendas neste ficheiro.',
       wrongFormat: 'Este ficheiro não parece o relatório de vendas por família. Verifique que exportou o relatório certo.',
+      legacyXls: 'Este é um ficheiro Excel antigo (.xls) que não conseguimos abrir. No ZoneSoft, exporte outra vez escolhendo Excel ou CSV.',
     },
     // Where a photograph comes from, asked in the app instead of by the phone
     sourcePicker: {
@@ -3917,6 +3918,7 @@ export const translations = {
       tooLarge: 'The file cannot exceed 10 MB.',
       noRows: 'No sales were found in this file.',
       wrongFormat: 'This does not look like the sales-by-family report. Check that you exported the right one.',
+      legacyXls: 'This is an old Excel file (.xls) we cannot open. In ZoneSoft, export it again choosing Excel or CSV.',
     },
     // Where a photograph comes from, asked in the app instead of by the phone
     sourcePicker: {

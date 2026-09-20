@@ -6,6 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { toClientError, withFaultReporting } from '@/lib/errors';
 import {
   parseFamiliaSheet,
+  parseHtmlTable,
+  detectShape,
   ImportFormatError,
   type ParsedImport,
   type SheetRow,
@@ -102,9 +104,20 @@ export async function previewPosImport(formData: FormData) {
       } satisfies ImportPreview,
     };
   } catch (error: unknown) {
-    if (error instanceof ImportFormatError) return { error: 'import.wrongFormat' };
+    if (error instanceof ImportFormatError) return { error: formatErrorKey(error) };
     return { error: toClientError('Failed to read the export', error, 'read') };
   }
+}
+
+/**
+ * Which message to show for a file we cannot read.
+ *
+ * A genuine binary .xls is worth naming: the owner fixes it by exporting
+ * again as Excel or CSV, and "could not read the file" would send them
+ * looking for a problem that is not theirs.
+ */
+function formatErrorKey(error: ImportFormatError): string {
+  return error.missing === '__legacyXls' ? 'import.legacyXls' : 'import.wrongFormat';
 }
 
 /**
@@ -222,7 +235,7 @@ async function commitPosImportInner(
       data: { daysWritten, daysSkipped, rowsWritten: written, familias: parsed.familias.length },
     };
   } catch (error: unknown) {
-    if (error instanceof ImportFormatError) return { error: 'import.wrongFormat' };
+    if (error instanceof ImportFormatError) return { error: formatErrorKey(error) };
     return { error: toClientError('Failed to import', error, 'write') };
   }
 }
@@ -264,10 +277,21 @@ async function ensureCategories(restaurantId: string, familias: string[]) {
  */
 async function readWorkbook(file: File): Promise<ParsedImport> {
   const buffer = Buffer.from(await file.arrayBuffer());
-  const isCsv = /\.csv$/i.test(file.name) || file.type === 'text/csv';
+
+  // By content, not by extension. ZoneSoft's "Excel" export is an HTML table
+  // saved with an .xls name — the old trick that opens in Excel without
+  // writing a real spreadsheet — so the name says nothing about what is
+  // inside, and trusting it is what made a perfectly good file fail to
+  // import.
+  const shape = detectShape(buffer);
+
+  if (shape === 'html') {
+    const { header, rows } = parseHtmlTable(buffer.toString('utf8'));
+    return parseFamiliaSheet(header, rows);
+  }
 
   const workbook = new ExcelJS.Workbook();
-  if (isCsv) {
+  if (shape === 'csv') {
     // ExcelJS reads a CSV through a stream; a Blob-backed one keeps the file
     // off disk, which matters on a read-only container.
     const { Readable } = await import('node:stream');

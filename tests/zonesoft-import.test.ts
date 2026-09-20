@@ -5,6 +5,9 @@ import {
   parsePtDate,
   toFamilia,
   ImportFormatError,
+  detectShape,
+  parseHtmlTable,
+  decodeEntities,
   type SheetRow,
 } from '@/lib/zonesoft-import';
 
@@ -196,5 +199,71 @@ describe('parseFamiliaSheet', () => {
     }));
     const parsed = parseFamiliaSheet(HEADER, cents);
     expect(parsed.rows[0].revenue).toBe(3);
+  });
+});
+
+describe('the ZoneSoft "Excel" export, which is really HTML', () => {
+  /**
+   * An excerpt of the client's actual file, markup and entities intact.
+   *
+   * This is the shape that broke the first release: ZoneSoft's .xls is an
+   * HTML table, so ExcelJS could not read a byte of it and the owner got a
+   * generic failure for a perfectly good file.
+   */
+  const REAL_HTML = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head>
+    <title>Evolu&ccedil;&atilde;o de Vendas por Familia / Sub-Familia</title></head><body>
+    <table width="100%"><tr><td><b>Loja</b>: 1 - Loja 1</td></tr></table>
+    <table width="100%"><tr><td><b>Data in&#237;cio</b>: 01-01-2025</td><td><b>Data de Fim</b>: 31-12-2025</td></tr></table>
+    <table width="100%">
+      <tr><th bgcolor="#C0C0C0">Data</th><th bgcolor="#C0C0C0">Descri&ccedil;&atilde;o</th><th bgcolor="#C0C0C0">Quantidade</th><th bgcolor="#C0C0C0">Valor Total S/IVA</th><th bgcolor="#C0C0C0">Valor Total</th></tr>
+      <tr><td bgcolor="#FFFFFF">02-01-2025</td><td align="left">BEBIDAS/</td><td align="right">1,000</td><td align="right">0,000&euro;</td><td align="right">0,000&euro;</td></tr>
+      <tr><td bgcolor="#F6F6F6">02-01-2025</td><td align="left">BEBIDAS/SUMOS E AGUAS</td><td align="right">4,000</td><td align="right">6,179&euro;</td><td align="right">7,600&euro;</td></tr>
+      <tr><td bgcolor="#FFFFFF">02-01-2025</td><td align="left">COMIDAS/SMASHIES</td><td align="right">16,000</td><td align="right">162,389&euro;</td><td align="right">183,500&euro;</td></tr>
+      <tr><td>Total:</td><td>21,000</td><td>168,568&euro;</td><td>191,100&euro;</td></tr>
+    </table></body></html>`;
+
+  it('recognises the file by its bytes, not its name', () => {
+    // The whole bug in one line: the extension says .xls, the content says
+    // HTML, and only one of those can be trusted.
+    expect(detectShape(new TextEncoder().encode(REAL_HTML))).toBe('html');
+    expect(detectShape(new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14]))).toBe('xlsx');
+    expect(detectShape(new TextEncoder().encode('Data,Descrição\n02-01-2025,X'))).toBe('csv');
+  });
+
+  it('finds the header below the title and shop tables', () => {
+    const { header } = parseHtmlTable(REAL_HTML);
+    expect(header).toEqual(['Data', 'Descrição', 'Quantidade', 'Valor Total S/IVA', 'Valor Total']);
+  });
+
+  it('decodes the entities ZoneSoft writes', () => {
+    // "Descri&ccedil;&atilde;o" must come back as "Descrição" or the column
+    // is never matched and the import fails on a good file.
+    expect(decodeEntities('Descri&ccedil;&atilde;o')).toBe('Descrição');
+    expect(decodeEntities('183,500&euro;')).toBe('183,500€');
+    expect(decodeEntities('Data in&#237;cio')).toBe('Data início');
+  });
+
+  it('reads the real markup end to end, to the cent', () => {
+    const { header, rows } = parseHtmlTable(REAL_HTML);
+    const parsed = parseFamiliaSheet(header, rows);
+
+    expect(parsed.grandTotal).toBeCloseTo(191.1, 2);
+    expect(parsed.familias).toEqual(['BEBIDAS', 'COMIDAS']);
+    expect(parsed.skipped).toHaveLength(0);
+  });
+
+  it('ignores the Total line the report closes with', () => {
+    const { header, rows } = parseHtmlTable(REAL_HTML);
+    const parsed = parseFamiliaSheet(header, rows);
+    // Counting it would double the takings.
+    expect(parsed.dailyTotals).toHaveLength(1);
+    expect(parsed.dailyTotals[0].revenue).toBeCloseTo(191.1, 2);
+  });
+
+  it('strips the markup inside a cell', () => {
+    const withTags = REAL_HTML.replace('BEBIDAS/SUMOS E AGUAS', '<b>BEBIDAS</b>/SUMOS E AGUAS');
+    const { header, rows } = parseHtmlTable(withTags);
+    const parsed = parseFamiliaSheet(header, rows);
+    expect(parsed.familias).toContain('BEBIDAS');
   });
 });
