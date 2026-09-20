@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { FileText, Download, Loader2 } from 'lucide-react';
 import InfoHint from '@/app/components/InfoHint';
 import { useLanguage } from '@/lib/language-context';
+import { downloadFile } from '@/lib/download-file';
 
 /** Translated at render time. The index is the month, January first. */
 const MONTH_KEYS = [
@@ -21,17 +23,12 @@ export default function MonthlyReportPanel() {
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      const res = await fetch(`/api/export/pdf?month=${month}&year=${year}`);
-      if (!res.ok) throw new Error('PDF generation failed');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `relatorio-${year}-${String(month).padStart(2, '0')}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await downloadFile(
+        `/api/export/pdf?month=${month}&year=${year}`,
+        `relatorio-${year}-${String(month).padStart(2, '0')}.pdf`,
+      );
     } catch {
-      alert(t('monthlyReport.error'));
+      toast.error(t('monthlyReport.error'));
     }
     setDownloading(false);
   };

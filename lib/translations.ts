@@ -1274,6 +1274,8 @@ export const translations = {
       dateFrom: 'Data de início',
       dateTo: 'Data de fim',
       exportCsv: 'Exportar CSV',
+      exportDone: 'Ficheiro guardado',
+      exportFailed: 'Não foi possível exportar. Tente outra vez.',
       col: {
         date: 'Data',
         type: 'Tipo',
@@ -1300,6 +1302,8 @@ export const translations = {
       dateFrom: 'Data de início',
       dateTo: 'Data de fim',
       exportCsv: 'Exportar CSV',
+      exportDone: 'Ficheiro guardado',
+      exportFailed: 'Não foi possível exportar. Tente outra vez.',
       dineInTickets: 'Tickets no local',
       takeawayTickets: 'Tickets de takeaway',
       col: {
@@ -3106,6 +3110,8 @@ export const translations = {
       dateFrom: 'From date',
       dateTo: 'To date',
       exportCsv: 'Export CSV',
+      exportDone: 'File saved',
+      exportFailed: 'Could not export. Please try again.',
       col: {
         date: 'Date',
         type: 'Type',
@@ -3132,6 +3138,8 @@ export const translations = {
       dateFrom: 'From date',
       dateTo: 'To date',
       exportCsv: 'Export CSV',
+      exportDone: 'File saved',
+      exportFailed: 'Could not export. Please try again.',
       dineInTickets: 'Dine-in tickets',
       takeawayTickets: 'Takeaway tickets',
       col: {

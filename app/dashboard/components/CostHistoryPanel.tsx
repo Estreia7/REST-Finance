@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Pencil, Trash2, Loader2, X, Check, Calendar, Filter, Download } from 'lucide-react';
 import { getCostHistory, updateCostEntry, deleteCostEntry, getCategories } from '../actions';
 import { useLanguage } from '@/lib/language-context';
+import { downloadFile, exportFilename } from '@/lib/download-file';
 
 interface CostEntry {
   id: string;
@@ -33,6 +34,7 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
   const [editForm, setEditForm] = useState<{ amount: number; description: string }>({ amount: 0, description: '' });
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [filterType, setFilterType] = useState<'' | 'COGS' | 'OPEX'>('');
 
   const now = new Date();
@@ -62,6 +64,29 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
       if (r.success && r.data) setCategories(r.data as unknown as Category[]);
     });
   }, [loadEntries]);
+
+  /**
+   * Saves the export without navigating.
+   *
+   * A link straight to the endpoint strands an iPhone on Safari's document
+   * preview — a screen offering to open the CSV in another app, with no way
+   * back to the dashboard. Fetching the bytes and saving them keeps the owner
+   * on the page they were on.
+   */
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await downloadFile(
+        `/api/export/csv?type=costs&from=${dateFrom}&to=${dateTo}`,
+        exportFilename('custos', dateFrom, dateTo),
+      );
+      toast.success(t('costHistory.exportDone'));
+    } catch {
+      toast.error(t('costHistory.exportFailed'));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleEdit = (entry: CostEntry) => {
     setEditingId(entry.id);
@@ -145,9 +170,18 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
               <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} aria-label={t('costHistory.dateFrom')} className="input-field !py-1.5 !text-xs w-[130px]" />
               <span className="text-muted-foreground text-xs">—</span>
               <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} aria-label={t('costHistory.dateTo')} className="input-field !py-1.5 !text-xs w-[130px]" />
-              <a href={`/api/export/csv?type=costs&from=${dateFrom}&to=${dateTo}`} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={t('costHistory.exportCsv')} aria-label={t('costHistory.exportCsv')}>
-                <Download className="w-4 h-4" />
-              </a>
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={exporting}
+                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                title={t('costHistory.exportCsv')}
+                aria-label={t('costHistory.exportCsv')}
+              >
+                {exporting
+                  ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                  : <Download className="w-4 h-4" aria-hidden="true" />}
+              </button>
             </div>
           </div>
         </div>

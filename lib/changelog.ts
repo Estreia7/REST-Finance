@@ -49,6 +49,12 @@ export const CHANGELOG: Release[] = [
           'A câmara passa a encontrar sozinha os limites do papel enquanto aponta, e endireita a fotografia por si — mesmo que a tire de lado ou um pouco torta. Depois pode acertar o corte pelos cantos, rodar, e escolher como quer a imagem: normal, realçada (a melhor para talões de caixa desbotados), cinzentos ou preto e branco. Quanto melhor a fotografia, melhor os valores saem certos.',
       },
       {
+        kind: 'fix',
+        title: 'Exportar para Excel já não prende o telemóvel',
+        detail:
+          'No iPhone, exportar o histórico de receitas ou de custos levava-o para um ecrã com o ficheiro e só a opção de o abrir noutra aplicação — sem maneira de voltar atrás. Agora o ficheiro é simplesmente guardado e fica onde estava, sem sair da página. O nome do ficheiro passa também a trazer as datas do período exportado, para não ficar com vários iguais na pasta das transferências.',
+      },
+      {
         kind: 'improvement',
         title: 'O botão + já pergunta o que quer registar',
         detail:
