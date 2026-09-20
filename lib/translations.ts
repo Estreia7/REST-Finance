@@ -1586,6 +1586,25 @@ export const translations = {
       dayThreeBody: 'Chegas à reunião com os números já feitos, em vez de os ir buscar depois de a reunião acabar.',
       dayFourTitle: 'O mês deixa de ser uma surpresa',
       dayFourBody: 'A meio do mês já sabes como vai acabar, e ainda dás tempo a ti próprio para mudar o final.',
+      dayFiveTitle: 'A equipa deixa de te perguntar',
+      dayFiveBody: 'A escala está afixada, as trocas de turno ficam registadas, e ninguém liga ao domingo a perguntar a que horas entra.',
+      daySixTitle: 'Um sítio para procurar, não uma gaveta',
+      daySixBody: 'A fatura daquele fornecedor de março está a dois toques, com a fotografia original anexada.',
+
+      // The lines the owner should still remember on the drive home. Kept
+      // short and concrete on purpose: a claim they can repeat to a partner
+      // is worth more than a paragraph they half remember.
+      takeawayLabel: 'Para levar',
+      takeawayTitle: 'Se ficares só com quatro coisas',
+      takeawayLead: 'São estas as que mudam o mês.',
+      takeawayOneTitle: 'Cinco minutos por dia',
+      takeawayOneBody: 'É todo o trabalho que te pedimos. O resto acontece sozinho.',
+      takeawayTwoTitle: 'Prime Cost é o número',
+      takeawayTwoBody: 'Mercadoria mais pessoal. Se souberes só um número, sabe este.',
+      takeawayThreeTitle: 'A margem está no prato',
+      takeawayThreeBody: 'O prato que mais sai costuma ser o que menos deixa. Aqui vês qual.',
+      takeawayFourTitle: 'Saber a tempo de mudar',
+      takeawayFourBody: 'Um número em outubro muda outubro. Em janeiro só explica outubro.',
 
       // Close
       closeTitle: 'Feito para quem tem o restaurante aberto',
@@ -1593,6 +1612,32 @@ export const translations = {
       closePointOne: 'IVA e IRC portugueses, já configurados',
       closePointTwo: 'Funciona no telemóvel, no balcão',
       closePointThree: 'Vários restaurantes na mesma conta',
+      closePointFour: 'Os teus dados são teus, e saem em Excel quando quiseres',
+      closePointFive: 'Começas com os números do mês passado, não do zero',
+
+      // The unattended deck shown on a television. Everything here is read
+      // from across a room, or spoken by a screen reader, so the labels say
+      // what the button does rather than naming the key that triggers it.
+      tvShareTitle: 'Apresentar numa televisão',
+      tvShareBody: 'Abre este endereço no browser da televisão. A apresentação corre sozinha, sem precisar de entrar na conta.',
+      tvCopyPt: 'Copiar link em português',
+      tvCopyEn: 'Copiar link em inglês',
+      tvCopied: 'Link copiado',
+      tvCopyFailed: 'Não foi possível copiar. Selecione o endereço e copie à mão.',
+      tvOpen: 'Abrir',
+      tvStart: 'Começar',
+      tvPlay: 'Continuar',
+      tvPause: 'Pausa',
+      tvNext: 'Seguinte',
+      tvPrevious: 'Anterior',
+      tvRestart: 'Recomeçar',
+      tvSlideOf: 'Ecrã {current} de {total}',
+      tvHelpTitle: 'Com o comando da televisão',
+      tvHelpKeys: 'Direita ou baixo avança. Esquerda ou cima recua. OK pausa e continua.',
+      tvHelpAuto: 'Sem tocar em nada, avança sozinha e volta ao início no fim.',
+      tvHelpDismiss: 'Entendido',
+      tvEndTitle: 'Obrigado',
+      tvEndBody: 'A apresentação volta ao início.',
     },
     support: {
       title: 'Precisa de ajuda?',
@@ -3499,6 +3544,25 @@ export const translations = {
       dayThreeBody: 'You arrive with the numbers already done, instead of chasing them after the meeting has ended.',
       dayFourTitle: 'The month stops being a surprise',
       dayFourBody: 'Halfway through, you already know how it will end, and you still have time to change the ending.',
+      dayFiveTitle: 'The team stops asking you',
+      dayFiveBody: 'The rota is posted, shift swaps are recorded where they belong, and nobody rings on a Sunday asking what time they start.',
+      daySixTitle: 'One place to look, not a drawer',
+      daySixBody: "That supplier's invoice from March is two taps away, with the original photograph attached.",
+
+      // The lines the owner should still remember on the drive home. Kept
+      // short and concrete on purpose: a claim they can repeat to a partner
+      // is worth more than a paragraph they half remember.
+      takeawayLabel: 'Worth remembering',
+      takeawayTitle: 'If you keep only four things',
+      takeawayLead: 'These are the ones that change the month.',
+      takeawayOneTitle: 'Five minutes a day',
+      takeawayOneBody: 'That is all the work we ask of you. The rest happens on its own.',
+      takeawayTwoTitle: 'Prime Cost is the number',
+      takeawayTwoBody: 'Goods plus staff. If you only ever know one number, know this one.',
+      takeawayThreeTitle: 'The margin is on the plate',
+      takeawayThreeBody: 'The dish that sells most is usually the one that leaves least. Here you see which.',
+      takeawayFourTitle: 'Knowing in time to change it',
+      takeawayFourBody: 'A number in October changes October. In January it only explains October.',
 
       // Close
       closeTitle: 'Built for people who run an open restaurant',
@@ -3506,6 +3570,32 @@ export const translations = {
       closePointOne: 'Portuguese VAT and corporate tax, already set up',
       closePointTwo: 'Works on your phone, behind the counter',
       closePointThree: 'Several restaurants on one account',
+      closePointFour: 'Your data is yours, and leaves as Excel whenever you want',
+      closePointFive: 'You start with last month already in, not from nothing',
+
+      // The unattended deck shown on a television. Everything here is read
+      // from across a room, or spoken by a screen reader, so the labels say
+      // what the button does rather than naming the key that triggers it.
+      tvShareTitle: 'Present on a television',
+      tvShareBody: "Open this address in the television's browser. The deck runs by itself, with no need to sign in.",
+      tvCopyPt: 'Copy Portuguese link',
+      tvCopyEn: 'Copy English link',
+      tvCopied: 'Link copied',
+      tvCopyFailed: 'Could not copy. Select the address and copy it by hand.',
+      tvOpen: 'Open',
+      tvStart: 'Start',
+      tvPlay: 'Resume',
+      tvPause: 'Pause',
+      tvNext: 'Next',
+      tvPrevious: 'Previous',
+      tvRestart: 'Start again',
+      tvSlideOf: 'Screen {current} of {total}',
+      tvHelpTitle: 'With the television remote',
+      tvHelpKeys: 'Right or down moves on. Left or up goes back. OK pauses and resumes.',
+      tvHelpAuto: 'Left alone, it advances by itself and returns to the start at the end.',
+      tvHelpDismiss: 'Got it',
+      tvEndTitle: 'Thank you',
+      tvEndBody: 'The deck returns to the beginning.',
     },
     support: {
       title: 'Need a hand?',

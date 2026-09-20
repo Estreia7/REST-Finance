@@ -35,9 +35,27 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.09.19';
+export const CHANGELOG_VERSION = '2026.09.20';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.09.20',
+    date: '2026-09-20',
+    entries: [
+      {
+        kind: 'new',
+        title: 'A apresentação corre sozinha numa televisão',
+        detail:
+          'A apresentação passa a ter endereço próprio, um para português e outro para inglês, e não precisa de conta para abrir. Escreva o endereço no browser da televisão e ela começa: os ecrãs avançam sozinhos e voltam ao início no fim, sem ninguém lhe tocar. O comando da televisão chega para tudo — as setas avançam e recuam, o OK põe em pausa e continua. Em Apresentação, no painel de administração, tem os dois endereços com um botão para copiar cada um.',
+      },
+      {
+        kind: 'improvement',
+        title: 'A apresentação diz melhor o que muda no dia a dia',
+        detail:
+          'A parte final ganhou dois pontos novos — a equipa deixa de andar a perguntar horários, e as faturas antigas encontram-se em dois toques — e no fim há agora um resumo com as quatro ideias que vale a pena levar da conversa.',
+      },
+    ],
+  },
   {
     version: '2026.09.19',
     date: '2026-09-19',
