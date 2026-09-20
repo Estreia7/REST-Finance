@@ -14,15 +14,21 @@ export const SETTING_KEYS = {
   googleClientSecret: 'auth.google.clientSecret',
   /** Whether anyone can create an account, or only an admin can. */
   openRegistration: 'auth.openRegistration',
+  /** Reads photographed invoices and till reports. */
+  anthropicApiKey: 'scanner.anthropicApiKey',
 } as const;
 
 /** Which settings hold secrets, and therefore must be encrypted. */
-const SECRET_KEYS = new Set<string>([SETTING_KEYS.googleClientSecret]);
+const SECRET_KEYS = new Set<string>([
+  SETTING_KEYS.googleClientSecret,
+  SETTING_KEYS.anthropicApiKey,
+]);
 
 /** Environment variable consulted when no database value is set. */
 const ENV_FALLBACK: Record<string, string | undefined> = {
   [SETTING_KEYS.googleClientId]: 'GOOGLE_CLIENT_ID',
   [SETTING_KEYS.googleClientSecret]: 'GOOGLE_CLIENT_SECRET',
+  [SETTING_KEYS.anthropicApiKey]: 'ANTHROPIC_API_KEY',
 };
 
 export async function getSetting(key: string): Promise<string | null> {
@@ -85,4 +91,9 @@ export async function getGoogleCredentials(): Promise<{
 
   if (!clientId || !clientSecret) return null;
   return { clientId, clientSecret };
+}
+
+/** The key the document reader authenticates with, if one is configured. */
+export async function getAnthropicApiKey(): Promise<string | null> {
+  return getSetting(SETTING_KEYS.anthropicApiKey);
 }

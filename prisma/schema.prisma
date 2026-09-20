@@ -162,6 +162,7 @@ model User {
   complianceDocs   ComplianceDoc[] @relation("ComplianceUploadedBy")
   supportTickets   SupportTicket[] @relation("SupportRequester")
   supportReplies   SupportTicket[] @relation("SupportResponder")
+  extractionTests  ExtractionTest[]
 
   @@map("users")
 }
@@ -780,4 +781,64 @@ model SupportTicket {
   @@index([restaurantId, createdAt])
   @@index([status, createdAt])
   @@map("support_tickets")
+}
+
+/// A single run of the extraction bench, kept so accuracy can be measured
+/// rather than guessed at.
+///
+/// Separate from `ReceiptScan`, which belongs to a restaurant and can be
+/// linked to a real cost entry. These are laboratory runs: they carry the
+/// model, the prompt version, what the model said, what was actually on the
+/// paper, and what it cost — none of which belongs in a client's records.
+///
+/// The image is stored as a path, not bytes: a test corpus of invoices is
+/// large, and a database dump should not carry photographs of real suppliers.
+model ExtractionTest {
+  id        String   @id @default(uuid())
+  /// The administrator who ran it.
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String   @map("user_id")
+
+  scanType  ScanType @map("scan_type")
+  /// Where the uploaded image lives under the storage directory.
+  imagePath String   @map("image_path")
+  /// Original filename, so a run can be recognised in the list.
+  imageName String   @map("image_name")
+
+  /// Which model answered, and under which prompt, so a change in either can
+  /// be attributed. Free text rather than an enum: models are added faster
+  /// than migrations are run.
+  model         String
+  promptVersion String   @map("prompt_version")
+
+  /// Exactly what the model returned, before any correction.
+  extracted Json?
+  /// What was actually on the document, typed in by the administrator.
+  /// Null until someone has checked the run.
+  truth     Json?
+  /// Per-field verdicts, written when truth is supplied.
+  fieldScores Json?    @map("field_scores")
+  /// Share of checked fields that matched, 0..1. Null until checked.
+  accuracy    Float?
+
+  /// What it cost to ask, so accuracy can be weighed against price.
+  inputTokens  Int?    @map("input_tokens")
+  outputTokens Int?    @map("output_tokens")
+  /// Wall-clock time of the API call.
+  durationMs   Int?    @map("duration_ms")
+
+  status ScanStatus @default(PENDING)
+  /// Why it failed, when it did.
+  error  String?
+
+  /// Free-text observations: "blurred", "faded till roll", "two pages".
+  notes String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// Newest first, and filtered by type, are the only orders this is read in.
+  @@index([createdAt])
+  @@index([scanType, createdAt])
+  @@map("extraction_tests")
 }

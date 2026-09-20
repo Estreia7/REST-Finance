@@ -17,7 +17,7 @@ import {
   Building2, TrendingUp, TrendingDown, CreditCard,
   Search, ChevronRight, Activity, DollarSign,
   BarChart2, ArrowUpRight, ArrowDownRight, Shield,
-  ClipboardList, Settings, Presentation, LifeBuoy,
+  ClipboardList, Settings, Presentation, LifeBuoy, FlaskConical,
 } from 'lucide-react';
 import UserManagementPanel from './components/UserManagementPanel';
 import RestaurantDetailPanel from './components/RestaurantDetailPanel';
@@ -26,6 +26,7 @@ import DemoAccountPanel from './components/DemoAccountPanel';
 import ActivityLogPanel from './components/ActivityLogPanel';
 import PresentationPanel from './components/PresentationPanel';
 import SupportQueuePanel from './components/SupportQueuePanel';
+import ExtractionLabPanel from './components/ExtractionLabPanel';
 import AdminMobileBottomNav from './components/MobileBottomNav';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -36,7 +37,7 @@ import Logo from '@/app/components/Logo';
 import { formatMoney } from '@/lib/format';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-type Tab = 'dashboard' | 'clientes' | 'users' | 'activity' | 'suporte' | 'apresentacao' | 'settings';
+type Tab = 'dashboard' | 'clientes' | 'users' | 'activity' | 'suporte' | 'apresentacao' | 'extracao' | 'settings';
 
 /**
  * Chart axis labels, per language. Module scope cannot call `t()`, and twelve
@@ -246,6 +247,7 @@ export default function AdminPage() {
     { id: 'activity',     icon: ClipboardList,   labelKey: 'admin.nav.activity' },
     { id: 'suporte',      icon: LifeBuoy,        labelKey: 'admin.nav.support', badge: openTickets },
     { id: 'apresentacao', icon: Presentation,    labelKey: 'admin.nav.presentation' },
+    { id: 'extracao',     icon: FlaskConical,    labelKey: 'admin.nav.extraction' },
     { id: 'settings',     icon: Settings,        labelKey: 'admin.nav.settings' },
   ];
 
@@ -377,6 +379,7 @@ export default function AdminPage() {
                 activity: t('admin.heading.activity'),
                 suporte: t('admin.heading.support'),
                 apresentacao: t('admin.heading.presentation'),
+                extracao: t('admin.heading.extraction'),
                 settings: t('admin.heading.settings'),
               }[activeTab]}
             </h1>
@@ -388,6 +391,7 @@ export default function AdminPage() {
                 activity: t('admin.heading.activitySub'),
                 suporte: t('admin.heading.supportSub'),
                 apresentacao: t('admin.heading.presentationSub'),
+                extracao: t('admin.heading.extractionSub'),
                 settings: t('admin.heading.settingsSub'),
               }[activeTab]}
             </p>
@@ -728,6 +732,8 @@ export default function AdminPage() {
 
           {/* ── Presentation Tab ───────────────────────────────────────────── */}
           {activeTab === 'apresentacao' && <PresentationPanel />}
+
+          {activeTab === 'extracao' && <ExtractionLabPanel />}
 
           {activeTab === 'settings' && (
             <div className="space-y-6">

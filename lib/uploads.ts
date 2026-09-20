@@ -138,13 +138,21 @@ export type SaveResult =
  *                 cannot reach outside the owner's own directory.
  */
 export async function saveImage(
-  scope: 'logos' | 'avatars',
+  scope: 'logos' | 'avatars' | 'extraction-tests',
   ownerId: string,
   file: File
 ): Promise<SaveResult> {
   if (file.size === 0) return { ok: false, error: 'O ficheiro está vazio.' };
-  if (file.size > MAX_IMAGE_BYTES) {
-    return { ok: false, error: 'A imagem não pode exceder 2 MB.' };
+  // A photographed invoice is much larger than an avatar — a phone camera
+  // frame at full resolution runs to several megabytes — and downscaling it
+  // before the reader has seen it would throw away the detail the extraction
+  // depends on.
+  const limit = scope === 'extraction-tests' ? MAX_DOC_BYTES : MAX_IMAGE_BYTES;
+  if (file.size > limit) {
+    return {
+      ok: false,
+      error: `A imagem não pode exceder ${Math.round(limit / (1024 * 1024))} MB.`,
+    };
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
