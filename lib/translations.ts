@@ -1769,6 +1769,19 @@ export const translations = {
       ctaSubtitle: 'A nossa equipa está pronta para ajudar. Entra em contacto e respondemos a todas as tuas questões.',
       ctaButton: 'Falar com vendas',
     },
+    // The + button on the dashboard, and the two questions it asks
+    quickAdd: {
+      whatTitle: 'O que quer registar?',
+      howTitle: 'Como quer registar?',
+      revenue: 'Ticket diário',
+      revenueHint: 'O fecho de caixa do dia',
+      cost: 'Despesa',
+      costHint: 'Uma fatura de fornecedor',
+      manual: 'Escrever',
+      manualHint: 'Preencher os valores à mão',
+      photo: 'Fotografar',
+      photoHint: 'A câmara lê os valores',
+    },
     camera: {
       title: 'Digitalizar documento',
       starting: 'A abrir a câmara...',
@@ -3587,6 +3600,19 @@ export const translations = {
       ctaTitle: 'Still have questions?',
       ctaSubtitle: 'Our team is ready to help. Get in touch and we will answer every one of them.',
       ctaButton: 'Talk to sales',
+    },
+    // The + button on the dashboard, and the two questions it asks
+    quickAdd: {
+      whatTitle: 'What are you adding?',
+      howTitle: 'How would you like to add it?',
+      revenue: 'Daily takings',
+      revenueHint: "The day's till total",
+      cost: 'Expense',
+      costHint: 'A supplier invoice',
+      manual: 'Type it',
+      manualHint: 'Fill in the figures by hand',
+      photo: 'Photograph it',
+      photoHint: 'The camera reads the figures',
     },
     camera: {
       title: 'Scan document',

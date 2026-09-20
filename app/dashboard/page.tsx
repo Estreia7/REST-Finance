@@ -37,6 +37,7 @@ import RevenueChart     from './components/RevenueChart';
 import ChannelSplitChart from './components/ChannelSplitChart';
 import CategoryTable    from './components/CategoryTable';
 import QuickEntryPanel  from './components/QuickEntryPanel';
+import QuickAddSheet, { type QuickAddKind, type QuickAddMethod } from './components/QuickAddSheet';
 import StaffPanel       from './components/StaffPanel';
 import BillingPanel     from './components/BillingPanel';
 import CompliancePanel from './components/CompliancePanel';
@@ -138,6 +139,8 @@ function DashboardPageInner() {
   const [showMoreCharts, setShowMoreCharts] = useState(false);
 
   // ── Sub-views for revenue/costs/analytics
+  /** The + button asks what is being added before it goes anywhere. */
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [revenueSubView, setRevenueSubView] = useState<'entry' | 'history' | 'scan'>('entry');
   const [costSubView, setCostSubView] = useState<'entry' | 'history' | 'scan'>('entry');
   const [analyticsSubView, setAnalyticsSubView] = useState<'pnl' | 'compare' | 'tickets' | 'menu' | 'goals' | 'report' | 'prices'>('pnl');
@@ -235,6 +238,20 @@ function DashboardPageInner() {
       setHasUnsavedChanges(false);
     }
     setActiveTab(tab);
+  };
+
+  /**
+   * Takes the + button's two answers to the screen that does the job.
+   *
+   * Both halves of the destination are set before the tab changes, so the
+   * panel renders on the right sub-view rather than showing the entry form
+   * for a frame and then swapping to the scanner.
+   */
+  const handleQuickAdd = (kind: QuickAddKind, method: QuickAddMethod) => {
+    if (kind === 'revenue') setRevenueSubView(method);
+    else setCostSubView(method);
+    setShowQuickAdd(false);
+    handleTabChange(kind);
   };
 
   const handleSubmitRevenue = async (e: React.FormEvent) => {
@@ -588,7 +605,7 @@ function DashboardPageInner() {
       {activeTab === 'dashboard' && (
         <button
           type="button"
-          onClick={() => handleTabChange('revenue')}
+          onClick={() => setShowQuickAdd(true)}
           // Positioned off the safe area, not off the viewport edge: on a
           // phone with rounded corners `right-4` puts a 56px button partly
           // under the curve, which is what clipped it. The bottom offset
@@ -600,10 +617,17 @@ function DashboardPageInner() {
           className="fixed z-40 md:hidden w-14 h-14 rounded-2xl gradient-bg shadow-glow
                      flex items-center justify-center active:scale-95 transition-transform
                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Registar receita"
+          aria-label={t('quickAdd.whatTitle')}
         >
           <Plus className="w-6 h-6 text-white" aria-hidden="true" />
         </button>
+      )}
+
+      {showQuickAdd && (
+        <QuickAddSheet
+          onClose={() => setShowQuickAdd(false)}
+          onChoose={handleQuickAdd}
+        />
       )}
 
       {/* Mobile bottom nav */}
