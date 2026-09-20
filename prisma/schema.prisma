@@ -890,6 +890,15 @@ model DailyCategoryRevenue {
 
   /// Takings in this category, VAT included.
   revenue  Decimal @default(0) @db.Decimal(12, 2)
+
+  /// The same takings net of VAT, as the till reports them.
+  ///
+  /// Kept because the difference is the VAT actually charged, per category —
+  /// which is the only honest way to know the blended rate a restaurant is
+  /// really paying. Portuguese restaurants run 13% on food and 23% on drink,
+  /// so a single assumed rate is wrong for every one of them. Null where the
+  /// source did not carry a net figure.
+  revenueNet Decimal? @map("revenue_net") @db.Decimal(12, 2)
   /// How many items went out. Useful for spotting a category that sells a
   /// lot of units for very little money.
   quantity Int     @default(0)

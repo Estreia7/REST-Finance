@@ -200,9 +200,14 @@ async function commitPosImportInner(
             date,
             categoryId,
             revenue: row.revenue,
+            revenueNet: row.revenueNet,
             quantity: row.quantity,
           },
-          update: { revenue: row.revenue, quantity: row.quantity },
+          update: {
+            revenue: row.revenue,
+            revenueNet: row.revenueNet,
+            quantity: row.quantity,
+          },
         });
         written++;
       }

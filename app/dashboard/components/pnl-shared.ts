@@ -35,6 +35,12 @@ export type Annual = {
   revenue: Line;
   dineIn: Line;
   takeaway: Line;
+  /**
+   * Revenue by menu category, where the POS import has supplied it. Empty for
+   * a restaurant that enters a day's takings by hand, because a total says
+   * nothing about what was sold.
+   */
+  revenueLines: Line[];
   cogs: Line;
   cogsLines: Line[];
   labour: Line;

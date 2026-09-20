@@ -8,6 +8,8 @@ import {
   detectShape,
   parseHtmlTable,
   decodeEntities,
+  vatRate,
+  vatAmount,
   type SheetRow,
 } from '@/lib/zonesoft-import';
 
@@ -265,5 +267,51 @@ describe('the ZoneSoft "Excel" export, which is really HTML', () => {
     const { header, rows } = parseHtmlTable(withTags);
     const parsed = parseFamiliaSheet(header, rows);
     expect(parsed.familias).toContain('BEBIDAS');
+  });
+});
+
+describe('VAT, derived rather than assumed', () => {
+  it('reads the rate the till actually charged', () => {
+    // A Portuguese restaurant pays 13% on food and 23% on drink, so no single
+    // assumed rate is right. 183,50 gross on 162,389 net is the 13% band.
+    expect(vatRate(183.5, 162.389)! * 100).toBeCloseTo(13, 1);
+    // 7,60 on 6,179 is the 23% band.
+    expect(vatRate(7.6, 6.179)! * 100).toBeCloseTo(23, 1);
+  });
+
+  it('says "unknown" rather than zero when it cannot tell', () => {
+    // Zero percent and "we have no net figure" are different answers, and
+    // only one of them is safe to put in a tax return.
+    expect(vatRate(100, null)).toBeNull();
+    expect(vatRate(0, 0)).toBeNull();
+  });
+
+  it('refuses a reading where net exceeds gross', () => {
+    // Impossible, so the columns were read the wrong way round.
+    expect(vatRate(100, 120)).toBeNull();
+  });
+
+  it('gives the VAT in euros', () => {
+    expect(vatAmount(183.5, 162.389)).toBeCloseTo(21.11, 2);
+    expect(vatAmount(183.5, null)).toBeNull();
+  });
+
+  it('keeps the net figure through a sub-família roll-up', () => {
+    // BEBIDAS at 23% and its sub-famílias must sum on both sides, or the
+    // derived rate is nonsense.
+    const parsed = parseFamiliaSheet(HEADER, JAN_2);
+    const bebidas = parsed.rows.find((r) => r.familia === 'BEBIDAS')!;
+    // 0 + 6,179 + 3,902
+    expect(bebidas.revenueNet).toBeCloseTo(10.081, 2);
+  });
+
+  it('refuses to guess when one row of a família lacks its net figure', () => {
+    // A partial sum would imply a rate that was never charged.
+    const mixed: SheetRow[] = [
+      { index: 2, cells: ['02-01-2025', 'BEBIDAS/A', '1,000', '6,179€', '7,600€'] },
+      { index: 3, cells: ['02-01-2025', 'BEBIDAS/B', '1,000', 'n/a', '4,800€'] },
+    ];
+    const parsed = parseFamiliaSheet(HEADER, mixed);
+    expect(parsed.rows[0].revenueNet).toBeNull();
   });
 });

@@ -62,6 +62,12 @@ export default function AnnualPnLMobile({ data, month, onMonthChange, onDrill }:
       <div className="-mx-4 mt-4 divide-y divide-border-subtle border-y border-border-subtle">
         <Row line={data.revenue} section="revenue" heading term="revenue" {...{ month, monthRevenue, onDrill }} />
         <Row line={data.dineIn} section="revenue" indent term="dineIn" {...{ month, monthRevenue, onDrill }} />
+        {/* What was sold, where the till has told us. Listed rather than
+            collapsed: the phone shows one month at a time, so there is room,
+            and a chevron to open four lines is a tap for nothing. */}
+        {data.revenueLines.map((l) => (
+          <Row key={l.label} line={l} section="revenue" indent {...{ month, monthRevenue, onDrill }} />
+        ))}
         <Row line={data.takeaway} section="revenue" indent term="takeaway" {...{ month, monthRevenue, onDrill }} />
 
         <Row line={data.cogs} section="cogs" heading term="cogs" {...{ month, monthRevenue, onDrill }} />

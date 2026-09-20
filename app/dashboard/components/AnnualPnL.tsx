@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ChevronRight } from 'lucide-react';
 import { getAnnualPnL } from '../pnl-actions';
 import { formatMoney, formatPercent } from '@/lib/format';
 import PnLDrilldown, { type DrillTarget } from './PnLDrilldown';
@@ -37,6 +37,8 @@ export default function AnnualPnL() {
   const [data, setData] = useState<Annual | null>(null);
   const [loading, setLoading] = useState(true);
   const [drill, setDrill] = useState<DrillTarget | null>(null);
+  /** Whether the Local line is open, showing what was actually sold. */
+  const [showMenuMix, setShowMenuMix] = useState(false);
 
   /**
    * Which month the phone is showing.
@@ -130,15 +132,26 @@ export default function AnnualPnL() {
     section,
     heading = false,
     indent = false,
+    deep = false,
     benchmark,
     higherIsBetter = false,
     term,
+    expanded,
+    onToggle,
   }: {
     line: Line;
     section: Section;
     /** The band's own total line, which carries its colour and weight. */
     heading?: boolean;
     indent?: boolean;
+    /** A second level of indent, for what a detail line is itself made of. */
+    deep?: boolean;
+    /**
+     * Set on a line that opens to show what it is made of. Undefined leaves
+     * the row exactly as it was, so nothing else in the statement changes.
+     */
+    expanded?: boolean;
+    onToggle?: () => void;
     /** Rates the share against its band, for the subtotals worth judging. */
     benchmark?: PtBenchmarkKey;
     higherIsBetter?: boolean;
@@ -164,7 +177,8 @@ export default function AnnualPnL() {
           scope="row"
           className={`sticky left-0 z-10 text-left px-4 py-2 whitespace-nowrap
                       ${heading ? `${style.head} font-semibold` : `${style.bodySolid} font-normal`}
-                      ${indent ? 'pl-8 text-muted-foreground' : ''}`}
+                      ${indent ? 'pl-8 text-muted-foreground' : ''}
+                      ${deep ? '!pl-14 text-xs' : ''}`}
         >
           {/* A colour stripe on the band's own line, so the section is legible
               even where the tint is too faint to survive a projector. */}
@@ -174,7 +188,27 @@ export default function AnnualPnL() {
               aria-hidden="true"
             />
           )}
-          {lineLabel(line)}
+          {/* A line that opens carries its own control rather than making the
+              whole row clickable: the row is a table header with figures in
+              it, and a click target that wide is easy to hit by accident
+              while reading. */}
+          {onToggle ? (
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-expanded={expanded}
+              className="inline-flex items-center gap-1 hover:text-foreground transition-colors
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+            >
+              <ChevronRight
+                className={`w-3 h-3 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`}
+                aria-hidden="true"
+              />
+              {lineLabel(line)}
+            </button>
+          ) : (
+            lineLabel(line)
+          )}
           {term && <InfoHint term={term} />}
 
           {benchmark && (
@@ -313,7 +347,25 @@ export default function AnnualPnL() {
 
             <tbody>
               <Row line={data.revenue} section="revenue" heading term="revenue" />
-              <Row line={data.dineIn} section="revenue" indent term="dineIn" />
+              <Row
+                line={data.dineIn}
+                section="revenue"
+                indent
+                term="dineIn"
+                // Only offered when the till has told us what was sold. A
+                // restaurant entering totals by hand has nothing to open, and
+                // a chevron that reveals an empty list is worse than none.
+                expanded={data.revenueLines.length > 0 ? showMenuMix : undefined}
+                onToggle={
+                  data.revenueLines.length > 0
+                    ? () => setShowMenuMix((open) => !open)
+                    : undefined
+                }
+              />
+              {showMenuMix &&
+                data.revenueLines.map((l) => (
+                  <Row key={l.label} line={l} section="revenue" indent deep />
+                ))}
               <Row line={data.takeaway} section="revenue" indent term="takeaway" />
 
               <Row line={data.cogs} section="cogs" heading term="cogs" />

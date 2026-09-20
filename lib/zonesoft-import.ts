@@ -34,6 +34,15 @@ export interface FamiliaRow {
   quantity: number;
   /** Takings, VAT included. */
   revenue: number;
+  /**
+   * The same takings net of VAT, where the export carried them.
+   *
+   * The difference between the two is the VAT actually charged on this
+   * category — which is worth keeping, because a Portuguese restaurant pays
+   * 13% on food and 23% on drink and no single assumed rate is right for
+   * both. Null when the column was absent or unreadable.
+   */
+  revenueNet: number | null;
 }
 
 export interface ParsedImport {
@@ -164,6 +173,7 @@ export function parseFamiliaSheet(header: string[], rows: SheetRow[]): ParsedImp
     if (revenue === null) { skipped.push({ row: index, reason: 'invalidRevenue' }); continue; }
 
     const quantity = parsePtNumber(cells[cols.quantity]) ?? 0;
+    const revenueNet = cols.revenueNet >= 0 ? parsePtNumber(cells[cols.revenueNet]) : null;
 
     // Sub-famílias roll up, so several rows land on the same key.
     const key = `${date}|${familia}`;
@@ -171,8 +181,16 @@ export function parseFamiliaSheet(header: string[], rows: SheetRow[]): ParsedImp
     if (existing) {
       existing.revenue += revenue;
       existing.quantity += Math.round(quantity);
+      // Summed only while every contributing row had one: a partial total
+      // would imply a VAT rate that was never charged.
+      existing.revenueNet =
+        existing.revenueNet !== null && revenueNet !== null
+          ? existing.revenueNet + revenueNet
+          : null;
     } else {
-      byDayFamilia.set(key, { date, familia, revenue, quantity: Math.round(quantity) });
+      byDayFamilia.set(key, {
+        date, familia, revenue, revenueNet, quantity: Math.round(quantity),
+      });
     }
   }
 
@@ -183,7 +201,10 @@ export function parseFamiliaSheet(header: string[], rows: SheetRow[]): ParsedImp
   // Rounded once at the end: adding a hundred two-decimal amounts in binary
   // floating point drifts, and a day that should total 240,70 must not be
   // stored as 240,70000000000002.
-  for (const row of parsed) row.revenue = round2(row.revenue);
+  for (const row of parsed) {
+    row.revenue = round2(row.revenue);
+    if (row.revenueNet !== null) row.revenueNet = round2(row.revenueNet);
+  }
 
   const totals = new Map<string, number>();
   for (const row of parsed) totals.set(row.date, (totals.get(row.date) ?? 0) + row.revenue);
@@ -336,7 +357,9 @@ export function parseHtmlTable(html: string): { header: string[]; rows: SheetRow
  * changed between ZoneSoft versions would otherwise import the wrong money
  * without any error at all.
  */
-function mapColumns(header: string[]): Record<'date' | 'description' | 'quantity' | 'revenue', number> {
+function mapColumns(
+  header: string[],
+): Record<'date' | 'description' | 'quantity' | 'revenue' | 'revenueNet', number> {
   const cells = header.map(normalise);
 
   const findExact = (names: string[]) => cells.findIndex((c) => names.includes(c));
@@ -354,5 +377,35 @@ function mapColumns(header: string[]): Record<'date' | 'description' | 'quantity
   if (description < 0) throw new ImportFormatError('Descrição');
   if (revenue < 0) throw new ImportFormatError('Valor Total');
 
-  return { date, description, quantity: quantity < 0 ? -1 : quantity, revenue };
+  return {
+    date,
+    description,
+    quantity: quantity < 0 ? -1 : quantity,
+    revenue,
+    revenueNet: netAt,
+  };
+}
+
+/**
+ * The VAT rate a category was actually charged at.
+ *
+ * Derived rather than assumed. A Portuguese restaurant pays 13% on food and
+ * 23% on drink, and a category like MENUS mixes both — so the only honest
+ * rate for it is the one the till actually applied, which is exactly what
+ * the gap between gross and net says.
+ *
+ * Returns null when the net figure is missing or the gross is zero, because
+ * "0%" and "we do not know" are different answers and only one of them is
+ * safe to put in a tax return.
+ */
+export function vatRate(revenue: number, revenueNet: number | null): number | null {
+  if (revenueNet === null || revenue === 0 || revenueNet === 0) return null;
+  if (revenue < revenueNet) return null; // net above gross is a bad reading
+  return (revenue - revenueNet) / revenueNet;
+}
+
+/** The VAT charged, in euros. Null when it cannot be known. */
+export function vatAmount(revenue: number, revenueNet: number | null): number | null {
+  if (revenueNet === null) return null;
+  return Math.round((revenue - revenueNet + Number.EPSILON) * 100) / 100;
 }

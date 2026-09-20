@@ -57,7 +57,7 @@ export async function getAnnualPnL(year: number) {
     const end = new Date(year, 11, 31, 23, 59, 59);
     const scope = { restaurantId: member.restaurantId, deletedAt: null };
 
-    const [summaries, costs, categories] = await Promise.all([
+    const [summaries, costs, categories, categoryRevenue] = await Promise.all([
       // Grouped by day, then folded into months here: Prisma cannot group by
       // month portably, and a year is at most 365 rows.
       prisma.dailySummary.findMany({
@@ -77,6 +77,13 @@ export async function getAnnualPnL(year: number) {
         where: { restaurantId: member.restaurantId },
         select: { id: true, name: true, type: true, isLabour: true, isOccupancy: true },
       }),
+      // Revenue split by menu category, where the POS import has supplied it.
+      // Restaurants that enter revenue by hand have none of this, and the
+      // section simply does not appear for them.
+      prisma.dailyCategoryRevenue.findMany({
+        where: { restaurantId: member.restaurantId, date: { gte: start, lte: end } },
+        select: { date: true, categoryId: true, revenue: true },
+      }),
     ]);
 
     const categoryById = new Map(categories.map((c) => [c.id, c]));
@@ -91,6 +98,20 @@ export async function getAnnualPnL(year: number) {
       revenue[m] += Number(s.revenueTotal);
       dineIn[m] += Number(s.dineInRevenue);
       takeaway[m] += Number(s.takeawayRevenue);
+    }
+
+    // Revenue by menu category, month by month. Only present for a restaurant
+    // whose POS export has been imported; entering a day's takings by hand
+    // says nothing about what was sold.
+    const revenueByCategory = new Map<string, number[]>();
+    for (const row of categoryRevenue) {
+      const m = row.date.getMonth();
+      let months = revenueByCategory.get(row.categoryId);
+      if (!months) {
+        months = emptyMonths();
+        revenueByCategory.set(row.categoryId, months);
+      }
+      months[m] += Number(row.revenue);
     }
 
     // -------------------------------------------------------------- costs
@@ -183,6 +204,27 @@ export async function getAnnualPnL(year: number) {
         })
         .sort((a, b) => b.total - a.total);
 
+    /**
+     * Revenue by menu category, biggest first.
+     *
+     * Categories the till records but never sells from — MOLHOS, STAFF and
+     * the like, which carry quantities against zero money — are left out.
+     * A P&L line that is always zero is noise in a statement someone reads
+     * to find where the money went.
+     */
+    const revenueCategoryLines = (): PnLLine[] =>
+      [...revenueByCategory.entries()]
+        .filter(([, months]) => sum(months) > 0)
+        .map(([categoryId, months]) => ({
+          label: categoryById.get(categoryId)?.name ?? 'Sem categoria',
+          labelKey: categoryById.get(categoryId) ? undefined : 'uncategorised',
+          months,
+          total: sum(months),
+          percentOfRevenue: pct(sum(months)),
+          drill: { kind: 'revenue' as const, categoryId },
+        }))
+        .sort((a, b) => b.total - a.total);
+
     // Operating expenses in the USAR sense: what is left of OPEX once labour
     // and occupancy have been lifted into their own sections. Floored at zero
     // so a mis-flagged category cannot produce a negative band.
@@ -214,6 +256,12 @@ export async function getAnnualPnL(year: number) {
         revenue: line('revenue', 'Receita total', revenue, { kind: 'revenue', channel: 'total' }, false),
         dineIn: line('dineIn', 'Local', dineIn, { kind: 'revenue', channel: 'dineIn' }),
         takeaway: line('takeaway', 'Take-away', takeaway, { kind: 'revenue', channel: 'takeaway' }),
+
+        // What was actually sold, where the till has told us. These sit under
+        // Local because that is where the money is booked, but they describe
+        // the whole day's menu mix — a restaurant doing both channels would
+        // see the same categories spanning both.
+        revenueLines: revenueCategoryLines(),
 
         cogs: line('cogs', 'Custo das mercadorias', cogsTotal, { kind: 'cogs' }),
         cogsLines: categoryLines('COGS'),
@@ -274,6 +322,36 @@ export async function getPnLEntries(params: {
         : new Date(year, month, 0, 23, 59, 59);
 
     const scope = { restaurantId: member.restaurantId, deletedAt: null };
+
+    // A revenue line for one menu category reads from the POS import, not
+    // from the day's channel split. Without this, clicking BEBIDAS would show
+    // the day's dine-in total and reconcile against the wrong figure.
+    if (kind === 'revenue' && categoryId) {
+      const rows = await prisma.dailyCategoryRevenue.findMany({
+        where: { restaurantId: member.restaurantId, categoryId, date: { gte: start, lte: end } },
+        orderBy: { date: 'asc' },
+        select: { id: true, date: true, revenue: true, quantity: true },
+      });
+
+      return {
+        success: true,
+        data: {
+          kind: 'revenue' as const,
+          entries: rows
+            .filter((r) => Number(r.revenue) !== 0)
+            .map((r) => ({
+              id: r.id,
+              date: r.date,
+              amount: Number(r.revenue),
+              // How many items, which is what distinguishes a category that
+              // sells a lot cheaply from one that sells little dearly.
+              tickets: r.quantity,
+              detail: null,
+              notes: null,
+            })),
+        },
+      };
+    }
 
     if (kind === 'revenue') {
       const rows = await prisma.dailySummary.findMany({
