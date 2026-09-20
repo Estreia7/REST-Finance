@@ -8,6 +8,8 @@ import { useLanguage } from '@/lib/language-context';
 import DocumentCamera from './DocumentCamera';
 import ScanPageEditor, { type ScannedPage } from './ScanPageEditor';
 import ScanTray, { type ScannedDocument, newDocumentId } from './ScanTray';
+import SourcePickerSheet, { type PhotoSource } from './SourcePickerSheet';
+import { loadFrameFromFile } from '@/lib/detect-in-file';
 
 type ScanType = 'COST_RECEIPT' | 'DAILY_REPORT';
 
@@ -53,6 +55,62 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
   const [currentPages, setCurrentPages] = useState<ScannedPage[]>([]);
   const [documents, setDocuments] = useState<ScannedDocument[]>([]);
   const [queue, setQueue] = useState<ScannedDocument[]>([]);
+  /** The three-way choice, shown before anything opens. */
+  const [pickingSource, setPickingSource] = useState(false);
+  /** Detecting the document in a photograph that was chosen, not taken. */
+  const [readingFile, setReadingFile] = useState(false);
+
+  /**
+   * Acts on the three-way choice.
+   *
+   * Only the camera is ours. Reaching the gallery or the files app is
+   * something only the browser can do, so those still go through a file
+   * input — but without `capture`, which is what makes iOS offer its own
+   * camera instead of the picker that was asked for.
+   */
+  const handleSource = (source: PhotoSource) => {
+    setPickingSource(false);
+    if (source === 'camera') {
+      setCurrentPages([]);
+      setDocuments([]);
+      setStage('camera');
+      return;
+    }
+    const input = fileRef.current;
+    if (!input) return;
+    // A gallery pick wants images only; "files" should also reach a PDF or a
+    // scan saved from an email.
+    input.accept = source === 'gallery' ? 'image/*' : 'image/*,application/pdf';
+    input.click();
+  };
+
+  /**
+   * A photograph that was chosen rather than taken.
+   *
+   * It goes through the same detector and the same editor as a live capture,
+   * so a picture from the gallery is cropped and straightened exactly like one
+   * taken through the camera. Anything else would make "choose a photo" the
+   * worse option for no reason the owner could see.
+   */
+  const handlePickedFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Cleared straight away so picking the same file twice still fires.
+    e.target.value = '';
+    if (!file) return;
+
+    setCurrentPages([]);
+    setDocuments([]);
+    setReadingFile(true);
+    try {
+      const { frame, corners } = await loadFrameFromFile(file);
+      setCaptured({ frame, corners });
+      setStage('editing');
+    } catch {
+      toast.error(t('scanner.couldNotReadFile'));
+    } finally {
+      setReadingFile(false);
+    }
+  };
 
   /** A frame arrived from the camera; hand it to the editor. */
   const handleCaptured = (frame: HTMLCanvasElement, corners: any) => {
@@ -102,20 +160,6 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
     setQueue([]);
   };
 
-
-  const handleCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setImagePreview(dataUrl);
-      setExtracted(null);
-      setEditData(null);
-    };
-    reader.readAsDataURL(file);
-  };
 
   const handleScan = async () => {
     if (!imagePreview) return;
@@ -244,7 +288,8 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
       {!imagePreview && (
         <button
           type="button"
-          onClick={() => { setCurrentPages([]); setDocuments([]); setStage('camera'); }}
+          onClick={() => setPickingSource(true)}
+          disabled={readingFile}
           className="w-full flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-border rounded-2xl hover:border-primary transition-colors"
         >
           <div className="w-14 h-14 rounded-2xl gradient-bg flex items-center justify-center shadow-glow-sm">
@@ -261,13 +306,18 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
         </button>
       )}
 
-      {/* Kept for the fallback when the camera cannot be opened. */}
+      {/*
+        Reaches the gallery and the files app. `accept` is set per choice just
+        before it opens, and there is deliberately no `capture` attribute:
+        that is what makes iOS ignore the request and open its own camera,
+        which takes a plain photograph with none of the edge detection or
+        automatic crop this app does.
+      */}
       <input
         ref={fileRef}
         type="file"
         accept="image/*"
-        capture="environment"
-        onChange={handleCapture}
+        onChange={handlePickedFile}
         className="hidden"
       />
 
@@ -382,12 +432,28 @@ export default function ReceiptScanner({ onSaved }: { onSaved?: () => void }) {
         </div>
       )}
 
+      {pickingSource && (
+        <SourcePickerSheet
+          onChoose={handleSource}
+          onClose={() => setPickingSource(false)}
+        />
+      )}
+
+      {/* Finding the document in a chosen photograph takes a moment on a
+          phone, and a dead button in the meantime looks like a failed tap. */}
+      {readingFile && (
+        <div className="fixed inset-0 z-[85] flex flex-col items-center justify-center gap-3 bg-black/60 text-white">
+          <Loader2 className="w-6 h-6 animate-spin" aria-hidden="true" />
+          <p className="text-sm">{t('scanner.readingFile')}</p>
+        </div>
+      )}
+
       {/* ── Capture: camera, page editor, tray ─────────────────────────── */}
       {stage === 'camera' && (
         <DocumentCamera
           onCapture={handleCaptured}
           onClose={() => setStage(currentPages.length || documents.length ? 'tray' : 'idle')}
-          onPickFile={() => { setStage('idle'); fileRef.current?.click(); }}
+          onPickFile={() => { setStage('idle'); handleSource('gallery'); }}
         />
       )}
 

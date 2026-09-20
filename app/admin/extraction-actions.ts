@@ -9,7 +9,7 @@ import { getSetting, setSetting, deleteSetting, SETTING_KEYS } from '@/lib/setti
 import { maskSecret } from '@/lib/crypto';
 import { claudeScan, SCANNER_MODEL, PROMPT_VERSION, estimateCostUsd } from '@/lib/scanners/claude-scanner';
 import { checkExtraction } from '@/lib/pt-validation';
-import { readInvoiceQr, compareWithQr } from '@/lib/pt-invoice-qr';
+import { readInvoiceQr, compareWithQr, applyQrTruth } from '@/lib/pt-invoice-qr';
 import type { MediaType, ScanType } from '@/lib/document-scanner';
 
 /**
@@ -143,17 +143,31 @@ export async function runExtractionTest(formData: FormData) {
       );
 
       const data = result as unknown as Record<string, unknown>;
-      const warnings = checkExtraction(data);
+      // Compared before the QR is applied, so the log still shows what the
+      // reader alone managed — otherwise every QR-bearing invoice would look
+      // like a perfect reading and the bench would measure nothing.
       const qrComparison = qr ? compareWithQr(data, qr) : [];
+      const { corrected, changed } = qr
+        ? applyQrTruth(data, qr)
+        : { corrected: data, changed: [] as string[] };
+
+      const warnings = checkExtraction(corrected);
 
       const updated = await prisma.extractionTest.update({
         where: { id: record.id },
         data: {
           status: 'PROCESSED',
-          extracted: result as never,
+          // What the reader said, kept as it was.
+          extracted: data as never,
           // Everything that could be checked without the paper, kept with the
           // run so the list can show which need a human first.
-          fieldScores: { warnings, qr: qr ?? null, qrComparison } as never,
+          fieldScores: {
+            warnings, qr: qr ?? null, qrComparison,
+            // What the QR put right, so a rescue is visible rather than silent.
+            corrected, qrCorrected: changed,
+          } as never,
+          // Named after the document itself, so a folder of tests can be read.
+          imageName: describeDocument(corrected, file.name),
           inputTokens: telemetry.inputTokens,
           outputTokens: telemetry.outputTokens,
           durationMs: telemetry.durationMs,
@@ -174,6 +188,34 @@ export async function runExtractionTest(formData: FormData) {
     return { error: toClientError('Failed to run test', error, 'generic') };
   }
 }
+
+/**
+ * A name that says which document this was.
+ *
+ * "bench-1758372910.jpg" tells nobody anything once there are forty of them,
+ * so the run is named after what is on the paper: the date and the document
+ * number, which together identify an invoice uniquely.
+ *
+ * Falls back to the uploaded filename when neither could be read. It does not
+ * invent a number — a run whose document number is missing is a finding, and
+ * the bench says so rather than hiding it behind a tidy name.
+ */
+function describeDocument(data: Record<string, unknown>, fallback: string): string {
+  const date = typeof data.date === 'string' && data.date ? data.date : null;
+  const number = typeof data.invoiceNumber === 'string' && data.invoiceNumber.trim()
+    ? data.invoiceNumber.trim()
+    : null;
+
+  if (date && number) return `${date} · ${number}`;
+  if (number) return number;
+  // Dated but unnumbered: worth seeing at a glance that the number is the
+  // thing that failed.
+  if (date) return `${date} · ${MISSING_NUMBER}`;
+  return fallback || MISSING_NUMBER;
+}
+
+/** Shown where a document number could not be read and must be typed in. */
+const MISSING_NUMBER = 'sem nº';
 
 /** The runs, newest first. */
 export async function getExtractionTests(scanType?: ScanType) {

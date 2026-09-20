@@ -76,10 +76,39 @@ describe('checkExtraction', () => {
       checkExtraction({
         date: '2026-09-03',
         vendorTaxId: '515194077',
+        invoiceNumber: 'FR U005/267376',
         grandTotal: 4.56,
         items: [{ product: 'Ben-u-ron', quantity: 1, unitPrice: 4.56, total: 4.56 }],
       }),
     ).toEqual([]);
+  });
+
+  it('flags an invoice whose number could not be read', () => {
+    // Every Portuguese invoice carries one by law, so a missing number means
+    // it was not read — and it has to be typed in rather than left out.
+    const warnings = checkExtraction({
+      date: '2026-09-03',
+      vendor: 'Farmácia',
+      grandTotal: 4.56,
+      items: [],
+    });
+    expect(warnings.map((w) => w.code)).toContain('missingInvoiceNumber');
+  });
+
+  it('flags a blank invoice number the same as a missing one', () => {
+    const warnings = checkExtraction({ vendor: 'X', invoiceNumber: '   ' });
+    expect(warnings.map((w) => w.code)).toContain('missingInvoiceNumber');
+  });
+
+  it('does not ask a till report for an invoice number', () => {
+    // A fecho de caixa has no document number; demanding one would flag
+    // every single till report.
+    const warnings = checkExtraction({
+      date: '2026-09-03',
+      dineInRevenue: 820.5,
+      takeawayRevenue: 130,
+    });
+    expect(warnings.map((w) => w.code)).not.toContain('missingInvoiceNumber');
   });
 
   it('flags a NIF that fails its own check digit', () => {

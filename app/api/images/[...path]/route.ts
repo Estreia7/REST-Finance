@@ -60,6 +60,17 @@ export async function GET(
     if (!membership) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
+  } else if (scope === 'extraction-tests') {
+    // Bench images are real supplier paperwork, photographed by an
+    // administrator. Platform admins only — and not merely the one who
+    // uploaded it, since the bench is a shared corpus.
+    const admin = await prisma.membership.findFirst({
+      where: { userId: auth.userId, role: 'PLATFORM_ADMIN', active: true },
+      select: { id: true },
+    });
+    if (!admin) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
   } else {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }

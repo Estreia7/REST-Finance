@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseInvoiceQr, compareWithQr } from '@/lib/pt-invoice-qr';
+import { parseInvoiceQr, compareWithQr, applyQrTruth } from '@/lib/pt-invoice-qr';
 
 /**
  * A QR in the shape the Farmácia Godinho Belo receipt carries: a fatura-recibo
@@ -119,5 +119,68 @@ describe('compareWithQr', () => {
     const bare = parseInvoiceQr('A:515194077*D:FT')!;
     const comparisons = compareWithQr({ vendor: 'Anything', grandTotal: 99 }, bare);
     expect(comparisons.map((c) => c.field)).toEqual(['vendorTaxId']);
+  });
+});
+
+describe('applyQrTruth', () => {
+  const qr = parseInvoiceQr(REAL_SHAPE)!;
+
+  it('supplies a document number the reader missed entirely', () => {
+    // The case that prompted this: the number is on the paper and in the QR,
+    // and the reading came back without it.
+    const { corrected, changed } = applyQrTruth({ vendor: 'Farmacia' }, qr);
+    expect(corrected.invoiceNumber).toBe('FR U005/267376');
+    expect(changed).toContain('invoiceNumber');
+  });
+
+  it('overrules a misread total', () => {
+    const { corrected, changed } = applyQrTruth({ grandTotal: 4.5 }, qr);
+    expect(corrected.grandTotal).toBe(4.56);
+    expect(changed).toContain('grandTotal');
+  });
+
+  it('changes only the fields that actually disagreed', () => {
+    const { changed } = applyQrTruth(
+      {
+        vendorTaxId: '515194077',
+        date: '2026-09-03',
+        invoiceNumber: 'FR U005/267376',
+        grandTotal: 4.5, // the only wrong one
+      },
+      qr,
+    );
+    expect(changed).toEqual(['grandTotal']);
+  });
+
+  it('changes nothing when the reading already agrees', () => {
+    const { changed } = applyQrTruth(
+      {
+        vendorTaxId: '515194077',
+        date: '2026-09-03',
+        invoiceNumber: 'FR U005/267376',
+        grandTotal: 4.56,
+      },
+      qr,
+    );
+    expect(changed).toEqual([]);
+  });
+
+  it('leaves fields the QR does not carry alone', () => {
+    // The supplier name is not in the QR and must survive untouched.
+    const { corrected } = applyQrTruth({ vendor: 'Farmácia Godinho Belo' }, qr);
+    expect(corrected.vendor).toBe('Farmácia Godinho Belo');
+  });
+
+  it('does not mutate what it was given', () => {
+    const original = { grandTotal: 4.5 };
+    applyQrTruth(original, qr);
+    expect(original.grandTotal).toBe(4.5);
+  });
+
+  it('handles a POS-style simplified invoice number', () => {
+    // The shape a Portuguese POS terminal prints, with a series in the middle.
+    const pos = parseInvoiceQr('A:515194077*D:FS*G:FS 4055TPV2/260014357*O:12.40')!;
+    const { corrected } = applyQrTruth({}, pos);
+    expect(corrected.invoiceNumber).toBe('FS 4055TPV2/260014357');
   });
 });

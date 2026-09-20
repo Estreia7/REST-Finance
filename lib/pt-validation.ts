@@ -71,7 +71,13 @@ export function isValidIsoDate(value: string): boolean {
 export interface ExtractionWarning {
   field: string;
   /** Why it looks wrong, as a dictionary key the UI translates. */
-  code: 'invalidNif' | 'invalidDate' | 'totalMismatch' | 'futureDate' | 'negativeAmount';
+  code:
+    | 'invalidNif'
+    | 'invalidDate'
+    | 'totalMismatch'
+    | 'futureDate'
+    | 'negativeAmount'
+    | 'missingInvoiceNumber';
   detail?: string;
 }
 
@@ -96,6 +102,18 @@ export function checkExtraction(data: Record<string, unknown>): ExtractionWarnin
       // Tomorrow or later: a till report cannot be from the future, and this
       // is the usual shape of a misread year.
       warnings.push({ field: 'date', code: 'futureDate', detail: date });
+    }
+  }
+
+  // Only meaningful on an invoice: a till report has no document number, and
+  // `items` is what distinguishes the two shapes here.
+  if ('items' in data || 'vendor' in data) {
+    const number = data.invoiceNumber;
+    if (typeof number !== 'string' || number.trim() === '') {
+      // Every Portuguese invoice carries one by law, so a missing number
+      // means it could not be read — and it has to be typed in by hand
+      // rather than left out or guessed at.
+      warnings.push({ field: 'invoiceNumber', code: 'missingInvoiceNumber' });
     }
   }
 

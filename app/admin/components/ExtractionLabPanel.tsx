@@ -4,10 +4,14 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   Loader2, Upload, Trash2, KeyRound, FlaskConical, CheckCircle2, XCircle,
-  AlertTriangle, QrCode, ChevronDown, ChevronRight, Save,
+  AlertTriangle, QrCode, ChevronDown, ChevronRight, Save, Eye,
 } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
+import SourcePickerSheet, { type PhotoSource } from '@/app/dashboard/components/SourcePickerSheet';
+import DocumentCamera from '@/app/dashboard/components/DocumentCamera';
+import ScanPageEditor, { type ScannedPage } from '@/app/dashboard/components/ScanPageEditor';
+import { loadFrameFromFile } from '@/lib/detect-in-file';
 import {
   getExtractionSettings, setAnthropicApiKey, clearAnthropicApiKey,
   runExtractionTest, getExtractionTests, setExtractionTruth,
@@ -20,6 +24,7 @@ interface TestRow {
   id: string;
   scanType: ScanType;
   imageName: string;
+  imagePath: string;
   model: string;
   promptVersion: string;
   extracted: unknown;
@@ -60,6 +65,17 @@ export default function ExtractionLabPanel() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // The same capture flow the clients get: source sheet, our camera with its
+  // automatic shutter, then the page editor that crops and straightens. A
+  // bench that fed the reader differently from the app would measure the
+  // wrong thing.
+  const [pickingSource, setPickingSource] = useState(false);
+  const [readingFile, setReadingFile] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [captured, setCaptured] = useState<{ frame: HTMLCanvasElement; corners: unknown } | null>(null);
+  /** The prepared page waiting to be sent, with a preview to look at. */
+  const [page, setPage] = useState<ScannedPage | null>(null);
+
   const load = useCallback(async () => {
     const [s, list, sum] = await Promise.all([
       getExtractionSettings(), getExtractionTests(), getExtractionSummary(),
@@ -87,23 +103,62 @@ export default function ExtractionLabPanel() {
     else { toast.success(t('admin.extraction.keyCleared')); await load(); }
   };
 
+  /** Camera, gallery or files — the same three the clients are offered. */
+  const handleSource = (source: PhotoSource) => {
+    setPickingSource(false);
+    if (source === 'camera') { setCameraOpen(true); return; }
+    const input = fileRef.current;
+    if (!input) return;
+    input.accept = source === 'gallery' ? 'image/*' : 'image/*,application/pdf';
+    input.click();
+  };
+
+  /** A chosen photograph goes through the same detector as a live capture. */
+  const handlePickedFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setReadingFile(true);
+    try {
+      const { frame, corners } = await loadFrameFromFile(file);
+      setCaptured({ frame, corners });
+    } catch {
+      toast.error(t('scanner.couldNotReadFile'));
+    } finally {
+      setReadingFile(false);
+    }
+  };
+
+  /**
+   * Sends the prepared page.
+   *
+   * What goes to the reader is the cropped, straightened, filtered page the
+   * editor produced — not the original photograph. That is what the client
+   * side will send, and a bench that sent something cleaner would report an
+   * accuracy nobody is going to see in practice.
+   */
   const handleRun = async () => {
-    const file = fileRef.current?.files?.[0];
-    if (!file) { toast.error(t('admin.extraction.pickFirst')); return; }
+    if (!page) { toast.error(t('admin.extraction.pickFirst')); return; }
 
     setRunning(true);
-    const form = new FormData();
-    form.set('image', file);
-    form.set('scanType', scanType);
-    form.set('notes', notes);
+    try {
+      const blob = await (await fetch(page.dataUrl)).blob();
+      const form = new FormData();
+      form.set('image', new File([blob], `bench-${Date.now()}.jpg`, { type: blob.type }));
+      form.set('scanType', scanType);
+      form.set('notes', notes);
 
-    const res = await runExtractionTest(form);
-    if (res.error) toast.error(translateError(language, res.error));
-    else {
-      toast.success(t('admin.extraction.done'));
-      setNotes('');
-      if (fileRef.current) fileRef.current.value = '';
-      await load();
+      const res = await runExtractionTest(form);
+      if (res.error) toast.error(translateError(language, res.error));
+      else {
+        toast.success(t('admin.extraction.done'));
+        setNotes('');
+        setPage(null);
+        await load();
+      }
+    } catch {
+      toast.error(t('scanner.couldNotReadFile'));
     }
     setRunning(false);
   };
@@ -125,6 +180,27 @@ export default function ExtractionLabPanel() {
 
   return (
     <div className="space-y-5">
+      {pickingSource && (
+        <SourcePickerSheet onChoose={handleSource} onClose={() => setPickingSource(false)} />
+      )}
+
+      {cameraOpen && (
+        <DocumentCamera
+          onCapture={(frame, corners) => { setCameraOpen(false); setCaptured({ frame, corners }); }}
+          onClose={() => setCameraOpen(false)}
+          onPickFile={() => { setCameraOpen(false); handleSource('gallery'); }}
+        />
+      )}
+
+      {captured && (
+        <ScanPageEditor
+          frame={captured.frame}
+          detectedCorners={captured.corners as never}
+          onDone={(prepared) => { setCaptured(null); setPage(prepared); }}
+          onCancel={() => setCaptured(null)}
+        />
+      )}
+
       {/* ── The key ─────────────────────────────────────────────────────── */}
       <section className="card-glass p-5">
         <div className="flex items-center gap-2 mb-1">
@@ -235,13 +311,46 @@ export default function ExtractionLabPanel() {
           <input
             ref={fileRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/*"
+            onChange={handlePickedFile}
             aria-label={t('admin.extraction.pickImage')}
-            className="block w-full text-xs text-muted-foreground
-                       file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0
-                       file:text-xs file:font-semibold file:bg-muted file:text-foreground
-                       hover:file:bg-muted/70 file:cursor-pointer"
+            className="hidden"
           />
+
+          {page ? (
+            <div className="relative rounded-xl overflow-hidden border border-border-subtle">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={page.dataUrl}
+                alt={t('admin.extraction.pickImage')}
+                className="w-full max-h-64 object-contain bg-black/20"
+              />
+              <button
+                type="button"
+                onClick={() => setPage(null)}
+                aria-label={t('common.delete')}
+                className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80"
+              >
+                <XCircle className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPickingSource(true)}
+              disabled={readingFile}
+              className="w-full flex flex-col items-center justify-center gap-2 p-6 rounded-xl
+                         border-2 border-dashed border-border hover:border-primary
+                         transition-colors disabled:opacity-50"
+            >
+              {readingFile
+                ? <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" aria-hidden="true" />
+                : <Upload className="w-5 h-5 text-muted-foreground" aria-hidden="true" />}
+              <span className="text-xs text-muted-foreground">
+                {readingFile ? t('scanner.readingFile') : t('admin.extraction.pickImage')}
+              </span>
+            </button>
+          )}
           <input
             type="text"
             value={notes}
@@ -253,7 +362,7 @@ export default function ExtractionLabPanel() {
           <button
             type="button"
             onClick={handleRun}
-            disabled={running || !settings?.configured}
+            disabled={running || !settings?.configured || !page}
             className="cta-button !py-2 !px-4 !text-xs disabled:opacity-50"
           >
             {running
@@ -317,12 +426,16 @@ function TestRowCard({
   const { t, language } = useLanguage();
   const [truth, setTruth] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  /** The photograph, full screen, for checking a reading against the paper. */
+  const [previewing, setPreviewing] = useState(false);
 
   const extracted = (row.extracted ?? {}) as Record<string, unknown>;
   const scores = (row.fieldScores ?? {}) as {
     warnings?: Array<{ field: string; code: string; detail?: string }>;
     qr?: { issuerNif?: string; grandTotal?: number; date?: string; atcud?: string } | null;
     qrComparison?: Array<{ field: string; extracted: unknown; fromQr: unknown; agrees: boolean }>;
+    /** Fields the QR put right after the reading got them wrong or missed them. */
+    qrCorrected?: string[];
     fields?: Record<string, boolean>;
   };
 
@@ -347,10 +460,62 @@ function TestRowCard({
 
   return (
     <div className="rounded-xl border border-border-subtle overflow-hidden">
+      {/* The paper itself, for settling a disagreement between the reading
+          and what was typed in as true. */}
+      {previewing && (
+        <div
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setPreviewing(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={row.imageName}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/images/${row.imagePath}`}
+            alt={row.imageName}
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            type="button"
+            onClick={() => setPreviewing(false)}
+            aria-label={t('common.close')}
+            className="absolute top-4 right-4 p-2 rounded-lg bg-black/60 text-white hover:bg-black/80"
+          >
+            <XCircle className="w-5 h-5" aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
+      <div className="flex items-stretch">
+        {/* A thumbnail beats a filename for recognising which invoice this
+            was, and opens the full photograph. */}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setPreviewing(true); }}
+          aria-label={t('admin.extraction.viewImage')}
+          title={t('admin.extraction.viewImage')}
+          className="shrink-0 w-14 relative group border-r border-border-subtle
+                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/images/${row.imagePath}`}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          <span className="absolute inset-0 flex items-center justify-center bg-black/0
+                           group-hover:bg-black/40 transition-colors">
+            <Eye className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                 aria-hidden="true" />
+          </span>
+        </button>
+
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center gap-3 p-3 text-left hover:bg-muted/40 transition-colors"
+        className="flex-1 min-w-0 flex items-center gap-3 p-3 text-left hover:bg-muted/40 transition-colors"
       >
         {expanded
           ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
@@ -398,6 +563,7 @@ function TestRowCard({
               </span>
             )}
       </button>
+      </div>
 
       {expanded && (
         <div className="border-t border-border-subtle p-4 space-y-4 bg-muted/20">
@@ -412,6 +578,11 @@ function TestRowCard({
                     {t('admin.extraction.qrTitle')}
                   </p>
                   <p className="text-[11px] text-muted-foreground mb-2">{t('admin.extraction.qrBody')}</p>
+                  {(scores.qrCorrected?.length ?? 0) > 0 && (
+                    <p className="text-[11px] text-success mb-2">
+                      {t('admin.extraction.qrFixed')} {scores.qrCorrected!.join(', ')}
+                    </p>
+                  )}
                   <div className="space-y-1">
                     {(scores.qrComparison ?? []).map((c) => (
                       <div key={c.field} className="flex items-center gap-2 text-xs">

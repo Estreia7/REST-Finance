@@ -27,7 +27,7 @@ export const SCANNER_MODEL = 'claude-haiku-4-5';
  * prompt change rather than guessed at. Date-stamped rather than numbered:
  * the question asked later is always "what were we sending in September?".
  */
-export const PROMPT_VERSION = '2026-09-20.1';
+export const PROMPT_VERSION = '2026-09-20.2';
 
 /** Rough per-token prices, for showing what a run cost. USD per 1M tokens. */
 const PRICE_PER_MTOK = { input: 1.0, output: 5.0 } as const;
@@ -56,6 +56,7 @@ Rules that matter for Portuguese documents:
 - "IVA" is VAT. Totals labelled "Total", "Total a pagar" or "Importância Liquida" are the amount owed INCLUDING VAT unless the document says otherwise.
 - "NIF" or "Contribuinte" is the 9-digit tax number. Copy it exactly; do not reformat it.
 - A "fatura-recibo" is both invoice and receipt. Treat it as an invoice.
+- EVERY Portuguese invoice carries a document number, by law. Find it. It sits near the top, after a label like "Fatura", "Fatura Simplificada", "FT", "FS", "FR", "Documento n." or "Nº", and usually looks like PREFIX SERIES/NUMBER — for example "FS 4055TPV2/260014357" or "FR U005/267376". Copy the whole thing, exactly as printed. Do not drop the prefix, do not drop the series in the middle, and do not return only the digits after the slash. If the label and the number are on different lines, they still belong together.
 
 Read only what is printed. If a field is not on the page, omit it rather than inferring it — a missing invoice number is useful information, an invented one is not. If the photograph is too unclear to read a figure, omit that figure instead of guessing at it.`;
 
@@ -82,7 +83,14 @@ const COST_RECEIPT_SCHEMA = {
     date: { type: 'string', description: 'Invoice date as YYYY-MM-DD.' },
     vendor: { type: 'string', description: 'Supplier name as printed at the top.' },
     vendorTaxId: { type: 'string', description: "Supplier's 9-digit NIF, digits only." },
-    invoiceNumber: { type: 'string', description: 'Document number, e.g. "FR 0005/267376".' },
+    invoiceNumber: {
+      type: 'string',
+      description:
+        'The document number, copied EXACTLY as printed, including the type prefix, all letters, spaces, slashes and leading zeros. ' +
+        'It follows a label such as "Fatura", "Fatura-Recibo", "Fatura Simplificada", "FT", "FS", "FR", "Documento n.", "Nº" or "N.º". ' +
+        'Portuguese POS terminals print a series code in the middle, so it can be long: "FS 4055TPV2/260014357", "FR U005/267376", "FT 1/2026/44". ' +
+        'Never shorten it, never drop the prefix, and never return only the digits after the slash.',
+    },
     items: {
       type: 'array',
       description: 'Every line on the invoice, in the order printed.',
@@ -110,7 +118,13 @@ const COST_RECEIPT_SCHEMA = {
       description: 'A short Portuguese category, e.g. "Carne", "Bebidas", "Limpeza", "Energia".',
     },
   },
-  required: ['date', 'vendor', 'items', 'grandTotal', 'suggestedType', 'suggestedCategory'],
+  // invoiceNumber is required: every Portuguese invoice carries one by law,
+  // so a missing one means it was not looked for rather than not there. It
+  // was optional here, and the model duly left it out.
+  required: [
+    'date', 'vendor', 'invoiceNumber', 'items', 'grandTotal',
+    'suggestedType', 'suggestedCategory',
+  ],
   additionalProperties: false,
 };
 
