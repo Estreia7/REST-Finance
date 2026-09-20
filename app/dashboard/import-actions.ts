@@ -3,7 +3,7 @@
 import ExcelJS from 'exceljs';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
-import { toClientError } from '@/lib/errors';
+import { toClientError, withFaultReporting } from '@/lib/errors';
 import {
   parseFamiliaSheet,
   ImportFormatError,
@@ -119,10 +119,22 @@ export async function previewPosImport(formData: FormData) {
  * correction in the till should get the corrected figures, not both.
  */
 export async function commitPosImport(formData: FormData) {
-  try {
-    const owner = await requireOwner();
-    if (isAuthError(owner)) return { error: owner.error };
+  const owner = await requireOwner();
+  if (isAuthError(owner)) return { error: owner.error };
 
+  // Anything that breaks in here is filed against this owner, so a failed
+  // import reaches the administrator instead of stopping at a toast the owner
+  // dismisses and never mentions.
+  return withFaultReporting({ restaurantId: owner.restaurantId, userId: owner.userId }, () =>
+    commitPosImportInner(owner, formData),
+  );
+}
+
+async function commitPosImportInner(
+  owner: { restaurantId: string; userId: string },
+  formData: FormData,
+) {
+  try {
     const file = formData.get('file');
     if (!(file instanceof File)) return { error: 'import.noFile' };
     if (file.size > MAX_BYTES) return { error: 'import.tooLarge' };

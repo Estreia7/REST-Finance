@@ -1658,7 +1658,12 @@ export const translations = {
         PROBLEM: 'Problema',
         SUGGESTION: 'Sugestão',
         BILLING: 'Faturação',
+        SYSTEM: 'Falha automática',
       },
+      // Shown to the owner on a ticket the app raised for them. Says what
+      // happened without the technical detail, which is for us, not for them.
+      systemTicketBody:
+        'A aplicação detetou um erro enquanto estava a trabalhar e avisou-nos automaticamente. Não precisa de fazer nada — já estamos a ver o que se passou. Se ficou com trabalho por gravar, vale a pena tentar outra vez.',
       status: {
         OPEN: 'Por ver',
         IN_PROGRESS: 'Em curso',
@@ -1691,6 +1696,8 @@ export const translations = {
       raisedOn: 'Recebido a',
       unnamedUser: 'Sem nome',
       messageLabel: 'Pedido do cliente',
+      technicalLabel: 'O que falhou',
+      occurrences: '{n} vezes',
       currentReply: 'Resposta enviada',
       replyLabel: 'Resposta',
       replyPlaceholder: 'Escreva a resposta que o cliente vai ler.',
@@ -3645,7 +3652,12 @@ export const translations = {
         PROBLEM: 'Problem',
         SUGGESTION: 'Suggestion',
         BILLING: 'Billing',
+        SYSTEM: 'Automatic fault',
       },
+      // Shown to the owner on a ticket the app raised for them. Says what
+      // happened without the technical detail, which is for us, not for them.
+      systemTicketBody:
+        'The app ran into an error while working and told us about it automatically. There is nothing you need to do — we are already looking into it. If something did not save, it is worth trying again.',
       status: {
         OPEN: 'Not seen yet',
         IN_PROGRESS: 'In progress',
@@ -3678,6 +3690,8 @@ export const translations = {
       raisedOn: 'Received on',
       unnamedUser: 'No name',
       messageLabel: 'What the client wrote',
+      technicalLabel: 'What went wrong',
+      occurrences: '{n} times',
       currentReply: 'Reply already sent',
       replyLabel: 'Reply',
       replyPlaceholder: 'Write the reply the client will read.',

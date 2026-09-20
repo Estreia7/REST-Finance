@@ -102,6 +102,9 @@ export async function getAllTickets() {
       select: {
         id: true, subject: true, message: true, category: true, status: true,
         reply: true, repliedAt: true, createdAt: true,
+        // Only meaningful on a SYSTEM ticket, and only ever read here: this
+        // is the real error, which must not reach the owner's own screen.
+        technical: true, occurrences: true, lastSeenAt: true,
         restaurant: { select: { id: true, name: true } },
         user: { select: { email: true, name: true } },
       },

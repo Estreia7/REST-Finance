@@ -70,9 +70,9 @@ export default function PosImportPanel({ onImported }: { onImported?: () => void
     form.set('overwrite', String(overwrite));
     const res = await commitPosImport(form);
 
-    if (res.error) {
+    if ('error' in res && res.error) {
       toast.error(translateError(language, res.error));
-    } else if (res.success) {
+    } else if ('data' in res && res.data) {
       const { daysWritten, daysSkipped } = res.data;
       toast.success(
         t('import.done')

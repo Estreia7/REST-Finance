@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 /**
  * Client-safe error handling.
  *
@@ -46,14 +48,66 @@ export class UserFacingError extends Error {
  * @param kind     Which generic fallback to use.
  */
 export function toClientError(context: string, err: unknown, kind: ErrorKind = 'generic'): string {
-  // Deliberate, already-safe messages pass through unchanged.
+  // Deliberate, already-safe messages pass through unchanged. They are the
+  // app telling the owner something it meant to say — "this file is not the
+  // right report" — not a fault, so nothing is reported.
   if (err instanceof UserFacingError) {
     console.error(`[${context}]`, err.message);
     return err.message;
   }
 
   console.error(`[${context}]`, err);
+
+  // An owner who hits a broken screen does not file a bug report, so the app
+  // files it for them. Deliberately not awaited: the caller owes the owner an
+  // answer now, and a slow database must not make a handled error feel like a
+  // hang. `reportFault` never rejects, so there is nothing to catch here.
+  const fault = currentFault();
+  if (fault) {
+    void import('@/lib/fault-report').then(({ reportFault }) =>
+      reportFault({ ...fault, context, error: err }),
+    );
+  }
+
   return MESSAGES[kind];
+}
+
+/**
+ * Who the current failure belongs to.
+ *
+ * `toClientError` is called from every server action and knows nothing about
+ * the request, so the action tells it beforehand with `withFaultReporting`.
+ * Without that, a fault is logged but not ticketed — which is the right
+ * default for code paths that have no owner to attribute one to.
+ */
+type FaultOwner = { restaurantId: string; userId: string };
+
+/**
+ * Per-request storage, not a module-level variable.
+ *
+ * A plain variable is wrong here and quietly so: two owners submitting at the
+ * same time both suspend at their first `await`, and whichever resumes last
+ * overwrites the other's identity. Every fault then gets filed against the
+ * wrong restaurant — worse than not filing it at all, because the record
+ * looks authoritative. `AsyncLocalStorage` keeps a value bound to the async
+ * call chain that set it, which is exactly the guarantee needed.
+ */
+const faultOwner = new AsyncLocalStorage<FaultOwner>();
+
+function currentFault(): FaultOwner | null {
+  return faultOwner.getStore() ?? null;
+}
+
+/**
+ * Attributes any fault raised inside `run` to this restaurant and user.
+ *
+ * A server action wraps its own body, so a failure is filed against the owner
+ * who actually hit it. Without a wrapper a fault is still logged but not
+ * ticketed, which is the right default for code paths with no owner to
+ * attribute one to — a webhook, a cron, sign-in.
+ */
+export async function withFaultReporting<T>(owner: FaultOwner, run: () => Promise<T>): Promise<T> {
+  return faultOwner.run(owner, run);
 }
 
 /** Shorthand for the common `{ error }` server-action return shape. */

@@ -751,6 +751,10 @@ enum SupportCategory {
   PROBLEM
   SUGGESTION
   BILLING
+  /// Raised by the app itself when something failed for an owner, rather than
+  /// written by them. Kept apart so the queue can tell a fault from a question,
+  /// and so a burst of them cannot bury real requests.
+  SYSTEM
 }
 
 /// A request for help, raised by an owner and answered by an administrator.
@@ -775,6 +779,21 @@ model SupportTicket {
   repliedAt   DateTime? @map("replied_at")
   repliedBy   User?     @relation("SupportResponder", fields: [repliedById], references: [id])
   repliedById String?   @map("replied_by_id")
+
+  /// What actually broke, for a SYSTEM ticket: the real error and where it
+  /// came from. Never shown to the owner — Prisma errors name tables and
+  /// columns, and an SDK error can describe how a request was handled — but
+  /// it is the whole reason the ticket is worth having.
+  technical String? @map("technical")
+
+  /// How many times this same fault has happened. One owner hitting a broken
+  /// screen ten times is one problem, not ten tickets, and a count says more
+  /// about severity than ten identical rows would.
+  occurrences Int @default(1)
+
+  /// The most recent time this fault occurred, which for a repeated one is
+  /// more useful than when it was first seen.
+  lastSeenAt DateTime? @map("last_seen_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

@@ -34,6 +34,11 @@ interface Ticket {
   createdAt: Date | string;
   restaurant: { id: string; name: string };
   user: { email: string; name: string | null };
+  /** The real error, on a SYSTEM ticket. Never sent to the owner's own list. */
+  technical?: string | null;
+  /** How many times this same fault happened. */
+  occurrences?: number;
+  lastSeenAt?: Date | string | null;
 }
 
 /** Same iconography and colours as the client's panel, so both sides read alike. */
@@ -232,9 +237,33 @@ export default function SupportQueuePanel({ onOpenCountChange }: SupportQueuePan
                     {t('supportAdmin.messageLabel')}
                   </p>
                   <p className="text-xs text-foreground whitespace-pre-wrap break-words">
-                    {ticket.message}
+                    {ticket.category === 'SYSTEM'
+                      ? t('support.systemTicketBody')
+                      : ticket.message}
                   </p>
                 </div>
+
+                {/* What actually broke. Only on a fault the app raised itself,
+                    and only ever here — the owner's own list does not select
+                    this column. */}
+                {ticket.technical && (
+                  <div className="mt-2 rounded-xl bg-destructive/5 border border-destructive/20 p-3">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <p className="text-[11px] font-semibold text-destructive">
+                        {t('supportAdmin.technicalLabel')}
+                      </p>
+                      {(ticket.occurrences ?? 1) > 1 && (
+                        <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-destructive/10 text-destructive tabular-nums">
+                          {t('supportAdmin.occurrences').replace('{n}', String(ticket.occurrences))}
+                        </span>
+                      )}
+                    </div>
+                    <pre className="text-[11px] font-mono text-muted-foreground whitespace-pre-wrap
+                                    break-all max-h-48 overflow-y-auto">
+                      {ticket.technical}
+                    </pre>
+                  </div>
+                )}
 
                 {/* The answer already sent, if any */}
                 {ticket.reply && (
