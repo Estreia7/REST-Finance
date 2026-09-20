@@ -1,0 +1,11 @@
+familia,vendavel,nota
+BEBIDAS,sim,"Sumos e águas, cervejas, vinhos, smoothies, limonadas"
+CAFETARIA,sim,"Cafés e milkshakes"
+COMIDAS,sim,"Smashies, pizzas, wraps, especiais, acompanhamentos"
+MENUS,sim,"Menus e combos — a maior fatia da receita"
+SOBREMESAS,sim,"Sobremesas"
+DESCONTINUADOS,sim,"Artigos retirados da carta que ainda venderam no ano"
+INGREDIENTES,nao,"Extras e modificadores; quase sempre a zero"
+MOLHOS,nao,"Molhos que acompanham; quase sempre a zero"
+PRODUTOS MAIN MENU,nao,"Componentes de menu; valores residuais"
+STAFF,nao,"Consumos do pessoal; sempre a zero"
