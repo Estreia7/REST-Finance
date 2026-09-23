@@ -35,9 +35,21 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.09.20';
+export const CHANGELOG_VERSION = '2026.09.23';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.09.23',
+    date: '2026-09-23',
+    entries: [
+      {
+        kind: 'fix',
+        title: 'Voltar à aplicação depois de muito tempo pede para entrar de novo',
+        detail:
+          'Quem voltava depois de uma longa ausência podia cair num painel vazio, sem nome, sem restaurante e sem números, como se a conta tivesse desaparecido. Agora, quando a sessão já terminou, a aplicação diz-lhe isso mesmo e abre o ecrã de entrada.',
+      },
+    ],
+  },
   {
     version: '2026.09.20',
     date: '2026-09-20',

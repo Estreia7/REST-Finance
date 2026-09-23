@@ -59,7 +59,7 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
         <div className="flex items-center gap-2.5">
           <Wordmark markSize={30} />
         </div>
-        <button onClick={onClose} className="md:hidden p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all" aria-label="Fechar menu">
+        <button onClick={onClose} className="md:hidden p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all" aria-label={t('nav.closeMenu')}>
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -99,7 +99,7 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-xs font-semibold text-foreground truncate">
-              {currentUser?.name || 'Utilizador'}
+              {currentUser?.name || currentUser?.email || t('nav.userFallback')}
             </div>
             <div className="text-[10px] text-muted-foreground truncate">
               {restaurant?.name || '—'}

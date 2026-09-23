@@ -772,8 +772,11 @@ export async function getCurrentUser() {
       },
     });
 
+    // A valid token for an account that no longer exists is a dead session,
+    // not a missing record: flag it so the dashboard signs out instead of
+    // rendering an empty shell.
     if (!userRecord) {
-      return { error: 'User not found' };
+      return { error: 'errors.auth', requiresAuth: true };
     }
 
     return { success: true, data: userRecord };
