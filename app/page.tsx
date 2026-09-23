@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { toast } from 'sonner';
 import Link from 'next/link';
 import {
   ArrowRight, Check, X, Receipt, Camera, TrendingDown,
@@ -37,6 +38,13 @@ function LandingPageInner() {
     const auth = searchParams.get('auth');
     if (auth === 'login' || auth === 'register') openModal(auth);
   }, [searchParams, openModal]);
+
+  // Sent here because the session had ended. Said once, so the owner knows
+  // why they are signing in again rather than wondering where their data went.
+  const expired = searchParams.get('expired') === '1';
+  useEffect(() => {
+    if (expired) toast.info(t('errors.auth'), { id: 'session-expired' });
+  }, [expired, t]);
 
   // The navbar dispatches this rather than importing page state.
   useEffect(() => {

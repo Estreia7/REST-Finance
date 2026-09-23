@@ -150,12 +150,15 @@ function DashboardPageInner() {
   const [settingsSubView, setSettingsSubView] = useState<'account' | 'support'>('account');
 
   // ── Load all data ────────────────────────────────────────────────────────
-  const loadData = useCallback(async () => {
+  /**
+   * Resolves false when the session turned out to be dead — the token was
+   * accepted at the door but the account behind it is gone. The owner is then
+   * signed out and sent to sign in, rather than left on a dashboard with no
+   * name, no restaurant and no numbers.
+   */
+  const loadData = useCallback(async (): Promise<boolean> => {
     try {
-      const [
-        restaurantData, staffData, statsData, userData,
-        last7Data, breakdownData, categoryData, advancedData,
-      ] = await Promise.all([
+      const results = await Promise.all([
         getRestaurant(),
         getStaff(),
         getDashboardStats(),
@@ -165,6 +168,16 @@ function DashboardPageInner() {
         getCategoryPerformance(),
         getAdvancedDashboardStats(),
       ]);
+
+      if (results.some((r) => r && 'requiresAuth' in r && r.requiresAuth)) {
+        await signOut({ callbackUrl: '/login?expired=1' });
+        return false;
+      }
+
+      const [
+        restaurantData, staffData, statsData, userData,
+        last7Data, breakdownData, categoryData, advancedData,
+      ] = results;
 
       if (restaurantData && 'data' in restaurantData) setRestaurant(restaurantData.data);
       if (staffData && 'data' in staffData)           setStaff(staffData.data as unknown as StaffMember[]);
@@ -177,6 +190,7 @@ function DashboardPageInner() {
     } catch (err) {
       console.error('loadData error:', err);
     }
+    return true;
   }, []);
 
   const loadCategories = useCallback(async () => {
@@ -191,7 +205,9 @@ function DashboardPageInner() {
       // re-checks membership server-side.
 
       try {
-        await Promise.all([loadData(), loadCategories()]);
+        const [alive] = await Promise.all([loadData(), loadCategories()]);
+        // Signing out; keep the loading screen up until the redirect lands.
+        if (!alive) return;
       } catch (err) {
         // A failed load must still end the loading state: the panels below
         // render their own empty states, whereas leaving isLoading set would
