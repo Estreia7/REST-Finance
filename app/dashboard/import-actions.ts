@@ -8,8 +8,10 @@ import {
   parseFamiliaSheet,
   parseHtmlTable,
   detectShape,
+  decodeExport,
   ImportFormatError,
   type ParsedImport,
+  type ProductRow,
   type SheetRow,
 } from '@/lib/zonesoft-import';
 
@@ -173,9 +175,17 @@ async function commitPosImportInner(
       existing.map((e) => [e.date.toISOString().slice(0, 10), Number(e.revenueTotal)]),
     );
 
+    // The product catalogue, upserted once for the whole file. Separate from
+    // the per-day writes because a product is not a day: its name and family
+    // are whatever the till last called it, and nine thousand sale rows
+    // referencing forty products should not re-resolve the same forty names
+    // nine thousand times.
+    const productIds = await ensureProducts(owner.restaurantId, parsed.products, categories);
+
     let written = 0;
     let daysWritten = 0;
     let daysSkipped = 0;
+    let productsWritten = 0;
 
     for (const day of parsed.dailyTotals) {
       const was = recorded.get(day.date);
@@ -212,6 +222,36 @@ async function commitPosImportInner(
         written++;
       }
 
+      // The day's product lines. Replaced wholesale rather than upserted one
+      // by one: a day has tens of products, a re-import must not leave
+      // yesterday's discontinued item behind, and two statements beat a
+      // hundred round trips.
+      if (productIds.size > 0) {
+        const sales = parsed.products
+          .filter((p) => p.date === day.date)
+          .map((p) => ({ productId: productIds.get(p.code), p }))
+          .filter((x): x is { productId: string; p: typeof parsed.products[number] } => !!x.productId);
+
+        if (sales.length > 0) {
+          await prisma.$transaction([
+            prisma.posProductSale.deleteMany({
+              where: { restaurantId: owner.restaurantId, date },
+            }),
+            prisma.posProductSale.createMany({
+              data: sales.map(({ productId, p }) => ({
+                restaurantId: owner.restaurantId,
+                productId,
+                date,
+                quantity: p.quantity,
+                revenue: p.revenue,
+                revenueNet: p.revenueNet,
+              })),
+            }),
+          ]);
+          productsWritten += sales.length;
+        }
+      }
+
       // The day's total, so the dashboard and the breakdown agree. Booked as
       // dine-in: this report carries no channel split, and inventing one
       // would put takeaway in the P&L that never happened.
@@ -237,7 +277,14 @@ async function commitPosImportInner(
 
     return {
       success: true,
-      data: { daysWritten, daysSkipped, rowsWritten: written, familias: parsed.familias.length },
+      data: {
+        daysWritten,
+        daysSkipped,
+        rowsWritten: written,
+        familias: parsed.familias.length,
+        products: productIds.size,
+        productRows: productsWritten,
+      },
     };
   } catch (error: unknown) {
     if (error instanceof ImportFormatError) return { error: formatErrorKey(error) };
@@ -275,6 +322,46 @@ async function ensureCategories(restaurantId: string, familias: string[]) {
 }
 
 /**
+ * Finds or creates a PosProduct per till code, and returns code to id.
+ *
+ * Keyed on the code rather than the name, because a product renamed in the
+ * POS is still the same product: matching on name would split its history
+ * in two and the units-per-month chart would show one stopping and another
+ * starting. The name and family are refreshed to whatever the file says, so
+ * a rename shows through everywhere without losing the past.
+ */
+async function ensureProducts(
+  restaurantId: string,
+  products: ProductRow[],
+  categories: Map<string, string>,
+) {
+  const ids = new Map<string, string>();
+  if (products.length === 0) return ids;
+
+  // A product appears on many days; it is written once per code. The last
+  // mention wins for the name, which is the till's current wording.
+  const latest = new Map<string, ProductRow>();
+  for (const p of products) latest.set(p.code, p);
+
+  for (const [code, row] of latest) {
+    const data = {
+      name: row.name,
+      categoryId: categories.get(row.familia) ?? null,
+      subFamily: row.subFamily,
+    };
+    const saved = await prisma.posProduct.upsert({
+      where: { restaurantId_code: { restaurantId, code } },
+      create: { restaurantId, code, ...data },
+      update: data,
+      select: { id: true },
+    });
+    ids.set(code, saved.id);
+  }
+
+  return ids;
+}
+
+/**
  * Reads the first worksheet of an Excel file, or a CSV, into rows.
  *
  * Both are offered because ZoneSoft exports either, and an owner should not
@@ -291,7 +378,10 @@ async function readWorkbook(file: File): Promise<ParsedImport> {
   const shape = detectShape(buffer);
 
   if (shape === 'html') {
-    const { header, rows } = parseHtmlTable(buffer.toString('utf8'));
+    // Decoded by sniffing rather than assuming UTF-8: the export declares no
+    // charset and is Windows-1252, so "PEÇAS" would otherwise be stored with
+    // a replacement character in place of the Ç.
+    const { header, rows } = parseHtmlTable(decodeExport(buffer));
     return parseFamiliaSheet(header, rows);
   }
 

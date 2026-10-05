@@ -36,6 +36,10 @@ import TopBar           from './components/TopBar';
 import MobileBottomNav  from './components/MobileBottomNav';
 import KPICards         from './components/KPICards';
 import RevenueChart     from './components/RevenueChart';
+import ProductsPanel    from './components/ProductsPanel';
+import IngredientRanking from './components/IngredientRanking';
+import { getMonthProgress } from './product-actions';
+import type { MonthProgress } from '@/lib/trading-days';
 import MonthlyStackChart from './components/MonthlyStackChart';
 import RestaurantLogo   from './components/RestaurantLogo';
 import QuickEntryPanel  from './components/QuickEntryPanel';
@@ -119,6 +123,8 @@ function DashboardPageInner() {
    */
   const [chartYear, setChartYear] = useState(new Date().getFullYear());
   const [revenueYears, setRevenueYears] = useState<number[]>([]);
+  // How far through the month the restaurant is, for the revenue card.
+  const [monthProgress, setMonthProgress] = useState<MonthProgress | null>(null);
   // Each chart keeps its own year: comparing this year's sales with last
   // year's costs is a question an owner asks, and moving one chart should
   // not move the others.
@@ -162,7 +168,7 @@ function DashboardPageInner() {
   const [autoStartCamera, setAutoStartCamera] = useState(false);
   const [revenueSubView, setRevenueSubView] = useState<'entry' | 'history' | 'scan' | 'import'>('entry');
   const [costSubView, setCostSubView] = useState<'entry' | 'history' | 'scan'>('entry');
-  const [analyticsSubView, setAnalyticsSubView] = useState<'pnl' | 'compare' | 'tickets' | 'menu' | 'goals' | 'report' | 'prices'>('pnl');
+  const [analyticsSubView, setAnalyticsSubView] = useState<'pnl' | 'compare' | 'tickets' | 'products' | 'menu' | 'goals' | 'report' | 'prices'>('pnl');
   const [settingsSubView, setSettingsSubView] = useState<'account' | 'support'>('account');
 
   // ── Load all data ────────────────────────────────────────────────────────
@@ -183,6 +189,7 @@ function DashboardPageInner() {
         getMonthlyRevenueBreakdown(chartYear),
         getAdvancedDashboardStats(),
         getRevenueYears(),
+        getMonthProgress(),
       ]);
 
       if (results.some((r) => r && 'requiresAuth' in r && r.requiresAuth)) {
@@ -193,10 +200,11 @@ function DashboardPageInner() {
       const [
         restaurantData, staffData, statsData, userData,
         last7Data, breakdownData, advancedData,
-        yearsData,
+        yearsData, progressData,
       ] = results;
 
       if (yearsData && 'data' in yearsData) setRevenueYears(yearsData.data as number[]);
+      if (progressData && 'data' in progressData) setMonthProgress(progressData.data as MonthProgress);
 
       if (restaurantData && 'data' in restaurantData) setRestaurant(restaurantData.data);
       if (staffData && 'data' in staffData)           setStaff(staffData.data as unknown as StaffMember[]);
@@ -515,7 +523,7 @@ function DashboardPageInner() {
                 </div>
               )}
 
-              <KPICards stats={stats} advancedStats={advancedStats} last7DaysData={last7DaysData} />
+              <KPICards stats={stats} advancedStats={advancedStats} last7DaysData={last7DaysData} monthProgress={monthProgress} />
 
               {/* Charts — collapsible on mobile */}
               {/* Revenue against costs, then where the money came from and
@@ -547,6 +555,11 @@ function DashboardPageInner() {
                   onYearChange={setCostYear}
                   availableYears={costMix.years}
                 />
+                {/* The ranking is a list of ten, not a chart: held to half
+                    the width so the rows stay close enough to compare. */}
+                <div className="grid lg:grid-cols-2 gap-5">
+                  <IngredientRanking />
+                </div>
               </div>
 
               {/* Mobile: toggle for charts */}
@@ -589,6 +602,7 @@ function DashboardPageInner() {
                       onYearChange={setCostYear}
                       availableYears={costMix.years}
                     />
+                    <IngredientRanking />
                   </div>
                 )}
               </div>
@@ -681,6 +695,7 @@ function DashboardPageInner() {
                 <button onClick={() => setAnalyticsSubView('pnl')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'pnl' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>P&L</button>
                 <button onClick={() => setAnalyticsSubView('compare')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'compare' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.comparison')}</button>
                 <button onClick={() => setAnalyticsSubView('tickets')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'tickets' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.tickets')}</button>
+                <button onClick={() => setAnalyticsSubView('products')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'products' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('products.tab')}</button>
                 <button onClick={() => setAnalyticsSubView('menu')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'menu' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.menuCalc')}</button>
                 <button onClick={() => setAnalyticsSubView('goals')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'goals' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.goals')}</button>
                 <button onClick={() => setAnalyticsSubView('report')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'report' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.report')}</button>
@@ -689,6 +704,7 @@ function DashboardPageInner() {
               {analyticsSubView === 'pnl' && <PnLPanel />}
               {analyticsSubView === 'compare' && <ComparativePanel />}
               {analyticsSubView === 'tickets' && <TicketAnalysisPanel />}
+              {analyticsSubView === 'products' && <ProductsPanel />}
               {analyticsSubView === 'menu' && <MenuCalculatorPanel />}
               {analyticsSubView === 'goals' && <GoalsPanel restaurant={restaurant} stats={stats} onUpdate={loadData} />}
               {analyticsSubView === 'report' && <MonthlyReportPanel />}

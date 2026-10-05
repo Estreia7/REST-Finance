@@ -35,9 +35,33 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.05.4';
+export const CHANGELOG_VERSION = '2026.10.05.5';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.05.5',
+    date: '2026-10-05',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Os seus produtos, um a um',
+        detail:
+          'Em Análises › Produtos pode procurar qualquer produto e ver quantos vendeu em cada mês do ano. A tabela mostra todos, do que mais rende ao que menos, com o peso de cada um na receita — e no topo, o mais vendido e o menos vendido. Vem dos ficheiros de vendas por produto que importa do seu POS.',
+      },
+      {
+        kind: 'new',
+        title: 'Os ingredientes que a cozinha mais prepara',
+        detail:
+          'No Painel, um ranking dos dez extras mais pedidos nos últimos 12 meses. Como não têm preço próprio, contam-se por vezes pedidas — serve para saber o que ter preparado e o que deixar de encomendar. Tomou o lugar do Lucro Líquido, que o P&L já mostra com mais detalhe.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Quantos dias de trabalho já foram, e onde o mês vai acabar',
+        detail:
+          'O cartão da receita no Painel diz agora quantos dias de trabalho já passaram este mês e quantos faltam, a média por dia, e uma estimativa de onde o mês fecha se os dias que faltam correrem como os que já foram. Conta dias de trabalho, não dias do calendário: os dias que marcou como fechados não entram na média.',
+      },
+    ],
+  },
   {
     version: '2026.10.05.4',
     date: '2026-10-05',

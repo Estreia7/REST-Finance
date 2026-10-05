@@ -45,8 +45,38 @@ export interface FamiliaRow {
   revenueNet: number | null;
 }
 
+/**
+ * One product, on one day, as the per-produto export lists it.
+ *
+ * Only the per-produto report carries these; the per-família one has no
+ * product column and yields none, which is why this is a separate list
+ * rather than a field on FamiliaRow.
+ */
+export interface ProductRow {
+  /** Calendar day, as YYYY-MM-DD. */
+  date: string;
+  /** The till's code for the item. Its identity across renames. */
+  code: string;
+  /** What the till calls it, e.g. "SMASHIE DUPLO C/QUEIJO". */
+  name: string;
+  /** Top-level família, for rolling a product up the way its money rolls up. */
+  familia: string;
+  /** The sub-família as written, e.g. "SMASHIES". Null when filed directly. */
+  subFamily: string | null;
+  quantity: number;
+  revenue: number;
+  revenueNet: number | null;
+}
 export interface ParsedImport {
   rows: FamiliaRow[];
+  /**
+   * Per-product rows, when the file was the per-produto export.
+   *
+   * Empty for the per-família report, which has no product column — so a
+   * caller writes whatever is here and an owner who exports the simpler
+   * report simply gets no product detail, rather than an error.
+   */
+  products: ProductRow[];
   /** One entry per day, for reconciling against what is already recorded. */
   dailyTotals: Array<{ date: string; revenue: number }>;
   /** Every família seen, so the caller can create the missing categories. */
@@ -146,6 +176,20 @@ export function toFamilia(description: string): string | null {
   return familia || null;
 }
 
+/**
+ * The sub-família half of "COMIDAS / SMASHIES".
+ *
+ * Null for "MENUS /", which is the família's own line for items filed
+ * directly under it — there is no sub-família there, and storing an empty
+ * string would read as one.
+ */
+export function toSubFamily(description: string): string | null {
+  const parts = description.trim().split('/');
+  if (parts.length < 2) return null;
+  const sub = parts.slice(1).join('/').trim().toUpperCase();
+  return sub || null;
+}
+
 /** A row from the sheet, as cell values in header order. */
 export interface SheetRow {
   index: number;
@@ -162,6 +206,7 @@ export function parseFamiliaSheet(header: string[], rows: SheetRow[]): ParsedImp
   const cols = mapColumns(header);
 
   const byDayFamilia = new Map<string, FamiliaRow>();
+  const byDayProduct = new Map<string, ProductRow>();
   const skipped: Array<{ row: number; reason: string }> = [];
 
   for (const { index, cells } of rows) {
@@ -184,6 +229,41 @@ export function parseFamiliaSheet(header: string[], rows: SheetRow[]): ParsedImp
 
     const quantity = parsePtNumber(cells[cols.quantity]) ?? 0;
     const revenueNet = cols.revenueNet >= 0 ? parsePtNumber(cells[cols.revenueNet]) : null;
+
+    // The product line, kept alongside the rollup rather than instead of
+    // it. Only the per-produto export has these columns; without them this
+    // does nothing and the família rollup is the whole result.
+    if (cols.product >= 0 && cols.code >= 0) {
+      const name = String(cells[cols.product] ?? '').trim();
+      const code = String(cells[cols.code] ?? '').trim();
+      // Both are needed: a code with no name cannot be shown to an owner,
+      // and a name with no code cannot be followed across a rename.
+      if (name && code) {
+        const pKey = `${date}|${code}`;
+        const prev = byDayProduct.get(pKey);
+        if (prev) {
+          // The till can print the same item twice in a day, once per
+          // series. One product-day, so they add.
+          prev.revenue += revenue;
+          prev.quantity += Math.round(quantity);
+          prev.revenueNet =
+            prev.revenueNet !== null && revenueNet !== null
+              ? prev.revenueNet + revenueNet
+              : null;
+        } else {
+          byDayProduct.set(pKey, {
+            date,
+            code,
+            name,
+            familia,
+            subFamily: toSubFamily(description),
+            quantity: Math.round(quantity),
+            revenue,
+            revenueNet,
+          });
+        }
+      }
+    }
 
     // Sub-famílias roll up, so several rows land on the same key.
     const key = `${date}|${familia}`;
@@ -220,11 +300,20 @@ export function parseFamiliaSheet(header: string[], rows: SheetRow[]): ParsedImp
     if (row.revenueNet !== null) row.revenueNet = round3(row.revenueNet);
   }
 
+  const products = [...byDayProduct.values()].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.code.localeCompare(b.code),
+  );
+  for (const row of products) {
+    row.revenue = round2(row.revenue);
+    if (row.revenueNet !== null) row.revenueNet = round3(row.revenueNet);
+  }
+
   const totals = new Map<string, number>();
   for (const row of parsed) totals.set(row.date, (totals.get(row.date) ?? 0) + row.revenue);
 
   return {
     rows: parsed,
+    products,
     dailyTotals: [...totals.entries()]
       .map(([date, revenue]) => ({ date, revenue: round2(revenue) }))
       .sort((a, b) => a.date.localeCompare(b.date)),
@@ -297,6 +386,29 @@ export function detectShape(bytes: Uint8Array): FileShape {
   if (head.startsWith('<') && /<(html|table|!doctype|meta|head)/.test(head)) return 'html';
 
   return 'csv';
+}
+
+/**
+ * Turns the export's bytes into text, in whatever encoding it used.
+ *
+ * ZoneSoft's HTML export declares no charset and is written in Windows-1252,
+ * so decoding it as UTF-8 corrupts every Portuguese accent in a product name:
+ * "ASAS DE FRANGO 6 PEÇAS" arrives with a replacement character where the Ç
+ * was, and the product is then stored under that corrupted name for good.
+ *
+ * UTF-8 is tried first, because a newer export may well be one, and a decoder
+ * in fatal mode rejects byte sequences that are not valid UTF-8 — which a lone
+ * 0xC7 is. Windows-1252 then reads it correctly, and since it accepts every
+ * byte it is a real fallback rather than a second guess.
+ */
+export function decodeExport(bytes: Uint8Array): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    // Not UTF-8, so it is the Windows-1252 that Excel writes on a Portuguese
+    // Windows machine.
+    return new TextDecoder('windows-1252').decode(bytes);
+  }
 }
 
 /** HTML entities ZoneSoft's export actually uses. */

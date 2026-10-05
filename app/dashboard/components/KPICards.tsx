@@ -1,8 +1,7 @@
 'use client';
 
-import { TrendingUp, TrendingDown, DollarSign, BarChart3, Target, Activity, AlertTriangle } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, BarChart3, Activity, AlertTriangle } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts';
-import { useChartTheme } from '@/lib/chart-theme';
 import { formatMoney } from '@/lib/format';
 import InfoHint from '@/app/components/InfoHint';
 import TooltipHint from '@/app/components/Tooltip';
@@ -31,6 +30,16 @@ interface KPICardsProps {
     hasLabourCategories?: boolean;
   };
   last7DaysData: Array<{ date: string; revenue: number }>;
+  /**
+   * How far through the month the restaurant is. Null until it loads, and on
+   * a restaurant with nothing recorded this month.
+   */
+  monthProgress?: {
+    elapsed: number;
+    remaining: number;
+    dailyAverage: number | null;
+    projection: number | null;
+  } | null;
 }
 
 /**
@@ -80,8 +89,13 @@ function Sparkline({ data }: { data: Array<{ date: string; revenue: number }> })
   );
 }
 
-export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, last7DaysData }: KPICardsProps) {
-  const chart = useChartTheme();
+export default function KPICards({
+  stats: rawStats,
+  advancedStats: rawAdvanced,
+  last7DaysData,
+  monthProgress = null,
+}: KPICardsProps) {
+  const { t } = useLanguage();
   const stats = {
     revenue: rawStats?.revenue ?? 0,
     costs: rawStats?.costs ?? 0,
@@ -109,14 +123,10 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
     ? Math.min(100, (advancedStats.totalRevenue / advancedStats.monthlyGoal) * 100)
     : 0;
 
-  // Circular gauge values for Net Income
-  const radius = 28;
-  const circ   = 2 * Math.PI * radius;
-  const netPct = Math.max(0, Math.min(100, advancedStats.netIncomePercent));
-  const dash   = (netPct / 100) * circ;
-
+  // Three columns, not four: net profit left this row, and a four-column
+  // grid would leave a hole at the end of it.
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
 
       {/* Revenue */}
       <div className="card-glass p-5 animate-fade-up-1">
@@ -130,22 +140,65 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
           €{advancedStats.totalRevenue.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
         </div>
         <div className="text-xs text-muted-foreground mt-1">
-          Receita este mês<InfoHint term="revenue" />
+          {t('kpi.revenueThisMonth')}<InfoHint term="revenue" />
         </div>
+
+        {/* How far through the month this figure is.
+            A revenue number halfway through a month means nothing on its
+            own, and the trading days are what make the average honest: a
+            restaurant that shuts Mondays has four fewer days than the
+            calendar claims. */}
+        {monthProgress && monthProgress.elapsed > 0 && (
+          <div className="mt-3 pt-3 border-t border-border-subtle space-y-2">
+            <p className="text-[11px] text-muted-foreground">
+              <span className="font-semibold text-foreground tabular-nums">{monthProgress.elapsed}</span>
+              {' '}{t('kpi.daysElapsed')}
+              {monthProgress.remaining > 0 && (
+                <>
+                  {' · '}
+                  <span className="font-semibold text-foreground tabular-nums">{monthProgress.remaining}</span>
+                  {' '}{t('kpi.daysRemaining')}
+                </>
+              )}
+            </p>
+            {monthProgress.dailyAverage !== null && (
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[10px] text-muted-foreground">{t('kpi.dailyAverage')}</span>
+                <span className="text-xs font-bold text-foreground tabular-nums">
+                  {formatMoney(monthProgress.dailyAverage)}
+                </span>
+              </div>
+            )}
+            {monthProgress.projection !== null && monthProgress.remaining > 0 && (
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[10px] text-muted-foreground">
+                  {t('kpi.estimate')}
+                  <TooltipHint text={t('kpi.estimateHint')} underline={false}>
+                    <span className="ml-1 cursor-help opacity-60" aria-hidden="true">?</span>
+                  </TooltipHint>
+                </span>
+                <span className="text-xs font-bold text-primary tabular-nums">
+                  {formatMoney(monthProgress.projection)}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* An unlabelled line of peaks reads as decoration until something
             says which seven days it covers. */}
         {last7DaysData.length > 0 && (
           <>
             <Sparkline data={last7DaysData} />
             <div className="mt-1 text-[10px] text-muted-foreground">
-              Últimos 7 dias<InfoHint term="sparkline" />
+              {t('kpi.last7Days')}<InfoHint term="sparkline" />
             </div>
           </>
         )}
         {advancedStats.monthlyGoal > 0 && (
           <div className="mt-3">
             <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-              <span>Meta mensal<InfoHint term="target" /></span>
+              <span>{t('kpi.monthlyGoal')}<InfoHint term="target" /></span>
               <span>{goalPercent.toFixed(0)}%</span>
             </div>
             <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -166,7 +219,7 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
           </div>
           {primeCostIncomplete ? (
             <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-warning/15 text-warning">
-              Incompleto
+              {t('kpi.incomplete')}
             </span>
           ) : (
             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
@@ -176,7 +229,7 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
                 ? 'bg-warning/15 text-warning'
                 : 'bg-success/15 text-success'
             }`}>
-              {advancedStats.primeCostPercent > 65 ? 'Alto' : advancedStats.primeCostPercent > 60 ? 'Atenção' : 'Bom'}
+              {advancedStats.primeCostPercent > 65 ? t('kpi.high') : advancedStats.primeCostPercent > 60 ? t('kpi.watch') : t('kpi.good')}
             </span>
           )}
         </div>
@@ -184,20 +237,19 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
           {advancedStats.primeCostPercent.toFixed(1)}%
         </div>
         <div className="text-xs text-muted-foreground mt-1">
-          Prime Cost<InfoHint term="primeCost" />
+          {t('kpi.primeCost')}<InfoHint term="primeCost" />
         </div>
         {primeCostIncomplete ? (
           <div className="mt-4 flex items-start gap-1.5 text-[10px] leading-relaxed text-warning/90">
             <AlertTriangle className="w-3 h-3 shrink-0 mt-px" aria-hidden="true" />
             <span>
-              Sem categorias de pessoal definidas — este valor inclui apenas mercadorias.
-              Marca as categorias de ordenados nas definições.
+              {t('kpi.noLabourCategories')}
             </span>
           </div>
         ) : (
           <div className="mt-4 space-y-1.5">
             <div className="flex justify-between text-[10px] text-muted-foreground">
-              <span>Meta &lt;60%</span>
+              <span>{t('kpi.targetUnder60')}</span>
               <span>{advancedStats.primeCostPercent.toFixed(1)}%</span>
             </div>
             <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -212,42 +264,10 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
         )}
       </div>
 
-      {/* Net Income — hidden on mobile */}
-      <div className="card-glass p-5 animate-fade-up-3 hidden sm:block">
-        <div className="flex items-start justify-between mb-1">
-          <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/20 flex items-center justify-center">
-            <Target className="w-4 h-4 text-success" />
-          </div>
-          <TrendBadge value={advancedStats.netIncomePercent} />
-        </div>
-        <div className="flex items-end gap-4 mt-3">
-          <div>
-            <div className="text-3xl font-black tabular-nums text-foreground">
-              {formatMoney(Math.abs(advancedStats.netIncome))}
-            </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              Lucro Líquido<InfoHint term="netIncome" />
-            </div>
-          </div>
-          {/* Circular gauge */}
-          <svg width="68" height="68" className="shrink-0 ml-auto" role="img" aria-label={`Lucro líquido: ${netPct.toFixed(0)}%`}>
-            <circle cx="34" cy="34" r={radius} fill="none" stroke={chart.grid} strokeWidth="5" />
-            <circle
-              cx="34" cy="34" r={radius}
-              fill="none"
-              stroke={netPct > 15 ? chart.success : netPct > 5 ? chart.warning : chart.danger}
-              strokeWidth="5"
-              strokeLinecap="round"
-              strokeDasharray={`${dash} ${circ}`}
-              transform="rotate(-90 34 34)"
-              style={{ transition: 'stroke-dasharray 1.2s ease' }}
-            />
-            <text x="34" y="39" textAnchor="middle" className="text-[9px]" fill="hsl(210 40% 96%)" fontWeight="700" fontSize="11">
-              {netPct.toFixed(0)}%
-            </text>
-          </svg>
-        </div>
-      </div>
+      {/* Net profit used to sit here. It was removed rather than moved: the
+          P&L says the same thing with the detail behind it, and the space
+          now carries the ingredients ranking, which is something the owner
+          can act on today. */}
 
       {/* COGS % — hidden on mobile */}
       <div className="card-glass p-5 animate-fade-up-4 hidden sm:block">
@@ -265,13 +285,13 @@ export default function KPICards({ stats: rawStats, advancedStats: rawAdvanced, 
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="bg-muted rounded-lg p-2.5">
-            <div className="text-[10px] text-muted-foreground">Receita<InfoHint term="revenue" /></div>
+            <div className="text-[10px] text-muted-foreground">{t('kpi.revenue')}<InfoHint term="revenue" /></div>
             <div className="text-sm font-bold text-foreground mt-0.5">
               {formatMoney(stats.revenue)}
             </div>
           </div>
           <div className="bg-muted rounded-lg p-2.5">
-            <div className="text-[10px] text-muted-foreground">Custos<InfoHint term="costs" /></div>
+            <div className="text-[10px] text-muted-foreground">{t('kpi.costs')}<InfoHint term="costs" /></div>
             <div className="text-sm font-bold text-foreground mt-0.5">
               {formatMoney(stats.costs)}
             </div>

@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
   engineType = "binary"
 }
 
@@ -41,13 +41,13 @@ enum RenewalPeriod {
 }
 
 enum ComplianceDocType {
-  INSURANCE       // Seguro de responsabilidade civil
-  HACCP           // Plano HACCP
-  FIRE_SAFETY     // Segurança contra incêndios
-  ASAE_LICENCE    // Licença de utilização / ASAE
-  HYGIENE_CERT    // Formação em higiene alimentar
-  WASTE_CONTRACT  // Contrato de recolha de resíduos
-  PEST_CONTROL    // Controlo de pragas
+  INSURANCE // Seguro de responsabilidade civil
+  HACCP // Plano HACCP
+  FIRE_SAFETY // Segurança contra incêndios
+  ASAE_LICENCE // Licença de utilização / ASAE
+  HYGIENE_CERT // Formação em higiene alimentar
+  WASTE_CONTRACT // Contrato de recolha de resíduos
+  PEST_CONTROL // Controlo de pragas
   OTHER
 }
 
@@ -67,7 +67,7 @@ model Restaurant {
   cancelAtPeriodEnd    Boolean   @default(false) @map("cancel_at_period_end")
 
   // Onboarding
-  onboardingCompleted Boolean @default(false) @map("onboarding_completed")
+  onboardingCompleted  Boolean  @default(false) @map("onboarding_completed")
   monthlyRevenueTarget Decimal? @map("monthly_revenue_target") @db.Decimal(12, 2)
 
   /// Restaurant logo, stored as a path under the storage directory rather
@@ -82,22 +82,22 @@ model Restaurant {
   serviceHoursPerDay Decimal? @map("service_hours_per_day") @db.Decimal(4, 1)
 
   // Settings
-  timezone String @default("Europe/Lisbon")
-  currency String @default("EUR")
+  timezone String  @default("Europe/Lisbon")
+  currency String  @default("EUR")
   taxId    String? @map("tax_id") // NIF for accountant reports
 
-  memberships    Membership[]
-  categories     Category[]
-  dailySummaries DailySummary[]
-  costEntries    CostEntry[]
-  auditLogs      AuditLog[]
-  stripeEvents   StripeEvent[]
-  notifications  Notification[]
-  exportLogs     ExportLog[]
-  receiptScans   ReceiptScan[]
-  vendors        Vendor[]
-  invoiceItems   InvoiceItem[]
-  complianceDocs ComplianceDoc[]
+  memberships       Membership[]
+  categories        Category[]
+  dailySummaries    DailySummary[]
+  costEntries       CostEntry[]
+  auditLogs         AuditLog[]
+  stripeEvents      StripeEvent[]
+  notifications     Notification[]
+  exportLogs        ExportLog[]
+  receiptScans      ReceiptScan[]
+  vendors           Vendor[]
+  invoiceItems      InvoiceItem[]
+  complianceDocs    ComplianceDoc[]
   scheduleEmployees ScheduleEmployee[]
   shiftTemplates    ShiftTemplate[]
   shifts            Shift[]
@@ -107,18 +107,20 @@ model Restaurant {
   menuItems         MenuItem[]
   supportTickets    SupportTicket[]
   categoryRevenue   DailyCategoryRevenue[]
+  posProducts       PosProduct[]
+  posProductSales   PosProductSale[]
 
   @@map("restaurants")
 }
 
 model StripeEvent {
-  id           String     @id
+  id           String      @id
   type         String
-  processed    Boolean    @default(false)
+  processed    Boolean     @default(false)
   data         Json
-  restaurantId String?    @map("restaurant_id")
+  restaurantId String?     @map("restaurant_id")
   restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
-  createdAt    DateTime   @default(now()) @map("created_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
 
   @@map("stripe_events")
 }
@@ -156,14 +158,14 @@ model User {
   sessions Session[]
 
   memberships      Membership[]
-  createdSummaries DailySummary[] @relation("SummaryCreatedBy")
-  createdCosts     CostEntry[]    @relation("CostCreatedBy")
-  auditLogs        AuditLog[]     @relation("AuditActor")
+  createdSummaries DailySummary[]   @relation("SummaryCreatedBy")
+  createdCosts     CostEntry[]      @relation("CostCreatedBy")
+  auditLogs        AuditLog[]       @relation("AuditActor")
   notifications    Notification[]
   receiptScans     ReceiptScan[]
-  complianceDocs   ComplianceDoc[] @relation("ComplianceUploadedBy")
-  supportTickets   SupportTicket[] @relation("SupportRequester")
-  supportReplies   SupportTicket[] @relation("SupportResponder")
+  complianceDocs   ComplianceDoc[]  @relation("ComplianceUploadedBy")
+  supportTickets   SupportTicket[]  @relation("SupportRequester")
+  supportReplies   SupportTicket[]  @relation("SupportResponder")
   extractionTests  ExtractionTest[]
 
   @@map("users")
@@ -272,6 +274,7 @@ model Category {
 
   costEntries  CostEntry[]
   dailyRevenue DailyCategoryRevenue[]
+  posProducts  PosProduct[]
 
   @@index([restaurantId, isActive])
   @@map("categories")
@@ -314,12 +317,12 @@ model CostEntry {
   vendor   Vendor? @relation(fields: [vendorId], references: [id])
   vendorId String? @map("vendor_id")
 
-  amount      Decimal  @db.Decimal(12, 2)
+  amount      Decimal @db.Decimal(12, 2)
   description String?
 
-  createdBy   User     @relation("CostCreatedBy", fields: [createdById], references: [id])
-  createdById String   @map("created_by")
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdBy   User      @relation("CostCreatedBy", fields: [createdById], references: [id])
+  createdById String    @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime? @updatedAt @map("updated_at")
   deletedAt   DateTime? @map("deleted_at")
 
@@ -421,14 +424,14 @@ model ComplianceDoc {
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
   restaurantId String     @map("restaurant_id")
 
-  type ComplianceDocType
-  name String
+  type      ComplianceDocType
+  name      String
   /// Policy or licence number, as printed on the document.
   reference String?
 
-  filePath  String  @map("file_path")
-  mimeType  String  @map("mime_type")
-  sizeBytes Int     @map("size_bytes")
+  filePath  String @map("file_path")
+  mimeType  String @map("mime_type")
+  sizeBytes Int    @map("size_bytes")
 
   /// Monthly or annual renewal. NONE for one-off documents.
   renewalPeriod RenewalPeriod @default(NONE) @map("renewal_period")
@@ -439,10 +442,10 @@ model ComplianceDoc {
 
   notes String?
 
-  uploadedBy   User     @relation("ComplianceUploadedBy", fields: [uploadedById], references: [id])
-  uploadedById String   @map("uploaded_by")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  uploadedBy   User      @relation("ComplianceUploadedBy", fields: [uploadedById], references: [id])
+  uploadedById String    @map("uploaded_by")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
   deletedAt    DateTime? @map("deleted_at")
 
   /// Drives the expiry queries that power the dashboard warnings.
@@ -456,8 +459,8 @@ model Vendor {
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
   restaurantId String     @map("restaurant_id")
 
-  name    String
-  taxId   String?  @map("tax_id") // NIF
+  name     String
+  taxId    String? @map("tax_id") // NIF
   isActive Boolean @default(true) @map("is_active")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -488,8 +491,8 @@ model InvoiceItem {
   normalizedName String  @map("normalized_name")
   quantity       Decimal @db.Decimal(10, 3)
   unit           String? // kg, L, un, etc.
-  unitPrice      Decimal @db.Decimal(10, 4) @map("unit_price")
-  totalPrice     Decimal @db.Decimal(12, 2) @map("total_price")
+  unitPrice      Decimal @map("unit_price") @db.Decimal(10, 4)
+  totalPrice     Decimal @map("total_price") @db.Decimal(12, 2)
 
   invoiceDate   DateTime? @map("invoice_date")
   invoiceNumber String?   @map("invoice_number")
@@ -581,18 +584,18 @@ model ShiftTemplate {
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
   restaurantId String     @map("restaurant_id")
 
-  label     String
+  label    String
   /// Minutes from midnight. Integers compare and sum without timezone or
   /// DST trouble, which a DateTime on a recurring weekly grid invites.
-  startMin  Int    @map("start_min")
-  endMin    Int    @map("end_min")
+  startMin Int    @map("start_min")
+  endMin   Int    @map("end_min")
 
   /// A saved split shift carries its break, so "Partido" reusable means the
   /// same thing every time it is applied.
   breakStartMin Int? @map("break_start_min")
   breakEndMin   Int? @map("break_end_min")
 
-  sortOrder Int    @default(0) @map("sort_order")
+  sortOrder Int @default(0) @map("sort_order")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -674,7 +677,7 @@ model Ingredient {
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
   restaurantId String     @map("restaurant_id")
 
-  name String
+  name           String
   /// Matches against InvoiceItem.normalizedName, so invoices can price this.
   normalizedName String @map("normalized_name")
 
@@ -851,10 +854,10 @@ model SupportTicket {
 /// The image is stored as a path, not bytes: a test corpus of invoices is
 /// large, and a database dump should not carry photographs of real suppliers.
 model ExtractionTest {
-  id        String   @id @default(uuid())
+  id     String @id @default(uuid())
   /// The administrator who ran it.
-  user      User     @relation(fields: [userId], references: [id])
-  userId    String   @map("user_id")
+  user   User   @relation(fields: [userId], references: [id])
+  userId String @map("user_id")
 
   scanType  ScanType @map("scan_type")
   /// Where the uploaded image lives under the storage directory.
@@ -866,23 +869,23 @@ model ExtractionTest {
   /// be attributed. Free text rather than an enum: models are added faster
   /// than migrations are run.
   model         String
-  promptVersion String   @map("prompt_version")
+  promptVersion String @map("prompt_version")
 
   /// Exactly what the model returned, before any correction.
-  extracted Json?
+  extracted   Json?
   /// What was actually on the document, typed in by the administrator.
   /// Null until someone has checked the run.
-  truth     Json?
+  truth       Json?
   /// Per-field verdicts, written when truth is supplied.
-  fieldScores Json?    @map("field_scores")
+  fieldScores Json?  @map("field_scores")
   /// Share of checked fields that matched, 0..1. Null until checked.
   accuracy    Float?
 
   /// What it cost to ask, so accuracy can be weighed against price.
-  inputTokens  Int?    @map("input_tokens")
-  outputTokens Int?    @map("output_tokens")
+  inputTokens  Int? @map("input_tokens")
+  outputTokens Int? @map("output_tokens")
   /// Wall-clock time of the API call.
-  durationMs   Int?    @map("duration_ms")
+  durationMs   Int? @map("duration_ms")
 
   status ScanStatus @default(PENDING)
   /// Why it failed, when it did.
@@ -920,12 +923,12 @@ model DailyCategoryRevenue {
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
   restaurantId String     @map("restaurant_id")
 
-  date     DateTime
-  category Category @relation(fields: [categoryId], references: [id])
-  categoryId String @map("category_id")
+  date       DateTime
+  category   Category @relation(fields: [categoryId], references: [id])
+  categoryId String   @map("category_id")
 
   /// Takings in this category, VAT included.
-  revenue  Decimal @default(0) @db.Decimal(12, 2)
+  revenue Decimal @default(0) @db.Decimal(12, 2)
 
   /// The same takings net of VAT, as the till reports them.
   ///
@@ -937,7 +940,7 @@ model DailyCategoryRevenue {
   revenueNet Decimal? @map("revenue_net") @db.Decimal(12, 2)
   /// How many items went out. Useful for spotting a category that sells a
   /// lot of units for very little money.
-  quantity Int     @default(0)
+  quantity   Int      @default(0)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -948,4 +951,79 @@ model DailyCategoryRevenue {
   @@index([restaurantId, date])
   @@index([categoryId, date])
   @@map("daily_category_revenue")
+}
+
+/// A product the till sells, as the POS names it.
+///
+/// Kept apart from `MenuItem`, which is the owner's own costed recipe: this
+/// is whatever the POS happens to have, including things that are not really
+/// products at all — INGREDIENTES and MOLHOS are modifiers the kitchen
+/// display needs, sold at zero. Conflating the two would put "CEBOLA
+/// CARAMELIZADA" in the menu calculator.
+///
+/// Identified by the till's own code, which survives a rename: a product
+/// renamed in the POS is still the same product, and matching on name would
+/// split its history in two.
+model PosProduct {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  /// The till's code for this item. Unique per restaurant.
+  code String
+  /// What the till calls it, as last seen. Updated when the POS renames it.
+  name String
+
+  /// The family it belongs to, so a product rolls up the same way its
+  /// revenue does. Null if the category has since been deleted.
+  category   Category? @relation(fields: [categoryId], references: [id])
+  categoryId String?   @map("category_id")
+
+  /// The sub-family as the till writes it, e.g. "SMASHIES". Kept as text
+  /// because sub-families change with the menu and are not worth a table.
+  subFamily String? @map("sub_family")
+
+  sales PosProductSale[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([restaurantId, code])
+  @@index([restaurantId, categoryId])
+  @@map("pos_products")
+}
+
+/// What one product sold on one day.
+///
+/// The grain the POS export actually has. `DailyCategoryRevenue` is this
+/// rolled up to the family, kept separately because almost every screen
+/// wants the family and reading nine thousand rows to draw one chart would
+/// be wasteful.
+model PosProductSale {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  product   PosProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String     @map("product_id")
+
+  date DateTime
+
+  /// How many went out. The figure that matters for a modifier, which sells
+  /// in quantity at no price.
+  quantity   Int      @default(0)
+  /// Takings, VAT included.
+  revenue    Decimal  @default(0) @db.Decimal(12, 2)
+  /// The same net of VAT, where the export carried it.
+  revenueNet Decimal? @map("revenue_net") @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// One row per product per day, so a re-import corrects rather than doubles.
+  @@unique([restaurantId, date, productId])
+  /// Read as "this product over time" and "this month, every product".
+  @@index([productId, date])
+  @@index([restaurantId, date])
+  @@map("pos_product_sales")
 }

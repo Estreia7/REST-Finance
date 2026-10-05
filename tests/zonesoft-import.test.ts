@@ -4,10 +4,12 @@ import {
   parsePtNumber,
   parsePtDate,
   toFamilia,
+  toSubFamily,
   ImportFormatError,
   detectShape,
   parseHtmlTable,
   decodeEntities,
+  decodeExport,
   vatRate,
   vatAmount,
   type SheetRow,
@@ -374,5 +376,147 @@ describe('the per-product export, which carries more than the family one', () =>
     const parsed = parseFamiliaSheet(header, rows);
     const comidas = parsed.rows.find((r) => r.familia === 'COMIDAS')!;
     expect(comidas.revenueNet).toBeCloseTo(150.62, 3);
+  });
+});
+
+describe('product rows, which the per-produto export carries and the other does not', () => {
+  const BY_PRODUCT = `<html><body>
+    <table>
+      <tr><th>Data</th><th>C&oacute;digo</th><th>Produto</th><th>Familia / Sub-Familia</th><th>Quantidade</th><th>Valor Total S/IVA</th><th>Valor Total</th></tr>
+      <tr><td>02-01-2025</td><td>9</td><td>SMASHIE SIMPLES C/QUEIJO</td><td>COMIDAS / SMASHIES</td><td>4,000</td><td>35,487&euro;</td><td>40,100&euro;</td></tr>
+      <tr><td>02-01-2025</td><td>11</td><td>SMASHIE DUPLO C/QUEIJO</td><td>COMIDAS / SMASHIES</td><td>10,000</td><td>115,133&euro;</td><td>130,100&euro;</td></tr>
+      <tr><td>02-01-2025</td><td>40</td><td>COCA-COLA</td><td>BEBIDAS / SUMOS E AGUAS</td><td>4,000</td><td>6,179&euro;</td><td>7,600&euro;</td></tr>
+      <tr><td>03-01-2025</td><td>9</td><td>SMASHIE SIMPLES C/QUEIJO</td><td>COMIDAS / SMASHIES</td><td>2,000</td><td>17,743&euro;</td><td>20,050&euro;</td></tr>
+      <tr><td>Totais</td><td>20,000</td><td>174,542&euro;</td><td>197,850&euro;</td></tr>
+    </table></body></html>`;
+
+  const parse = () => {
+    const { header, rows } = parseHtmlTable(BY_PRODUCT);
+    return parseFamiliaSheet(header, rows);
+  };
+
+  it('names each product and keeps the till code that identifies it', () => {
+    const { products } = parse();
+    const simples = products.find((p) => p.code === '9' && p.date === '2025-01-02')!;
+    expect(simples.name).toBe('SMASHIE SIMPLES C/QUEIJO');
+    expect(simples.familia).toBe('COMIDAS');
+    expect(simples.subFamily).toBe('SMASHIES');
+    expect(simples.quantity).toBe(4);
+    expect(simples.revenue).toBeCloseTo(40.1, 2);
+  });
+
+  it('keeps a product on separate days apart', () => {
+    // The chart the owner wants is units per month, which needs the daily
+    // grain. Collapsing to one row per product would make that impossible.
+    const { products } = parse();
+    const nine = products.filter((p) => p.code === '9');
+    expect(nine).toHaveLength(2);
+    expect(nine.map((p) => p.date)).toEqual(['2025-01-02', '2025-01-03']);
+  });
+
+  it('adds a product that the till printed twice in one day', () => {
+    // Two series, one item, one day.
+    const { header, rows } = parseHtmlTable(`<html><body><table>
+      <tr><th>Data</th><th>C&oacute;digo</th><th>Produto</th><th>Familia / Sub-Familia</th><th>Quantidade</th><th>Valor Total</th></tr>
+      <tr><td>02-01-2025</td><td>9</td><td>SMASHIE</td><td>COMIDAS / SMASHIES</td><td>4,000</td><td>40,00&euro;</td></tr>
+      <tr><td>02-01-2025</td><td>9</td><td>SMASHIE</td><td>COMIDAS / SMASHIES</td><td>1,000</td><td>10,00&euro;</td></tr>
+    </table></body></html>`);
+    const { products } = parseFamiliaSheet(header, rows);
+    expect(products).toHaveLength(1);
+    expect(products[0].quantity).toBe(5);
+    expect(products[0].revenue).toBeCloseTo(50, 2);
+  });
+
+  it('totals the same money as the family rollup', () => {
+    // The two lists are the same takings at two grains. If they ever
+    // disagree, one of them is wrong and the P&L would stop tying out.
+    const { rows, products, grandTotal } = parse();
+    const familiaSum = rows.reduce((s, r) => s + r.revenue, 0);
+    const productSum = products.reduce((s, p) => s + p.revenue, 0);
+    expect(productSum).toBeCloseTo(familiaSum, 2);
+    expect(productSum).toBeCloseTo(grandTotal, 2);
+    expect(grandTotal).toBeCloseTo(197.85, 2);
+  });
+
+  it('yields no products for the per-família export', () => {
+    // No product column, so no product rows — and no error either, because
+    // an owner exporting the simpler report is not making a mistake.
+    const header = ['Data', 'Descrição', 'Quantidade', 'Valor Total'];
+    const rows: SheetRow[] = [
+      { index: 1, cells: ['02-01-2025', 'COMIDAS/SMASHIES', '16,000', '183,50€'] },
+    ];
+    const parsed = parseFamiliaSheet(header, rows);
+    expect(parsed.rows).toHaveLength(1);
+    expect(parsed.products).toHaveLength(0);
+  });
+
+  it('skips a row whose product name or code is blank', () => {
+    // Still counted in the family rollup — the money is real — but there is
+    // nothing to file it under as a product.
+    const header = ['Data', 'Código', 'Produto', 'Familia / Sub-Familia', 'Quantidade', 'Valor Total'];
+    const rows: SheetRow[] = [
+      { index: 1, cells: ['02-01-2025', '', '', 'COMIDAS / SMASHIES', '2,000', '20,00€'] },
+    ];
+    const parsed = parseFamiliaSheet(header, rows);
+    expect(parsed.products).toHaveLength(0);
+    expect(parsed.rows[0].revenue).toBeCloseTo(20, 2);
+  });
+
+  it('reads the sub-família, and none where the item is filed on the family', () => {
+    expect(toSubFamily('COMIDAS / SMASHIES')).toBe('SMASHIES');
+    expect(toSubFamily('COMIDAS/SMASHIES')).toBe('SMASHIES');
+    expect(toSubFamily('MENUS /')).toBeNull();
+    expect(toSubFamily('INGREDIENTES')).toBeNull();
+  });
+
+  it('keeps a zero-priced modifier, which is the whole point of the ranking', () => {
+    // INGREDIENTES and MOLHOS sell at nothing; the kitchen display needs
+    // them. A filter on revenue would drop exactly the rows the ingredients
+    // ranking is built from.
+    const { header, rows } = parseHtmlTable(`<html><body><table>
+      <tr><th>Data</th><th>C&oacute;digo</th><th>Produto</th><th>Familia / Sub-Familia</th><th>Quantidade</th><th>Valor Total</th></tr>
+      <tr><td>02-01-2025</td><td>301</td><td>CEBOLA CARAMELIZADA</td><td>INGREDIENTES</td><td>7,000</td><td>0,00&euro;</td></tr>
+    </table></body></html>`);
+    const { products } = parseFamiliaSheet(header, rows);
+    expect(products).toHaveLength(1);
+    expect(products[0].quantity).toBe(7);
+    expect(products[0].revenue).toBe(0);
+    expect(products[0].familia).toBe('INGREDIENTES');
+    expect(products[0].subFamily).toBeNull();
+  });
+});
+
+describe('the encoding the export actually uses', () => {
+  /**
+   * The real client export declares no charset and is Windows-1252. Reading
+   * it as UTF-8 put a replacement character where every Portuguese accent
+   * was, and the product was then stored under that name for good.
+   */
+  it('reads Windows-1252 accents correctly', () => {
+    // 0xC7 is Ç in Windows-1252 and not valid UTF-8 on its own.
+    const bytes = new Uint8Array([
+      ...[...'ASAS DE FRANGO 6 PE'].map((c) => c.charCodeAt(0)),
+      0xc7,
+      ...[...'AS'].map((c) => c.charCodeAt(0)),
+    ]);
+    expect(decodeExport(bytes)).toBe('ASAS DE FRANGO 6 PEÇAS');
+  });
+
+  it('still reads a UTF-8 export', () => {
+    // A newer export may well be UTF-8, so that is tried first.
+    const bytes = new TextEncoder().encode('PIZZA CHOURIÇO E MEL');
+    expect(decodeExport(bytes)).toBe('PIZZA CHOURIÇO E MEL');
+  });
+
+  it('does not mangle a name that is pure ASCII', () => {
+    const bytes = new TextEncoder().encode('SUPER BOCK');
+    expect(decodeExport(bytes)).toBe('SUPER BOCK');
+  });
+
+  it('reads the whole Portuguese alphabet out of Windows-1252', () => {
+    // The accents that actually appear in a Portuguese menu.
+    const expected = 'ÁÃÂÀÉÊÍÓÕÔÚÇ';
+    const bytes = new Uint8Array([0xc1, 0xc3, 0xc2, 0xc0, 0xc9, 0xca, 0xcd, 0xd3, 0xd5, 0xd4, 0xda, 0xc7]);
+    expect(decodeExport(bytes)).toBe(expected);
   });
 });
