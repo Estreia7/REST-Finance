@@ -18,10 +18,11 @@ import { useLanguage } from '@/lib/language-context';
 /**
  * IVA and IRC, as an owner needs to see them.
  *
- * The honest framing matters more here than anywhere else in the app. These
- * are estimates built on assumptions — the split of takings across VAT rates,
- * and the VAT rate assumed on purchases — because the underlying records hold
- * one gross figure per day and one amount per cost. That is enough to answer
+ * The honest framing matters more here than anywhere else in the app. Sales
+ * VAT is the till's own figure wherever the takings were imported from it;
+ * the rest is estimated — the split of hand-typed takings across VAT rates,
+ * and the VAT rate assumed on purchases, which are recorded as one amount per
+ * cost. Each part says which it is. That is enough to answer
  * "roughly what do I owe in November", which is the question that keeps an
  * owner awake, and it is not the return their accountant files. Every screen
  * says so, and none of it is presented as advice.
@@ -30,7 +31,11 @@ import { useLanguage } from '@/lib/language-context';
 interface VatData {
   year: number;
   quarter: Quarter;
+  /** Sales VAT read off the till, per category. */
+  tillLines: Array<{ label: string; gross: number; net: number; vat: number; rate: number }>;
+  /** Sales VAT estimated from the mix, for takings the till did not break down. */
   salesLines: Array<{ key: string; label: string; rate: number; sharePercent: number; gross: number; net: number; vat: number }>;
+  estimatedGross: number;
   purchaseLines: Array<{ labelKey: string; gross: number; vatRate: number; vatCharged: number; vatDeductible: number }>;
   outputVat: number;
   deductibleVat: number;
@@ -58,6 +63,7 @@ interface IrcData {
   taxDespiteLoss: boolean;
   grossRevenue: number;
   netRevenue: number;
+  estimatedGross: number;
   totalCosts: number;
   accountingProfit: number;
   nextYearInstalments: { total: number; perInstalment: number; exempt: boolean };
@@ -161,6 +167,9 @@ export default function EstadoPanel() {
       {showSettings && (
         <SettingsDialog
           settings={(view === 'iva' ? vat?.settings : irc?.settings) ?? null}
+          // The mix only matters while some takings lack the till's detail.
+          // Unknown (nothing loaded yet) counts as in use, so it stays editable.
+          mixInUse={((view === 'iva' ? vat?.estimatedGross : irc?.estimatedGross) ?? 1) > 0}
           onClose={() => setShowSettings(false)}
           onSave={async (input) => {
             const result = await saveTaxSettings(input);
@@ -192,6 +201,8 @@ function VatView({
   const { t, language } = useLanguage();
   const nowQuarter = quarterOf(new Date());
   const isCurrent = year === new Date().getUTCFullYear() && quarter === nowQuarter;
+  const hasTill = (data?.tillLines.length ?? 0) > 0;
+  const hasEstimate = (data?.estimatedGross ?? 0) > 0;
 
   return (
     <>
@@ -240,11 +251,52 @@ function VatView({
       ) : (
         <>
           <div className="card-glass p-4 sm:p-5">
-            <h4 className="font-semibold text-foreground mb-1">{t('estado.outputVatTitle')}</h4>
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <h4 className="font-semibold text-foreground">{t('estado.outputVatTitle')}</h4>
+              <SalesSource hasTill={hasTill} hasEstimate={hasEstimate} />
+            </div>
             <p className="text-xs text-muted-foreground mb-4">
-              {t('estado.outputVatHint')}
+              {hasTill
+                ? hasEstimate ? t('estado.outputVatHintMixed') : t('estado.outputVatHintTill')
+                : t('estado.outputVatHint')}
             </p>
 
+            {/* What the till actually charged, family by family. A menu that
+                mixes food and drink shows its blended rate, which is the
+                honest figure for it. */}
+            {hasTill && (
+              <div className="-mx-4 sm:-mx-5 divide-y divide-border-subtle border-y border-border-subtle">
+                {data.tillLines.map((line) => (
+                  <div key={line.label} className="px-4 sm:px-5 py-2.5 flex items-center gap-3">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm text-foreground truncate">{line.label}</span>
+                      <span className="block text-[11px] text-muted-foreground">
+                        IVA {formatRate(line.rate)}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span className="block text-sm font-semibold text-foreground tabular-nums">
+                        {formatMoneyExact(line.vat)}
+                      </span>
+                      <span className="block text-[11px] text-muted-foreground tabular-nums">
+                        {t('estado.outOf')} {formatMoneyExact(line.gross)}
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {hasTill && hasEstimate && (
+              <div className="mt-4 mb-2">
+                <p className="text-xs font-semibold text-foreground">
+                  {t('estado.estimatedPartTitle')} · {formatMoneyExact(data.estimatedGross)}
+                </p>
+                <p className="text-[11px] text-muted-foreground">{t('estado.estimatedPartHint')}</p>
+              </div>
+            )}
+
+            {hasEstimate && (
             <div className="-mx-4 sm:-mx-5 divide-y divide-border-subtle border-y border-border-subtle">
               {data.salesLines.map((line) => (
                 <div key={line.key} className="px-4 sm:px-5 py-2.5 flex items-center gap-3">
@@ -265,6 +317,7 @@ function VatView({
                 </div>
               ))}
             </div>
+            )}
 
             <div className="pt-3 flex items-baseline justify-between">
               <span className="text-sm font-semibold text-foreground">{t('estado.totalOutput')}</span>
@@ -322,6 +375,30 @@ function VatView({
         </>
       )}
     </>
+  );
+}
+
+/**
+ * A rate as the till paid it: "13%" when it is a statutory rate, "15,4%"
+ * when a category blends two (a menu with food and a drink).
+ */
+function formatRate(rate: number): string {
+  return formatPercent(rate, Math.abs(rate - Math.round(rate)) < 0.15 ? 0 : 1);
+}
+
+/** Where the sales VAT figure came from, said in two words beside the title. */
+function SalesSource({ hasTill, hasEstimate }: { hasTill: boolean; hasEstimate: boolean }) {
+  const { t } = useLanguage();
+  const [label, tone] = hasTill
+    ? hasEstimate
+      ? [t('estado.sourceMixed'), 'border-border text-muted-foreground']
+      : [t('estado.sourceTill'), 'border-success text-success']
+    : [t('estado.sourceEstimate'), 'border-border text-muted-foreground'];
+
+  return (
+    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${tone}`}>
+      {label}
+    </span>
   );
 }
 
@@ -400,6 +477,9 @@ function IrcView({
             <div className="space-y-1.5 text-sm">
               <Line label={t('estado.salesWithVat')} value={formatMoneyExact(data.grossRevenue)} muted />
               <Line label={t('estado.salesExVat')} value={formatMoneyExact(data.netRevenue)} />
+              {data.estimatedGross === 0 && data.grossRevenue > 0 && (
+                <p className="text-[11px] text-success">{t('estado.netFromTill')}</p>
+              )}
               <Line label={t('estado.costs')} value={`-${formatMoneyExact(data.totalCosts)}`} tone="text-red-400" />
               <div className="pt-1.5 border-t border-border">
                 <Line
@@ -504,9 +584,11 @@ function Line({
 }
 
 function SettingsDialog({
-  settings, onClose, onSave,
+  settings, mixInUse, onClose, onSave,
 }: {
   settings: { mix: SalesMix; derramaMunicipalRate: number; isPme: boolean } | null;
+  /** False when the till covered every sale in view, so the mix changes nothing. */
+  mixInUse: boolean;
   onClose: () => void;
   onSave: (input: {
     mix: SalesMix; derramaMunicipalRate: number; isPme: boolean;
@@ -547,6 +629,15 @@ function SettingsDialog({
           </button>
         </div>
 
+        {/* Asking for a split the till already gives would be asking the
+            owner to guess something we know. Hidden, not deleted: it still
+            applies to any day typed in as a single total. */}
+        {!mixInUse ? (
+          <p className="text-xs text-muted-foreground rounded-xl border border-border p-3">
+            {t('estado.mixNotUsed')}
+          </p>
+        ) : (
+        <>
         <p className="text-xs text-muted-foreground mb-4">
           {t('estado.assumptionsHint')}
         </p>
@@ -581,6 +672,8 @@ function SettingsDialog({
           {t('estado.mixTotal')}: {formatPercent(total, 0)}
           {Math.abs(total - 100) > 0.5 && ` — ${t('estado.mixNotHundred')}`}
         </p>
+        </>
+        )}
 
         <label className="block mt-4">
           <span className="text-xs text-muted-foreground block mb-1.5">

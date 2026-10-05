@@ -159,6 +159,91 @@ export function salesVat(
   };
 }
 
+/** One category's takings on one day, as the till reported them. */
+export interface TillDayRow {
+  date: string;
+  label: string;
+  /** VAT included. */
+  gross: number;
+  /** Net of VAT, or null where the export did not carry it. */
+  net: number | null;
+}
+
+/** A category's VAT over a period, read off the till rather than estimated. */
+export interface TillSalesLine {
+  label: string;
+  gross: number;
+  net: number;
+  vat: number;
+  /** The rate the category actually paid; blended where it mixes rates (menus). */
+  rate: number;
+}
+
+/**
+ * Splits a period's takings into what the till already taxed and what is
+ * left to estimate.
+ *
+ * Done day by day, because coverage is per day: imported days carry the net
+ * figure per category, days typed in by hand carry only the total. A day's
+ * total minus what its till rows account for is the part the sales mix still
+ * has to estimate — usually zero, sometimes the whole day.
+ *
+ * A till row is trusted only when its net figure makes sense: present, below
+ * the gross, and implying a rate no higher than the region's normal rate. A
+ * misread column must fall back to the estimate, not invent VAT.
+ *
+ * Rows for a day with no takings recorded are ignored: the takings are the
+ * source of truth for the period's revenue everywhere else in the app.
+ */
+export function splitTillSales(input: {
+  days: Array<{ date: string; gross: number }>;
+  rows: TillDayRow[];
+  /** The region's normal rate; anything implying more is a bad reading. */
+  maxRate: number;
+}): { tillLines: TillSalesLine[]; estimatedGross: number } {
+  const trusted = (r: TillDayRow): r is TillDayRow & { net: number } => {
+    if (r.net === null || !(r.gross > 0) || !(r.net > 0) || r.net > r.gross) return false;
+    const rate = (r.gross / r.net - 1) * 100;
+    // Half a point of slack for the till's own rounding.
+    return rate <= input.maxRate + 0.5;
+  };
+
+  const rowsByDate = new Map<string, TillDayRow[]>();
+  for (const r of input.rows) {
+    const list = rowsByDate.get(r.date);
+    if (list) list.push(r);
+    else rowsByDate.set(r.date, [r]);
+  }
+
+  const byLabel = new Map<string, { gross: number; net: number }>();
+  let estimatedGross = 0;
+
+  for (const day of input.days) {
+    let covered = 0;
+    for (const r of (rowsByDate.get(day.date) ?? []).filter(trusted)) {
+      covered += r.gross;
+      const acc = byLabel.get(r.label) ?? { gross: 0, net: 0 };
+      acc.gross += r.gross;
+      acc.net += r.net;
+      byLabel.set(r.label, acc);
+    }
+    estimatedGross += Math.max(0, day.gross - covered);
+  }
+
+  const tillLines = Array.from(byLabel, ([label, { gross, net }]) => ({
+    label,
+    gross,
+    net,
+    vat: gross - net,
+    rate: net > 0 ? ((gross - net) / net) * 100 : 0,
+  })).sort((a, b) => b.gross - a.gross);
+
+  // Sub-cent remainders are rounding between the till and the daily total,
+  // not sales to estimate; leaving them would show an "estimated" section
+  // holding 0,00 €.
+  return { tillLines, estimatedGross: estimatedGross < 0.01 ? 0 : estimatedGross };
+}
+
 export interface PurchaseGroup {
   /**
    * Translation key for the cost category, resolved when it is displayed.
@@ -212,7 +297,12 @@ export function purchaseVat(groups: PurchaseGroup[]): {
 export interface VatReturn {
   year: number;
   quarter: Quarter;
+  /** Sales VAT read off the till, per category. */
+  tillLines: TillSalesLine[];
+  /** Sales VAT estimated from the mix, for takings the till did not break down. */
   salesLines: SalesVatLine[];
+  /** The takings `salesLines` were estimated from. Zero when the till covered everything. */
+  estimatedGross: number;
   purchaseLines: PurchaseVatLine[];
   outputVat: number;
   deductibleVat: number;
@@ -226,21 +316,28 @@ export interface VatReturn {
 export function vatReturn(input: {
   year: number;
   quarter: Quarter;
+  /** Takings the till did not break down — the part the mix estimates. */
   grossRevenue: number;
   mix: SalesMix;
   purchases: PurchaseGroup[];
   region?: Region;
+  /** Takings the till already taxed. The actual VAT is used, not the mix. */
+  tillLines?: TillSalesLine[];
 }): VatReturn {
+  const tillLines = input.tillLines ?? [];
   const sales = salesVat(input.grossRevenue, input.mix, input.region ?? 'continente');
   const purchases = purchaseVat(input.purchases);
-  const balance = sales.totalVat - purchases.totalDeductible;
+  const outputVat = tillLines.reduce((s, l) => s + l.vat, 0) + sales.totalVat;
+  const balance = outputVat - purchases.totalDeductible;
 
   return {
     year: input.year,
     quarter: input.quarter,
+    tillLines,
     salesLines: sales.lines,
+    estimatedGross: input.grossRevenue,
     purchaseLines: purchases.lines,
-    outputVat: sales.totalVat,
+    outputVat,
     deductibleVat: purchases.totalDeductible,
     balance,
     // A negative balance is not a negative payment: it is a credit, which

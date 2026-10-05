@@ -3,23 +3,23 @@
 import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import {
-  quarterRange, vatReturn, estimateIrc, paymentsOnAccount,
+  quarterRange, vatReturn, estimateIrc, paymentsOnAccount, salesVat, splitTillSales,
   DEFAULT_SALES_MIX, type Quarter, type SalesMix,
 } from '@/lib/tax-calc';
 import {
-  ASSUMED_PURCHASE_VAT, DEFAULT_DEDUCTIBILITY, type Region, type DeductibilityKey,
+  ASSUMED_PURCHASE_VAT, DEFAULT_DEDUCTIBILITY, IVA_RATES, type Region, type DeductibilityKey,
 } from '@/lib/tax-rules';
 
 /**
  * The Estado tab's server side.
  *
  * Everything it returns is an estimate, and the UI says so on every screen.
- * The daily takings are recorded as one gross figure, so the split between
- * 13% and 23% comes from proportions the owner sets rather than from the
- * till, and purchase VAT is assumed by cost type rather than read off each
- * invoice. That is enough to tell an owner roughly what is coming before the
- * accountant tells them, which is the point; it is not the return that gets
- * filed.
+ * Sales VAT is read off the till wherever the takings were imported from it,
+ * since the export carries each category's net figure; only takings typed in
+ * as one daily total fall back to proportions the owner sets. Purchase VAT is
+ * still assumed by cost type rather than read off each invoice. That is
+ * enough to tell an owner roughly what is coming before the accountant tells
+ * them, which is the point; it is not the return that gets filed.
  */
 
 function fail(error: string) {
@@ -99,6 +99,43 @@ export async function saveTaxSettings(input: Partial<TaxSettings>) {
   return { success: true as const, data: next };
 }
 
+// ── Sales ──────────────────────────────────────────────────────────────────
+
+/**
+ * A period's takings, split into what the till already taxed and what the
+ * sales mix has to estimate.
+ *
+ * Shared by IVA and IRC so the two tabs can never disagree about how much of
+ * the takings was VAT.
+ */
+async function readSales(restaurantId: string, start: Date, end: Date, region: Region) {
+  const [days, rows] = await Promise.all([
+    prisma.dailySummary.findMany({
+      where: { restaurantId, deletedAt: null, date: { gte: start, lte: end } },
+      select: { date: true, revenueTotal: true },
+    }),
+    prisma.dailyCategoryRevenue.findMany({
+      where: { restaurantId, date: { gte: start, lte: end }, revenueNet: { not: null } },
+      select: { date: true, revenue: true, revenueNet: true, category: { select: { name: true } } },
+    }),
+  ]);
+
+  const grossRevenue = days.reduce((s, d) => s + Number(d.revenueTotal), 0);
+
+  const { tillLines, estimatedGross } = splitTillSales({
+    days: days.map((d) => ({ date: d.date.toISOString().slice(0, 10), gross: Number(d.revenueTotal) })),
+    rows: rows.map((r) => ({
+      date: r.date.toISOString().slice(0, 10),
+      label: r.category.name,
+      gross: Number(r.revenue),
+      net: r.revenueNet === null ? null : Number(r.revenueNet),
+    })),
+    maxRate: IVA_RATES[region].normal,
+  });
+
+  return { grossRevenue, tillLines, estimatedGross };
+}
+
 // ── IVA ────────────────────────────────────────────────────────────────────
 
 export async function getVatQuarter(year: number, quarter: Quarter) {
@@ -112,11 +149,8 @@ export async function getVatQuarter(year: number, quarter: Quarter) {
   const { start, end } = quarterRange(year, quarter);
   const scope = { restaurantId: owner.restaurantId, deletedAt: null };
 
-  const [revenue, costs] = await Promise.all([
-    prisma.dailySummary.aggregate({
-      where: { ...scope, date: { gte: start, lte: end } },
-      _sum: { revenueTotal: true },
-    }),
+  const [sales, costs] = await Promise.all([
+    readSales(owner.restaurantId, start, end, settings.region),
     prisma.costEntry.groupBy({
       by: ['type'],
       where: { ...scope, date: { gte: start, lte: end } },
@@ -124,7 +158,7 @@ export async function getVatQuarter(year: number, quarter: Quarter) {
     }),
   ]);
 
-  const grossRevenue = Number(revenue._sum.revenueTotal ?? 0);
+  const { grossRevenue } = sales;
 
   const purchases = costs.map((row) => {
     const type = row.type as 'COGS' | 'OPEX';
@@ -141,7 +175,8 @@ export async function getVatQuarter(year: number, quarter: Quarter) {
   const result = vatReturn({
     year,
     quarter,
-    grossRevenue,
+    grossRevenue: sales.estimatedGross,
+    tillLines: sales.tillLines,
     mix: settings.mix,
     purchases,
     region: settings.region,
@@ -171,28 +206,24 @@ export async function getIrcYear(year: number) {
   const end = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
   const scope = { restaurantId: owner.restaurantId, deletedAt: null };
 
-  const [revenue, costs] = await Promise.all([
-    prisma.dailySummary.aggregate({
-      where: { ...scope, date: { gte: start, lte: end } },
-      _sum: { revenueTotal: true },
-    }),
+  const [sales, costs] = await Promise.all([
+    readSales(owner.restaurantId, start, end, settings.region),
     prisma.costEntry.aggregate({
       where: { ...scope, date: { gte: start, lte: end } },
       _sum: { amount: true },
     }),
   ]);
 
-  const grossRevenue = Number(revenue._sum.revenueTotal ?? 0);
+  const { grossRevenue } = sales;
   const totalCosts = Number(costs._sum.amount ?? 0);
 
   // IRC is charged on profit net of VAT: the VAT inside the takings was never
   // the restaurant's money. Using the gross figure would overstate the profit
-  // by roughly a seventh and the tax with it.
-  const { totalNet } = (await import('@/lib/tax-calc')).salesVat(
-    grossRevenue,
-    settings.mix,
-    settings.region
-  );
+  // by roughly a seventh and the tax with it. The till's own net figure where
+  // there is one; the mix only for takings it did not break down.
+  const totalNet =
+    sales.tillLines.reduce((s, l) => s + l.net, 0) +
+    salesVat(sales.estimatedGross, settings.mix, settings.region).totalNet;
 
   const accountingProfit = totalNet - totalCosts;
 
@@ -214,6 +245,8 @@ export async function getIrcYear(year: number) {
       ...estimate,
       grossRevenue,
       netRevenue: totalNet,
+      /** Takings whose VAT came from the mix rather than the till. */
+      estimatedGross: sales.estimatedGross,
       totalCosts,
       accountingProfit,
       nextYearInstalments: instalments,

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   quarterOf, quarterRange, deadlineFor, daysUntil,
   vatFromGross, netFromGross, salesVat, purchaseVat, vatReturn,
-  estimateIrc, paymentsOnAccount, DEFAULT_SALES_MIX,
+  estimateIrc, paymentsOnAccount, DEFAULT_SALES_MIX, splitTillSales,
 } from '@/lib/tax-calc';
 import { IVA_RATES, IRC_BY_YEAR, SALES_VAT_CLASSES } from '@/lib/tax-rules';
 
@@ -323,5 +323,101 @@ describe('paymentsOnAccount', () => {
     });
     expect(result.total).toBe(0);
     expect(result.exempt).toBe(true);
+  });
+});
+
+describe('splitTillSales', () => {
+  const maxRate = 23;
+
+  it('uses the till VAT for an imported day and estimates nothing', () => {
+    const { tillLines, estimatedGross } = splitTillSales({
+      days: [{ date: '2026-07-01', gross: 236 }],
+      rows: [
+        { date: '2026-07-01', label: 'COMIDAS', gross: 113, net: 100 },
+        { date: '2026-07-01', label: 'BEBIDAS', gross: 123, net: 100 },
+      ],
+      maxRate,
+    });
+    expect(estimatedGross).toBe(0);
+    expect(tillLines.map((l) => l.label)).toEqual(['BEBIDAS', 'COMIDAS']);
+    expect(tillLines[0].vat).toBeCloseTo(23);
+    expect(tillLines[0].rate).toBeCloseTo(23);
+    expect(tillLines[1].rate).toBeCloseTo(13);
+  });
+
+  it('adds up a category across days', () => {
+    const { tillLines } = splitTillSales({
+      days: [{ date: '2026-07-01', gross: 113 }, { date: '2026-07-02', gross: 226 }],
+      rows: [
+        { date: '2026-07-01', label: 'COMIDAS', gross: 113, net: 100 },
+        { date: '2026-07-02', label: 'COMIDAS', gross: 226, net: 200 },
+      ],
+      maxRate,
+    });
+    expect(tillLines).toHaveLength(1);
+    expect(tillLines[0].gross).toBeCloseTo(339);
+    expect(tillLines[0].vat).toBeCloseTo(39);
+  });
+
+  it('leaves a day typed in by hand to the estimate', () => {
+    const { tillLines, estimatedGross } = splitTillSales({
+      days: [{ date: '2026-07-01', gross: 113 }, { date: '2026-07-02', gross: 500 }],
+      rows: [{ date: '2026-07-01', label: 'COMIDAS', gross: 113, net: 100 }],
+      maxRate,
+    });
+    expect(tillLines).toHaveLength(1);
+    expect(estimatedGross).toBeCloseTo(500);
+  });
+
+  it('estimates the part of a day the till rows do not account for', () => {
+    const { estimatedGross } = splitTillSales({
+      days: [{ date: '2026-07-01', gross: 300 }],
+      rows: [{ date: '2026-07-01', label: 'COMIDAS', gross: 113, net: 100 }],
+      maxRate,
+    });
+    expect(estimatedGross).toBeCloseTo(187);
+  });
+
+  it('distrusts a net figure that makes no sense, and estimates instead', () => {
+    const { tillLines, estimatedGross } = splitTillSales({
+      days: [{ date: '2026-07-01', gross: 400 }],
+      rows: [
+        { date: '2026-07-01', label: 'A', gross: 100, net: 120 }, // net above gross
+        { date: '2026-07-01', label: 'B', gross: 100, net: 50 },  // implies 100%
+        { date: '2026-07-01', label: 'C', gross: 100, net: null },
+        { date: '2026-07-01', label: 'D', gross: 100, net: 0 },
+      ],
+      maxRate,
+    });
+    expect(tillLines).toHaveLength(0);
+    expect(estimatedGross).toBeCloseTo(400);
+  });
+
+  it('ignores till rows on a day with no takings recorded', () => {
+    const { tillLines, estimatedGross } = splitTillSales({
+      days: [],
+      rows: [{ date: '2026-07-01', label: 'COMIDAS', gross: 113, net: 100 }],
+      maxRate,
+    });
+    expect(tillLines).toHaveLength(0);
+    expect(estimatedGross).toBe(0);
+  });
+
+  it('feeds the return with the real VAT plus the estimate for the rest', () => {
+    const { tillLines, estimatedGross } = splitTillSales({
+      days: [{ date: '2026-07-01', gross: 113 }, { date: '2026-07-02', gross: 123 }],
+      rows: [{ date: '2026-07-01', label: 'COMIDAS', gross: 113, net: 100 }],
+      maxRate,
+    });
+    const result = vatReturn({
+      year: 2026, quarter: 3,
+      grossRevenue: estimatedGross,
+      tillLines,
+      mix: { food: 0, softDrink: 0, refrigerante: 0, alcohol: 100 },
+      purchases: [],
+    });
+    // 13 € from the till, 23 € estimated on the hand-typed 123 € at 23%.
+    expect(result.outputVat).toBeCloseTo(36);
+    expect(result.estimatedGross).toBeCloseTo(123);
   });
 });

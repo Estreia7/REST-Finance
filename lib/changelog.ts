@@ -50,6 +50,12 @@ export const CHANGELOG: Release[] = [
       },
       {
         kind: 'improvement',
+        title: 'O IVA das vendas vem do seu sistema de caixa',
+        detail:
+          'Em Estado › IVA, nos dias em que as vendas foram importadas da caixa, o IVA liquidado é o que a caixa realmente cobrou, família a família — já não é repartido pelos pressupostos. Os pressupostos só contam para os dias registados à mão, só com o total, e a página diz qual é qual. O IRC passa a usar as mesmas vendas sem IVA.',
+      },
+      {
+        kind: 'improvement',
         title: 'O fim de semana destaca-se no horário',
         detail:
           'Sábado e domingo aparecem num tom diferente, no ecrã e na imagem enviada à equipa, para se encontrarem num relance.',
