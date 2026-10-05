@@ -1,11 +1,10 @@
 'use client';
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useChartTheme } from '@/lib/chart-theme';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney, formatMoneyCompact } from '@/lib/format';
-import { ChartLegend, TooltipCard, TooltipRow, barPath, monthLabel } from './chart-parts';
+import { ChartHeader, ChartLegend, TooltipCard, TooltipRow, barPath, monthLabel, useTooltipTrigger } from './chart-parts';
 
 /**
  * Revenue against costs, month by month.
@@ -46,6 +45,7 @@ export default function RevenueChart({
   availableYears = [],
 }: RevenueChartProps) {
   const chart = useChartTheme();
+  const tooltipTrigger = useTooltipTrigger();
   const { t, language } = useLanguage();
 
   const points = data.map((d) => ({
@@ -57,52 +57,14 @@ export default function RevenueChart({
   const totalRevenue = points.reduce((s, p) => s + p.revenue, 0);
   const totalCosts = points.reduce((s, p) => s + p.costs, 0);
 
-  // Arrows stop at the edges of what was actually traded, so stepping back
-  // never lands on an empty chart that reads as a bug.
-  const oldest = availableYears.length ? Math.min(...availableYears) : undefined;
-  const newest = availableYears.length ? Math.max(...availableYears) : undefined;
-  const canGoBack = year !== undefined && oldest !== undefined && year > oldest;
-  const canGoForward = year !== undefined && newest !== undefined && year < newest;
-
   const header = (
-    <div className="flex items-start justify-between gap-4 mb-4">
-      <div className="min-w-0">
-        <h3 className="font-bold text-foreground mb-1">{t('charts.titleRevenueCosts')}</h3>
-        <p className="text-xs text-muted-foreground">{t('charts.subRevenueCosts')}</p>
-      </div>
-
-      {onYearChange && year !== undefined && (
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            type="button"
-            onClick={() => onYearChange(year - 1)}
-            disabled={!canGoBack}
-            aria-label={t('charts.previousYear')}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted
-                       disabled:opacity-30 disabled:hover:bg-transparent transition-colors
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ChevronLeft className="w-4 h-4" aria-hidden="true" />
-          </button>
-
-          <span className="text-sm font-semibold text-foreground tabular-nums w-12 text-center">
-            {year}
-          </span>
-
-          <button
-            type="button"
-            onClick={() => onYearChange(year + 1)}
-            disabled={!canGoForward}
-            aria-label={t('charts.nextYear')}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted
-                       disabled:opacity-30 disabled:hover:bg-transparent transition-colors
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ChevronRight className="w-4 h-4" aria-hidden="true" />
-          </button>
-        </div>
-      )}
-    </div>
+    <ChartHeader
+      title={t('charts.titleRevenueCosts')}
+      subtitle={t('charts.subRevenueCosts')}
+      year={year}
+      onYearChange={onYearChange}
+      availableYears={availableYears}
+    />
   );
 
   // A year with no trade still shows its controls, so the owner can step back
@@ -161,6 +123,7 @@ export default function RevenueChart({
             tickFormatter={(v: number) => formatMoneyCompact(v)}
           />
           <Tooltip
+            trigger={tooltipTrigger}
             cursor={{ fill: chart.grid, opacity: 0.35 }}
             content={({ active, payload, label }) => {
               if (!active || !payload?.length) return null;

@@ -17,6 +17,7 @@ import { calculateKpis, toPercent, safeDivide, percentChange } from '@/lib/kpi';
 type CostType = 'COGS' | 'OPEX';
 type CategoryType = 'REVENUE' | 'COGS' | 'OPEX';
 import { toClientError } from '@/lib/errors';
+import { foldMonthlySeries, UNCATEGORISED_SERIES } from '@/lib/monthly-series';
 
 export async function getRestaurant() {
   try {
@@ -1159,54 +1160,74 @@ export async function getMonthlyCategoryRevenue(year?: number) {
       select: { date: true, revenue: true, category: { select: { name: true } } },
     });
 
-    // Category by month. Twelve buckets each, so a quiet month shows as zero
-    // rather than breaking the line.
-    const byCategory = new Map<string, number[]>();
-    for (const row of rows) {
-      const name = row.category?.name ?? 'Sem categoria';
-      let months = byCategory.get(name);
-      if (!months) {
-        months = Array.from({ length: 12 }, () => 0);
-        byCategory.set(name, months);
-      }
-      months[row.date.getUTCMonth()] += Number(row.revenue);
-    }
+    // Six largest categories and the rest folded, as the cost chart does.
+    const folded = foldMonthlySeries(
+      target,
+      rows.map((row) => ({
+        monthIndex: row.date.getUTCMonth(),
+        name: row.category?.name ?? UNCATEGORISED_SERIES,
+        amount: Number(row.revenue),
+      })),
+    );
 
-    // Categories that never sold anything — the till's modifiers and staff
-    // meals — would be flat zero lines cluttering the legend.
-    const categories = [...byCategory.entries()]
-      .map(([name, months]) => ({ name, months, total: months.reduce((s, m) => s + m, 0) }))
-      .filter((c) => c.total > 0)
-      .sort((a, b) => b.total - a.total);
-
-    // Beyond six the chart is unreadable and the legend longer than the
-    // picture; the tail is grouped so the months still add up.
-    const top = categories.slice(0, 6);
-    const rest = categories.slice(6);
-
-    const series = top.map((c) => ({ name: c.name, total: c.total }));
-    if (rest.length) {
-      series.push({
-        name: 'Outras',
-        total: rest.reduce((s, c) => s + c.total, 0),
-      });
-    }
-
-    const data = Array.from({ length: 12 }, (_, m) => {
-      const point: Record<string, number | string> = {
-        month: `${target}-${String(m + 1).padStart(2, '0')}`,
-        monthIndex: m,
-      };
-      for (const c of top) point[c.name] = Math.round(c.months[m] * 100) / 100;
-      if (rest.length) {
-        point['Outras'] = Math.round(rest.reduce((s, c) => s + c.months[m], 0) * 100) / 100;
-      }
-      return point;
-    });
-
-    return { success: true, data: { year: target, series: series.map((s) => s.name), data } };
+    return { success: true, data: { year: target, ...folded } };
   } catch (error: unknown) {
     return { error: toClientError('Failed to fetch category revenue', error, 'read') };
+  }
+}
+
+/**
+ * What was spent each month, by cost category — the cost side of the menu-mix
+ * chart, drawn the same way so the two can be read against each other.
+ *
+ * Carries the years that have any cost, so the chart's arrows stop at the
+ * edges of what was recorded rather than stepping into empty years.
+ */
+export async function getMonthlyCostsByCategory(year?: number) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const target = year ?? new Date().getFullYear();
+    if (!Number.isInteger(target) || target < 2000 || target > 2100) {
+      return { error: 'errors.read' };
+    }
+
+    const scope = { restaurantId: owner.restaurantId, deletedAt: null };
+
+    const [rows, first, last] = await Promise.all([
+      prisma.costEntry.findMany({
+        where: {
+          ...scope,
+          date: {
+            gte: new Date(Date.UTC(target, 0, 1)),
+            lte: new Date(Date.UTC(target, 11, 31, 23, 59, 59)),
+          },
+        },
+        select: { date: true, amount: true, category: { select: { name: true } } },
+      }),
+      prisma.costEntry.findFirst({ where: scope, orderBy: { date: 'asc' }, select: { date: true } }),
+      prisma.costEntry.findFirst({ where: scope, orderBy: { date: 'desc' }, select: { date: true } }),
+    ]);
+
+    const folded = foldMonthlySeries(
+      target,
+      rows.map((row) => ({
+        monthIndex: row.date.getUTCMonth(),
+        name: row.category?.name ?? UNCATEGORISED_SERIES,
+        amount: Number(row.amount),
+      })),
+    );
+
+    // Every year from the first cost to the last, and always this one.
+    const thisYear = new Date().getFullYear();
+    const from = Math.min(first?.date.getUTCFullYear() ?? thisYear, thisYear);
+    const to = Math.max(last?.date.getUTCFullYear() ?? thisYear, thisYear);
+    const years = Array.from({ length: to - from + 1 }, (_, i) => to - i);
+
+    return { success: true, data: { year: target, years, ...folded } };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch costs by category', error, 'read') };
   }
 }
 
@@ -1240,56 +1261,6 @@ export async function getRevenueYears() {
 }
 
 // Get category performance data
-export async function getCategoryPerformance() {
-  try {
-    const owner = await requireOwner();
-    if (isAuthError(owner)) return { error: owner.error };
-
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-    // Get actual cost spending grouped by category
-    const costsByCategory = await prisma.costEntry.groupBy({
-      by: ['categoryId'],
-      where: {
-        restaurantId: owner.restaurantId,
-        deletedAt: null,
-        date: { gte: startOfMonth, lte: endOfMonth },
-      },
-      _sum: { amount: true },
-    });
-
-    const categoryIds = costsByCategory.map(c => c.categoryId).filter(Boolean) as string[];
-    const categories = categoryIds.length > 0
-      ? await prisma.category.findMany({
-          where: { id: { in: categoryIds } },
-          select: { id: true, name: true, type: true },
-        })
-      : [];
-    const catMap = Object.fromEntries(categories.map(c => [c.id, c]));
-
-    const totalSpending = costsByCategory.reduce((sum, c) => sum + Number(c._sum.amount || 0), 0);
-
-    const result = costsByCategory
-      .filter(c => c.categoryId && catMap[c.categoryId])
-      .map(c => {
-        const cat = catMap[c.categoryId!];
-        const amount = Number(c._sum.amount || 0);
-        return {
-          name: cat.name,
-          monthlySpending: amount,
-          contributionPercent: totalSpending > 0 ? (amount / totalSpending) * 100 : 0,
-          type: cat.type,
-        };
-      })
-      .sort((a, b) => b.monthlySpending - a.monthlySpending);
-
-    return { success: true, data: result };
-  } catch (error: unknown) {
-    return { error: toClientError('Failed to fetch category performance', error, 'read') };
-  }
-}
 
 // Get advanced dashboard stats (Prime Cost, COGS %, etc.)
 export async function getAdvancedDashboardStats() {

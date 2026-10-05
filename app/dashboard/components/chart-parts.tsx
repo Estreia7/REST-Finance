@@ -1,6 +1,92 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useLanguage } from '@/lib/language-context';
+
+/**
+ * How a chart's tooltip opens: on hover where there is a pointer to hover
+ * with, on a tap where there is not.
+ *
+ * Recharts' hover mode on a phone only shows the tooltip while a finger is
+ * dragged across the plot; a plain tap does nothing, so the month's figures
+ * were out of reach there. In click mode a tap opens the month under the
+ * finger and it stays open, which is what a tap is expected to do.
+ */
+export function useTooltipTrigger(): 'hover' | 'click' {
+  const [trigger, setTrigger] = useState<'hover' | 'click'>('hover');
+  useEffect(() => {
+    const media = window.matchMedia('(hover: none)');
+    const update = () => setTrigger(media.matches ? 'click' : 'hover');
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  return trigger;
+}
+
+/**
+ * The year on show, with arrows either side.
+ *
+ * The arrows stop at the edges of `availableYears`, so stepping back never
+ * lands on an empty chart that reads as a bug. With no list given, both
+ * directions stay open.
+ */
+export function YearStepper({
+  year, onChange, availableYears = [],
+}: {
+  year: number;
+  onChange: (year: number) => void;
+  availableYears?: number[];
+}) {
+  const { t } = useLanguage();
+  const oldest = availableYears.length ? Math.min(...availableYears) : undefined;
+  const newest = availableYears.length ? Math.max(...availableYears) : undefined;
+  const canGoBack = oldest === undefined || year > oldest;
+  const canGoForward = newest === undefined || year < newest;
+
+  const arrow =
+    'p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted ' +
+    'disabled:opacity-30 disabled:hover:bg-transparent transition-colors ' +
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+  return (
+    <div className="flex items-center gap-1 shrink-0">
+      <button type="button" onClick={() => onChange(year - 1)} disabled={!canGoBack} aria-label={t('charts.previousYear')} className={arrow}>
+        <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+      </button>
+      <span className="text-sm font-semibold text-foreground tabular-nums w-12 text-center" aria-live="polite">
+        {year}
+      </span>
+      <button type="button" onClick={() => onChange(year + 1)} disabled={!canGoForward} aria-label={t('charts.nextYear')} className={arrow}>
+        <ChevronRight className="w-4 h-4" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+/** A chart card's title row: heading and subtitle, and the year on the right. */
+export function ChartHeader({
+  title, subtitle, year, onYearChange, availableYears,
+}: {
+  title: string;
+  subtitle: string;
+  year?: number;
+  onYearChange?: (year: number) => void;
+  availableYears?: number[];
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 mb-4">
+      <div className="min-w-0">
+        <h3 className="font-bold text-foreground mb-1">{title}</h3>
+        <p className="text-xs text-muted-foreground">{subtitle}</p>
+      </div>
+      {onYearChange && year !== undefined && (
+        <YearStepper year={year} onChange={onYearChange} availableYears={availableYears} />
+      )}
+    </div>
+  );
+}
 
 /**
  * The pieces the dashboard's bar charts share, so the two read as one system:

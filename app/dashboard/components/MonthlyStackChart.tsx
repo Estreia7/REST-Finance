@@ -4,15 +4,15 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useChartTheme } from '@/lib/chart-theme';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney, formatMoneyCompact, formatPercent } from '@/lib/format';
-import { ChartLegend, TooltipCard, TooltipRow, barPath, monthLabel } from './chart-parts';
+import { OTHER_SERIES, UNCATEGORISED_SERIES } from '@/lib/monthly-series';
+import { ChartHeader, ChartLegend, TooltipCard, TooltipRow, barPath, monthLabel, useTooltipTrigger } from './chart-parts';
 
 /**
- * What was sold each month, by menu category.
+ * A year of amounts by category, one stacked bar a month.
  *
- * Replaces the channel donut, which showed a single slice every month for a
- * restaurant that does no takeaway — a card that answered nothing. The menu
- * mix is the thing an owner cannot see anywhere else: whether a good month
- * was carried by menus or by drinks, and whether that is shifting.
+ * Used twice on the dashboard: what was sold, by menu category, and what was
+ * spent, by cost category. The same chart for both so they read as a pair —
+ * where a month's money came from, and where it went.
  *
  * Stacked bars rather than lines: the question is composition, and a stack
  * shows both the month's total and its parts in one mark.
@@ -27,25 +27,36 @@ import { ChartLegend, TooltipCard, TooltipRow, barPath, monthLabel } from './cha
  * only clue.
  */
 
-/** What the server calls the folded tail of small categories. */
-const OTHER = 'Outras';
 /** Space between stacked categories, in the card's colour. */
 const GAP = 2;
 
-interface CategoryMixChartProps {
+interface MonthlyStackChartProps {
+  title: string;
+  subtitle: string;
+  /** Said when the year on show has nothing to draw. */
+  emptyText: string;
   series: string[];
   data: Array<Record<string, number | string>>;
+  year?: number;
+  onYearChange?: (year: number) => void;
+  availableYears?: number[];
 }
 
-export default function CategoryMixChart({ series, data }: CategoryMixChartProps) {
+export default function MonthlyStackChart({
+  title, subtitle, emptyText, series, data, year, onYearChange, availableYears,
+}: MonthlyStackChartProps) {
   const { t, language } = useLanguage();
   const chart = useChartTheme();
+  const tooltipTrigger = useTooltipTrigger();
 
   // Fixed order, never cycled: the server sends at most six categories plus
   // the folded rest, and the rest is always the neutral.
   const colorOf = (name: string, i: number) =>
-    name === OTHER ? chart.data.other : chart.data.categories[i] ?? chart.data.other;
-  const nameOf = (name: string) => (name === OTHER ? t('charts.mixOther') : name);
+    name === OTHER_SERIES ? chart.data.other : chart.data.categories[i] ?? chart.data.other;
+  const nameOf = (name: string) =>
+    name === OTHER_SERIES ? t('charts.mixOther')
+    : name === UNCATEGORISED_SERIES ? t('charts.mixUncategorised')
+    : name;
 
   const points: Array<Record<string, number | string>> = data.map((d) => ({
     ...d,
@@ -55,19 +66,30 @@ export default function CategoryMixChart({ series, data }: CategoryMixChartProps
   const yearTotals = series.map((s) => points.reduce((sum, d) => sum + Number(d[s] ?? 0), 0));
   const yearTotal = yearTotals.reduce((a, b) => a + b, 0);
 
+  const header = (
+    <ChartHeader
+      title={title}
+      subtitle={subtitle}
+      year={year}
+      onYearChange={onYearChange}
+      availableYears={availableYears}
+    />
+  );
+
+  // A year with nothing still shows its arrows, so the owner can step to one
+  // that has something rather than being stranded on an empty card.
   if (!series.length || yearTotal <= 0) {
     return (
       <div className="card-glass p-6">
-        <h3 className="font-bold text-foreground mb-1">{t('charts.titleCategoryMix')}</h3>
-        <p className="text-xs text-muted-foreground mb-4">{t('charts.subCategoryMix')}</p>
+        {header}
         <div className="flex items-center justify-center h-40 text-center text-sm text-muted-foreground px-6">
-          {t('charts.categoryMixEmpty')}
+          {emptyText}
         </div>
       </div>
     );
   }
 
-  /** The category on top of a month's stack: the last one that sold. */
+  /** The category on top of a month's stack: the last one with an amount. */
   const topOf = (d: Record<string, unknown>) => {
     for (let i = series.length - 1; i >= 0; i--) {
       if (Number(d[series[i]] ?? 0) > 0) return series[i];
@@ -77,8 +99,7 @@ export default function CategoryMixChart({ series, data }: CategoryMixChartProps
 
   return (
     <div className="card-glass p-6">
-      <h3 className="font-bold text-foreground mb-1">{t('charts.titleCategoryMix')}</h3>
-      <p className="text-xs text-muted-foreground mb-4">{t('charts.subCategoryMix')}</p>
+      {header}
 
       <ChartLegend
         items={series.map((s, i) => ({
@@ -109,6 +130,7 @@ export default function CategoryMixChart({ series, data }: CategoryMixChartProps
             tickFormatter={(v: number) => formatMoneyCompact(v)}
           />
           <Tooltip
+            trigger={tooltipTrigger}
             cursor={{ fill: chart.grid, opacity: 0.35 }}
             content={({ active, payload, label }) => {
               if (!active || !payload?.length) return null;
@@ -118,7 +140,7 @@ export default function CategoryMixChart({ series, data }: CategoryMixChartProps
               if (!rows.length) return null;
               const total = rows.reduce((s, p) => s + Number(p.value), 0);
               return (
-                <TooltipCard title={String(label)}>
+                <TooltipCard title={`${label} ${year ?? ''}`.trim()}>
                   {rows.map((p) => {
                     const key = String(p.dataKey);
                     const value = Number(p.value);
@@ -143,7 +165,7 @@ export default function CategoryMixChart({ series, data }: CategoryMixChartProps
               key={name}
               dataKey={name}
               name={nameOf(name)}
-              stackId="mix"
+              stackId="stack"
               fill={colorOf(name, i)}
               maxBarSize={24}
               shape={(p: {

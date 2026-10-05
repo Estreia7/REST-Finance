@@ -35,9 +35,33 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.05.2';
+export const CHANGELOG_VERSION = '2026.10.05.3';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.05.3',
+    date: '2026-10-05',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'Para onde foi o dinheiro, mês a mês',
+        detail:
+          'No Painel, os custos por categoria deixaram de mostrar só o mês atual: agora são um gráfico do ano inteiro, igual ao do que se vendeu, com cada mês repartido pelas suas categorias de custo e o peso de cada uma no ano.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Escolher o ano em cada gráfico do Painel',
+        detail:
+          'O que se vendeu e para onde foi o dinheiro têm agora as suas próprias setas de ano, independentes do gráfico da receita — pode comparar as vendas deste ano com os custos do ano passado.',
+      },
+      {
+        kind: 'improvement',
+        title: 'No telemóvel, toque num mês para ver os valores',
+        detail:
+          'Nos gráficos do Painel, tocar numa barra mostra os valores desse mês, como passar o rato no computador.',
+      },
+    ],
+  },
   {
     // A second release the same day: the first had already gone out, and
     // adding to it would leave the unread dot dark for anyone who opened it.

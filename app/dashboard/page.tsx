@@ -8,8 +8,8 @@ import { useTheme } from '@/lib/theme-context';
 import {
   getRestaurant, getStaff, addStaff, createDailySummary, createCostEntry,
   getCategories, getDashboardStats, getCurrentUser, getLast7DaysRevenue,
-  getMonthlyRevenueBreakdown, getCategoryPerformance, getAdvancedDashboardStats,
-  getMonthlyCategoryRevenue, getRevenueYears,
+  getMonthlyRevenueBreakdown, getAdvancedDashboardStats,
+  getMonthlyCategoryRevenue, getMonthlyCostsByCategory, getRevenueYears,
   getTourState,
 } from './actions';
 import RevenueHistoryPanel from './components/RevenueHistoryPanel';
@@ -36,8 +36,7 @@ import TopBar           from './components/TopBar';
 import MobileBottomNav  from './components/MobileBottomNav';
 import KPICards         from './components/KPICards';
 import RevenueChart     from './components/RevenueChart';
-import CategoryMixChart from './components/CategoryMixChart';
-import CategoryTable    from './components/CategoryTable';
+import MonthlyStackChart from './components/MonthlyStackChart';
 import QuickEntryPanel  from './components/QuickEntryPanel';
 import QuickAddSheet, { type QuickAddKind, type QuickAddMethod } from './components/QuickAddSheet';
 import StaffPanel       from './components/StaffPanel';
@@ -119,8 +118,14 @@ function DashboardPageInner() {
    */
   const [chartYear, setChartYear] = useState(new Date().getFullYear());
   const [revenueYears, setRevenueYears] = useState<number[]>([]);
+  // Each chart keeps its own year: comparing this year's sales with last
+  // year's costs is a question an owner asks, and moving one chart should
+  // not move the others.
+  const [dataVersion, setDataVersion] = useState(0);
+  const [mixYear, setMixYear] = useState(new Date().getFullYear());
+  const [costYear, setCostYear] = useState(new Date().getFullYear());
   const [categoryMix, setCategoryMix] = useState<{ series: string[]; data: Array<Record<string, number | string>> }>({ series: [], data: [] });
-  const [categoryPerformance, setCategoryPerformance] = useState<Array<{ name: string; monthlySpending: number; contributionPercent: number; type: string }>>([]);
+  const [costMix, setCostMix] = useState<{ series: string[]; data: Array<Record<string, number | string>>; years: number[] }>({ series: [], data: [], years: [] });
 
   // ── Theme
   const { resolvedTheme: theme, setTheme } = useTheme();
@@ -175,10 +180,8 @@ function DashboardPageInner() {
         getCurrentUser(),
         getLast7DaysRevenue(),
         getMonthlyRevenueBreakdown(chartYear),
-        getCategoryPerformance(),
         getAdvancedDashboardStats(),
         getRevenueYears(),
-        getMonthlyCategoryRevenue(chartYear),
       ]);
 
       if (results.some((r) => r && 'requiresAuth' in r && r.requiresAuth)) {
@@ -188,15 +191,11 @@ function DashboardPageInner() {
 
       const [
         restaurantData, staffData, statsData, userData,
-        last7Data, breakdownData, categoryData, advancedData,
-        yearsData, mixData,
+        last7Data, breakdownData, advancedData,
+        yearsData,
       ] = results;
 
       if (yearsData && 'data' in yearsData) setRevenueYears(yearsData.data as number[]);
-      if (mixData && 'data' in mixData) {
-        const mix = mixData.data as { series: string[]; data: Array<Record<string, number | string>> };
-        setCategoryMix({ series: mix.series, data: mix.data });
-      }
 
       if (restaurantData && 'data' in restaurantData) setRestaurant(restaurantData.data);
       if (staffData && 'data' in staffData)           setStaff(staffData.data as unknown as StaffMember[]);
@@ -204,13 +203,37 @@ function DashboardPageInner() {
       if (userData && 'data' in userData)             setCurrentUser(userData.data);
       if (last7Data && 'data' in last7Data)           setLast7DaysData(last7Data.data as any);
       if (breakdownData && 'data' in breakdownData)   setMonthlyBreakdown(breakdownData.data as any);
-      if (categoryData && 'data' in categoryData)     setCategoryPerformance(categoryData.data as any);
       if (advancedData && 'data' in advancedData)     setAdvancedStats(advancedData.data as any);
+      // Tells the two category charts, which load on their own years, that
+      // the data underneath them may have changed.
+      setDataVersion((v) => v + 1);
     } catch (err) {
       console.error('loadData error:', err);
     }
     return true;
   }, [chartYear]);
+
+  // The category charts, each on its own year. They wait for the first full
+  // load (version 0) rather than racing it with a second set of requests.
+  useEffect(() => {
+    if (dataVersion === 0) return;
+    let stale = false;
+    getMonthlyCategoryRevenue(mixYear).then((r) => {
+      if (stale || !r || !('data' in r) || !r.data) return;
+      setCategoryMix({ series: r.data.series, data: r.data.data });
+    });
+    return () => { stale = true; };
+  }, [mixYear, dataVersion]);
+
+  useEffect(() => {
+    if (dataVersion === 0) return;
+    let stale = false;
+    getMonthlyCostsByCategory(costYear).then((r) => {
+      if (stale || !r || !('data' in r) || !r.data) return;
+      setCostMix({ series: r.data.series, data: r.data.data, years: r.data.years });
+    });
+    return () => { stale = true; };
+  }, [costYear, dataVersion]);
 
   const loadCategories = useCallback(async () => {
     const result = await getCategories();
@@ -477,9 +500,8 @@ function DashboardPageInner() {
               <KPICards stats={stats} advancedStats={advancedStats} last7DaysData={last7DaysData} />
 
               {/* Charts — collapsible on mobile */}
-              {/* Both charts cover the same year, so one can be read against
-                  the other. The year control lives on the revenue chart; the
-                  mix follows it. */}
+              {/* Revenue against costs, then where the money came from and
+                  where it went — each with its own year. */}
               <div className="hidden md:grid gap-5">
                 <RevenueChart
                   data={monthlyBreakdown}
@@ -487,10 +509,26 @@ function DashboardPageInner() {
                   onYearChange={setChartYear}
                   availableYears={revenueYears}
                 />
-                <CategoryMixChart series={categoryMix.series} data={categoryMix.data} />
-              </div>
-              <div className="hidden md:block">
-                <CategoryTable data={categoryPerformance} />
+                <MonthlyStackChart
+                  title={t('charts.titleCategoryMix')}
+                  subtitle={t('charts.subCategoryMix')}
+                  emptyText={t('charts.categoryMixEmpty')}
+                  series={categoryMix.series}
+                  data={categoryMix.data}
+                  year={mixYear}
+                  onYearChange={setMixYear}
+                  availableYears={revenueYears}
+                />
+                <MonthlyStackChart
+                  title={t('charts.titleCostMix')}
+                  subtitle={t('charts.subCostMix')}
+                  emptyText={t('charts.costMixEmpty')}
+                  series={costMix.series}
+                  data={costMix.data}
+                  year={costYear}
+                  onYearChange={setCostYear}
+                  availableYears={costMix.years}
+                />
               </div>
 
               {/* Mobile: toggle for charts */}
@@ -513,8 +551,26 @@ function DashboardPageInner() {
                       onYearChange={setChartYear}
                       availableYears={revenueYears}
                     />
-                    <CategoryMixChart series={categoryMix.series} data={categoryMix.data} />
-                    <CategoryTable data={categoryPerformance} />
+                    <MonthlyStackChart
+                      title={t('charts.titleCategoryMix')}
+                      subtitle={t('charts.subCategoryMix')}
+                      emptyText={t('charts.categoryMixEmpty')}
+                      series={categoryMix.series}
+                      data={categoryMix.data}
+                      year={mixYear}
+                      onYearChange={setMixYear}
+                      availableYears={revenueYears}
+                    />
+                    <MonthlyStackChart
+                      title={t('charts.titleCostMix')}
+                      subtitle={t('charts.subCostMix')}
+                      emptyText={t('charts.costMixEmpty')}
+                      series={costMix.series}
+                      data={costMix.data}
+                      year={costYear}
+                      onYearChange={setCostYear}
+                      availableYears={costMix.years}
+                    />
                   </div>
                 )}
               </div>
