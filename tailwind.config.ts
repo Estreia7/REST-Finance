@@ -38,6 +38,7 @@ const config: Config = {
         primary: {
           DEFAULT:    'hsl(var(--primary))',
           hover:      'hsl(var(--primary-hover))',
+          subtle:     'hsl(var(--primary-subtle))',
           foreground: 'hsl(var(--primary-foreground))'
         },
         secondary: {
@@ -77,6 +78,10 @@ const config: Config = {
         'pnl-occupancy-bg': 'hsl(var(--pnl-occupancy-bg))',
         'pnl-result-bg':  'hsl(var(--pnl-result-bg))',
         info:         'hsl(var(--info))',
+        weekend: {
+          DEFAULT:    'hsl(var(--weekend))',
+          foreground: 'hsl(var(--weekend-foreground))'
+        },
         destructive: {
           DEFAULT:    'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))'

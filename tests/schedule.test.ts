@@ -15,6 +15,10 @@ import {
   formatWeekRange,
   weeklyMinutes,
   employeeColor,
+  isWeekend,
+  monthWeekStarts,
+  formatMonthTitle,
+  formatWeekShort,
 } from '@/lib/schedule';
 
 describe('startOfWeek', () => {
@@ -236,5 +240,55 @@ describe('employeeColor', () => {
 
   it('resolves a known key', () => {
     expect(employeeColor('amber').dot).toBe('#d97706');
+  });
+});
+
+describe('isWeekend', () => {
+  it('is true for Saturday and Sunday only', () => {
+    // 2026-10-05 is a Monday.
+    const flags = weekDates(parseDateKey('2026-10-05')).map(isWeekend);
+    expect(flags).toEqual([false, false, false, false, false, true, true]);
+  });
+});
+
+describe('monthWeekStarts', () => {
+  it('opens with the week that holds the 1st, even when it began last month', () => {
+    // October 2026 starts on a Thursday.
+    expect(monthWeekStarts(2026, 9)).toEqual([
+      '2026-09-28', '2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26',
+    ]);
+  });
+
+  it('gives four weeks for a February that starts on a Monday', () => {
+    // February 2027 runs Monday 1st to Sunday 28th.
+    expect(monthWeekStarts(2027, 1)).toEqual([
+      '2027-02-01', '2027-02-08', '2027-02-15', '2027-02-22',
+    ]);
+  });
+
+  it('gives six weeks when a long month starts on a Sunday', () => {
+    // November 2026 starts on a Sunday and ends on a Monday.
+    const weeks = monthWeekStarts(2026, 10);
+    expect(weeks).toHaveLength(6);
+    expect(weeks[0]).toBe('2026-10-26');
+    expect(weeks[5]).toBe('2026-11-30');
+  });
+
+  it('handles December rolling into the next year', () => {
+    const weeks = monthWeekStarts(2026, 11);
+    expect(weeks[weeks.length - 1]).toBe('2026-12-28');
+  });
+});
+
+describe('formatMonthTitle', () => {
+  it('names the month in either language, capitalised', () => {
+    expect(formatMonthTitle(2026, 9, 'pt')).toBe('Outubro 2026');
+    expect(formatMonthTitle(2026, 9, 'en')).toBe('October 2026');
+  });
+});
+
+describe('formatWeekShort', () => {
+  it('names a week that crosses months by day and month', () => {
+    expect(formatWeekShort(parseDateKey('2026-09-28'))).toBe('28/9 – 4/10');
   });
 });

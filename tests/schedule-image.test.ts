@@ -42,6 +42,18 @@ describe('buildScheduleSvg', () => {
     expect(svg).toContain('Marta R. &amp; Filha');
   });
 
+  it('tints Saturday and Sunday, but not a weekend day that is closed', () => {
+    const band = /fill="#eef4fc"/g;
+    expect(buildScheduleSvg(base).svg.match(band)).toHaveLength(2);
+
+    // Closed wins: the 19th is a Saturday, and a closed day keeps its own band.
+    const closedSaturday = buildScheduleSvg({
+      ...base,
+      closures: [{ date: '2026-09-19', reason: null }],
+    });
+    expect(closedSaturday.svg.match(band)).toHaveLength(1);
+  });
+
   it('names the closed day', () => {
     const { svg } = buildScheduleSvg(base);
     expect(svg).toContain('Feriado');
