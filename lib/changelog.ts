@@ -35,9 +35,27 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.09.23';
+export const CHANGELOG_VERSION = '2026.10.05';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.05',
+    date: '2026-10-05',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'Ver o mês inteiro no horário',
+        detail:
+          'Em Horários, no computador, escolha "Mês" para ver as semanas do mês umas por baixo das outras — Semana 1, Semana 2, e assim por diante. Cada semana tem os seus botões, para copiar e enviar à equipa só a que precisa. No telemóvel o horário continua por semana.',
+      },
+      {
+        kind: 'improvement',
+        title: 'O fim de semana destaca-se no horário',
+        detail:
+          'Sábado e domingo aparecem num tom diferente, no ecrã e na imagem enviada à equipa, para se encontrarem num relance.',
+      },
+    ],
+  },
   {
     version: '2026.09.23',
     date: '2026-09-23',

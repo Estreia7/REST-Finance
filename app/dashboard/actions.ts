@@ -1056,45 +1056,56 @@ export async function getLast7DaysRevenue() {
 }
 
 // Get monthly revenue breakdown by category (Food, Drinks, Other)
-export async function getMonthlyRevenueBreakdown() {
+/**
+ * A calendar year of revenue, split by channel.
+ *
+ * A whole year rather than a rolling six months, because the question this
+ * chart answers is seasonal — when is the quiet month, when does summer
+ * start — and six months cannot show it. Twelve points also stop the line
+ * from ending on a half-finished month that reads as a collapse.
+ *
+ * Every month is returned, including those with no trade, so a closed month
+ * shows as zero rather than being skipped and silently joining its
+ * neighbours into a straight line.
+ */
+export async function getMonthlyRevenueBreakdown(year?: number) {
   try {
     const owner = await requireOwner();
     if (isAuthError(owner)) return { error: owner.error };
 
-    const now = new Date();
-    const sixMonthsAgo = new Date(now);
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const target = year ?? new Date().getFullYear();
+    if (!Number.isInteger(target) || target < 2000 || target > 2100) {
+      return { error: 'errors.read' };
+    }
 
     const summaries = await prisma.dailySummary.findMany({
       where: {
         restaurantId: owner.restaurantId,
         deletedAt: null,
         date: {
-          gte: sixMonthsAgo,
-          lte: now,
+          gte: new Date(Date.UTC(target, 0, 1)),
+          lte: new Date(Date.UTC(target, 11, 31, 23, 59, 59)),
         },
       },
-      orderBy: {
-        date: 'asc',
-      },
+      orderBy: { date: 'asc' },
     });
 
-    // Group by month: actual dineIn vs takeaway (no fabricated splits)
-    const monthlyData: Record<string, { dineIn: number; takeaway: number }> = {};
+    // Twelve buckets, filled where there is trade. Real dineIn vs takeaway;
+    // nothing is apportioned between them.
+    const months = Array.from({ length: 12 }, () => ({ dineIn: 0, takeaway: 0 }));
 
-    summaries.forEach(summary => {
-      const monthKey = `${new Date(summary.date).getFullYear()}-${String(new Date(summary.date).getMonth() + 1).padStart(2, '0')}`;
+    for (const summary of summaries) {
+      const m = summary.date.getUTCMonth();
+      months[m].dineIn += Number(summary.dineInRevenue);
+      months[m].takeaway += Number(summary.takeawayRevenue);
+    }
 
-      if (!monthlyData[monthKey]) {
-        monthlyData[monthKey] = { dineIn: 0, takeaway: 0 };
-      }
-
-      monthlyData[monthKey].dineIn += Number(summary.dineInRevenue);
-      monthlyData[monthKey].takeaway += Number(summary.takeawayRevenue);
-    });
-
-    const result = Object.entries(monthlyData).map(([month, data]) => ({
-      month,
+    const result = months.map((data, i) => ({
+      // Kept as YYYY-MM so the client can format it in the reader's language;
+      // a month name chosen here would always be the server's.
+      month: `${target}-${String(i + 1).padStart(2, '0')}`,
+      monthIndex: i,
+      year: target,
       dineIn: data.dineIn,
       takeaway: data.takeaway,
       total: data.dineIn + data.takeaway,
@@ -1103,6 +1114,118 @@ export async function getMonthlyRevenueBreakdown() {
     return { success: true, data: result };
   } catch (error: unknown) {
     return { error: toClientError('Failed to fetch breakdown', error, 'read') };
+  }
+}
+
+/**
+ * What was sold each month, by menu category.
+ *
+ * Replaces the channel donut on the dashboard. A restaurant that does no
+ * takeaway sees that chart as a single slice every month of its life — it
+ * takes up a card and answers nothing. What an owner cannot see anywhere
+ * else is the menu mix: whether the month was carried by menus or by drinks,
+ * and whether that is changing.
+ *
+ * Only has anything to show where the POS import has supplied it.
+ */
+export async function getMonthlyCategoryRevenue(year?: number) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const target = year ?? new Date().getFullYear();
+    if (!Number.isInteger(target) || target < 2000 || target > 2100) {
+      return { error: 'errors.read' };
+    }
+
+    const rows = await prisma.dailyCategoryRevenue.findMany({
+      where: {
+        restaurantId: owner.restaurantId,
+        date: {
+          gte: new Date(Date.UTC(target, 0, 1)),
+          lte: new Date(Date.UTC(target, 11, 31, 23, 59, 59)),
+        },
+      },
+      select: { date: true, revenue: true, category: { select: { name: true } } },
+    });
+
+    // Category by month. Twelve buckets each, so a quiet month shows as zero
+    // rather than breaking the line.
+    const byCategory = new Map<string, number[]>();
+    for (const row of rows) {
+      const name = row.category?.name ?? 'Sem categoria';
+      let months = byCategory.get(name);
+      if (!months) {
+        months = Array.from({ length: 12 }, () => 0);
+        byCategory.set(name, months);
+      }
+      months[row.date.getUTCMonth()] += Number(row.revenue);
+    }
+
+    // Categories that never sold anything — the till's modifiers and staff
+    // meals — would be flat zero lines cluttering the legend.
+    const categories = [...byCategory.entries()]
+      .map(([name, months]) => ({ name, months, total: months.reduce((s, m) => s + m, 0) }))
+      .filter((c) => c.total > 0)
+      .sort((a, b) => b.total - a.total);
+
+    // Beyond six the chart is unreadable and the legend longer than the
+    // picture; the tail is grouped so the months still add up.
+    const top = categories.slice(0, 6);
+    const rest = categories.slice(6);
+
+    const series = top.map((c) => ({ name: c.name, total: c.total }));
+    if (rest.length) {
+      series.push({
+        name: 'Outras',
+        total: rest.reduce((s, c) => s + c.total, 0),
+      });
+    }
+
+    const data = Array.from({ length: 12 }, (_, m) => {
+      const point: Record<string, number | string> = {
+        month: `${target}-${String(m + 1).padStart(2, '0')}`,
+        monthIndex: m,
+      };
+      for (const c of top) point[c.name] = Math.round(c.months[m] * 100) / 100;
+      if (rest.length) {
+        point['Outras'] = Math.round(rest.reduce((s, c) => s + c.months[m], 0) * 100) / 100;
+      }
+      return point;
+    });
+
+    return { success: true, data: { year: target, series: series.map((s) => s.name), data } };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch category revenue', error, 'read') };
+  }
+}
+
+/**
+ * The years that actually have revenue, newest first.
+ *
+ * Used to bound the chart's arrows: stepping back into a year the restaurant
+ * did not trade shows an empty chart and reads as a bug.
+ */
+export async function getRevenueYears() {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const rows = await prisma.dailySummary.findMany({
+      where: { restaurantId: owner.restaurantId, deletedAt: null },
+      select: { date: true },
+      orderBy: { date: 'asc' },
+    });
+
+    const years = [...new Set(rows.map((r) => r.date.getUTCFullYear()))].sort((a, b) => b - a);
+    // The current year is always offered, so a restaurant that has not
+    // entered anything yet still sees this year rather than an empty picker.
+    const thisYear = new Date().getFullYear();
+    if (!years.includes(thisYear)) years.unshift(thisYear);
+
+    return { success: true, data: years };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to fetch revenue years', error, 'read') };
   }
 }
 

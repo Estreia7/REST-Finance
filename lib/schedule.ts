@@ -50,6 +50,52 @@ export function addWeeks(date: Date, weeks: number): Date {
   return addDays(date, weeks * 7);
 }
 
+/**
+ * Saturday or Sunday — the days a restaurant staffs differently, tinted on
+ * the grid so the weekend is found at a glance rather than counted to.
+ */
+export function isWeekend(date: Date): boolean {
+  const day = date.getUTCDay();
+  return day === 0 || day === 6;
+}
+
+/**
+ * The Mondays of every week that touches a month, as date keys.
+ *
+ * Overlapping weeks, as a wall calendar draws them: a month that starts on a
+ * Thursday opens with the week that began the Monday before. Leaving it out
+ * would hide the first days of the month from the month's own view. That
+ * means four to six weeks, and a week that straddles two months appears in
+ * both.
+ *
+ * `month` is 0-based, as in `Date`.
+ */
+export function monthWeekStarts(year: number, month: number): string[] {
+  const first = new Date(Date.UTC(year, month, 1));
+  const last = new Date(Date.UTC(year, month + 1, 0));
+  const starts: string[] = [];
+  for (let monday = startOfWeek(first); monday <= last; monday = addWeeks(monday, 1)) {
+    starts.push(dateKey(monday));
+  }
+  return starts;
+}
+
+/** "Outubro 2026" / "October 2026". */
+export function formatMonthTitle(year: number, month: number, language: 'pt' | 'en' = 'pt'): string {
+  const name = new Date(Date.UTC(year, month, 1)).toLocaleDateString(
+    language === 'pt' ? 'pt-PT' : 'en-GB',
+    { month: 'long', timeZone: 'UTC' },
+  );
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${year}`;
+}
+
+/** "28/9 – 4/10": a week named compactly, for a heading inside a month. */
+export function formatWeekShort(monday: Date): string {
+  const sunday = addDays(monday, 6);
+  const dm = (d: Date) => `${d.getUTCDate()}/${d.getUTCMonth() + 1}`;
+  return `${dm(monday)} – ${dm(sunday)}`;
+}
+
 /** `2026-09-14`, the key the grid uses to find a day's shifts. */
 export function dateKey(date: Date): string {
   return date.toISOString().slice(0, 10);

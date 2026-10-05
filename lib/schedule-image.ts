@@ -30,6 +30,7 @@ import {
   weekDates,
   dateKey,
   parseDateKey,
+  isWeekend,
 } from './schedule';
 
 export interface ImageEmployee {
@@ -96,6 +97,14 @@ const COLORS = {
    */
   offLine: '#c9c4bd',
   offInk: '#78716c',
+  /**
+   * Saturday and Sunday, as on the screen: a cool band down the column, so
+   * the weekend is found at a glance in a chat thumbnail. Pale enough that a
+   * shift's own colour still reads on top of it.
+   */
+  weekendBg: '#eef4fc',
+  weekendHead: '#dce8f7',
+  weekendInk: '#24548f',
 };
 
 /** Sizes in px at 1x; the route renders at 2x for a crisp result on a phone. */
@@ -160,6 +169,17 @@ export function buildScheduleSvg(input: ImageInput): { svg: string; width: numbe
     )}</text>`
   );
 
+  // ── The weekend, as a band behind its columns ───────────────────────────
+  days.forEach((day, i) => {
+    if (!isWeekend(day) || closedDays.has(dateKey(day))) return;
+    const x = L.padding + L.nameCol + i * L.dayCol;
+    parts.push(
+      `<rect x="${x}" y="${L.headerHeight}" width="${L.dayCol}" height="${
+        gridBottom - L.headerHeight
+      }" fill="${COLORS.weekendBg}"/>`
+    );
+  });
+
   // ── Closed days, as one band behind the whole column ────────────────────
   // Painted before the rows so it reads as the day being shut, not as a
   // series of empty cells that happen to share a tint.
@@ -178,17 +198,20 @@ export function buildScheduleSvg(input: ImageInput): { svg: string; width: numbe
     const x = L.padding + L.nameCol + i * L.dayCol;
     const key = dateKey(day);
     const closed = closedDays.has(key);
+    const weekend = !closed && isWeekend(day);
 
     // The closed band already paints its own header.
     if (!closed) {
       parts.push(
-        `<rect x="${x}" y="${L.headerHeight}" width="${L.dayCol}" height="${L.dayHeader}" fill="${COLORS.headBg}"/>`
+        `<rect x="${x}" y="${L.headerHeight}" width="${L.dayCol}" height="${L.dayHeader}" fill="${
+          weekend ? COLORS.weekendHead : COLORS.headBg
+        }"/>`
       );
     }
 
     parts.push(
       `<text x="${x + L.dayCol / 2}" y="${L.headerHeight + 19}" font-size="15" font-weight="700" text-anchor="middle" fill="${
-        closed ? COLORS.muted : COLORS.ink
+        closed ? COLORS.muted : weekend ? COLORS.weekendInk : COLORS.ink
       }">${dayNames[i]}</text>`,
       `<text x="${x + L.dayCol / 2}" y="${L.headerHeight + 36}" font-size="13" text-anchor="middle" fill="${COLORS.muted}">${day.getUTCDate()}/${
         day.getUTCMonth() + 1
@@ -210,13 +233,13 @@ export function buildScheduleSvg(input: ImageInput): { svg: string; width: numbe
     const color = employeeColor(emp.color);
 
     // Stops at the day columns: striping the full width would paint over the
-    // closed band that was laid down first.
+    // closed and weekend bands that were laid down first.
     if (row % 2 === 1) {
       parts.push(
         `<rect x="${L.padding}" y="${y}" width="${L.nameCol}" height="${rowHeight}" fill="#ffffff"/>`
       );
       days.forEach((day, i) => {
-        if (closedDays.has(dateKey(day))) return;
+        if (closedDays.has(dateKey(day)) || isWeekend(day)) return;
         parts.push(
           `<rect x="${L.padding + L.nameCol + i * L.dayCol}" y="${y}" width="${L.dayCol}" height="${
             rowHeight

@@ -1,18 +1,19 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   Loader2, ChevronLeft, ChevronRight, Plus, Trash2, Pencil, X, Check,
   CalendarOff, CalendarCheck, CopyPlus, Copy, Download, Users, Eraser,
 } from 'lucide-react';
 import {
-  getWeekSchedule, addEmployee, updateEmployee, removeEmployee,
+  getScheduleWeeks, addEmployee, updateEmployee, removeEmployee,
   setShift, clearShift, toggleClosure, copyWeekForward, clearWeek,
   saveTemplate, deleteTemplate,
 } from '../schedule-actions';
 import {
-  startOfWeek, addWeeks, weekDates, dateKey, parseDateKey,
+  startOfWeek, addDays, addWeeks, weekDates, dateKey, parseDateKey, isWeekend,
+  monthWeekStarts, formatMonthTitle, formatWeekShort,
   formatRange, formatShiftTimes, hasBreak, formatDuration, formatWeekRange, shiftLength,
   parseTime, formatMinutes, weeklyMinutes,
   WEEKDAYS_PT_SHORT, EMPLOYEE_COLORS, employeeColor,
@@ -105,9 +106,36 @@ const DEFAULT_SHIFTS = [
   { labelKey: 'schedule.suggestionSplit', startMin: 12 * 60, endMin: 23 * 60, breakStartMin: 15 * 60, breakEndMin: 19 * 60 },
 ];
 
+type ScheduleView = 'week' | 'month';
+
+/**
+ * Remembered per browser, not per account: it is a question of screen, and
+ * the phone never offers the month anyway.
+ */
+const VIEW_STORAGE_KEY = 'schedule-view';
+
+/** True from `md` up, where a month of grids has room. Null until measured. */
+function useIsDesktop(): boolean | null {
+  const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 768px)');
+    const update = () => setIsDesktop(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  return isDesktop;
+}
+
 export default function SchedulePanel() {
   const { t, language } = useLanguage();
+  const isDesktop = useIsDesktop();
+  const [view, setView] = useState<ScheduleView>('month');
   const [weekStart, setWeekStart] = useState(() => dateKey(startOfWeek(new Date())));
+  const [month, setMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getUTCFullYear(), month: now.getUTCMonth() };
+  });
   const [data, setData] = useState<WeekData | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -115,30 +143,67 @@ export default function SchedulePanel() {
   const [editingCell, setEditingCell] = useState<{ employeeId: string; date: string } | null>(null);
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [editingPerson, setEditingPerson] = useState<Employee | null>(null);
-  const [copyOpen, setCopyOpen] = useState(false);
-  const [copying, setCopying] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  // Which week each action is working on. The month view puts several weeks
+  // on screen, so "copying" has to say which one is spinning.
+  const [repeatFrom, setRepeatFrom] = useState<string | null>(null);
+  const [copyingWeek, setCopyingWeek] = useState<string | null>(null);
+  const [downloadingWeek, setDownloadingWeek] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(VIEW_STORAGE_KEY);
+      if (saved === 'week' || saved === 'month') setView(saved);
+    } catch {
+      // Storage blocked: the default view stands.
+    }
+  }, []);
+
+  // The phone always gets the week. Seven columns already need a day-at-a-time
+  // layout there; five weeks of them would be unusable.
+  const activeView: ScheduleView | null = isDesktop === null ? null : isDesktop ? view : 'week';
+
+  const weekStarts = useMemo(
+    () => (activeView === 'month' ? monthWeekStarts(month.year, month.month) : [weekStart]),
+    [activeView, month.year, month.month, weekStart],
+  );
+  const firstWeek = weekStarts[0];
+  const weekCount = weekStarts.length;
 
   // "7 – 13 de setembro 2026". Named in the confirmations so the owner can see
   // which week actually went to the clipboard before pasting it to the team.
-  const weekLabel = formatWeekRange(parseDateKey(weekStart), language);
+  const weekLabelOf = (wk: string) => formatWeekRange(parseDateKey(wk), language);
 
+  const requestId = useRef(0);
   const load = useCallback(() => {
+    if (!activeView) return;
+    const id = ++requestId.current;
     setLoading(true);
-    getWeekSchedule(weekStart).then((r) => {
+    getScheduleWeeks(firstWeek, weekCount).then((r) => {
+      // Stepping through months quickly can bring answers back out of order;
+      // only the latest one may reach the screen.
+      if (id !== requestId.current) return;
       if (r.success) setData(r.data as WeekData);
-      else toast.error(r.error);
+      else toast.error(t(r.error));
       setLoading(false);
     });
-  }, [weekStart]);
+  }, [activeView, firstWeek, weekCount, t]);
 
   useEffect(() => { load(); }, [load]);
 
-  const days = weekDates(parseDateKey(weekStart));
+  const shifts = useMemo(() => data?.shifts ?? [], [data]);
+  const byCell = useMemo(
+    () => new Map(shifts.map((s) => [`${s.employeeId}|${s.date}`, s])),
+    [shifts],
+  );
+  const shiftAt = (employeeId: string, date: string) => byCell.get(`${employeeId}|${date}`) ?? null;
   const closedSet = new Map((data?.closures ?? []).map((c) => [c.date, c.reason]));
-  const shiftAt = (employeeId: string, date: string) =>
-    data?.shifts.find((s) => s.employeeId === employeeId && s.date === date) ?? null;
-  const totals = weeklyMinutes(data?.shifts ?? []);
+
+  /** One week's shifts, for its totals and for whether it has anything to send. */
+  const shiftsOfWeek = (wk: string) => {
+    const keys = new Set(weekDates(parseDateKey(wk)).map(dateKey));
+    return shifts.filter((s) => keys.has(s.date));
+  };
+
   // Saved shifts first, then the suggestions that are not already covered.
   // Previously the suggestions were replaced by the saved list, so saving the
   // first shift of your own made Manhã/Tarde/Noite disappear — which looks
@@ -162,6 +227,50 @@ export default function SchedulePanel() {
   };
 
   /**
+   * Switches between one week and the whole month, keeping the owner where
+   * they were: the month opened is the one the week sits in, and the week
+   * opened is this one if the month holds it, otherwise the month's first.
+   */
+  const chooseView = (next: ScheduleView) => {
+    if (next === view) return;
+    if (next === 'month') {
+      // A week straddling two months belongs to the one holding its Thursday.
+      const thursday = addDays(parseDateKey(weekStart), 3);
+      setMonth({ year: thursday.getUTCFullYear(), month: thursday.getUTCMonth() });
+    } else {
+      const thisWeek = dateKey(startOfWeek(new Date()));
+      const weeks = monthWeekStarts(month.year, month.month);
+      setWeekStart(
+        weeks.includes(thisWeek)
+          ? thisWeek
+          : weeks.find((w) => parseDateKey(w).getUTCMonth() === month.month) ?? weeks[0],
+      );
+    }
+    setView(next);
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, next);
+    } catch {
+      // Not remembered this time; nothing else depends on it.
+    }
+  };
+
+  const stepMonth = (delta: number) =>
+    setMonth((m) => {
+      const d = new Date(Date.UTC(m.year, m.month + delta, 1));
+      return { year: d.getUTCFullYear(), month: d.getUTCMonth() };
+    });
+
+  const toggleDay = (key: string, closed: boolean, promptKey: string) => {
+    const reason = closed ? undefined : prompt(t(promptKey)) ?? undefined;
+    run(() => toggleClosure(key, reason), closed ? t('schedule.dayReopened') : t('schedule.dayClosed'));
+  };
+
+  const clearOneWeek = (wk: string) => {
+    if (!confirm(`${t('schedule.confirmClearWeek')}\n${weekLabelOf(wk)}`)) return;
+    run(() => clearWeek(wk), t('schedule.weekCleared'));
+  };
+
+  /**
    * Saves the week's image, or hands it to the phone's share sheet.
    *
    * Navigating to the URL would take iOS Safari off the page and leave the
@@ -174,19 +283,20 @@ export default function SchedulePanel() {
    * dependable. Elsewhere, and if sharing a file is refused, it falls back to
    * the ordinary download link.
    */
-  const downloadImage = async () => {
-    setDownloading(true);
+  const downloadImage = async (wk: string) => {
+    setDownloadingWeek(wk);
+    const label = weekLabelOf(wk);
     try {
-      const res = await fetch(`/api/export/schedule?week=${weekStart}`);
+      const res = await fetch(`/api/export/schedule?week=${wk}`);
       if (!res.ok) throw new Error('fetch failed');
 
       const blob = await res.blob();
-      const filename = `horario-${weekStart}.jpg`;
+      const filename = `horario-${wk}.jpg`;
       const file = new File([blob], filename, { type: 'image/jpeg' });
 
       if (navigator.canShare?.({ files: [file] })) {
         try {
-          await navigator.share({ files: [file], title: `${t('schedule.shareTitle')} ${weekLabel}` });
+          await navigator.share({ files: [file], title: `${t('schedule.shareTitle')} ${label}` });
           return;
         } catch (err) {
           // Dismissing the share sheet is a choice, not a failure: say nothing
@@ -207,11 +317,11 @@ export default function SchedulePanel() {
       // before the browser has finished reading the blob.
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
 
-      toast.success(`${t('schedule.downloadedPrefix')} ${weekLabel}`);
+      toast.success(`${t('schedule.downloadedPrefix')} ${label}`);
     } catch {
       toast.error(t('schedule.downloadFailed'));
     } finally {
-      setDownloading(false);
+      setDownloadingWeek(null);
     }
   };
 
@@ -225,15 +335,15 @@ export default function SchedulePanel() {
    * the call inside the gesture. PNG because that is the one image type the
    * clipboard accepts across browsers — the download stays JPEG.
    */
-  const copyImage = async () => {
-    const url = `/api/export/schedule?week=${weekStart}&format=png`;
+  const copyImage = async (wk: string) => {
+    const url = `/api/export/schedule?week=${wk}&format=png`;
 
     if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
       toast.error(t('schedule.copyUnsupported'));
       return;
     }
 
-    setCopying(true);
+    setCopyingWeek(wk);
     try {
       const blob = fetch(url).then(async (res) => {
         if (!res.ok) throw new Error('fetch failed');
@@ -241,11 +351,11 @@ export default function SchedulePanel() {
       });
 
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-      toast.success(`${t('schedule.copiedPrefix')} ${weekLabel}. ${t('schedule.copiedHint')}`);
+      toast.success(`${t('schedule.copiedPrefix')} ${weekLabelOf(wk)}. ${t('schedule.copiedHint')}`);
     } catch {
       toast.error(t('schedule.copyFailed'));
     } finally {
-      setCopying(false);
+      setCopyingWeek(null);
     }
   };
 
@@ -259,30 +369,75 @@ export default function SchedulePanel() {
   }
 
   const employees = data?.employees ?? [];
+  const isMonth = activeView === 'month';
+  const thisWeekKey = dateKey(startOfWeek(new Date()));
+  const now = new Date();
+  const onThisPeriod = isMonth
+    ? now.getUTCFullYear() === month.year && now.getUTCMonth() === month.month
+    : thisWeekKey === weekStart;
+
+  const weekActions = (wk: string) => (
+    <WeekActions
+      hasShifts={shiftsOfWeek(wk).length > 0}
+      busy={busy}
+      copying={copyingWeek === wk}
+      downloading={downloadingWeek === wk}
+      compact={isMonth}
+      onRepeat={() => setRepeatFrom(wk)}
+      onCopy={() => copyImage(wk)}
+      onDownload={() => downloadImage(wk)}
+      onClear={() => clearOneWeek(wk)}
+    />
+  );
+
+  const weekGrid = (wk: string) => {
+    const days = weekDates(parseDateKey(wk));
+    return (
+      <WeekGrid
+        days={days}
+        employees={employees}
+        closedSet={closedSet}
+        shiftAt={shiftAt}
+        totals={weeklyMinutes(shiftsOfWeek(wk))}
+        busy={busy}
+        // In the month view, the days of the neighbouring months that complete
+        // the first and last weeks are drawn quieter: there to be read, not
+        // the subject of this page.
+        isOutside={isMonth ? (d) => d.getUTCMonth() !== month.month : undefined}
+        onToggleClosure={(key, closed) => toggleDay(key, closed, 'schedule.closureReasonPrompt')}
+        onEditCell={(employeeId, date) => setEditingCell({ employeeId, date })}
+        onEditPerson={setEditingPerson}
+      />
+    );
+  };
+
+  const navButton =
+    'w-11 h-11 rounded-xl border border-border flex items-center justify-center text-muted-foreground ' +
+    'hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
   return (
     <div className="space-y-4">
-      {/* ── Week navigation and the week's own actions ───────────────────── */}
+      {/* ── Navigation, the view switch, and in the week view its actions ─ */}
       <div className="card-glass p-4 sm:p-5">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => setWeekStart(dateKey(addWeeks(parseDateKey(weekStart), -1)))}
-              className="w-11 h-11 rounded-xl border border-border flex items-center justify-center
-                         text-muted-foreground hover:text-foreground hover:bg-muted transition-colors
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label={t('schedule.weekPrevious')}
+              onClick={() =>
+                isMonth ? stepMonth(-1) : setWeekStart(dateKey(addWeeks(parseDateKey(weekStart), -1)))
+              }
+              className={navButton}
+              aria-label={isMonth ? t('schedule.monthPrevious') : t('schedule.weekPrevious')}
             >
               <ChevronLeft className="w-5 h-5" aria-hidden="true" />
             </button>
             <button
               type="button"
-              onClick={() => setWeekStart(dateKey(addWeeks(parseDateKey(weekStart), 1)))}
-              className="w-11 h-11 rounded-xl border border-border flex items-center justify-center
-                         text-muted-foreground hover:text-foreground hover:bg-muted transition-colors
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label={t('schedule.weekNext')}
+              onClick={() =>
+                isMonth ? stepMonth(1) : setWeekStart(dateKey(addWeeks(parseDateKey(weekStart), 1)))
+              }
+              className={navButton}
+              aria-label={isMonth ? t('schedule.monthNext') : t('schedule.weekNext')}
             >
               <ChevronRight className="w-5 h-5" aria-hidden="true" />
             </button>
@@ -290,204 +445,109 @@ export default function SchedulePanel() {
 
           <div className="min-w-0 flex-1">
             <h3 className="font-bold text-foreground truncate">
-              {weekLabel}
+              {isMonth ? formatMonthTitle(month.year, month.month, language) : weekLabelOf(weekStart)}
             </h3>
             <p className="text-xs text-muted-foreground">
               {employees.length === 0
                 ? t('schedule.hintAddPeople')
-                : t('schedule.hintTapCell')}
+                : isMonth
+                  ? t('schedule.hintMonth')
+                  : t('schedule.hintTapCell')}
             </p>
           </div>
 
-          {dateKey(startOfWeek(new Date())) !== weekStart && (
-            <button
-              type="button"
-              onClick={() => setWeekStart(dateKey(startOfWeek(new Date())))}
-              className="text-xs font-semibold text-primary hover:underline px-2 py-1"
+          <div className="flex items-center gap-2">
+            {!onThisPeriod && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (isMonth) setMonth({ year: now.getUTCFullYear(), month: now.getUTCMonth() });
+                  else setWeekStart(thisWeekKey);
+                }}
+                className="text-xs font-semibold text-primary-ink hover:underline px-2 py-1"
+              >
+                {isMonth ? t('schedule.thisMonth') : t('schedule.thisWeek')}
+              </button>
+            )}
+
+            {/* Desktop only: the phone keeps the week, where it fits. */}
+            <div
+              role="group"
+              aria-label={t('schedule.viewLabel')}
+              className="hidden md:inline-flex rounded-xl border border-border bg-muted p-0.5"
             >
-              {t('schedule.thisWeek')}
-            </button>
-          )}
+              {(['week', 'month'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => chooseView(v)}
+                  aria-pressed={view === v}
+                  className={`px-3 py-1.5 rounded-[10px] text-xs font-semibold transition-colors
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                    ${view === v
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  {v === 'week' ? t('schedule.viewWeek') : t('schedule.viewMonth')}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setCopyOpen(true)}
-            disabled={busy || (data?.shifts.length ?? 0) === 0}
-            className="cta-button-secondary !py-2 !px-3 !text-xs disabled:opacity-40"
-          >
-            <CopyPlus className="w-4 h-4" aria-hidden="true" />
-            {t('schedule.repeatWeek')}
-          </button>
-
-          <button
-            type="button"
-            onClick={copyImage}
-            disabled={busy || copying || (data?.shifts.length ?? 0) === 0}
-            className="cta-button !py-2 !px-3 !text-xs disabled:opacity-40"
-          >
-            {copying
-              ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-              : <Copy className="w-4 h-4" aria-hidden="true" />}
-            {t('schedule.copyImage')}
-          </button>
-
-          <button
-            type="button"
-            onClick={downloadImage}
-            disabled={busy || downloading || (data?.shifts.length ?? 0) === 0}
-            className="cta-button-secondary !py-2 !px-3 !text-xs disabled:opacity-40"
-          >
-            {downloading
-              ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-              : <Download className="w-4 h-4" aria-hidden="true" />}
-            {t('schedule.download')}
-          </button>
-
-          {(data?.shifts.length ?? 0) > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                if (!confirm(t('schedule.confirmClearWeek'))) return;
-                run(() => clearWeek(weekStart), t('schedule.weekCleared'));
-              }}
-              disabled={busy}
-              className="cta-button-secondary !py-2 !px-3 !text-xs text-danger disabled:opacity-40"
-            >
-              <Eraser className="w-4 h-4" aria-hidden="true" />
-              {t('schedule.clear')}
-            </button>
-          )}
-        </div>
+        {!isMonth && <div className="mt-4">{weekActions(weekStart)}</div>}
       </div>
 
       {employees.length === 0 ? (
         <EmptyState onAdd={() => setShowAddPerson(true)} />
+      ) : isMonth ? (
+        /* ── Month: the weeks stacked, each sendable on its own ──────────
+           The team is sent one week at a time, so each week keeps its own
+           copy and download rather than the month going out as one image. */
+        <div className={`space-y-4 transition-opacity ${loading ? 'opacity-60' : ''}`} aria-busy={loading}>
+          {weekStarts.map((wk, i) => (
+            <section key={wk} className="card-glass p-4 sm:p-5" aria-label={`${t('schedule.weekNumber')} ${i + 1}`}>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <h4 className="flex items-baseline gap-2 min-w-0">
+                  <span className="font-bold text-foreground">
+                    {t('schedule.weekNumber')} {i + 1}
+                  </span>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {formatWeekShort(parseDateKey(wk))}
+                  </span>
+                  {wk === thisWeekKey && (
+                    <span className="self-center rounded-full bg-primary-subtle px-2 py-0.5 text-[10px] font-semibold text-primary-ink">
+                      {t('schedule.thisWeek')}
+                    </span>
+                  )}
+                </h4>
+                {weekActions(wk)}
+              </div>
+              {weekGrid(wk)}
+            </section>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => setShowAddPerson(true)}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-ink hover:underline px-1"
+          >
+            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+            {t('schedule.addPerson')}
+          </button>
+        </div>
       ) : (
         <>
-          {/* ── Desktop grid ──────────────────────────────────────────────
+          {/* ── Desktop week ──────────────────────────────────────────────
               Seven columns of times is exactly what a rota is; on a laptop
               there is room for it and nothing is gained by hiding it. */}
-          <div className="card-glass p-4 sm:p-5 hidden md:block">
-            <div className="overflow-x-auto -mx-5 px-5">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr>
-                    <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground w-[180px]">
-                      {t('schedule.person')}
-                    </th>
-                    {days.map((day, i) => {
-                      const key = dateKey(day);
-                      const closed = closedSet.has(key);
-                      return (
-                        <th key={key} className="px-1 py-2 min-w-[110px]">
-                          <div className="flex flex-col items-center gap-1">
-                            <span className={`text-xs font-semibold ${closed ? 'text-muted-foreground' : 'text-foreground'}`}>
-                              {weekdayShort(t, i)}
-                            </span>
-                            <span className="text-[11px] text-muted-foreground">
-                              {day.getUTCDate()}/{day.getUTCMonth() + 1}
-                            </span>
-                            {/* Closing a day is one tap on its header, which
-                                is the whole point: no walking every cell. */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const reason = closed
-                                  ? undefined
-                                  : prompt(t('schedule.closureReasonPrompt')) ?? undefined;
-                                run(
-                                  () => toggleClosure(key, reason),
-                                  closed ? t('schedule.dayReopened') : t('schedule.dayClosed')
-                                );
-                              }}
-                              disabled={busy}
-                              className={`mt-0.5 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md transition-colors
-                                ${closed
-                                  ? 'bg-warning/15 text-warning hover:bg-warning/25'
-                                  : 'text-muted-foreground hover:bg-muted'}`}
-                              title={closed ? t('schedule.reopenDayTitle') : t('schedule.closeDayTitle')}
-                            >
-                              {closed ? (
-                                <><CalendarCheck className="w-3 h-3" aria-hidden="true" /> {t('schedule.closedShort')}</>
-                              ) : (
-                                <><CalendarOff className="w-3 h-3" aria-hidden="true" /> {t('schedule.closeShort')}</>
-                              )}
-                            </button>
-                          </div>
-                        </th>
-                      );
-                    })}
-                    <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground w-[70px]">
-                      {t('schedule.weekTotal')}
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {employees.map((emp) => {
-                    const color = employeeColor(emp.color);
-                    return (
-                      <tr key={emp.id} className="border-t border-border-subtle">
-                        <th scope="row" className="text-left px-2 py-2 font-normal">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span
-                              className="w-1 h-7 rounded-full shrink-0"
-                              style={{ background: color.dot }}
-                              aria-hidden="true"
-                            />
-                            <span className="min-w-0">
-                              <span className="block text-sm font-semibold text-foreground truncate">
-                                {emp.name}
-                              </span>
-                              {emp.role && (
-                                <span className="block text-[11px] text-muted-foreground truncate">
-                                  {emp.role}
-                                </span>
-                              )}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setEditingPerson(emp)}
-                              className="ml-auto p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted shrink-0"
-                              aria-label={`${t('schedule.editPerson')} ${emp.name}`}
-                            >
-                              <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
-                            </button>
-                          </div>
-                        </th>
-
-                        {days.map((day) => {
-                          const key = dateKey(day);
-                          const closed = closedSet.has(key);
-                          const shift = shiftAt(emp.id, key);
-                          return (
-                            <td key={key} className={`px-1 py-1.5 ${closed ? 'bg-muted/40' : ''}`}>
-                              <ShiftCell
-                                closed={closed}
-                                shift={shift}
-                                color={color}
-                                onClick={() => setEditingCell({ employeeId: emp.id, date: key })}
-                              />
-                            </td>
-                          );
-                        })}
-
-                        <td className="px-2 py-2 text-right text-xs text-muted-foreground tabular-nums">
-                          {totals.get(emp.id) ? formatDuration(totals.get(emp.id)!) : '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+          <div className={`card-glass p-4 sm:p-5 hidden md:block transition-opacity ${loading ? 'opacity-60' : ''}`}>
+            {weekGrid(weekStart)}
 
             <button
               type="button"
               onClick={() => setShowAddPerson(true)}
-              className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+              className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-primary-ink hover:underline"
             >
               <Plus className="w-3.5 h-3.5" aria-hidden="true" />
               {t('schedule.addPerson')}
@@ -499,16 +559,13 @@ export default function SchedulePanel() {
               works for the annual statement works here: show one day whole
               rather than all seven cropped. */}
           <MobileSchedule
-            days={days}
+            days={weekDates(parseDateKey(weekStart))}
             employees={employees}
             closedSet={closedSet}
             shiftAt={shiftAt}
-            totals={totals}
+            totals={weeklyMinutes(shiftsOfWeek(weekStart))}
             busy={busy}
-            onToggleClosure={(key, closed) => {
-              const reason = closed ? undefined : prompt(t('schedule.closureReasonShortPrompt')) ?? undefined;
-              run(() => toggleClosure(key, reason), closed ? t('schedule.dayReopened') : t('schedule.dayClosed'));
-            }}
+            onToggleClosure={(key, closed) => toggleDay(key, closed, 'schedule.closureReasonShortPrompt')}
             onEditCell={(employeeId, date) => setEditingCell({ employeeId, date })}
             onAddPerson={() => setShowAddPerson(true)}
           />
@@ -568,15 +625,15 @@ export default function SchedulePanel() {
         />
       )}
 
-      {copyOpen && (
+      {repeatFrom && (
         <CopyWeeksDialog
-          weekLabel={weekLabel}
-          onClose={() => setCopyOpen(false)}
+          weekLabel={weekLabelOf(repeatFrom)}
+          onClose={() => setRepeatFrom(null)}
           onCopy={async (weeks, overwrite) => {
-            const result = await copyWeekForward({ fromWeekStart: weekStart, weeks, overwrite });
+            const result = await copyWeekForward({ fromWeekStart: repeatFrom, weeks, overwrite });
             if (result.success) {
               toast.success(`${t('schedule.weekRepeated')} ${weeks}×`);
-              setCopyOpen(false);
+              setRepeatFrom(null);
               load();
               return { ok: true as const };
             }
@@ -591,6 +648,225 @@ export default function SchedulePanel() {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * A week's own buttons: repeat it, send it, clear it.
+ *
+ * Shared by the week view and every week of the month view, so copying in the
+ * month sends exactly one week — the one whose buttons were pressed.
+ */
+function WeekActions({
+  hasShifts, busy, copying, downloading, compact,
+  onRepeat, onCopy, onDownload, onClear,
+}: {
+  hasShifts: boolean;
+  busy: boolean;
+  copying: boolean;
+  downloading: boolean;
+  /** In the month view, "Repetir" rather than "Repetir esta semana". */
+  compact: boolean;
+  onRepeat: () => void;
+  onCopy: () => void;
+  onDownload: () => void;
+  onClear: () => void;
+}) {
+  const { t } = useLanguage();
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={onRepeat}
+        disabled={busy || !hasShifts}
+        className="cta-button-secondary !py-2 !px-3 !text-xs disabled:opacity-40"
+      >
+        <CopyPlus className="w-4 h-4" aria-hidden="true" />
+        {compact ? t('schedule.repeat') : t('schedule.repeatWeek')}
+      </button>
+
+      <button
+        type="button"
+        onClick={onCopy}
+        disabled={busy || copying || !hasShifts}
+        className="cta-button !py-2 !px-3 !text-xs disabled:opacity-40"
+      >
+        {copying
+          ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+          : <Copy className="w-4 h-4" aria-hidden="true" />}
+        {t('schedule.copyImage')}
+      </button>
+
+      <button
+        type="button"
+        onClick={onDownload}
+        disabled={busy || downloading || !hasShifts}
+        className="cta-button-secondary !py-2 !px-3 !text-xs disabled:opacity-40"
+      >
+        {downloading
+          ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+          : <Download className="w-4 h-4" aria-hidden="true" />}
+        {t('schedule.download')}
+      </button>
+
+      {hasShifts && (
+        <button
+          type="button"
+          onClick={onClear}
+          disabled={busy}
+          className="cta-button-secondary !py-2 !px-3 !text-xs text-danger disabled:opacity-40"
+        >
+          <Eraser className="w-4 h-4" aria-hidden="true" />
+          {t('schedule.clear')}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** One week as a table: a row per person, a column per day, the total last. */
+function WeekGrid({
+  days, employees, closedSet, shiftAt, totals, busy, isOutside,
+  onToggleClosure, onEditCell, onEditPerson,
+}: {
+  days: Date[];
+  employees: Employee[];
+  closedSet: Map<string, string | null>;
+  shiftAt: (employeeId: string, date: string) => Shift | null;
+  totals: Map<string, number>;
+  busy: boolean;
+  /** Days belonging to a neighbouring month, drawn quieter in the month view. */
+  isOutside?: (day: Date) => boolean;
+  onToggleClosure: (dateKey: string, closed: boolean) => void;
+  onEditCell: (employeeId: string, date: string) => void;
+  onEditPerson: (employee: Employee) => void;
+}) {
+  const { t } = useLanguage();
+
+  return (
+    <div className="overflow-x-auto -mx-5 px-5">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr>
+            <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground w-[180px]">
+              {t('schedule.person')}
+            </th>
+            {days.map((day, i) => {
+              const key = dateKey(day);
+              const closed = closedSet.has(key);
+              const weekend = isWeekend(day);
+              const outside = isOutside?.(day) ?? false;
+              return (
+                <th
+                  key={key}
+                  className={`px-1 py-2 min-w-[110px] ${weekend && !closed ? 'bg-weekend rounded-t-sm' : ''}`}
+                >
+                  <div className={`flex flex-col items-center gap-1 ${outside ? 'opacity-50' : ''}`}>
+                    <span
+                      className={`text-xs font-semibold ${
+                        closed ? 'text-muted-foreground' : weekend ? 'text-weekend-foreground' : 'text-foreground'
+                      }`}
+                    >
+                      {weekdayShort(t, i)}
+                    </span>
+                    <span className={`text-[11px] ${weekend && !closed ? 'text-weekend-foreground' : 'text-muted-foreground'}`}>
+                      {day.getUTCDate()}/{day.getUTCMonth() + 1}
+                    </span>
+                    {/* Closing a day is one tap on its header, which
+                        is the whole point: no walking every cell. */}
+                    <button
+                      type="button"
+                      onClick={() => onToggleClosure(key, closed)}
+                      disabled={busy}
+                      className={`mt-0.5 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md transition-colors
+                        ${closed
+                          ? 'bg-warning/15 text-warning hover:bg-warning/25'
+                          : 'text-muted-foreground hover:bg-muted'}`}
+                      title={closed ? t('schedule.reopenDayTitle') : t('schedule.closeDayTitle')}
+                    >
+                      {closed ? (
+                        <><CalendarCheck className="w-3 h-3" aria-hidden="true" /> {t('schedule.closedShort')}</>
+                      ) : (
+                        <><CalendarOff className="w-3 h-3" aria-hidden="true" /> {t('schedule.closeShort')}</>
+                      )}
+                    </button>
+                  </div>
+                </th>
+              );
+            })}
+            <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground w-[70px]">
+              {t('schedule.weekTotal')}
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {employees.map((emp, row) => {
+            const color = employeeColor(emp.color);
+            const lastRow = row === employees.length - 1;
+            return (
+              <tr key={emp.id} className="border-t border-border-subtle">
+                <th scope="row" className="text-left px-2 py-2 font-normal">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="w-1 h-7 rounded-full shrink-0"
+                      style={{ background: color.dot }}
+                      aria-hidden="true"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-foreground truncate">
+                        {emp.name}
+                      </span>
+                      {emp.role && (
+                        <span className="block text-[11px] text-muted-foreground truncate">
+                          {emp.role}
+                        </span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onEditPerson(emp)}
+                      className="ml-auto p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted shrink-0"
+                      aria-label={`${t('schedule.editPerson')} ${emp.name}`}
+                    >
+                      <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                </th>
+
+                {days.map((day) => {
+                  const key = dateKey(day);
+                  const closed = closedSet.has(key);
+                  const weekend = isWeekend(day);
+                  const outside = isOutside?.(day) ?? false;
+                  const shift = shiftAt(emp.id, key);
+                  // The weekend band runs the full height of its column, so
+                  // the last row rounds off where the header began.
+                  const tint = closed ? 'bg-muted' : weekend ? `bg-weekend ${lastRow ? 'rounded-b-sm' : ''}` : '';
+                  return (
+                    <td key={key} className={`px-1 py-1.5 ${tint}`}>
+                      <div className={outside ? 'opacity-55 hover:opacity-100 focus-within:opacity-100 transition-opacity' : ''}>
+                        <ShiftCell
+                          closed={closed}
+                          shift={shift}
+                          color={color}
+                          onClick={() => onEditCell(emp.id, key)}
+                        />
+                      </div>
+                    </td>
+                  );
+                })}
+
+                <td className="px-2 py-2 text-right text-xs text-muted-foreground tabular-nums">
+                  {totals.get(emp.id) ? formatDuration(totals.get(emp.id)!) : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function ShiftCell({
   closed, shift, color, onClick,
@@ -715,7 +991,13 @@ function MobileSchedule({
               type="button"
               onClick={() => setDayIndex(i)}
               className={`shrink-0 w-[52px] py-2 rounded-xl text-center transition-colors
-                ${selected ? 'bg-primary text-primary-foreground' : isClosed ? 'bg-muted text-muted-foreground' : 'bg-muted/50 text-foreground'}`}
+                ${selected
+                  ? 'bg-primary text-primary-foreground'
+                  : isClosed
+                    ? 'bg-muted text-muted-foreground'
+                    : isWeekend(d)
+                      ? 'bg-weekend text-weekend-foreground'
+                      : 'bg-muted/50 text-foreground'}`}
               aria-pressed={selected}
             >
               <span className="block text-[11px] font-semibold">{weekdayShort(t, i)}</span>

@@ -65,11 +65,28 @@ function checkBreak(
 // ── Reading ────────────────────────────────────────────────────────────────
 
 export async function getWeekSchedule(weekStartKey?: string) {
+  return getScheduleWeeks(weekStartKey, 1);
+}
+
+/** A month needs at most six weeks; anything past that is not a view we draw. */
+const MAX_VIEW_WEEKS = 6;
+
+/**
+ * Several consecutive weeks in one read, for the month view.
+ *
+ * One query over the whole span rather than one per week: the month view is
+ * opened to compare weeks side by side, and five round trips to draw it would
+ * make the comparison arrive one week at a time.
+ */
+export async function getScheduleWeeks(firstWeekStartKey?: string, weekCount = 1) {
   const owner = await requireOwner();
   if (isAuthError(owner)) return fail(owner.error);
 
-  const monday = weekStartKey ? startOfWeek(parseDateKey(weekStartKey)) : startOfWeek(new Date());
-  const sunday = addDays(monday, 6);
+  const monday = firstWeekStartKey ? startOfWeek(parseDateKey(firstWeekStartKey)) : startOfWeek(new Date());
+  if (Number.isNaN(monday.getTime())) return fail('schedule.invalidWeek');
+
+  const weeks = Math.max(1, Math.min(MAX_VIEW_WEEKS, Math.floor(weekCount) || 1));
+  const sunday = addDays(monday, weeks * 7 - 1);
 
   const [employees, shifts, closures, templates] = await Promise.all([
     prisma.scheduleEmployee.findMany({

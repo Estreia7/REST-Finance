@@ -9,6 +9,7 @@ import {
   getRestaurant, getStaff, addStaff, createDailySummary, createCostEntry,
   getCategories, getDashboardStats, getCurrentUser, getLast7DaysRevenue,
   getMonthlyRevenueBreakdown, getCategoryPerformance, getAdvancedDashboardStats,
+  getMonthlyCategoryRevenue, getRevenueYears,
   getTourState,
 } from './actions';
 import RevenueHistoryPanel from './components/RevenueHistoryPanel';
@@ -35,7 +36,7 @@ import TopBar           from './components/TopBar';
 import MobileBottomNav  from './components/MobileBottomNav';
 import KPICards         from './components/KPICards';
 import RevenueChart     from './components/RevenueChart';
-import ChannelSplitChart from './components/ChannelSplitChart';
+import CategoryMixChart from './components/CategoryMixChart';
 import CategoryTable    from './components/CategoryTable';
 import QuickEntryPanel  from './components/QuickEntryPanel';
 import QuickAddSheet, { type QuickAddKind, type QuickAddMethod } from './components/QuickAddSheet';
@@ -109,7 +110,15 @@ function DashboardPageInner() {
     labor: 0, cogs: 0, monthlyGoal: 0,
   });
   const [last7DaysData, setLast7DaysData]       = useState<Array<{ date: string; revenue: number }>>([]);
-  const [monthlyBreakdown, setMonthlyBreakdown] = useState<Array<{ month: string; dineIn: number; takeaway: number; total: number }>>([]);
+  const [monthlyBreakdown, setMonthlyBreakdown] = useState<Array<{ month: string; monthIndex?: number; dineIn: number; takeaway: number; total: number }>>([]);
+  /**
+   * Which year the two revenue charts are showing, and which years exist.
+   * Held here rather than in the charts so both move together: reading one
+   * against the other only works when they cover the same months.
+   */
+  const [chartYear, setChartYear] = useState(new Date().getFullYear());
+  const [revenueYears, setRevenueYears] = useState<number[]>([]);
+  const [categoryMix, setCategoryMix] = useState<{ series: string[]; data: Array<Record<string, number | string>> }>({ series: [], data: [] });
   const [categoryPerformance, setCategoryPerformance] = useState<Array<{ name: string; monthlySpending: number; contributionPercent: number; type: string }>>([]);
 
   // ── Theme
@@ -164,9 +173,11 @@ function DashboardPageInner() {
         getDashboardStats(),
         getCurrentUser(),
         getLast7DaysRevenue(),
-        getMonthlyRevenueBreakdown(),
+        getMonthlyRevenueBreakdown(chartYear),
         getCategoryPerformance(),
         getAdvancedDashboardStats(),
+        getRevenueYears(),
+        getMonthlyCategoryRevenue(chartYear),
       ]);
 
       if (results.some((r) => r && 'requiresAuth' in r && r.requiresAuth)) {
@@ -177,7 +188,14 @@ function DashboardPageInner() {
       const [
         restaurantData, staffData, statsData, userData,
         last7Data, breakdownData, categoryData, advancedData,
+        yearsData, mixData,
       ] = results;
+
+      if (yearsData && 'data' in yearsData) setRevenueYears(yearsData.data as number[]);
+      if (mixData && 'data' in mixData) {
+        const mix = mixData.data as { series: string[]; data: Array<Record<string, number | string>> };
+        setCategoryMix({ series: mix.series, data: mix.data });
+      }
 
       if (restaurantData && 'data' in restaurantData) setRestaurant(restaurantData.data);
       if (staffData && 'data' in staffData)           setStaff(staffData.data as unknown as StaffMember[]);
@@ -191,7 +209,7 @@ function DashboardPageInner() {
       console.error('loadData error:', err);
     }
     return true;
-  }, []);
+  }, [chartYear]);
 
   const loadCategories = useCallback(async () => {
     const result = await getCategories();
@@ -458,11 +476,17 @@ function DashboardPageInner() {
               <KPICards stats={stats} advancedStats={advancedStats} last7DaysData={last7DaysData} />
 
               {/* Charts — collapsible on mobile */}
-              <div className="hidden md:grid lg:grid-cols-3 gap-5">
-                <div className="lg:col-span-2">
-                  <RevenueChart data={monthlyBreakdown} />
-                </div>
-                <ChannelSplitChart stats={stats} />
+              {/* Both charts cover the same year, so one can be read against
+                  the other. The year control lives on the revenue chart; the
+                  mix follows it. */}
+              <div className="hidden md:grid gap-5">
+                <RevenueChart
+                  data={monthlyBreakdown}
+                  year={chartYear}
+                  onYearChange={setChartYear}
+                  availableYears={revenueYears}
+                />
+                <CategoryMixChart series={categoryMix.series} data={categoryMix.data} />
               </div>
               <div className="hidden md:block">
                 <CategoryTable data={categoryPerformance} />
@@ -482,8 +506,13 @@ function DashboardPageInner() {
                 </button>
                 {showMoreCharts && (
                   <div className="space-y-5 mt-5 animate-fade-in">
-                    <RevenueChart data={monthlyBreakdown} />
-                    <ChannelSplitChart stats={stats} />
+                    <RevenueChart
+                      data={monthlyBreakdown}
+                      year={chartYear}
+                      onYearChange={setChartYear}
+                      availableYears={revenueYears}
+                    />
+                    <CategoryMixChart series={categoryMix.series} data={categoryMix.data} />
                     <CategoryTable data={categoryPerformance} />
                   </div>
                 )}
