@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sharp from 'sharp';
+import { readFile } from 'node:fs/promises';
+import { resolveStoredPath } from '@/lib/uploads';
 import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { buildScheduleSvg } from '@/lib/schedule-image';
@@ -26,6 +28,28 @@ import { startOfWeek, addDays, dateKey, parseDateKey } from '@/lib/schedule';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * The restaurant's logo, ready to embed: a 128px square PNG on white, as a
+ * data URI. Read from disk, like the PDF report does, because the rasteriser
+ * cannot fetch the authenticated image route. Null on anything at all — a
+ * missing or unreadable logo must never stop the rota from being sent.
+ */
+async function logoDataUri(logoPath: string | null | undefined): Promise<string | null> {
+  if (!logoPath) return null;
+  try {
+    const absolute = resolveStoredPath(logoPath);
+    if (!absolute) return null;
+    const png = await sharp(await readFile(absolute))
+      .resize(128, 128, { fit: 'contain', background: '#ffffff' })
+      .flatten({ background: '#ffffff' })
+      .png()
+      .toBuffer();
+    return `data:image/png;base64,${png.toString('base64')}`;
+  } catch {
+    return null;
+  }
+}
+
 const SCALE = 2;
 
 export async function GET(request: NextRequest) {
@@ -47,7 +71,7 @@ export async function GET(request: NextRequest) {
   const [restaurant, employees, shifts, closures, leaves] = await Promise.all([
     prisma.restaurant.findUnique({
       where: { id: owner.restaurantId },
-      select: { name: true },
+      select: { name: true, logoPath: true },
     }),
     prisma.scheduleEmployee.findMany({
       where: { restaurantId: owner.restaurantId, deletedAt: null },
@@ -67,6 +91,7 @@ export async function GET(request: NextRequest) {
 
   const { svg, width, height } = buildScheduleSvg({
     restaurantName: restaurant?.name ?? 'Restaurante',
+    logo: await logoDataUri(restaurant?.logoPath),
     weekStart: dateKey(monday),
     employees: employees.map((e) => ({
       id: e.id,

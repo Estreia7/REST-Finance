@@ -151,6 +151,7 @@ export default function SettingsPanel({
                 hint={t('settings.logoHint')}
                 onUpload={uploadRestaurantLogo}
                 onRemove={removeRestaurantLogo}
+                onChanged={onUpdate}
               />
             </div>
 

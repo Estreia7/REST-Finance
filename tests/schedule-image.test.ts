@@ -64,6 +64,18 @@ describe('buildScheduleSvg', () => {
     expect(svg).toContain('>Férias<');
   });
 
+  it('puts the logo before the name when there is one, and nothing when there is not', () => {
+    const logo = 'data:image/png;base64,iVBORw0KGgo=';
+    const withLogo = buildScheduleSvg({ ...base, logo }).svg;
+    expect(withLogo).toContain(`href="${logo}"`);
+    // The name moves right to make room for the tile.
+    expect(withLogo).toMatch(/<text x="1\d\d" y="58"[^>]*>Tasca do Bairro<\/text>/);
+
+    const without = buildScheduleSvg(base).svg;
+    expect(without).not.toContain('<image');
+    expect(without).toMatch(/<text x="32" y="58"[^>]*>Tasca do Bairro<\/text>/);
+  });
+
   it('names the closed day', () => {
     const { svg } = buildScheduleSvg(base);
     expect(svg).toContain('Feriado');

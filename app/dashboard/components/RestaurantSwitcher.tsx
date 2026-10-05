@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { Check, ChevronDown, Store } from 'lucide-react';
+import { Check, ChevronDown, ImagePlus } from 'lucide-react';
 import { getMyRestaurants, setActiveRestaurant } from '../restaurant-actions';
 import { useLanguage } from '@/lib/language-context';
+import RestaurantLogo from './RestaurantLogo';
 
 type Restaurant = {
   id: string;
@@ -16,16 +17,28 @@ type Restaurant = {
 /**
  * Chooses which restaurant the dashboard is about.
  *
- * Renders nothing at all for the single-restaurant owner, which is almost
- * everyone: a dropdown with one entry is a control that does nothing but take
- * up space and raise a question.
+ * For the single-restaurant owner, which is almost everyone, it is not a
+ * control at all: a dropdown with one entry does nothing but raise a question.
+ * It shows whose dashboard this is instead — the restaurant's logo and name —
+ * and, while there is no logo, a way to add one.
  *
  * Switching reloads rather than refetching panel by panel. Every figure on
  * screen belongs to the old restaurant the instant the cookie changes, and a
  * half-swapped dashboard showing one house's revenue against another's costs
  * would be worse than a moment's wait.
  */
-export default function RestaurantSwitcher() {
+export default function RestaurantSwitcher({
+  current,
+  onAddLogo,
+}: {
+  /**
+   * The active restaurant as the dashboard last loaded it. Preferred over the
+   * list fetched here, so a logo changed in Settings shows straight away.
+   */
+  current?: { name: string; logoPath: string | null } | null;
+  /** Opens Settings. Given only to the owner, who is the one who can upload. */
+  onAddLogo?: () => void;
+} = {}) {
   const { t } = useLanguage();
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -61,9 +74,35 @@ export default function RestaurantSwitcher() {
     };
   }, [open]);
 
-  if (restaurants.length < 2) return null;
+  const listed = restaurants.find((r) => r.id === activeId) ?? restaurants[0];
+  const name = current?.name ?? listed?.name;
+  const logoPath = current ? current.logoPath : listed?.logoPath ?? null;
 
-  const active = restaurants.find((r) => r.id === activeId) ?? restaurants[0];
+  if (restaurants.length < 2) {
+    if (!name) return null;
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-border-subtle bg-surface p-2.5">
+        <RestaurantLogo logoPath={logoPath} name={name} size={40} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-foreground">{name}</p>
+          {!logoPath && onAddLogo ? (
+            <button
+              type="button"
+              onClick={onAddLogo}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary-ink hover:underline"
+            >
+              <ImagePlus className="w-3 h-3" aria-hidden="true" />
+              {t('restaurantSwitcher.addLogo')}
+            </button>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">{t('restaurantSwitcher.yourRestaurant')}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const active = listed;
 
   const choose = async (id: string) => {
     if (id === activeId) {
@@ -96,9 +135,9 @@ export default function RestaurantSwitcher() {
                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
                    disabled:opacity-60"
       >
-        <Store className="w-4 h-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <RestaurantLogo logoPath={logoPath} name={name} size={28} />
         <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-          {switching ? t('restaurantSwitcher.switching') : active.name}
+          {switching ? t('restaurantSwitcher.switching') : name}
         </span>
         <ChevronDown
           className={`w-4 h-4 shrink-0 text-muted-foreground transition-transform ${
@@ -122,9 +161,10 @@ export default function RestaurantSwitcher() {
                 role="option"
                 aria-selected={r.id === active.id}
                 onClick={() => choose(r.id)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm
                            hover:bg-muted transition-colors"
               >
+                <RestaurantLogo logoPath={r.id === active.id ? logoPath : r.logoPath} name={r.name} size={24} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-foreground">{r.name}</span>
                   {r.role === 'STAFF' && (

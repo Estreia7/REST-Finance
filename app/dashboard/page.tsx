@@ -37,6 +37,7 @@ import MobileBottomNav  from './components/MobileBottomNav';
 import KPICards         from './components/KPICards';
 import RevenueChart     from './components/RevenueChart';
 import MonthlyStackChart from './components/MonthlyStackChart';
+import RestaurantLogo   from './components/RestaurantLogo';
 import QuickEntryPanel  from './components/QuickEntryPanel';
 import QuickAddSheet, { type QuickAddKind, type QuickAddMethod } from './components/QuickAddSheet';
 import StaffPanel       from './components/StaffPanel';
@@ -71,7 +72,7 @@ interface StaffMember {
 function DashboardPageInner() {
   const router       = useRouter();
   const searchParams = useSearchParams();
-  const { t }        = useLanguage();
+  const { t, language } = useLanguage();
 
   // ── Auth
   const [user, setUser]             = useState<any>(null);
@@ -462,6 +463,23 @@ function DashboardPageInner() {
         <main className="flex-1 p-4 md:p-6 space-y-6">
           {activeTab === 'dashboard' && (
             <>
+              {/* The restaurant's masthead: its logo, its name, and today. The
+                  first thing on the page the owner opens most is their own
+                  house, not the app's. */}
+              {restaurant && (
+                <div className="flex items-center gap-4">
+                  <RestaurantLogo logoPath={restaurant.logoPath} name={restaurant.name} size={56} />
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground first-letter:uppercase">
+                      {new Date().toLocaleDateString(language === 'pt' ? 'pt-PT' : 'en-GB', {
+                        weekday: 'long', day: 'numeric', month: 'long',
+                      })}
+                    </p>
+                    <h1 className="text-xl md:text-2xl font-bold text-foreground truncate">{restaurant.name}</h1>
+                  </div>
+                </div>
+              )}
+
               {/* Onboarding card — shown when no data exists */}
               {stats.revenue === 0 && stats.costs === 0 && last7DaysData.length === 0 && (
                 <div className="card-glass p-6 sm:p-8 border border-primary/20 bg-primary-subtle">

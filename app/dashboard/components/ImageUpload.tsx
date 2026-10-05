@@ -24,6 +24,7 @@ export default function ImageUpload({
   hint,
   onUpload,
   onRemove,
+  onChanged,
 }: {
   /** Stored path, or an absolute URL for a Google profile picture. */
   currentPath: string | null;
@@ -33,6 +34,13 @@ export default function ImageUpload({
   hint: string;
   onUpload: (formData: FormData) => Promise<{ error?: string; success?: boolean }>;
   onRemove: () => Promise<{ error?: string; success?: boolean }>;
+  /**
+   * Called once the stored image has changed, so the parent can reload the
+   * path. Without it the preview falls back to the old `currentPath` the
+   * moment the upload lands, and every other place showing the image stays
+   * on the old one until a full reload.
+   */
+  onChanged?: () => void;
 }) {
   const { t } = useLanguage();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -78,8 +86,9 @@ export default function ImageUpload({
 
       setPreview(null);
       toast.success(t('upload.updated'));
+      onChanged?.();
     },
-    [onUpload, t]
+    [onUpload, onChanged, t]
   );
 
   const handleRemove = async () => {
@@ -93,6 +102,7 @@ export default function ImageUpload({
     }
     setPreview(null);
     toast.success(t('upload.removed'));
+    onChanged?.();
   };
 
   const Placeholder = kind === 'logo' ? Building2 : User;

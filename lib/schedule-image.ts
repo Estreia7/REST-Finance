@@ -58,8 +58,17 @@ export interface ImageInput {
   closures: Array<{ date: string; reason: string | null }>;
   /** Holidays touching the week, as inclusive date ranges. */
   leaves?: Array<{ employeeId: string; start: string; end: string }>;
+  /**
+   * The restaurant's logo as a `data:image/png;base64,…` URI, already sized
+   * by the caller. Embedded rather than linked: the rasteriser has no session
+   * to fetch the authenticated image route with.
+   */
+  logo?: string | null;
   language?: 'pt' | 'en';
 }
+
+/** The logo tile in the header, in px at 1x. Fits beside the two header lines. */
+const LOGO_SIZE = 64;
 
 /** XML-escapes text. Names and notes are user input and reach the markup raw. */
 function esc(value: string): string {
@@ -178,11 +187,26 @@ export function buildScheduleSvg(input: ImageInput): { svg: string; width: numbe
   parts.push(`<rect width="${width}" height="${height}" fill="${COLORS.paper}"/>`);
 
   // ── Header ──────────────────────────────────────────────────────────────
+  // The restaurant's logo leads, when there is one: the team sees this image
+  // in a chat full of others, and the logo is how it is found at a glance.
+  let textX = L.padding;
+  if (input.logo) {
+    const s = LOGO_SIZE;
+    const y = L.padding - 4;
+    parts.push(
+      `<defs><clipPath id="logo-clip"><rect x="${L.padding}" y="${y}" width="${s}" height="${s}" rx="12"/></clipPath></defs>`,
+      `<rect x="${L.padding}" y="${y}" width="${s}" height="${s}" rx="12" fill="#ffffff"/>`,
+      `<image href="${input.logo}" x="${L.padding + 5}" y="${y + 5}" width="${s - 10}" height="${s - 10}" preserveAspectRatio="xMidYMid meet" clip-path="url(#logo-clip)"/>`,
+      `<rect x="${L.padding + 0.5}" y="${y + 0.5}" width="${s - 1}" height="${s - 1}" rx="12" fill="none" stroke="${COLORS.rule}"/>`,
+    );
+    textX = L.padding + s + 18;
+  }
+
   parts.push(
-    `<text x="${L.padding}" y="${L.padding + 26}" font-size="28" font-weight="700" fill="${COLORS.ink}">${esc(
-      fit(input.restaurantName, 40)
+    `<text x="${textX}" y="${L.padding + 26}" font-size="28" font-weight="700" fill="${COLORS.ink}">${esc(
+      fit(input.restaurantName, input.logo ? 34 : 40)
     )}</text>`,
-    `<text x="${L.padding}" y="${L.padding + 56}" font-size="18" fill="${COLORS.muted}">${esc(
+    `<text x="${textX}" y="${L.padding + 56}" font-size="18" fill="${COLORS.muted}">${esc(
       formatWeekRange(monday, language)
     )}</text>`
   );

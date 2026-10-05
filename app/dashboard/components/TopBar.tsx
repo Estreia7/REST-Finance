@@ -4,6 +4,7 @@ import { Menu } from 'lucide-react';
 import LanguageSelector from '@/app/components/LanguageSelector';
 import { useLanguage } from '@/lib/language-context';
 import WhatsNew from './WhatsNew';
+import RestaurantLogo from './RestaurantLogo';
 
 type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
@@ -41,9 +42,24 @@ export default function TopBar({ activeTab, restaurant, onMenuClick }: TopBarPro
         <Menu className="w-5 h-5" />
       </button>
 
-      {/* Breadcrumb */}
+      {/* Breadcrumb. The logo stays on a phone, where the name does not fit,
+          so the restaurant is still named on every screen. */}
       <div className="flex items-center gap-2 text-sm min-w-0">
-        <span className="text-muted-foreground hidden sm:block truncate">{restaurant?.name ?? '—'}</span>
+        {restaurant && (
+          <RestaurantLogo
+            logoPath={restaurant.logoPath}
+            name={restaurant.name}
+            size={26}
+            decorative={false}
+            className="sm:hidden"
+          />
+        )}
+        {restaurant && (
+          <span className="hidden sm:flex items-center gap-2 min-w-0">
+            <RestaurantLogo logoPath={restaurant.logoPath} name={restaurant.name} size={24} />
+            <span className="text-muted-foreground truncate">{restaurant.name}</span>
+          </span>
+        )}
         <span className="text-muted-foreground/40 hidden sm:block">/</span>
         <span className="font-semibold text-foreground">{t(TAB_LABEL_KEYS[activeTab])}</span>
       </div>

@@ -35,9 +35,21 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.05.3';
+export const CHANGELOG_VERSION = '2026.10.05.4';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.05.4',
+    date: '2026-10-05',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'O logótipo do seu restaurante em toda a aplicação',
+        detail:
+          'O logótipo que carrega em Configurações aparece agora no menu lateral, na barra de cima (também no telemóvel), no topo do Painel e na imagem do horário enviada à equipa. Sem logótipo, aparecem as iniciais do restaurante — e o menu lateral leva-o direto ao sítio onde o pode carregar.',
+      },
+    ],
+  },
   {
     version: '2026.10.05.3',
     date: '2026-10-05',

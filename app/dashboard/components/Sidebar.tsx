@@ -64,9 +64,14 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
         </button>
       </div>
 
-      {/* Renders nothing unless this person holds more than one restaurant. */}
+      {/* Whose dashboard this is: the restaurant's logo and name, or the
+          switcher for someone who holds more than one. `restaurant` is only
+          loaded for the owner, so only the owner is offered the upload. */}
       <div className="px-3 pt-3 empty:hidden">
-        <RestaurantSwitcher />
+        <RestaurantSwitcher
+          current={restaurant ? { name: restaurant.name, logoPath: restaurant.logoPath ?? null } : null}
+          onAddLogo={restaurant ? () => { onTabChange('settings'); onClose(); } : undefined}
+        />
       </div>
 
       {/* Nav */}

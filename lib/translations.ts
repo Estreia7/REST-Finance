@@ -926,6 +926,8 @@ export const translations = {
       switching: 'A mudar...',
       chooseLabel: 'Escolher restaurante',
       staff: 'Equipa',
+      addLogo: 'Adicionar logótipo',
+      yourRestaurant: 'O seu restaurante',
     },
     emailBanner: {
       message: 'Confirma o teu email para garantir o acesso contínuo.',
@@ -3041,6 +3043,8 @@ export const translations = {
       switching: 'Switching...',
       chooseLabel: 'Choose restaurant',
       staff: 'Staff',
+      addLogo: 'Add your logo',
+      yourRestaurant: 'Your restaurant',
     },
     emailBanner: {
       message: 'Confirm your email to keep your access.',
