@@ -60,7 +60,17 @@ export interface ParsedImport {
 /** Column headers, lower-cased and stripped of accents for matching. */
 const HEADERS = {
   date: ['data'],
-  description: ['descricao', 'descrição', 'descricao/familia'],
+  // Two reports carry the family. "Evolução de Vendas por Família" calls the
+  // column Descrição; "por Produto" names it outright and adds a Produto
+  // column of its own. Both are accepted, so an owner can export either.
+  description: [
+    'descricao', 'descrição', 'descricao/familia',
+    'familia / sub-familia', 'familia/sub-familia', 'familia',
+  ],
+  /** Only on the per-product report: the item's own name. */
+  product: ['produto'],
+  /** Only on the per-product report: the till's code for the item. */
+  code: ['codigo', 'código'],
   quantity: ['quantidade', 'qtd'],
   // Deliberately NOT 's/iva': that column is net of VAT.
   revenue: ['valor total'],
@@ -203,7 +213,11 @@ export function parseFamiliaSheet(header: string[], rows: SheetRow[]): ParsedImp
   // stored as 240,70000000000002.
   for (const row of parsed) {
     row.revenue = round2(row.revenue);
-    if (row.revenueNet !== null) row.revenueNet = round2(row.revenueNet);
+    // The net is kept to three decimals, matching how the till reports it.
+    // Rounding it to cents here costs about a euro across a year of a
+    // per-product export — harmless for money, but it is the denominator of
+    // the VAT rate, and there is no reason to throw the precision away.
+    if (row.revenueNet !== null) row.revenueNet = round3(row.revenueNet);
   }
 
   const totals = new Map<string, number>();
@@ -224,6 +238,11 @@ function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+/** Three decimals, as the till reports the net figure. */
+function round3(n: number): number {
+  return Math.round((n + Number.EPSILON) * 1000) / 1000;
+}
+
 /**
  * Whether a dateless row is the report's own furniture rather than a failure.
  *
@@ -232,8 +251,9 @@ function round2(n: number): number {
  * would bury the one row that genuinely could not be.
  */
 function isNoiseRow(dateCell: unknown, description: string): boolean {
+  // "Total:" closes the per-família report and "Totais" the per-produto one.
   const candidates = [String(dateCell ?? ''), description];
-  return candidates.some((c) => /^\s*(data|total|descri)/i.test(normalise(c)));
+  return candidates.some((c) => /^\s*(data|totais|total|descri|familia)/i.test(normalise(c)));
 }
 
 export class ImportFormatError extends Error {
@@ -359,7 +379,7 @@ export function parseHtmlTable(html: string): { header: string[]; rows: SheetRow
  */
 function mapColumns(
   header: string[],
-): Record<'date' | 'description' | 'quantity' | 'revenue' | 'revenueNet', number> {
+): Record<'date' | 'description' | 'quantity' | 'revenue' | 'revenueNet' | 'product' | 'code', number> {
   const cells = header.map(normalise);
 
   const findExact = (names: string[]) => cells.findIndex((c) => names.includes(c));
@@ -383,6 +403,8 @@ function mapColumns(
     quantity: quantity < 0 ? -1 : quantity,
     revenue,
     revenueNet: netAt,
+    product: findExact(HEADERS.product),
+    code: findExact(HEADERS.code),
   };
 }
 

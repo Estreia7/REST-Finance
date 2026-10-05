@@ -315,3 +315,64 @@ describe('VAT, derived rather than assumed', () => {
     expect(parsed.rows[0].revenueNet).toBeNull();
   });
 });
+
+describe('the per-product export, which carries more than the family one', () => {
+  /**
+   * "Evolução de Vendas por Produto" names the item and its code as well as
+   * the family. Same money as the per-family report — both total to
+   * 60 085,55 EUR for 2025 — but one row per product per day rather than one
+   * per family, and the family column is named outright instead of being
+   * called "Descrição".
+   */
+  const BY_PRODUCT = `<html><body>
+    <table><tr><td><b>Séries</b>: Todas</td><td><b>Data de Início</b>: 01-01-2025</td></tr></table>
+    <table>
+      <tr><th>Data</th><th>C&oacute;digo</th><th>Produto</th><th>Familia / Sub-Familia</th><th>Quantidade</th><th>Valor Total S/IVA</th><th>Valor Total</th></tr>
+      <tr><td>02-01-2025</td><td>9</td><td>SMASHIE SIMPLES C/QUEIJO</td><td>COMIDAS / SMASHIES</td><td>4,000</td><td>35,487&euro;</td><td>40,100&euro;</td></tr>
+      <tr><td>02-01-2025</td><td>11</td><td>SMASHIE DUPLO C/QUEIJO</td><td>COMIDAS / SMASHIES</td><td>10,000</td><td>115,133&euro;</td><td>130,100&euro;</td></tr>
+      <tr><td>02-01-2025</td><td>40</td><td>COCA-COLA</td><td>BEBIDAS / SUMOS E AGUAS</td><td>4,000</td><td>6,179&euro;</td><td>7,600&euro;</td></tr>
+      <tr><td>Totais</td><td>18,000</td><td>156,799&euro;</td><td>177,800&euro;</td></tr>
+    </table></body></html>`;
+
+  it('finds the family column under its own name', () => {
+    // The per-família report calls this "Descrição"; this one says what it
+    // is. Both have to work, so an owner can export either.
+    const { header } = parseHtmlTable(BY_PRODUCT);
+    expect(header).toContain('Familia / Sub-Familia');
+    expect(header).toContain('Produto');
+  });
+
+  it('rolls products up into their family', () => {
+    const { header, rows } = parseHtmlTable(BY_PRODUCT);
+    const parsed = parseFamiliaSheet(header, rows);
+
+    // Two SMASHIES products become one COMIDAS line: 40,10 + 130,10.
+    const comidas = parsed.rows.find((r) => r.familia === 'COMIDAS')!;
+    expect(comidas.revenue).toBeCloseTo(170.2, 2);
+    expect(comidas.quantity).toBe(14);
+  });
+
+  it('handles the spaces around the slash this report uses', () => {
+    // "COMIDAS / SMASHIES", not "COMIDAS/SMASHIES".
+    expect(toFamilia('COMIDAS / SMASHIES')).toBe('COMIDAS');
+    expect(toFamilia('MENUS /')).toBe('MENUS');
+  });
+
+  it('ignores the "Totais" line this report closes with', () => {
+    // The per-família report says "Total:"; this one says "Totais". Counting
+    // it would double the day.
+    const { header, rows } = parseHtmlTable(BY_PRODUCT);
+    const parsed = parseFamiliaSheet(header, rows);
+    expect(parsed.grandTotal).toBeCloseTo(177.8, 2);
+    expect(parsed.skipped).toHaveLength(0);
+  });
+
+  it('keeps the net to three decimals, as the till reports it', () => {
+    // The net is the denominator of the VAT rate. Rounding it to cents per
+    // row costs about a euro across a year and there is no reason to.
+    const { header, rows } = parseHtmlTable(BY_PRODUCT);
+    const parsed = parseFamiliaSheet(header, rows);
+    const comidas = parsed.rows.find((r) => r.familia === 'COMIDAS')!;
+    expect(comidas.revenueNet).toBeCloseTo(150.62, 3);
+  });
+});
