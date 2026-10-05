@@ -84,7 +84,7 @@ it('chart subtitles resolve in both languages', () => {
     'charts.subAvgTicket',
     'charts.subMonthlyComparison',
     'charts.subMonthlyDetail',
-    'charts.subRevenueByChannel',
+    'charts.subRevenueCosts',
     'charts.subSalesChannel',
   ];
 

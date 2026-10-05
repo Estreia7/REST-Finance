@@ -88,7 +88,7 @@ export async function getScheduleWeeks(firstWeekStartKey?: string, weekCount = 1
   const weeks = Math.max(1, Math.min(MAX_VIEW_WEEKS, Math.floor(weekCount) || 1));
   const sunday = addDays(monday, weeks * 7 - 1);
 
-  const [employees, shifts, closures, templates] = await Promise.all([
+  const [employees, shifts, closures, templates, leaves] = await Promise.all([
     prisma.scheduleEmployee.findMany({
       where: { restaurantId: owner.restaurantId, deletedAt: null },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -103,11 +103,21 @@ export async function getScheduleWeeks(firstWeekStartKey?: string, weekCount = 1
       where: { restaurantId: owner.restaurantId },
       orderBy: [{ sortOrder: 'asc' }, { startMin: 'asc' }],
     }),
+    // Any holiday touching the span, so the grid can say who is away.
+    prisma.employeeLeave.findMany({
+      where: { restaurantId: owner.restaurantId, startDate: { lte: sunday }, endDate: { gte: monday } },
+      select: { employeeId: true, startDate: true, endDate: true },
+    }),
   ]);
 
   return {
     success: true as const,
     data: {
+      leaves: leaves.map((l) => ({
+        employeeId: l.employeeId,
+        start: dateKey(l.startDate),
+        end: dateKey(l.endDate),
+      })),
       weekStart: dateKey(monday),
       employees: employees.map((e) => ({
         id: e.id,
@@ -284,6 +294,20 @@ export async function setShift(input: {
   const date = parseDateKey(input.date);
   if (Number.isNaN(date.getTime())) return fail('Data inválida');
 
+  // Someone on holiday is not on the rota. The grid does not offer the cell,
+  // so this only catches a stale screen — but a shift saved on a holiday
+  // would go out to the team in the image.
+  const onHoliday = await prisma.employeeLeave.findFirst({
+    where: {
+      restaurantId: owner.restaurantId,
+      employeeId: input.employeeId,
+      startDate: { lte: date },
+      endDate: { gte: date },
+    },
+    select: { id: true },
+  });
+  if (onHoliday) return fail('schedule.onLeaveError');
+
   await prisma.shift.upsert({
     where: { employeeId_date: { employeeId: input.employeeId, date } },
     create: {
@@ -434,18 +458,32 @@ export async function copyWeekForward(input: {
     }
   }
 
+  // A repeated week must not put anyone on the rota during their holiday.
+  const leaves = await prisma.employeeLeave.findMany({
+    where: {
+      restaurantId: owner.restaurantId,
+      startDate: { lte: lastTargetEnd },
+      endDate: { gte: firstTarget },
+    },
+    select: { employeeId: true, startDate: true, endDate: true },
+  });
+  const onHoliday = (employeeId: string, date: Date) =>
+    leaves.some((l) => l.employeeId === employeeId && l.startDate <= date && date <= l.endDate);
+
   const shiftRows = targetStarts.flatMap((target) => {
     const weekOffset = Math.round((target.getTime() - source.getTime()) / 86_400_000);
-    return copyable.map((s) => ({
-      restaurantId: owner.restaurantId,
-      employeeId: s.employeeId,
-      date: addDays(s.date, weekOffset),
-      startMin: s.startMin,
-      endMin: s.endMin,
-      breakStartMin: s.breakStartMin,
-      breakEndMin: s.breakEndMin,
-      note: s.note,
-    }));
+    return copyable
+      .map((s) => ({
+        restaurantId: owner.restaurantId,
+        employeeId: s.employeeId,
+        date: addDays(s.date, weekOffset),
+        startMin: s.startMin,
+        endMin: s.endMin,
+        breakStartMin: s.breakStartMin,
+        breakEndMin: s.breakEndMin,
+        note: s.note,
+      }))
+      .filter((row) => !onHoliday(row.employeeId, row.date));
   });
 
   const closureRows = targetStarts.flatMap((target) => {

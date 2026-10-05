@@ -54,6 +54,16 @@ describe('buildScheduleSvg', () => {
     expect(closedSaturday.svg.match(band)).toHaveLength(1);
   });
 
+  it('marks a holiday in the row, and keeps someone whose whole week is holiday', () => {
+    const { svg } = buildScheduleSvg({
+      ...base,
+      employees: [...base.employees, { id: 'h', name: 'Helena Férias', role: null, color: 'rose' }],
+      leaves: [{ employeeId: 'h', start: '2026-09-10', end: '2026-09-25' }],
+    });
+    expect(svg).toContain('Helena Férias');
+    expect(svg).toContain('>Férias<');
+  });
+
   it('names the closed day', () => {
     const { svg } = buildScheduleSvg(base);
     expect(svg).toContain('Feriado');

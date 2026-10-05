@@ -102,6 +102,7 @@ model Restaurant {
   shiftTemplates    ShiftTemplate[]
   shifts            Shift[]
   scheduleClosures  ScheduleClosure[]
+  employeeLeaves    EmployeeLeave[]
   ingredients       Ingredient[]
   menuItems         MenuItem[]
   supportTickets    SupportTicket[]
@@ -523,6 +524,12 @@ model ScheduleEmployee {
   /// Ordering on the grid, so the owner can group the kitchen together.
   sortOrder Int @default(0) @map("sort_order")
 
+  /// The day the contract started. Decides the holiday entitlement: in the
+  /// year someone joins they earn 2 working days per complete month, not 22.
+  /// Optional, because people already on the rota were added without it;
+  /// until it is filled in they are treated as having a full year.
+  startDate DateTime? @map("start_date") @db.Date
+
   /// Someone who has left keeps their past shifts: a schedule that rewrites
   /// history when a person leaves is not a record of anything. They simply
   /// stop appearing on new weeks.
@@ -531,9 +538,38 @@ model ScheduleEmployee {
   deletedAt DateTime? @map("deleted_at")
 
   shifts Shift[]
+  leaves EmployeeLeave[]
 
   @@index([restaurantId, active, sortOrder])
   @@map("schedule_employees")
+}
+
+/// A stretch of holiday booked for one person.
+///
+/// Stored as the two calendar dates, inclusive, and never as a count: how
+/// many working days it uses depends on weekends and public holidays, which
+/// are worked out when it is read. Storing a count would freeze today's
+/// holiday calendar into the row and go wrong the year a holiday moves.
+model EmployeeLeave {
+  id           String           @id @default(uuid())
+  restaurant   Restaurant       @relation(fields: [restaurantId], references: [id])
+  restaurantId String           @map("restaurant_id")
+  employee     ScheduleEmployee @relation(fields: [employeeId], references: [id])
+  employeeId   String           @map("employee_id")
+
+  /// First day off, midnight UTC, as a date.
+  startDate DateTime @map("start_date") @db.Date
+  /// Last day off, inclusive.
+  endDate   DateTime @map("end_date") @db.Date
+  note      String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// Read as "this restaurant, this stretch of the calendar".
+  @@index([restaurantId, startDate])
+  @@index([employeeId, startDate])
+  @@map("employee_leaves")
 }
 
 /// A named shift the restaurant uses often, such as "Manhã 09:00–17:00".

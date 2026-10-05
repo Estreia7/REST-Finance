@@ -35,9 +35,35 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.05';
+export const CHANGELOG_VERSION = '2026.10.05.2';
 
 export const CHANGELOG: Release[] = [
+  {
+    // A second release the same day: the first had already gone out, and
+    // adding to it would leave the unread dot dark for anyone who opened it.
+    version: '2026.10.05.2',
+    date: '2026-10-05',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Férias da equipa, contadas como manda a lei',
+        detail:
+          'Em Equipa › Férias, um calendário do mês mostra quem está fora, e por baixo cada colaborador tem os dias a que tem direito, os marcados, os gozados e os que ainda faltam. Contam-se dias úteis (segunda a sexta, sem feriados): 22 por ano, menos no ano de entrada, e o que sobra pode ser gozado até 30 de abril. Indique a data de entrada de cada um para o primeiro ano ficar certo. Quem está de férias aparece assim no horário e na imagem enviada à equipa.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Receita e custos lado a lado, mês a mês',
+        detail:
+          'No Painel, o gráfico da receita por canal deu lugar a duas barras por mês: o que entrou e o que saiu, com os totais do ano por cima e a diferença de cada mês ao passar o rato. O gráfico do que se vendeu tem barras mais finas e cores mais fáceis de distinguir, com o peso de cada categoria no ano.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Voltar à semana atual num toque',
+        detail:
+          'Em Horários, o botão "Esta semana" está sempre à vista. Na vista de mês, abre o mês atual e leva-o diretamente à semana de hoje, que fica destacada.',
+      },
+    ],
+  },
   {
     version: '2026.10.05',
     date: '2026-10-05',

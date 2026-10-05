@@ -56,6 +56,8 @@ export interface ImageInput {
   employees: ImageEmployee[];
   shifts: ImageShift[];
   closures: Array<{ date: string; reason: string | null }>;
+  /** Holidays touching the week, as inclusive date ranges. */
+  leaves?: Array<{ employeeId: string; start: string; end: string }>;
   language?: 'pt' | 'en';
 }
 
@@ -98,6 +100,13 @@ const COLORS = {
   offLine: '#c9c4bd',
   offInk: '#78716c',
   /**
+   * A day on holiday. Filled where a closed day is outlined, and grey where a
+   * shift is coloured: the three things a cell can be stay apart by shape and
+   * hue together, which survives a forwarded, recompressed thumbnail.
+   */
+  leaveBg: '#ebe8e3',
+  leaveInk: '#57534e',
+  /**
    * Saturday and Sunday, as on the screen: a cool band down the column, so
    * the weekend is found at a glance in a chat thumbnail. Pale enough that a
    * shift's own colour still reads on top of it.
@@ -135,7 +144,16 @@ export function buildScheduleSvg(input: ImageInput): { svg: string; width: numbe
 
   // Someone with no shifts at all this week is left out: a row of dashes adds
   // height to the image and tells the team nothing.
+  // Someone on holiday this week stays in: "Férias" across their row tells
+  // the team who is away, which is the point of sending the rota at all.
+  const weekKeys = days.map(dateKey);
+  const leaves = input.leaves ?? [];
+  const onLeave = (employeeId: string, key: string) =>
+    leaves.some((l) => l.employeeId === employeeId && l.start <= key && key <= l.end);
   const working = new Set(input.shifts.map((s) => s.employeeId));
+  for (const l of leaves) {
+    if (weekKeys.some((k) => l.start <= k && k <= l.end)) working.add(l.employeeId);
+  }
   const employees = input.employees.filter((e) => working.has(e.id));
 
   const closedDays = new Map(input.closures.map((c) => [c.date, c.reason]));
@@ -282,6 +300,16 @@ export function buildScheduleSvg(input: ImageInput): { svg: string; width: numbe
           }" font-size="13" font-weight="600" text-anchor="middle" fill="${COLORS.offInk}">${
             language === 'pt' ? 'Folga' : 'Day off'
           }</text>`
+        );
+        return;
+      }
+
+      if (onLeave(emp.id, key)) {
+        parts.push(
+          `<rect x="${x + 8}" y="${y + 10}" width="${L.dayCol - 16}" height="32" rx="7" fill="${COLORS.leaveBg}"/>`,
+          `<text x="${x + L.dayCol / 2}" y="${y + 31}" font-size="13" font-weight="600" text-anchor="middle" fill="${
+            COLORS.leaveInk
+          }">${language === 'pt' ? 'Férias' : 'On leave'}</text>`
         );
         return;
       }

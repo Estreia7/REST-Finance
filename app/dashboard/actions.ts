@@ -1078,26 +1078,35 @@ export async function getMonthlyRevenueBreakdown(year?: number) {
       return { error: 'errors.read' };
     }
 
-    const summaries = await prisma.dailySummary.findMany({
-      where: {
-        restaurantId: owner.restaurantId,
-        deletedAt: null,
-        date: {
-          gte: new Date(Date.UTC(target, 0, 1)),
-          lte: new Date(Date.UTC(target, 11, 31, 23, 59, 59)),
-        },
-      },
-      orderBy: { date: 'asc' },
-    });
+    const yearRange = {
+      gte: new Date(Date.UTC(target, 0, 1)),
+      lte: new Date(Date.UTC(target, 11, 31, 23, 59, 59)),
+    };
+
+    const [summaries, costs] = await Promise.all([
+      prisma.dailySummary.findMany({
+        where: { restaurantId: owner.restaurantId, deletedAt: null, date: yearRange },
+        orderBy: { date: 'asc' },
+      }),
+      // Costs as recorded, the same figures the cost tab and the KPI cards
+      // add up, so the bars agree with every other number on the page.
+      prisma.costEntry.findMany({
+        where: { restaurantId: owner.restaurantId, deletedAt: null, date: yearRange },
+        select: { date: true, amount: true },
+      }),
+    ]);
 
     // Twelve buckets, filled where there is trade. Real dineIn vs takeaway;
     // nothing is apportioned between them.
-    const months = Array.from({ length: 12 }, () => ({ dineIn: 0, takeaway: 0 }));
+    const months = Array.from({ length: 12 }, () => ({ dineIn: 0, takeaway: 0, costs: 0 }));
 
     for (const summary of summaries) {
       const m = summary.date.getUTCMonth();
       months[m].dineIn += Number(summary.dineInRevenue);
       months[m].takeaway += Number(summary.takeawayRevenue);
+    }
+    for (const cost of costs) {
+      months[cost.date.getUTCMonth()].costs += Number(cost.amount);
     }
 
     const result = months.map((data, i) => ({
@@ -1109,6 +1118,7 @@ export async function getMonthlyRevenueBreakdown(year?: number) {
       dineIn: data.dineIn,
       takeaway: data.takeaway,
       total: data.dineIn + data.takeaway,
+      costs: Math.round(data.costs * 100) / 100,
     }));
 
     return { success: true, data: result };

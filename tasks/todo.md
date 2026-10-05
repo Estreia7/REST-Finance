@@ -1,3 +1,38 @@
+# Férias dos colaboradores
+
+## Decisões (2026-10-05)
+- Na tab **Equipa**, como sub-vista "Férias" ao lado dos acessos. Usa os
+  colaboradores dos Horários (sem conta), não os acessos à aplicação.
+- Contagem **como a lei** (art. 238.º CT): dias úteis seg–sex, sem feriados
+  nacionais. O feriado municipal e o Carnaval não entram.
+- 22 dias por ano, vencidos a 1 de janeiro. No ano de admissão, 2 dias por mês
+  completo, até 20, gozáveis após 6 meses (art. 239.º); se o ano acabar antes,
+  até 30 de junho do ano seguinte, com teto de 30 dias nesse ano.
+- O que sobra passa para o ano seguinte até **30 de abril** (art. 240.º).
+- As férias aparecem no **horário** (célula "Férias") e na imagem enviada.
+- Marcar férias por cima de turnos pede confirmação e remove esses turnos;
+  repetir uma semana não marca turnos em dias de férias.
+
+## Feito
+- [x] Schema: `ScheduleEmployee.startDate` + modelo `EmployeeLeave`; migração
+      `20261005170000_employee_leave` (gerada com `prisma migrate diff`).
+- [x] `lib/leave.ts` puro: feriados (Páscoa), dias úteis, direito, saldo com
+      transição — 23 testes.
+- [x] `leave-actions.ts`: visão do ano, marcar/alterar/remover, data de entrada.
+      Erros como chaves.
+- [x] Painel Férias (calendário mensal + saldo por colaborador + diálogos) na
+      tab Equipa, com sub-vista Acessos. `Dialog` passou a componente partilhado.
+- [x] Horários: célula "Férias" na grelha, no telemóvel e na imagem; `setShift`
+      recusa dias de férias; repetir semana salta-os.
+- [x] pt/en, changelog (release 2026.10.05.2), apresentação. Sem passo no tour.
+- [x] tsc limpo, 539 testes, `next build` OK.
+
+## Revisão
+- Não verificado no ecrã (sem browser nesta sessão) nem contra dados reais.
+- A transição de dias só conta a partir do primeiro ano com férias registadas,
+  para quem começa a usar a app não ver +22 dias "do ano passado".
+- Feriado municipal, Carnaval e feriados regionais não entram.
+
 # Tab de Horários
 
 ## Decisões (2026-09-12)

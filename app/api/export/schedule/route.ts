@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
 
   const sunday = addDays(monday, 6);
 
-  const [restaurant, employees, shifts, closures] = await Promise.all([
+  const [restaurant, employees, shifts, closures, leaves] = await Promise.all([
     prisma.restaurant.findUnique({
       where: { id: owner.restaurantId },
       select: { name: true },
@@ -58,6 +58,10 @@ export async function GET(request: NextRequest) {
     }),
     prisma.scheduleClosure.findMany({
       where: { restaurantId: owner.restaurantId, date: { gte: monday, lte: sunday } },
+    }),
+    prisma.employeeLeave.findMany({
+      where: { restaurantId: owner.restaurantId, startDate: { lte: sunday }, endDate: { gte: monday } },
+      select: { employeeId: true, startDate: true, endDate: true },
     }),
   ]);
 
@@ -80,6 +84,11 @@ export async function GET(request: NextRequest) {
       note: s.note,
     })),
     closures: closures.map((c) => ({ date: dateKey(c.date), reason: c.reason })),
+    leaves: leaves.map((l) => ({
+      employeeId: l.employeeId,
+      start: dateKey(l.startDate),
+      end: dateKey(l.endDate),
+    })),
   });
 
   try {

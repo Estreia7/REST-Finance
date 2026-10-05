@@ -41,6 +41,7 @@ import CategoryTable    from './components/CategoryTable';
 import QuickEntryPanel  from './components/QuickEntryPanel';
 import QuickAddSheet, { type QuickAddKind, type QuickAddMethod } from './components/QuickAddSheet';
 import StaffPanel       from './components/StaffPanel';
+import TeamTab          from './components/TeamTab';
 import BillingPanel     from './components/BillingPanel';
 import CompliancePanel from './components/CompliancePanel';
 import SchedulePanel from './components/SchedulePanel';
@@ -110,7 +111,7 @@ function DashboardPageInner() {
     labor: 0, cogs: 0, monthlyGoal: 0,
   });
   const [last7DaysData, setLast7DaysData]       = useState<Array<{ date: string; revenue: number }>>([]);
-  const [monthlyBreakdown, setMonthlyBreakdown] = useState<Array<{ month: string; monthIndex?: number; dineIn: number; takeaway: number; total: number }>>([]);
+  const [monthlyBreakdown, setMonthlyBreakdown] = useState<Array<{ month: string; monthIndex?: number; dineIn: number; takeaway: number; total: number; costs: number }>>([]);
   /**
    * Which year the two revenue charts are showing, and which years exist.
    * Held here rather than in the charts so both move together: reading one
@@ -622,13 +623,17 @@ function DashboardPageInner() {
           )}
 
           {activeTab === 'users' && (
-            <StaffPanel
-              staff={staff}
-              staffEmail={staffEmail}
-              isSubmitting={isSubmitting}
-              onEmailChange={setStaffEmail}
-              onAddStaff={handleAddStaff}
-              onDataChange={loadData}
+            <TeamTab
+              access={
+                <StaffPanel
+                  staff={staff}
+                  staffEmail={staffEmail}
+                  isSubmitting={isSubmitting}
+                  onEmailChange={setStaffEmail}
+                  onAddStaff={handleAddStaff}
+                  onDataChange={loadData}
+                />
+              }
             />
           )}
 

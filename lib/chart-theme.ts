@@ -29,9 +29,47 @@ function readTokenAlpha(name: string, alpha: number, fallback: string): string {
   return raw ? `hsl(${raw} / ${alpha})` : fallback;
 }
 
+/**
+ * Colours for data marks: bars that compare and stacks that compose.
+ *
+ * Not the interface tokens. The brand amber (`--primary`) is too light to
+ * carry data — it fails the lightness band a mark needs to read against the
+ * card — so the data amber is a step darker, and each mode has its own steps
+ * rather than a flipped copy. Validated with the dataviz palette checker
+ * (lightness band, chroma, colour-blind separation of neighbours, contrast)
+ * against the card surface of each mode. The category order is part of that
+ * check: aqua beside magenta, or orange beside magenta, fails it.
+ *
+ * "Other" is a neutral, never a ninth hue.
+ */
+const DATA_COLORS = {
+  light: {
+    revenue: '#d98e00',
+    costs: '#2a78d6',
+    categories: ['#d98e00', '#2a78d6', '#e87ba4', '#4a3aa7', '#1baf7a', '#eb6834'],
+    other: '#a8a29e',
+  },
+  dark: {
+    revenue: '#c98500',
+    costs: '#3987e5',
+    categories: ['#c98500', '#3987e5', '#d55181', '#9085e9', '#199e70', '#d95926'],
+    other: '#6b6560',
+  },
+} as const;
+
 export type ChartTheme = {
   /** Series colours, in the order charts should use them. */
   series: string[];
+  /** Validated colours for data marks; see DATA_COLORS. */
+  data: {
+    revenue: string;
+    costs: string;
+    categories: readonly string[];
+    other: string;
+  };
+  /** The card the chart sits on: the colour of the gaps between marks. */
+  surface: string;
+  isDark: boolean;
   primary: string;
   success: string;
   danger: string;
@@ -54,10 +92,15 @@ function buildTheme(): ChartTheme {
   const warning = readToken('--warning', 'hsl(25 85% 30%)');
   const info = readToken('--info', 'hsl(215 70% 45%)');
 
+  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+
   return {
     // Amber first, then hues far enough apart to stay distinguishable, and
     // not relying on red/green alone to carry meaning.
     series: [primary, info, success, warning, danger],
+    data: isDark ? DATA_COLORS.dark : DATA_COLORS.light,
+    surface: readToken('--card', isDark ? 'hsl(220 24% 12%)' : 'hsl(0 0% 100%)'),
+    isDark,
     primary,
     success,
     danger,

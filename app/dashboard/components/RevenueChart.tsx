@@ -1,9 +1,24 @@
 'use client';
 
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useChartTheme } from '@/lib/chart-theme';
 import { useLanguage } from '@/lib/language-context';
+import { formatMoney, formatMoneyCompact } from '@/lib/format';
+import { ChartLegend, TooltipCard, TooltipRow, barPath, monthLabel } from './chart-parts';
+
+/**
+ * Revenue against costs, month by month.
+ *
+ * Replaces the revenue-by-channel area chart, which split the takings into
+ * dine-in and takeaway — for most restaurants a single band every month, and
+ * no answer to the question an owner actually brings to this card: did more
+ * come in than went out?
+ *
+ * Two thin bars per month, side by side on one axis. Thin on purpose: a bar
+ * that fills its slot reads as a block and the eye loses which month it
+ * belongs to; capped narrow, the air between months does the grouping.
+ */
 
 interface MonthlyItem {
   month: string;
@@ -12,6 +27,7 @@ interface MonthlyItem {
   dineIn: number;
   takeaway: number;
   total: number;
+  costs: number;
 }
 
 interface RevenueChartProps {
@@ -23,38 +39,6 @@ interface RevenueChartProps {
   availableYears?: number[];
 }
 
-/**
- * Month abbreviations, per language.
- *
- * Not `toLocaleDateString`: Portuguese returns "set." with a trailing dot and
- * in lower case, which reads as a typo along an axis, and twelve labels are
- * not worth twenty-four dictionary keys.
- */
-const MONTH_SHORT: Record<string, string[]> = {
-  pt: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
-  en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-};
-
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="px-4 py-3 rounded-xl bg-card border border-border shadow-modal text-xs">
-      <div className="font-semibold text-foreground mb-2">{label}</div>
-      {payload.map((p: any) => (
-        <div key={p.name} className="flex items-center justify-between gap-6">
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="w-2 h-2 rounded-full" style={{ background: p.color }} />
-            {p.name}
-          </span>
-          <span className="font-bold text-foreground">
-            €{Number(p.value).toLocaleString('pt-PT', { minimumFractionDigits: 2 })}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-};
-
 export default function RevenueChart({
   data,
   year,
@@ -62,20 +46,16 @@ export default function RevenueChart({
   availableYears = [],
 }: RevenueChartProps) {
   const chart = useChartTheme();
-  // Series colours come from the theme, so they cannot live at module scope.
-  const COLORS = [chart.primary, chart.info];
   const { t, language } = useLanguage();
 
-  const names = MONTH_SHORT[language] ?? MONTH_SHORT.pt;
+  const points = data.map((d) => ({
+    label: monthLabel(d.month, language, d.monthIndex),
+    revenue: d.total,
+    costs: d.costs ?? 0,
+  }));
 
-  // "Jan 26" rather than "2026-01": a year of twelve ISO labels is unreadable
-  // at this width, and the two-digit year keeps the month legible while still
-  // saying which year is on screen when the arrows have been used.
-  const labelled = data.map((d) => {
-    const [y, m] = d.month.split('-').map(Number);
-    const index = d.monthIndex ?? (m - 1);
-    return { ...d, label: `${names[index]} ${String(y).slice(-2)}` };
-  });
+  const totalRevenue = points.reduce((s, p) => s + p.revenue, 0);
+  const totalCosts = points.reduce((s, p) => s + p.costs, 0);
 
   // Arrows stop at the edges of what was actually traded, so stepping back
   // never lands on an empty chart that reads as a bug.
@@ -85,10 +65,10 @@ export default function RevenueChart({
   const canGoForward = year !== undefined && newest !== undefined && year < newest;
 
   const header = (
-    <div className="flex items-start justify-between gap-4 mb-5">
+    <div className="flex items-start justify-between gap-4 mb-4">
       <div className="min-w-0">
-        <h3 className="font-bold text-foreground mb-1">{t('charts.titleRevenueByChannel')}</h3>
-        <p className="text-xs text-muted-foreground">{t('charts.subRevenueByChannel')}</p>
+        <h3 className="font-bold text-foreground mb-1">{t('charts.titleRevenueCosts')}</h3>
+        <p className="text-xs text-muted-foreground">{t('charts.subRevenueCosts')}</p>
       </div>
 
       {onYearChange && year !== undefined && (
@@ -127,7 +107,7 @@ export default function RevenueChart({
 
   // A year with no trade still shows its controls, so the owner can step back
   // to one that has some rather than being stranded on an empty card.
-  if (!labelled.some((d) => d.total > 0)) {
+  if (totalRevenue <= 0 && totalCosts <= 0) {
     return (
       <div className="card-glass p-6">
         {header}
@@ -141,43 +121,86 @@ export default function RevenueChart({
   return (
     <div className="card-glass p-6">
       {header}
+
+      {/* The year's totals ride the legend: the colour is never the only
+          thing saying which bar is which, and the sum is there without a
+          hover. */}
+      <ChartLegend
+        items={[
+          { key: 'revenue', color: chart.data.revenue, label: t('charts.revenue'), value: formatMoney(totalRevenue) },
+          { key: 'costs', color: chart.data.costs, label: t('charts.costs'), value: formatMoney(totalCosts) },
+        ]}
+      />
+
       <ResponsiveContainer width="100%" height={240}>
-        <AreaChart data={labelled} margin={{ top: 5, right: 10, bottom: 0, left: 10 }}>
-          <defs>
-            <linearGradient id="gradDineIn" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor={chart.primary} stopOpacity={0.4} />
-              <stop offset="95%" stopColor={chart.primary} stopOpacity={0.0} />
-            </linearGradient>
-            <linearGradient id="gradTakeaway" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor={chart.info} stopOpacity={0.4} />
-              <stop offset="95%" stopColor={chart.info} stopOpacity={0.0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+        <BarChart
+          data={points}
+          margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+          // Two bars a month with a 2px gap between them; the space between
+          // months is wider than the bars, so each pair reads as one month.
+          barGap={2}
+          barCategoryGap="28%"
+        >
+          <CartesianGrid vertical={false} stroke={chart.grid} />
           <XAxis
             dataKey="label"
             tick={{ fontSize: 11, fill: chart.axis }}
             axisLine={false}
             tickLine={false}
-            // Twelve labels crowd on a phone; recharts drops the ones that do
-            // not fit rather than overlapping them.
+            // All twelve on a laptop; on a phone the ones that would collide
+            // are dropped rather than drawn over each other.
             interval="preserveStartEnd"
-            minTickGap={4}
+            minTickGap={2}
+            tickMargin={8}
           />
           <YAxis
             tick={{ fontSize: 11, fill: chart.axis }}
             axisLine={false}
             tickLine={false}
-            tickFormatter={v => `€${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`}
+            width={48}
+            tickFormatter={(v: number) => formatMoneyCompact(v)}
           />
-          <Tooltip content={<CustomTooltip />} />
-          <Legend
-            wrapperStyle={{ fontSize: 12, paddingTop: 16 }}
-            formatter={(value) => <span style={{ color: chart.axis }}>{value}</span>}
+          <Tooltip
+            cursor={{ fill: chart.grid, opacity: 0.35 }}
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null;
+              const revenue = Number(payload.find((p) => p.dataKey === 'revenue')?.value ?? 0);
+              const costs = Number(payload.find((p) => p.dataKey === 'costs')?.value ?? 0);
+              const diff = revenue - costs;
+              return (
+                <TooltipCard title={`${label} ${year ?? ''}`.trim()}>
+                  <TooltipRow color={chart.data.revenue} label={t('charts.revenue')} value={formatMoney(revenue, { decimals: 2 })} />
+                  <TooltipRow color={chart.data.costs} label={t('charts.costs')} value={formatMoney(costs, { decimals: 2 })} />
+                  <div className="pt-1.5 mt-1.5 border-t border-border-subtle">
+                    <TooltipRow
+                      label={t('charts.difference')}
+                      value={`${diff < 0 ? '−' : '+'}${formatMoney(Math.abs(diff), { decimals: 2 })}`}
+                      strong
+                    />
+                  </div>
+                </TooltipCard>
+              );
+            }}
           />
-          <Area type="monotone" dataKey="dineIn"   name={t('charts.dineIn')}     stroke={chart.primary} fill="url(#gradDineIn)"   strokeWidth={2} />
-          <Area type="monotone" dataKey="takeaway" name={t('charts.takeaway')} stroke={chart.info} fill="url(#gradTakeaway)" strokeWidth={2} />
-        </AreaChart>
+          <Bar
+            dataKey="revenue"
+            name={t('charts.revenue')}
+            fill={chart.data.revenue}
+            maxBarSize={14}
+            shape={(p: { x?: number; y?: number; width?: number; height?: number; fill?: string }) => (
+              <path d={barPath(p.x ?? 0, p.y ?? 0, p.width ?? 0, p.height ?? 0, true)} fill={p.fill} />
+            )}
+          />
+          <Bar
+            dataKey="costs"
+            name={t('charts.costs')}
+            fill={chart.data.costs}
+            maxBarSize={14}
+            shape={(p: { x?: number; y?: number; width?: number; height?: number; fill?: string }) => (
+              <path d={barPath(p.x ?? 0, p.y ?? 0, p.width ?? 0, p.height ?? 0, true)} fill={p.fill} />
+            )}
+          />
+        </BarChart>
       </ResponsiveContainer>
     </div>
   );

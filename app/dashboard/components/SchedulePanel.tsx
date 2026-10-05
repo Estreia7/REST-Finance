@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   Loader2, ChevronLeft, ChevronRight, Plus, Trash2, Pencil, X, Check,
-  CalendarOff, CalendarCheck, CopyPlus, Copy, Download, Users, Eraser,
+  CalendarOff, CalendarCheck, CalendarDays, CopyPlus, Copy, Download, Users, Eraser,
 } from 'lucide-react';
 import {
   getScheduleWeeks, addEmployee, updateEmployee, removeEmployee,
@@ -19,6 +19,7 @@ import {
   WEEKDAYS_PT_SHORT, EMPLOYEE_COLORS, employeeColor,
 } from '@/lib/schedule';
 import { useLanguage } from '@/lib/language-context';
+import Dialog from './Dialog';
 
 /**
  * The weekly rota.
@@ -64,6 +65,8 @@ interface WeekData {
   shifts: Shift[];
   closures: Array<{ date: string; reason: string | null }>;
   templates: ShiftTemplate[];
+  /** Holidays touching the weeks on screen, booked in the Equipa tab. */
+  leaves: Array<{ employeeId: string; start: string; end: string }>;
 }
 
 /**
@@ -197,6 +200,8 @@ export default function SchedulePanel() {
   );
   const shiftAt = (employeeId: string, date: string) => byCell.get(`${employeeId}|${date}`) ?? null;
   const closedSet = new Map((data?.closures ?? []).map((c) => [c.date, c.reason]));
+  const onLeaveAt = (employeeId: string, date: string) =>
+    (data?.leaves ?? []).some((l) => l.employeeId === employeeId && l.start <= date && date <= l.end);
 
   /** One week's shifts, for its totals and for whether it has anything to send. */
   const shiftsOfWeek = (wk: string) => {
@@ -220,7 +225,9 @@ export default function SchedulePanel() {
       if (okMsg) toast.success(okMsg);
       load();
     } else {
-      toast.error(result.error || t('schedule.saveFailed'));
+      // Newer actions return a dictionary key; older ones a sentence, which
+      // t() hands back unchanged.
+      toast.error(result.error ? t(result.error) : t('schedule.saveFailed'));
     }
     setBusy(false);
     return result;
@@ -253,6 +260,31 @@ export default function SchedulePanel() {
       // Not remembered this time; nothing else depends on it.
     }
   };
+
+  /**
+   * Back to today. In the week view that is this week; in the month view it
+   * is this month, scrolled to this week once the grid has drawn — the month
+   * can run to six weeks and today's may be off the bottom of the screen.
+   */
+  const [scrollToThisWeek, setScrollToThisWeek] = useState(false);
+  const goToThisWeek = () => {
+    const today = new Date();
+    if (activeView === 'month') {
+      setMonth({ year: today.getUTCFullYear(), month: today.getUTCMonth() });
+      setScrollToThisWeek(true);
+    } else {
+      setWeekStart(dateKey(startOfWeek(today)));
+    }
+  };
+
+  useEffect(() => {
+    if (!scrollToThisWeek || loading) return;
+    const el = document.getElementById(`week-${dateKey(startOfWeek(new Date()))}`);
+    if (!el) return;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+    setScrollToThisWeek(false);
+  }, [scrollToThisWeek, loading, weekStarts]);
 
   const stepMonth = (delta: number) =>
     setMonth((m) => {
@@ -398,6 +430,7 @@ export default function SchedulePanel() {
         employees={employees}
         closedSet={closedSet}
         shiftAt={shiftAt}
+        onLeaveAt={onLeaveAt}
         totals={weeklyMinutes(shiftsOfWeek(wk))}
         busy={busy}
         // In the month view, the days of the neighbouring months that complete
@@ -443,7 +476,9 @@ export default function SchedulePanel() {
             </button>
           </div>
 
-          <div className="min-w-0 flex-1">
+          {/* A floor on the title's width, so on a phone the buttons on the
+              right wrap to their own line instead of squeezing it to "5 – 1…". */}
+          <div className="min-w-[12rem] flex-1">
             <h3 className="font-bold text-foreground truncate">
               {isMonth ? formatMonthTitle(month.year, month.month, language) : weekLabelOf(weekStart)}
             </h3>
@@ -457,18 +492,19 @@ export default function SchedulePanel() {
           </div>
 
           <div className="flex items-center gap-2">
-            {!onThisPeriod && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (isMonth) setMonth({ year: now.getUTCFullYear(), month: now.getUTCMonth() });
-                  else setWeekStart(thisWeekKey);
-                }}
-                className="text-xs font-semibold text-primary-ink hover:underline px-2 py-1"
-              >
-                {isMonth ? t('schedule.thisMonth') : t('schedule.thisWeek')}
-              </button>
-            )}
+            {/* Always there, never a link that comes and goes: getting back
+                to today is the most common move on a rota. In the month view
+                it opens this month and brings this week into sight. */}
+            <button
+              type="button"
+              onClick={goToThisWeek}
+              disabled={!isMonth && onThisPeriod}
+              title={t('schedule.goToThisWeek')}
+              className="cta-button-secondary !h-11 !py-0 !px-3.5 !text-xs disabled:opacity-50"
+            >
+              <CalendarDays className="w-4 h-4" aria-hidden="true" />
+              {t('schedule.thisWeek')}
+            </button>
 
             {/* Desktop only: the phone keeps the week, where it fits. */}
             <div
@@ -506,7 +542,14 @@ export default function SchedulePanel() {
            copy and download rather than the month going out as one image. */
         <div className={`space-y-4 transition-opacity ${loading ? 'opacity-60' : ''}`} aria-busy={loading}>
           {weekStarts.map((wk, i) => (
-            <section key={wk} className="card-glass p-4 sm:p-5" aria-label={`${t('schedule.weekNumber')} ${i + 1}`}>
+            <section
+              key={wk}
+              id={`week-${wk}`}
+              // Room above when scrolled to, so the sticky top bar does not
+              // cover the week's heading.
+              className={`card-glass p-4 sm:p-5 scroll-mt-24 ${wk === thisWeekKey ? 'ring-2 ring-primary' : ''}`}
+              aria-label={`${t('schedule.weekNumber')} ${i + 1}`}
+            >
               <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                 <h4 className="flex items-baseline gap-2 min-w-0">
                   <span className="font-bold text-foreground">
@@ -563,6 +606,7 @@ export default function SchedulePanel() {
             employees={employees}
             closedSet={closedSet}
             shiftAt={shiftAt}
+            onLeaveAt={onLeaveAt}
             totals={weeklyMinutes(shiftsOfWeek(weekStart))}
             busy={busy}
             onToggleClosure={(key, closed) => toggleDay(key, closed, 'schedule.closureReasonShortPrompt')}
@@ -725,13 +769,14 @@ function WeekActions({
 
 /** One week as a table: a row per person, a column per day, the total last. */
 function WeekGrid({
-  days, employees, closedSet, shiftAt, totals, busy, isOutside,
+  days, employees, closedSet, shiftAt, onLeaveAt, totals, busy, isOutside,
   onToggleClosure, onEditCell, onEditPerson,
 }: {
   days: Date[];
   employees: Employee[];
   closedSet: Map<string, string | null>;
   shiftAt: (employeeId: string, date: string) => Shift | null;
+  onLeaveAt: (employeeId: string, date: string) => boolean;
   totals: Map<string, number>;
   busy: boolean;
   /** Days belonging to a neighbouring month, drawn quieter in the month view. */
@@ -847,6 +892,7 @@ function WeekGrid({
                       <div className={outside ? 'opacity-55 hover:opacity-100 focus-within:opacity-100 transition-opacity' : ''}>
                         <ShiftCell
                           closed={closed}
+                          onLeave={onLeaveAt(emp.id, key)}
                           shift={shift}
                           color={color}
                           onClick={() => onEditCell(emp.id, key)}
@@ -869,9 +915,11 @@ function WeekGrid({
 }
 
 function ShiftCell({
-  closed, shift, color, onClick,
+  closed, onLeave, shift, color, onClick,
 }: {
   closed: boolean;
+  /** Booked as holiday in the Equipa tab: not a cell to put a shift in. */
+  onLeave: boolean;
   shift: Shift | null;
   color: ReturnType<typeof employeeColor>;
   onClick: () => void;
@@ -887,6 +935,21 @@ function ShiftCell({
       <div className="h-11 rounded-lg flex items-center justify-center border border-dashed border-border
                       text-[11px] font-semibold text-muted-foreground">
         {t('schedule.dayOff')}
+      </div>
+    );
+  }
+
+  // Filled grey where a closed day is outlined and a shift is coloured, so
+  // the three read apart at a glance. Not a button: holidays are booked and
+  // changed in the Equipa tab, where the days are counted.
+  if (onLeave) {
+    return (
+      <div
+        className="h-11 rounded-lg flex items-center justify-center bg-muted
+                   text-[11px] font-semibold text-muted-foreground"
+        title={t('schedule.onLeaveHint')}
+      >
+        {t('schedule.onLeave')}
       </div>
     );
   }
@@ -955,13 +1018,14 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 
 /** The phone view: one day at a time, every person on it. */
 function MobileSchedule({
-  days, employees, closedSet, shiftAt, totals, busy,
+  days, employees, closedSet, shiftAt, onLeaveAt, totals, busy,
   onToggleClosure, onEditCell, onAddPerson,
 }: {
   days: Date[];
   employees: Employee[];
   closedSet: Map<string, string | null>;
   shiftAt: (employeeId: string, date: string) => Shift | null;
+  onLeaveAt: (employeeId: string, date: string) => boolean;
   totals: Map<string, number>;
   busy: boolean;
   onToggleClosure: (dateKey: string, closed: boolean) => void;
@@ -1034,6 +1098,22 @@ function MobileSchedule({
           {employees.map((emp) => {
             const shift = shiftAt(emp.id, key);
             const color = employeeColor(emp.color);
+            // On holiday: the row says so and is not a button. Holidays are
+            // changed in the Equipa tab, where the days are counted.
+            if (onLeaveAt(emp.id, key)) {
+              return (
+                <div key={emp.id} className="min-h-[56px] px-4 py-3 flex items-center gap-3" title={t('schedule.onLeaveHint')}>
+                  <span className="w-1 h-8 rounded-full shrink-0" style={{ background: color.dot }} aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-foreground truncate">{emp.name}</span>
+                    {emp.role && <span className="block text-xs text-muted-foreground truncate">{emp.role}</span>}
+                  </span>
+                  <span className="shrink-0 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-semibold text-muted-foreground">
+                    {t('schedule.onLeave')}
+                  </span>
+                </div>
+              );
+            }
             return (
               <button
                 key={emp.id}
@@ -1614,53 +1694,5 @@ function CopyWeeksDialog({
         </button>
       </div>
     </Dialog>
-  );
-}
-
-/** A plain centred dialog. Escape and the backdrop both close it. */
-function Dialog({
-  title, onClose, children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  const { t } = useLanguage();
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className="relative w-full sm:max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl
-                   p-5 shadow-modal max-h-[90dvh] overflow-y-auto overscroll-contain
-                   pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-5"
-      >
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <h4 className="font-bold text-foreground">{title}</h4>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 -m-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
-            aria-label={t('schedule.close')}
-          >
-            <X className="w-4 h-4" aria-hidden="true" />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
   );
 }
