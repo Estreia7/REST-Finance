@@ -103,6 +103,7 @@ model Restaurant {
   shifts            Shift[]
   scheduleClosures  ScheduleClosure[]
   employeeLeaves    EmployeeLeave[]
+  recurringCosts    RecurringCost[]
   ingredients       Ingredient[]
   menuItems         MenuItem[]
   supportTickets    SupportTicket[]
@@ -160,6 +161,7 @@ model User {
   memberships      Membership[]
   createdSummaries DailySummary[]   @relation("SummaryCreatedBy")
   createdCosts     CostEntry[]      @relation("CostCreatedBy")
+  createdRecurringCosts RecurringCost[] @relation("RecurringCostCreatedBy")
   auditLogs        AuditLog[]       @relation("AuditActor")
   notifications    Notification[]
   receiptScans     ReceiptScan[]
@@ -272,6 +274,7 @@ model Category {
   /// like a bad one.
   isOccupancy Boolean @default(false) @map("is_occupancy")
 
+  recurringCosts RecurringCost[]
   costEntries  CostEntry[]
   dailyRevenue DailyCategoryRevenue[]
   posProducts  PosProduct[]
@@ -326,12 +329,58 @@ model CostEntry {
   updatedAt   DateTime? @updatedAt @map("updated_at")
   deletedAt   DateTime? @map("deleted_at")
 
+  /// Set on entries booked automatically from a fixed monthly cost.
+  recurringCost   RecurringCost? @relation(fields: [recurringCostId], references: [id])
+  recurringCostId String?        @map("recurring_cost_id")
+
   invoiceItems InvoiceItem[]
   receiptScans ReceiptScan[]
 
+  /// One booking per fixed cost per day: two dashboards opening at once
+  /// must not book the same month twice.
+  @@unique([recurringCostId, date])
   @@index([restaurantId, date])
   @@index([restaurantId, type, date])
   @@map("cost_entries")
+}
+
+/// A cost that repeats every month — rent, internet, a 12-month contract.
+///
+/// Typed once; the app books a CostEntry on dayOfMonth each month from
+/// startDate until endDate. Entries are booked when the dashboard opens
+/// (there is no scheduler on the box), catching up any months missed, and
+/// lastGeneratedDate records how far that has got so nothing is booked
+/// twice. Changing the amount changes only the months still to come; the
+/// ones already booked are real costs and stay as they were.
+model RecurringCost {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  type       CostType
+  category   Category? @relation(fields: [categoryId], references: [id])
+  categoryId String?   @map("category_id")
+  amount      Decimal  @db.Decimal(12, 2)
+  description String?
+
+  /// 1–31; a 31 falls on the last day of shorter months.
+  dayOfMonth        Int       @map("day_of_month")
+  /// The first booking.
+  startDate         DateTime  @map("start_date") @db.Date
+  /// The last booking, inclusive. Null runs until stopped.
+  endDate           DateTime? @map("end_date") @db.Date
+  lastGeneratedDate DateTime? @map("last_generated_date") @db.Date
+  active            Boolean   @default(true)
+
+  createdBy   User     @relation("RecurringCostCreatedBy", fields: [createdById], references: [id])
+  createdById String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  entries CostEntry[]
+
+  @@index([restaurantId, active])
+  @@map("recurring_costs")
 }
 
 model AuditLog {

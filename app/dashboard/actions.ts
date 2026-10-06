@@ -17,6 +17,8 @@ import { calculateKpis, toPercent, safeDivide, percentChange } from '@/lib/kpi';
 type CostType = 'COGS' | 'OPEX';
 type CategoryType = 'REVENUE' | 'COGS' | 'OPEX';
 import { toClientError } from '@/lib/errors';
+import { endDateFor } from '@/lib/recurring-costs';
+import { bookDueRecurringCosts } from '@/lib/recurring-costs-server';
 import { foldMonthlySeries, UNCATEGORISED_SERIES } from '@/lib/monthly-series';
 
 export async function getRestaurant() {
@@ -201,29 +203,94 @@ export async function createCostEntry(data: {
   categoryId?: string;
   amount: number;
   description?: string;
+  /**
+   * Repeats this cost every month: rent, internet, a 12-month contract. The
+   * entry being created is the first month; `months` null runs until stopped.
+   */
+  recurring?: { dayOfMonth: number; months: number | null };
 }) {
   try {
     // Validate input
-    const parsed = costEntrySchema.safeParse(data);
+    const { recurring, ...entry } = data;
+    const parsed = costEntrySchema.safeParse(entry);
     if (!parsed.success) {
       return { success: false as const, error: formatZodError(parsed.error) };
+    }
+
+    if (recurring) {
+      const day = recurring.dayOfMonth;
+      const months = recurring.months;
+      if (!Number.isInteger(day) || day < 1 || day > 31) {
+        return { success: false as const, error: 'recurring.invalidDay' };
+      }
+      if (months !== null && (!Number.isInteger(months) || months < 1 || months > 120)) {
+        return { success: false as const, error: 'recurring.invalidMonths' };
+      }
     }
 
     const owner = await requireOwner();
     if (isAuthError(owner)) return { success: false as const, error: owner.error };
 
     const v = parsed.data;
-    const costEntry = await prisma.costEntry.create({
-      data: {
-        restaurantId: owner.restaurantId,
-        date: v.date,
-        type: v.type,
-        categoryId: v.categoryId || null,
-        amount: v.amount,
-        description: v.description,
-        createdById: owner.userId,
-      },
+
+    if (!recurring) {
+      const costEntry = await prisma.costEntry.create({
+        data: {
+          restaurantId: owner.restaurantId,
+          date: v.date,
+          type: v.type,
+          categoryId: v.categoryId || null,
+          amount: v.amount,
+          description: v.description,
+          createdById: owner.userId,
+        },
+      });
+      return { success: true, data: costEntry };
+    }
+
+    // A fixed monthly cost: the template, and this month's entry booked from
+    // it in the same transaction, so the first month cannot be booked twice
+    // or not at all.
+    const startKey = v.date.toISOString().slice(0, 10);
+    const endKey = recurring.months === null
+      ? null
+      : endDateFor(startKey, recurring.dayOfMonth, recurring.months);
+    const start = new Date(`${startKey}T00:00:00Z`);
+
+    const costEntry = await prisma.$transaction(async (tx) => {
+      const template = await tx.recurringCost.create({
+        data: {
+          restaurantId: owner.restaurantId,
+          type: v.type,
+          categoryId: v.categoryId || null,
+          amount: v.amount,
+          description: v.description,
+          dayOfMonth: recurring.dayOfMonth,
+          startDate: start,
+          endDate: endKey ? new Date(`${endKey}T00:00:00Z`) : null,
+          lastGeneratedDate: start,
+          // A one-month "repeat" is over as soon as it is booked.
+          active: endKey !== startKey,
+          createdById: owner.userId,
+        },
+      });
+      return tx.costEntry.create({
+        data: {
+          restaurantId: owner.restaurantId,
+          date: start,
+          type: v.type,
+          categoryId: v.categoryId || null,
+          amount: v.amount,
+          description: v.description,
+          createdById: owner.userId,
+          recurringCostId: template.id,
+        },
+      });
     });
+
+    // A contract typed in with a start date months back fills in the
+    // months since, rather than waiting for the next dashboard load.
+    await bookDueRecurringCosts(owner.restaurantId);
 
     return { success: true, data: costEntry };
   } catch (error: unknown) {
@@ -586,6 +653,8 @@ export async function getCostHistory(dateFrom: Date, dateTo: Date, type?: CostTy
       amount: Number(e.amount),
       description: e.description,
       createdBy: e.createdBy.name || e.createdBy.email,
+      // Booked automatically from a fixed monthly cost.
+      recurring: e.recurringCostId !== null,
     }));
 
     return { success: true, data };

@@ -35,9 +35,21 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.06.1';
+export const CHANGELOG_VERSION = '2026.10.06.2';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.06.2',
+    date: '2026-10-06',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Custos fixos que se lançam sozinhos todos os meses',
+        detail:
+          'Ao registar um custo em Custos › Inserir, marque "Repete todos os meses" — renda, internet, um contrato de 12 meses — e escolha o dia do mês e por quantos meses. A aplicação lança-o sozinha nesse dia, mesmo nos meses em que não abrir a aplicação. Por baixo do formulário vê os custos fixos em curso e pode mudar o valor ou terminá-los; os meses já lançados ficam como estão.',
+      },
+    ],
+  },
   {
     version: '2026.10.06.1',
     date: '2026-10-06',

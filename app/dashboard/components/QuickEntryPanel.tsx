@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Save, Loader2, Plus, X } from 'lucide-react';
+import { Save, Loader2, Plus, X, Repeat } from 'lucide-react';
 import { toast } from 'sonner';
 import { createCategory } from '../category-actions';
 import { useLanguage } from '@/lib/language-context';
+import { endDateFor } from '@/lib/recurring-costs';
+import { formatMoney } from '@/lib/format';
 
 type CostType = 'COGS' | 'OPEX';
 type CostTypeOrEmpty = CostType | '';
@@ -30,6 +32,12 @@ interface CostForm {
   categoryId: string;
   amount: string;
   description: string;
+  /** Book this cost every month as well: rent, internet, a contract. */
+  recurring: boolean;
+  /** Day of the month, 1–31. Empty follows the date. */
+  dayOfMonth: string;
+  /** How many months, counting this one. Empty runs until stopped. */
+  months: string;
 }
 
 interface QuickEntryPanelProps {
@@ -52,7 +60,7 @@ export default function QuickEntryPanel({
   activeTab, revenueForm, costForm, categories, isSubmitting,
   onRevenueChange, onCostChange, onSubmitRevenue, onSubmitCost, onCategoryCreated,
 }: QuickEntryPanelProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const filteredCategories = (categories ?? []).filter(c => c.type === costForm.type);
 
   // Adding a category without leaving the entry form: a cost that does not
@@ -302,6 +310,8 @@ export default function QuickEntryPanel({
             />
           </div>
 
+          <RecurringFields costForm={costForm} onCostChange={onCostChange} language={language} />
+
           <button type="submit" disabled={isSubmitting} className="cta-button w-full justify-center mt-2">
             {isSubmitting
               ? <><Loader2 className="w-4 h-4 animate-spin" />{t('owner.costForm.registering')}</>
@@ -310,6 +320,120 @@ export default function QuickEntryPanel({
           </button>
         </form>
       </div>
+    </div>
+  );
+}
+
+/**
+ * "Repeats every month": the cost being entered becomes the first of a fixed
+ * monthly cost — rent, internet, a 12-month contract — and the app books the
+ * rest on the chosen day.
+ *
+ * Closes with one sentence saying exactly what will happen, because a repeat
+ * set up wrong books a wrong cost every month until someone notices.
+ */
+function RecurringFields({
+  costForm, onCostChange, language,
+}: {
+  costForm: CostForm;
+  onCostChange: (form: CostForm) => void;
+  language: 'pt' | 'en';
+}) {
+  const { t } = useLanguage();
+  const dateValid = /^\d{4}-\d{2}-\d{2}$/.test(costForm.date);
+  const dateDay = dateValid ? Number(costForm.date.slice(8, 10)) : 1;
+  const day = Math.min(31, Math.max(1, parseInt(costForm.dayOfMonth, 10) || dateDay));
+  const months = costForm.months.trim() ? Math.max(1, parseInt(costForm.months, 10) || 1) : null;
+  const amount = parseFloat(costForm.amount) || 0;
+
+  const locale = language === 'pt' ? 'pt-PT' : 'en-GB';
+  const monthName = (key: string) =>
+    new Date(`${key}T00:00:00Z`).toLocaleDateString(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+  const end = dateValid && months ? endDateFor(costForm.date, day, months) : null;
+  // Months between the first date and today are booked at once.
+  const today = new Date().toISOString().slice(0, 10);
+  const catchesUp = dateValid && costForm.date.slice(0, 7) < today.slice(0, 7);
+
+  const set = (patch: Partial<CostForm>) => onCostChange({ ...costForm, ...patch });
+
+  return (
+    <div className={`rounded-xl border p-4 transition-colors ${costForm.recurring ? 'border-primary' : 'border-border'}`}>
+      <label className="flex items-start gap-3 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={costForm.recurring}
+          onChange={(e) => set({ recurring: e.target.checked })}
+          className="mt-0.5 w-4 h-4 accent-[hsl(var(--primary))]"
+        />
+        <span>
+          <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+            <Repeat className="w-3.5 h-3.5 text-primary-ink" aria-hidden="true" />
+            {t('recurring.checkbox')}
+          </span>
+          <span className="block text-xs text-muted-foreground mt-0.5">{t('recurring.checkboxHint')}</span>
+        </span>
+      </label>
+
+      {costForm.recurring && (
+        <div className="mt-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-xs font-medium text-muted-foreground block mb-2">{t('recurring.dayOfMonth')}</span>
+              <input
+                type="number" min={1} max={31} inputMode="numeric"
+                value={costForm.dayOfMonth}
+                placeholder={String(dateDay)}
+                onChange={(e) => set({ dayOfMonth: e.target.value })}
+                className="input-field"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-muted-foreground block mb-2">{t('recurring.months')}</span>
+              <input
+                type="number" min={1} max={120} inputMode="numeric"
+                value={costForm.months}
+                placeholder={t('recurring.noEnd')}
+                onChange={(e) => set({ months: e.target.value })}
+                className="input-field"
+              />
+            </label>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { label: t('recurring.months12'), value: '12' },
+              { label: t('recurring.months24'), value: '24' },
+              { label: t('recurring.noEnd'), value: '' },
+            ].map((chip) => (
+              <button
+                key={chip.label}
+                type="button"
+                onClick={() => set({ months: chip.value })}
+                aria-pressed={costForm.months === chip.value}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors
+                  ${costForm.months === chip.value
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:text-foreground'}`}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+
+          {dateValid && (
+            <p className="rounded-lg bg-muted p-3 text-xs text-muted-foreground leading-relaxed">
+              <strong className="text-foreground">{amount > 0 ? formatMoney(amount, { decimals: 2 }) : '—'}</strong>{' '}
+              {t('recurring.summaryOnDay')} <strong className="text-foreground">{day}</strong>{' '}
+              {t('recurring.summaryEachMonth')} {monthName(costForm.date)}
+              {end
+                ? <> {t('recurring.summaryUntil')} {monthName(end)} ({months} {months === 1 ? t('recurring.month') : t('recurring.monthsUnit')}).</>
+                : <>{t('recurring.summaryNoEnd')}</>}
+              {catchesUp && <> {t('recurring.summaryCatchUp')}</>}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

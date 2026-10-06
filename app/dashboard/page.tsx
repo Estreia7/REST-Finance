@@ -12,6 +12,7 @@ import {
   getMonthlyCategoryRevenue, getMonthlyCostsByCategory, getRevenueYears,
   getTourState,
 } from './actions';
+import { syncRecurringCosts } from './recurring-cost-actions';
 import RevenueHistoryPanel from './components/RevenueHistoryPanel';
 import CostHistoryPanel from './components/CostHistoryPanel';
 import ReceiptScanner from './components/ReceiptScanner';
@@ -43,6 +44,7 @@ import { getMonthProgress } from './product-actions';
 import type { MonthProgress } from '@/lib/trading-days';
 import MonthlyStackChart from './components/MonthlyStackChart';
 import RestaurantLogo   from './components/RestaurantLogo';
+import RecurringCostsPanel from './components/RecurringCostsPanel';
 import QuickEntryPanel  from './components/QuickEntryPanel';
 import QuickAddSheet, { type QuickAddKind, type QuickAddMethod } from './components/QuickAddSheet';
 import StaffPanel       from './components/StaffPanel';
@@ -151,11 +153,17 @@ function DashboardPageInner() {
     date: new Date().toISOString().split('T')[0],
     dineInRevenue: '', takeawayRevenue: '', dineInTickets: '', takeawayTickets: '', notes: '',
   });
+  const emptyCostForm = () => ({
+    date: new Date().toISOString().split('T')[0],
+    type: '' as CostTypeOrEmpty, categoryId: '', amount: '', description: '',
+    // A fixed monthly cost: off by default, the day follows the date, and an
+    // empty number of months runs until stopped.
+    recurring: false, dayOfMonth: '', months: '',
+  });
   const [costForm, setCostForm] = useState<{
     date: string; type: CostTypeOrEmpty; categoryId: string; amount: string; description: string;
-  }>({
-    date: new Date().toISOString().split('T')[0], type: '', categoryId: '', amount: '', description: '',
-  });
+    recurring: boolean; dayOfMonth: string; months: string;
+  }>(emptyCostForm);
   const [staffEmail, setStaffEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -181,6 +189,11 @@ function DashboardPageInner() {
    */
   const loadData = useCallback(async (): Promise<boolean> => {
     try {
+      // Fixed monthly costs that have come due are booked first, so every
+      // figure read below already includes them. A failure here only delays
+      // them to the next load; it never stops the dashboard opening.
+      await syncRecurringCosts().catch(() => undefined);
+
       const results = await Promise.all([
         getRestaurant(),
         getStaff(),
@@ -358,13 +371,21 @@ function DashboardPageInner() {
       categoryId:  costForm.categoryId || undefined,
       amount:      parseFloat(costForm.amount) || 0,
       description: costForm.description,
+      recurring:   costForm.recurring
+        ? {
+            dayOfMonth: parseInt(costForm.dayOfMonth, 10) || new Date(costForm.date).getUTCDate(),
+            months: costForm.months.trim() ? parseInt(costForm.months, 10) : null,
+          }
+        : undefined,
     });
     if (result.success) {
-      toast.success(t('owner.notifications.costRegistered'));
-      setCostForm({ date: new Date().toISOString().split('T')[0], type: '', categoryId: '', amount: '', description: '' });
+      toast.success(costForm.recurring ? t('recurring.created') : t('owner.notifications.costRegistered'));
+      setCostForm(emptyCostForm());
       await loadData();
     } else {
-      toast.error(result.error || t('owner.notifications.errorRegisteringCost'));
+      // New errors come back as dictionary keys; older ones as sentences,
+      // which t() returns unchanged.
+      toast.error(result.error ? t(result.error) : t('owner.notifications.errorRegisteringCost'));
     }
     setIsSubmitting(false);
   };
@@ -671,18 +692,23 @@ function DashboardPageInner() {
                 ]}
               />
               {costSubView === 'entry' && (
-                <QuickEntryPanel
-                  activeTab="costs"
-                  revenueForm={revenueForm}
-                  costForm={costForm}
-                  categories={categories}
-                  isSubmitting={isSubmitting}
-                  onRevenueChange={setRevenueForm}
-                  onCostChange={setCostForm}
-                  onSubmitRevenue={handleSubmitRevenue}
-                  onSubmitCost={handleSubmitCost}
-                  onCategoryCreated={loadCategories}
-                />
+                <>
+                  <QuickEntryPanel
+                    activeTab="costs"
+                    revenueForm={revenueForm}
+                    costForm={costForm}
+                    categories={categories}
+                    isSubmitting={isSubmitting}
+                    onRevenueChange={setRevenueForm}
+                    onCostChange={setCostForm}
+                    onSubmitRevenue={handleSubmitRevenue}
+                    onSubmitCost={handleSubmitCost}
+                    onCategoryCreated={loadCategories}
+                  />
+                  {/* The fixed costs already running, under the form that
+                      creates them: where the owner looks to change or stop one. */}
+                  <RecurringCostsPanel refreshKey={dataVersion} onChanged={loadData} />
+                </>
               )}
               {costSubView === 'scan' && (
                 <div className="max-w-2xl">

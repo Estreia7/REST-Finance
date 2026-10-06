@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Loader2, X, Check, Calendar, Filter, Download } from 'lucide-react';
+import { Pencil, Trash2, Loader2, X, Check, Calendar, Filter, Download, Repeat } from 'lucide-react';
 import { getCostHistory, updateCostEntry, deleteCostEntry, getCategories } from '../actions';
 import { useLanguage } from '@/lib/language-context';
 import { downloadFile, exportFilename } from '@/lib/download-file';
@@ -16,6 +16,8 @@ interface CostEntry {
   amount: number;
   description: string | null;
   createdBy: string;
+  /** Booked automatically from a fixed monthly cost. */
+  recurring?: boolean;
 }
 
 interface Category {
@@ -238,7 +240,16 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
                       </>
                     ) : (
                       <>
-                        <td className="py-3 text-foreground font-medium">{fmtDate(entry.date)}</td>
+                        <td className="py-3 text-foreground font-medium">
+                          <span className="inline-flex items-center gap-1.5">
+                            {fmtDate(entry.date)}
+                            {/* A fixed monthly cost, booked by the app: marked so it
+                                is not mistaken for something typed twice. */}
+                            {entry.recurring && (
+                              <Repeat className="w-3 h-3 text-primary-ink" aria-label={t('recurring.bookedAutomatically')} />
+                            )}
+                          </span>
+                        </td>
                         <td className="py-3">
                           <span className={`badge ${entry.type === 'COGS' ? 'badge-warning' : 'badge-info'}`}>
                             {entry.type}
