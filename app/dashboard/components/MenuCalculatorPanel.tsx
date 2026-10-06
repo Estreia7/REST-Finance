@@ -17,6 +17,7 @@ import {
 import { formatMoneyExact, formatPercent } from '@/lib/format';
 import { useLanguage } from '@/lib/language-context';
 import CatalogueImport from './CatalogueImport';
+import MenuGraph from './MenuGraph';
 import InfoHint from '@/app/components/InfoHint';
 
 /**
@@ -83,7 +84,7 @@ export default function MenuCalculatorPanel() {
   const [data, setData] = useState<MenuData | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<'menu' | 'ingredients'>('menu');
+  const [view, setView] = useState<'menu' | 'ingredients' | 'map'>('menu');
 
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [addingItem, setAddingItem] = useState(false);
@@ -137,7 +138,7 @@ export default function MenuCalculatorPanel() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-1 p-1 rounded-xl bg-muted w-fit">
-        {([['menu', t('menuCalc.tabMenu')], ['ingredients', t('menuCalc.tabIngredients')]] as const).map(([value, label]) => (
+        {([['menu', t('menuCalc.tabMenu')], ['ingredients', t('menuCalc.tabIngredients')], ['map', t('menuGraph.title')]] as const).map(([value, label]) => (
           <button
             key={value}
             type="button"
@@ -152,7 +153,7 @@ export default function MenuCalculatorPanel() {
         ))}
       </div>
 
-      {view === 'menu' ? (
+      {view === 'map' ? <MenuGraph /> : view === 'menu' ? (
         items.length === 0 ? (
           <EmptyMenu
             hasIngredients={ingredients.length > 0}

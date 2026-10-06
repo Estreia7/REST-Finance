@@ -176,3 +176,62 @@ export async function commitCatalogueImport() {
     return { error: toClientError('Failed to import the catalogue', error, 'write') };
   }
 }
+
+/**
+ * The menu as a graph: dishes, ingredients, and what links them.
+ *
+ * One call for the whole map. It is a few hundred rows at most, and three
+ * round trips to draw one picture would show it building itself in pieces.
+ */
+export async function getMenuGraph() {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const [dishes, ingredients, lines] = await Promise.all([
+      prisma.menuItem.findMany({
+        where: { restaurantId: owner.restaurantId, deletedAt: null },
+        select: { id: true, name: true, category: true, monthlyVolume: true, priceGross: true },
+        orderBy: { name: 'asc' },
+      }),
+      prisma.ingredient.findMany({
+        where: { restaurantId: owner.restaurantId, deletedAt: null },
+        select: { id: true, name: true, unit: true, manualUnitCost: true, invoiceUnitCost: true },
+        orderBy: { name: 'asc' },
+      }),
+      prisma.recipeLine.findMany({
+        where: { menuItem: { restaurantId: owner.restaurantId, deletedAt: null } },
+        select: { menuItemId: true, ingredientId: true, quantity: true, unit: true },
+      }),
+    ]);
+
+    return {
+      success: true,
+      data: {
+        dishes: dishes.map((d) => ({
+          id: d.id,
+          name: d.name,
+          category: d.category,
+          monthlyVolume: d.monthlyVolume,
+          priceGross: Number(d.priceGross),
+        })),
+        ingredients: ingredients.map((i) => ({
+          id: i.id,
+          name: i.name,
+          unit: i.unit,
+          // Whether it has a cost at all, which is what decides if a dish
+          // above it can be costed. The figure itself belongs in Preços.
+          priced: i.manualUnitCost !== null || i.invoiceUnitCost !== null,
+        })),
+        lines: lines.map((l) => ({
+          menuItemId: l.menuItemId,
+          ingredientId: l.ingredientId,
+          quantity: Number(l.quantity),
+          unit: l.unit,
+        })),
+      },
+    };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to read the menu graph', error, 'read') };
+  }
+}

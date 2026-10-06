@@ -44,6 +44,12 @@ export const CHANGELOG: Release[] = [
     entries: [
       {
         kind: 'new',
+        title: 'O mapa da sua carta',
+        detail:
+          'Em Análises › Ementa há agora um mapa: cada prato ligado ao que leva, e os ingredientes partilhados a puxar os pratos uns para os outros — vê-se logo quando meia carta depende do mesmo pão. Os pratos ainda sem receita ficam de fora, sozinhos, a mostrar o que falta fazer. Abre no computador, onde há espaço para lhe mexer.',
+      },
+      {
+        kind: 'new',
         title: 'A sua carta vem do sistema de caixa',
         detail:
           'Na Ementa há agora um botão que traz os produtos que já importou das vendas: o que a cozinha compõe entra como prato com o preço real a que vende, e o que se compra tal como se vende — bebidas, molhos, ingredientes — entra em Preços à espera do custo das faturas. Mostra o que vai fazer antes de confirmar. Depois é só abrir cada prato e dizer o que leva.',
