@@ -7,6 +7,7 @@ import {
   netFromGross,
   suggestedPrice,
   classify,
+  recipeUnitsFor,
 } from '@/lib/menu-costing';
 
 const cod = { unit: 'kg', manualUnitCost: null, invoiceUnitCost: 12.5, wastePercent: 0 };
@@ -51,6 +52,22 @@ describe('unitFactor', () => {
     expect(unitFactor('g', 'un')).toBeNull();
     expect(unitFactor('ml', 'kg')).toBeNull();
     expect(unitFactor('un', 'kg')).toBeNull();
+  });
+});
+
+describe('recipeUnitsFor', () => {
+  it('offers the everyday unit first', () => {
+    expect(recipeUnitsFor('kg')).toEqual(['g', 'kg']);
+    expect(recipeUnitsFor('L')).toEqual(['ml', 'L']);
+    expect(recipeUnitsFor('un')).toEqual(['un']);
+  });
+
+  it('only offers units that convert', () => {
+    for (const purchase of ['kg', 'L', 'un']) {
+      for (const unit of recipeUnitsFor(purchase)) {
+        expect(unitFactor(unit, purchase)).not.toBeNull();
+      }
+    }
   });
 });
 

@@ -56,6 +56,19 @@ export function unitFactor(recipeUnit: string, purchaseUnit: string): number | n
   return null;
 }
 
+/**
+ * The recipe units that make sense for something bought in `purchaseUnit`,
+ * the everyday one first. Offering only these is what keeps "2 un of cheese
+ * bought by the kilo" from being typed in the first place.
+ */
+export function recipeUnitsFor(purchaseUnit: string): RecipeUnit[] {
+  const p = purchaseUnit.trim();
+  if (p === 'kg') return ['g', 'kg'];
+  if (p === 'L') return ['ml', 'L'];
+  if (p === 'un') return ['un'];
+  return [...RECIPE_UNITS];
+}
+
 export interface CostedIngredient {
   unit: string;
   /** Pinned by the owner; wins over the invoice when set. */

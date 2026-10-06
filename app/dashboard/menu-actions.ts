@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { normalizeProductName } from '@/lib/price-tracking';
-import { costMenuItem, classify, type RecipeLineInput } from '@/lib/menu-costing';
+import { costMenuItem, classify, RECIPE_UNITS, type RecipeLineInput } from '@/lib/menu-costing';
 
 /**
  * The menu calculator's server side.
@@ -330,48 +330,70 @@ export async function setRecipeLine(input: {
   quantity: number;
   unit: string;
 }) {
+  return addIngredientToItems({
+    menuItemIds: [input.menuItemId],
+    ingredientId: input.ingredientId,
+    quantity: input.quantity,
+    unit: input.unit,
+  });
+}
+
+/**
+ * Puts one ingredient into several dishes at once — the bun that goes into
+ * every burger, the cup that goes with every drink. A dish that already has
+ * the ingredient takes the new quantity, so the same action also corrects it
+ * across the menu.
+ */
+export async function addIngredientToItems(input: {
+  menuItemIds: string[];
+  ingredientId: string;
+  quantity: number;
+  unit: string;
+}) {
   const owner = await requireOwner();
   if (isAuthError(owner)) return fail(owner.error);
 
+  const ids = Array.from(new Set(input.menuItemIds)).slice(0, 500);
+  if (ids.length === 0) return fail('menuCalc.errNoDishes');
+
   const quantity = num(input.quantity);
-  if (quantity === null || quantity <= 0) return fail('Quantidade inválida');
-  if (!['g', 'kg', 'ml', 'L', 'un'].includes(input.unit)) return fail('Unidade inválida');
+  if (quantity === null || quantity <= 0) return fail('menuCalc.errQuantity');
+  if (!(RECIPE_UNITS as readonly string[]).includes(input.unit)) return fail('menuCalc.errUnit');
 
   // Both sides checked against this restaurant: a guessed uuid from another
   // restaurant must not become a line in this one's recipe.
-  const [item, ingredient] = await Promise.all([
-    prisma.menuItem.findFirst({
-      where: { id: input.menuItemId, restaurantId: owner.restaurantId, deletedAt: null },
-      select: { id: true },
+  const [items, ingredient] = await Promise.all([
+    prisma.menuItem.findMany({
+      where: { id: { in: ids }, restaurantId: owner.restaurantId, deletedAt: null },
+      select: { id: true, _count: { select: { recipeLines: true } } },
     }),
     prisma.ingredient.findFirst({
       where: { id: input.ingredientId, restaurantId: owner.restaurantId, deletedAt: null },
       select: { id: true },
     }),
   ]);
-  if (!item) return fail('Prato não encontrado');
-  if (!ingredient) return fail('Ingrediente não encontrado');
+  if (items.length !== ids.length) return fail('menuCalc.errDishNotFound');
+  if (!ingredient) return fail('menuCalc.errIngredientNotFound');
 
-  const count = await prisma.recipeLine.count({ where: { menuItemId: input.menuItemId } });
+  await prisma.$transaction(
+    items.map((item) =>
+      prisma.recipeLine.upsert({
+        where: {
+          menuItemId_ingredientId: { menuItemId: item.id, ingredientId: ingredient.id },
+        },
+        create: {
+          menuItemId: item.id,
+          ingredientId: ingredient.id,
+          quantity,
+          unit: input.unit,
+          sortOrder: item._count.recipeLines,
+        },
+        update: { quantity, unit: input.unit },
+      })
+    )
+  );
 
-  await prisma.recipeLine.upsert({
-    where: {
-      menuItemId_ingredientId: {
-        menuItemId: input.menuItemId,
-        ingredientId: input.ingredientId,
-      },
-    },
-    create: {
-      menuItemId: input.menuItemId,
-      ingredientId: input.ingredientId,
-      quantity,
-      unit: input.unit,
-      sortOrder: count,
-    },
-    update: { quantity, unit: input.unit },
-  });
-
-  return { success: true as const };
+  return { success: true as const, data: { count: items.length } };
 }
 
 export async function removeRecipeLine(menuItemId: string, ingredientId: string) {
@@ -382,7 +404,7 @@ export async function removeRecipeLine(menuItemId: string, ingredientId: string)
     where: { id: menuItemId, restaurantId: owner.restaurantId, deletedAt: null },
     select: { id: true },
   });
-  if (!item) return fail('Prato não encontrado');
+  if (!item) return fail('menuCalc.errDishNotFound');
 
   await prisma.recipeLine.deleteMany({ where: { menuItemId, ingredientId } });
   return { success: true as const };

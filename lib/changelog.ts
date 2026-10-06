@@ -35,9 +35,38 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.06.2';
+export const CHANGELOG_VERSION = '2026.10.06.3';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.06.3',
+    date: '2026-10-06',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'A ementa arrumada por secções, com pesquisa',
+        detail:
+          'Em Análises › Ementa os pratos aparecem agrupados pelas secções da carta — Menus, Hambúrgueres, Bebidas — com atalhos no topo para saltar para cada uma e uma caixa para procurar um prato pelo nome.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Os ingredientes de cada prato à vista, para mexer ali mesmo',
+        detail:
+          'Já não é preciso abrir o prato: as quantidades mudam-se na própria lista, e para juntar um ingrediente basta começar a escrever o nome e escolhê-lo. Só aparecem as unidades que fazem sentido para o que está a comprar.',
+      },
+      {
+        kind: 'new',
+        title: 'Um ingrediente em vários pratos de uma vez',
+        detail:
+          'Carregue em Selecionar, marque os pratos — ou uma secção inteira — e adicione o pão, o molho ou o copo a todos de uma só vez.',
+      },
+      {
+        kind: 'fix',
+        title: 'A quantidade volta a ver-se quando junta um ingrediente',
+        detail: 'A caixa da unidade ocupava a linha toda e escondia o número que estava a escrever.',
+      },
+    ],
+  },
   {
     version: '2026.10.06.2',
     date: '2026-10-06',

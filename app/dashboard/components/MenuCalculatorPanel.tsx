@@ -1,21 +1,22 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useId, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   Loader2, Plus, Trash2, Pencil, X, Check, ChefHat, Carrot,
-  AlertTriangle, TrendingUp, Receipt, Tag,
+  AlertTriangle, Receipt, Tag, Search, ListChecks,
 } from 'lucide-react';
 import {
   getMenu, saveIngredient, deleteIngredient,
-  saveMenuItem, deleteMenuItem, setRecipeLine, removeRecipeLine,
+  saveMenuItem, deleteMenuItem, setRecipeLine, removeRecipeLine, addIngredientToItems,
 } from '../menu-actions';
 import {
-  VAT_RATES, PURCHASE_UNITS, RECIPE_UNITS, suggestedPrice,
+  VAT_RATES, PURCHASE_UNITS, RECIPE_UNITS, suggestedPrice, recipeUnitsFor,
   type MenuClass, type CostedLine,
 } from '@/lib/menu-costing';
 import { formatMoneyExact, formatPercent } from '@/lib/format';
 import { useLanguage } from '@/lib/language-context';
+import { translateError } from '@/lib/error-messages';
 import CatalogueImport from './CatalogueImport';
 import MenuGraph from './MenuGraph';
 import InfoHint from '@/app/components/InfoHint';
@@ -79,8 +80,40 @@ interface MenuData {
 /** Portuguese guidance puts restaurant food cost at 25–35% of net sales. */
 const TARGET_FOOD_COST = 30;
 
+/**
+ * The compact field used inside the dish cards. Not `.input-field`: that one
+ * is `width: 100%` outside any layer, so it beats a `w-20` and a unit select
+ * ends up eating the whole row while the quantity beside it collapses to
+ * nothing.
+ */
+const FIELD =
+  'h-10 sm:h-9 rounded-lg border border-border bg-input px-2.5 text-sm text-foreground ' +
+  'placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 ' +
+  'focus:border-primary/50 disabled:opacity-50 transition-colors';
+
+/** Case- and accent-blind, so "pao" finds "Pão Hamburguer". */
+function searchKey(value: string): string {
+  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+/** A positive quantity, read the way it is typed here: "0,5" as well as "0.5". */
+function parseQuantity(value: string): number | null {
+  const n = Number(value.replace(',', '.').trim());
+  return value.trim() !== '' && Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function formatQuantity(value: number, language: string): string {
+  const s = String(Number(value.toFixed(3)));
+  return language === 'pt' ? s.replace('.', ',') : s;
+}
+
+/** Ingredient cost per purchase unit, invoice or pinned, for the picker. */
+function unitCostOf(ing: Ingredient): number | null {
+  return ing.manualUnitCost ?? ing.invoiceUnitCost;
+}
+
 export default function MenuCalculatorPanel() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [data, setData] = useState<MenuData | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -88,40 +121,51 @@ export default function MenuCalculatorPanel() {
 
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [addingItem, setAddingItem] = useState(false);
-  const [recipeFor, setRecipeFor] = useState<MenuItem | null>(null);
   const [editingIngredient, setEditingIngredient] = useState<Ingredient | null>(null);
   const [addingIngredient, setAddingIngredient] = useState(false);
+  const [newIngredientName, setNewIngredientName] = useState('');
+
+  const [query, setQuery] = useState('');
+  const [section, setSection] = useState<string | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   const load = useCallback(() => {
     setLoading(true);
     getMenu().then((r) => {
       if (r.success) setData(r.data as unknown as MenuData);
-      else toast.error(r.error);
+      else toast.error(translateError(language, r.error));
       setLoading(false);
     });
-  }, []);
+  }, [language]);
 
   useEffect(() => { load(); }, [load]);
 
-  const run = async (fn: () => Promise<{ success: boolean; error?: string }>, okMsg?: string) => {
+  const run = async (
+    fn: () => Promise<{ success: boolean; error?: string }>,
+    okMsg?: string
+  ): Promise<boolean> => {
     setBusy(true);
     const result = await fn();
     if (result.success) {
       if (okMsg) toast.success(okMsg);
       load();
     } else {
-      toast.error(result.error || t('menuCalc.saveFailed'));
+      toast.error(result.error ? translateError(language, result.error) : t('menuCalc.saveFailed'));
     }
     setBusy(false);
-    return result;
+    return result.success;
   };
 
-  // Keep the open recipe dialog in step with a reload.
-  useEffect(() => {
-    if (!recipeFor || !data) return;
-    const fresh = data.items.find((i) => i.id === recipeFor.id);
-    if (fresh && fresh !== recipeFor) setRecipeFor(fresh);
-  }, [data, recipeFor]);
+  const createIngredient = (name: string) => {
+    setNewIngredientName(name);
+    setAddingIngredient(true);
+  };
+
+  const stopSelecting = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
 
   if (loading && !data) {
     return (
@@ -134,6 +178,41 @@ export default function MenuCalculatorPanel() {
 
   const items = data?.items ?? [];
   const ingredients = data?.ingredients ?? [];
+  const ingredientById = new Map(ingredients.map((i) => [i.id, i]));
+
+  // Sections in the order the menu itself has them; dishes without one last.
+  const sectionOf = (item: MenuItem) => item.category?.trim() || '';
+  const sectionCounts = new Map<string, number>();
+  for (const item of items) {
+    const key = sectionOf(item);
+    sectionCounts.set(key, (sectionCounts.get(key) ?? 0) + 1);
+  }
+  const sections = Array.from(sectionCounts.keys()).sort((a, b) =>
+    a === '' ? 1 : b === '' ? -1 : 0
+  );
+  const sectionLabel = (key: string) => key || t('menuCalc.noSection');
+
+  const q = searchKey(query);
+  const visible = items.filter(
+    (item) =>
+      (section === null || sectionOf(item) === section) &&
+      (q === '' || searchKey(item.name).includes(q))
+  );
+  const groups = sections
+    .map((key) => ({ key, items: visible.filter((i) => sectionOf(i) === key) }))
+    .filter((g) => g.items.length > 0);
+
+  const selectedIds = items.filter((i) => selected.has(i.id)).map((i) => i.id);
+
+  const toggle = (ids: string[], on: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
 
   return (
     <div className="space-y-4">
@@ -164,24 +243,155 @@ export default function MenuCalculatorPanel() {
         ) : (
           <>
             <MenuSummary items={items} />
-            <div className="space-y-2">
-              {items.map((item) => (
-                <DishCard
-                  key={item.id}
-                  item={item}
-                  onEdit={() => setEditingItem(item)}
-                  onRecipe={() => setRecipeFor(item)}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[12rem]">
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none"
+                  aria-hidden="true"
                 />
-              ))}
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Escape') setQuery(''); }}
+                  placeholder={t('menuCalc.searchDishes')}
+                  aria-label={t('menuCalc.searchAria')}
+                  enterKeyHint="search"
+                  className={`${FIELD} !h-10 w-full pl-9 pr-9`}
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery('')}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-muted-foreground hover:text-foreground"
+                    aria-label={t('menuCalc.clearSearch')}
+                  >
+                    <X className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+                aria-pressed={selecting}
+                className={`h-10 inline-flex items-center gap-1.5 px-3 rounded-lg border text-xs font-semibold transition-colors ${
+                  selecting
+                    ? 'border-primary/60 bg-primary/10 text-foreground'
+                    : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+                }`}
+              >
+                <ListChecks className="w-4 h-4" aria-hidden="true" />
+                {selecting ? t('menuCalc.doneSelecting') : t('menuCalc.select')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddingItem(true)}
+                className="cta-button !h-10 !py-0 !px-3 !text-xs"
+              >
+                <Plus className="w-4 h-4" aria-hidden="true" />
+                {t('menuCalc.addDish')}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setAddingItem(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-            >
-              <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-              {t('menuCalc.addDish')}
-            </button>
+
+            {sections.length > 1 && (
+              <div className="-mx-1 px-1 flex gap-1.5 overflow-x-auto no-scrollbar">
+                {[null, ...sections].map((key) => {
+                  const active = section === key;
+                  return (
+                    <button
+                      key={key ?? '__all'}
+                      type="button"
+                      onClick={() => setSection(key)}
+                      aria-pressed={active}
+                      className={`shrink-0 h-8 px-3 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
+                        active
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {key === null ? t('menuCalc.allSections') : sectionLabel(key)}
+                      <span className="ml-1.5 tabular-nums opacity-70">
+                        {key === null ? items.length : sectionCounts.get(key)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {groups.length === 0 ? (
+              <p className="card-glass p-6 text-center text-sm text-muted-foreground">
+                {t('menuCalc.noResults').replace('{q}', query.trim())}
+              </p>
+            ) : (
+              groups.map((group) => {
+                const ids = group.items.map((i) => i.id);
+                const allOn = ids.every((id) => selected.has(id));
+                return (
+                  <section key={group.key || '__none'} aria-label={sectionLabel(group.key)} className="space-y-2">
+                    <div className="flex items-center justify-between gap-3 pt-2">
+                      <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                        {sectionLabel(group.key)}
+                        <span className="ml-2 font-semibold tabular-nums opacity-60">{group.items.length}</span>
+                      </h3>
+                      {selecting && (
+                        <button
+                          type="button"
+                          onClick={() => toggle(ids, !allOn)}
+                          className="text-xs font-semibold text-primary-ink hover:underline"
+                        >
+                          {allOn ? t('menuCalc.clearSection') : t('menuCalc.selectSection')}
+                        </button>
+                      )}
+                    </div>
+                    {group.items.map((item) => (
+                      <DishCard
+                        key={item.id}
+                        item={item}
+                        ingredients={ingredients}
+                        ingredientById={ingredientById}
+                        busy={busy}
+                        selecting={selecting}
+                        isSelected={selected.has(item.id)}
+                        onToggle={(on) => toggle([item.id], on)}
+                        onEdit={() => setEditingItem(item)}
+                        onEditIngredient={setEditingIngredient}
+                        onCreateIngredient={createIngredient}
+                        onSetLine={(ingredientId, quantity, unit) =>
+                          run(() => setRecipeLine({ menuItemId: item.id, ingredientId, quantity, unit }))
+                        }
+                        onRemoveLine={(ingredientId) =>
+                          run(() => removeRecipeLine(item.id, ingredientId))
+                        }
+                      />
+                    ))}
+                  </section>
+                );
+              })
+            )}
+
+            {selecting && selectedIds.length > 0 && (
+              <>
+                {/* Room for the bar, so the last dish can still be reached. */}
+                <div className="h-48" aria-hidden="true" />
+                <BulkBar
+                  count={selectedIds.length}
+                  ingredients={ingredients}
+                  busy={busy}
+                  onCancel={stopSelecting}
+                  onCreateIngredient={createIngredient}
+                  onAdd={async (ingredientId, quantity, unit) => {
+                    const ok = await run(
+                      () => addIngredientToItems({ menuItemIds: selectedIds, ingredientId, quantity, unit }),
+                      t('menuCalc.addedToDishes').replace('{n}', String(selectedIds.length))
+                    );
+                    if (ok) stopSelecting();
+                    return ok;
+                  }}
+                />
+              </>
+            )}
           </>
         )
       ) : (
@@ -216,7 +426,8 @@ export default function MenuCalculatorPanel() {
       {(addingIngredient || editingIngredient) && (
         <IngredientDialog
           ingredient={editingIngredient}
-          onClose={() => { setAddingIngredient(false); setEditingIngredient(null); }}
+          initialName={newIngredientName}
+          onClose={() => { setAddingIngredient(false); setEditingIngredient(null); setNewIngredientName(''); }}
           onSave={async (input) => {
             await run(
               () => saveIngredient({ id: editingIngredient?.id, ...input }),
@@ -224,12 +435,12 @@ export default function MenuCalculatorPanel() {
             );
             setAddingIngredient(false);
             setEditingIngredient(null);
+            setNewIngredientName('');
           }}
           onDelete={
             editingIngredient
               ? async () => {
-                  const result = await run(() => deleteIngredient(editingIngredient.id));
-                  if (result.success) {
+                  if (await run(() => deleteIngredient(editingIngredient.id))) {
                     toast.success(t('menuCalc.ingredientRemoved'));
                     setEditingIngredient(null);
                   }
@@ -239,21 +450,6 @@ export default function MenuCalculatorPanel() {
         />
       )}
 
-      {recipeFor && (
-        <RecipeDialog
-          item={recipeFor}
-          ingredients={ingredients}
-          busy={busy}
-          onClose={() => setRecipeFor(null)}
-          onAddLine={(ingredientId, quantity, unit) =>
-            run(() => setRecipeLine({ menuItemId: recipeFor.id, ingredientId, quantity, unit }))
-          }
-          onRemoveLine={(ingredientId) =>
-            run(() => removeRecipeLine(recipeFor.id, ingredientId))
-          }
-          onNewIngredient={() => { setRecipeFor(null); setView('ingredients'); setAddingIngredient(true); }}
-        />
-      )}
     </div>
   );
 }
@@ -323,16 +519,27 @@ function MenuSummary({ items }: { items: MenuItem[] }) {
 }
 
 function DishCard({
-  item, onEdit, onRecipe,
+  item, ingredients, ingredientById, busy, selecting, isSelected,
+  onToggle, onEdit, onEditIngredient, onCreateIngredient, onSetLine, onRemoveLine,
 }: {
   item: MenuItem;
+  ingredients: Ingredient[];
+  ingredientById: Map<string, Ingredient>;
+  busy: boolean;
+  selecting: boolean;
+  isSelected: boolean;
+  onToggle: (on: boolean) => void;
   onEdit: () => void;
-  onRecipe: () => void;
+  onEditIngredient: (ingredient: Ingredient) => void;
+  onCreateIngredient: (name: string) => void;
+  onSetLine: (ingredientId: string, quantity: number, unit: string) => Promise<boolean>;
+  onRemoveLine: (ingredientId: string) => Promise<boolean>;
 }) {
   const { t } = useLanguage();
   const c = item.costing;
   const hasRecipe = c.lines.length > 0;
   const suggested = suggestedPrice(c.foodCost, TARGET_FOOD_COST, item.vatRate);
+  const used = new Set(c.lines.map((l) => l.ingredientId));
 
   const tone =
     !hasRecipe ? 'text-muted-foreground'
@@ -342,16 +549,23 @@ function DishCard({
       : 'text-red-400';
 
   return (
-    <div className="card-glass p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+    <article
+      className={`card-glass p-4 ${isSelected ? 'ring-2 ring-primary/70 border-primary/40' : ''}`}
+    >
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-3">
+        {selecting && (
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => onToggle(e.target.checked)}
+            aria-label={t('menuCalc.selectDishAria').replace('{name}', item.name)}
+            className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-primary"
+          />
+        )}
+
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h4 className="font-semibold text-foreground truncate">{item.name}</h4>
-            {item.category && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground">
-                {item.category}
-              </span>
-            )}
             {item.menuClass && <MenuClassBadge menuClass={item.menuClass} />}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
@@ -361,19 +575,9 @@ function DishCard({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={onEdit}
-          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted shrink-0"
-          aria-label={`${t('menuCalc.editAria')} ${item.name}`}
-        >
-          <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
-        </button>
-      </div>
-
-      {hasRecipe ? (
-        <>
-          <div className="mt-3 grid grid-cols-3 gap-3">
+        {/* Full width under the name on a phone; beside it from there up. */}
+        {hasRecipe && (
+          <div className="order-last basis-full grid grid-cols-3 gap-3 sm:order-none sm:basis-auto sm:gap-6 sm:text-right">
             <Figure label={t('menuCalc.dishCost')} value={formatMoneyExact(c.foodCost)} />
             <Figure
               label={t('menuCalc.grossMargin')}
@@ -386,46 +590,472 @@ function DishCard({
               tone={tone}
             />
           </div>
+        )}
 
-          {c.incomplete && (
-            <p className="mt-3 flex items-start gap-1.5 text-[11px] text-warning">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" aria-hidden="true" />
-              {c.missingCount}{' '}
-              {c.missingCount > 1
-                ? t('menuCalc.missingPricesPlural')
-                : t('menuCalc.missingPricesSingular')}
-            </p>
-          )}
+        <button
+          type="button"
+          onClick={onEdit}
+          className="p-1.5 -m-0.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted shrink-0"
+          aria-label={`${t('menuCalc.editAria')} ${item.name}`}
+        >
+          <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+        </button>
+      </div>
 
-          {c.grossProfit <= 0 && (
-            <p className="mt-3 flex items-start gap-1.5 text-[11px] text-red-400">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" aria-hidden="true" />
-              {t('menuCalc.dishLoses')}
-              {suggested && ` ${t('menuCalc.forTargetItWouldCost')} ${formatMoneyExact(suggested)}.`}
-            </p>
-          )}
-
-          {c.grossProfit > 0 && (c.foodCostPercent ?? 0) > 38 && suggested && (
-            <p className="mt-3 text-[11px] text-muted-foreground">
-              {t('menuCalc.forTargetPriceWouldBe')}{' '}
-              <strong className="text-foreground">{formatMoneyExact(suggested)}</strong>.
-            </p>
-          )}
-        </>
+      {hasRecipe ? (
+        <ul className="mt-3 rounded-lg border border-border-subtle divide-y divide-border-subtle">
+          {c.lines.map((line) => (
+            <RecipeLineRow
+              // Keyed on the saved values, so a reload resets the field.
+              key={`${line.ingredientId}:${line.quantity}:${line.unit}`}
+              line={line}
+              ingredient={ingredientById.get(line.ingredientId)}
+              onEditIngredient={onEditIngredient}
+              onSave={(quantity, unit) => onSetLine(line.ingredientId, quantity, unit)}
+              onRemove={() => onRemoveLine(line.ingredientId)}
+            />
+          ))}
+        </ul>
       ) : (
-        <p className="mt-3 text-xs text-muted-foreground">
-          {t('menuCalc.noRecipeYet')}
+        <p className="mt-3 text-xs text-muted-foreground">{t('menuCalc.noRecipeYet')}</p>
+      )}
+
+      <div className="mt-2">
+        <AddLine
+          ingredients={ingredients.filter((i) => !used.has(i.id))}
+          busy={busy}
+          onAdd={(ingredientId, quantity, unit) => onSetLine(ingredientId, quantity, unit)}
+          onCreateIngredient={onCreateIngredient}
+        />
+      </div>
+
+      {hasRecipe && c.incomplete && (
+        <p className="mt-3 flex items-start gap-1.5 text-[11px] text-warning">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" aria-hidden="true" />
+          {c.missingCount}{' '}
+          {c.missingCount > 1
+            ? t('menuCalc.missingPricesPlural')
+            : t('menuCalc.missingPricesSingular')}
         </p>
       )}
 
+      {hasRecipe && c.grossProfit <= 0 && (
+        <p className="mt-3 flex items-start gap-1.5 text-[11px] text-red-400">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" aria-hidden="true" />
+          {t('menuCalc.dishLoses')}
+          {suggested && ` ${t('menuCalc.forTargetItWouldCost')} ${formatMoneyExact(suggested)}.`}
+        </p>
+      )}
+
+      {hasRecipe && c.grossProfit > 0 && (c.foodCostPercent ?? 0) > 38 && suggested && (
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          {t('menuCalc.forTargetPriceWouldBe')}{' '}
+          <strong className="text-foreground">{formatMoneyExact(suggested)}</strong>.
+        </p>
+      )}
+    </article>
+  );
+}
+
+/**
+ * One ingredient in a dish, edited where it stands: the quantity saves when
+ * the field is left or Enter is pressed, the unit as soon as it changes.
+ */
+function RecipeLineRow({
+  line, ingredient, onEditIngredient, onSave, onRemove,
+}: {
+  line: CostedLine;
+  ingredient: Ingredient | undefined;
+  onEditIngredient: (ingredient: Ingredient) => void;
+  onSave: (quantity: number, unit: string) => Promise<boolean>;
+  onRemove: () => Promise<boolean>;
+}) {
+  const { t, language } = useLanguage();
+  const original = formatQuantity(line.quantity, language);
+  const [quantity, setQuantity] = useState(original);
+
+  // Only units that convert from how it is bought — plus the saved one when
+  // it does not, so the mistake is visible and can be changed.
+  const units: string[] = ingredient ? recipeUnitsFor(ingredient.unit) : [...RECIPE_UNITS];
+  if (!units.includes(line.unit)) units.push(line.unit);
+
+  const commit = async () => {
+    const value = parseQuantity(quantity);
+    if (value === null) { setQuantity(original); return; }
+    if (value === line.quantity) return;
+    if (!(await onSave(value, line.unit))) setQuantity(original);
+  };
+
+  return (
+    <li className="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-3 py-2">
+      <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
+        {ingredient ? (
+          <button
+            type="button"
+            onClick={() => onEditIngredient(ingredient)}
+            className="max-w-full truncate text-left text-sm text-foreground hover:text-primary-ink hover:underline"
+          >
+            {line.name}
+          </button>
+        ) : (
+          <span className="block truncate text-sm text-foreground">{line.name}</span>
+        )}
+        {line.problem && (
+          <span className="block text-[11px] text-warning">
+            {line.problem === 'no-price' ? t('menuCalc.noPriceLower') : t('menuCalc.badUnit')}
+          </span>
+        )}
+      </div>
+
+      <input
+        type="text"
+        inputMode="decimal"
+        value={quantity}
+        onChange={(e) => setQuantity(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+          if (e.key === 'Escape') { setQuantity(original); e.currentTarget.blur(); }
+        }}
+        aria-label={t('menuCalc.quantityOf').replace('{name}', line.name)}
+        className={`${FIELD} w-20 text-right tabular-nums`}
+      />
+      <UnitSelect
+        units={units}
+        value={line.unit}
+        invalid={line.problem === 'bad-unit'}
+        label={t('menuCalc.unitOf').replace('{name}', line.name)}
+        onChange={(unit) => {
+          const value = parseQuantity(quantity) ?? line.quantity;
+          void onSave(value, unit);
+        }}
+      />
+      <span className="ml-auto sm:ml-0 w-16 text-right text-sm font-semibold tabular-nums text-foreground">
+        {line.cost === null ? '—' : formatMoneyExact(line.cost)}
+      </span>
       <button
         type="button"
-        onClick={onRecipe}
-        className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+        onClick={() => void onRemove()}
+        className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-danger hover:bg-muted"
+        aria-label={`${t('menuCalc.removeAria')} ${line.name}`}
       >
-        <ChefHat className="w-3.5 h-3.5" aria-hidden="true" />
-        {hasRecipe ? `${t('menuCalc.recipe')} (${c.lines.length})` : t('menuCalc.createRecipe')}
+        <X className="w-3.5 h-3.5" aria-hidden="true" />
       </button>
+    </li>
+  );
+}
+
+function UnitSelect({
+  units, value, label, invalid = false, disabled = false, onChange,
+}: {
+  units: readonly string[];
+  value: string;
+  label: string;
+  invalid?: boolean;
+  disabled?: boolean;
+  onChange: (unit: string) => void;
+}) {
+  // Nothing to choose: say the unit rather than offer a one-item menu.
+  if (units.length === 1 && units[0] === value) {
+    return (
+      <span className="w-16 text-center text-sm text-muted-foreground" aria-label={label}>
+        {value}
+      </span>
+    );
+  }
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      aria-label={label}
+      aria-invalid={invalid || undefined}
+      className={`${FIELD} w-16 px-2 ${invalid ? '!border-warning text-warning' : ''}`}
+    >
+      {units.map((u) => (
+        <option key={u} value={u}>{u}</option>
+      ))}
+    </select>
+  );
+}
+
+/** Pick an ingredient by typing, say how much, add. Used per dish and in bulk. */
+function AddLine({
+  ingredients, busy, onAdd, onCreateIngredient, placement = 'down', submitLabel,
+}: {
+  ingredients: Ingredient[];
+  busy: boolean;
+  onAdd: (ingredientId: string, quantity: number, unit: string) => Promise<boolean>;
+  onCreateIngredient: (name: string) => void;
+  placement?: 'down' | 'up';
+  submitLabel?: string;
+}) {
+  const { t } = useLanguage();
+  const [picked, setPicked] = useState<Ingredient | null>(null);
+  const [quantity, setQuantity] = useState('');
+  const [unit, setUnit] = useState('g');
+  // Bumped after each add, which gives the picker a clean slate.
+  const [round, setRound] = useState(0);
+  const pickerRef = useRef<HTMLInputElement>(null);
+  const quantityRef = useRef<HTMLInputElement>(null);
+
+  const value = parseQuantity(quantity);
+  const canAdd = picked !== null && value !== null && !busy;
+
+  const submit = async () => {
+    if (!canAdd || !picked || value === null) return;
+    if (await onAdd(picked.id, value, unit)) {
+      setPicked(null);
+      setQuantity('');
+      setRound((r) => r + 1);
+      // Straight on to the next ingredient: a recipe is entered in a row.
+      requestAnimationFrame(() => pickerRef.current?.focus());
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <IngredientPicker
+        key={round}
+        inputRef={pickerRef}
+        ingredients={ingredients}
+        picked={picked}
+        placement={placement}
+        onPick={(ing) => {
+          setPicked(ing);
+          if (ing) {
+            setUnit(recipeUnitsFor(ing.unit)[0]);
+            requestAnimationFrame(() => quantityRef.current?.focus());
+          }
+        }}
+        onCreate={onCreateIngredient}
+      />
+      <div className="flex items-center gap-2">
+        <input
+          ref={quantityRef}
+          type="text"
+          inputMode="decimal"
+          value={quantity}
+          onChange={(e) => setQuantity(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void submit(); } }}
+          placeholder={picked?.unit === 'un' ? '1' : '150'}
+          aria-label={t('menuCalc.quantity')}
+          className={`${FIELD} w-20 text-right tabular-nums`}
+        />
+        <UnitSelect
+          units={picked ? recipeUnitsFor(picked.unit) : RECIPE_UNITS}
+          value={unit}
+          disabled={!picked}
+          label={t('menuCalc.unit')}
+          onChange={setUnit}
+        />
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={!canAdd}
+          className="cta-button !h-10 sm:!h-9 !py-0 !px-3 !text-xs shrink-0 disabled:opacity-40"
+          aria-label={submitLabel ? undefined : t('menuCalc.addToDish')}
+        >
+          <Plus className="w-4 h-4" aria-hidden="true" />
+          {submitLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A search box over the ingredients, in place of a select that has to be
+ * scrolled through. Arrow keys and Enter work; an unknown name offers to
+ * create it.
+ */
+function IngredientPicker({
+  ingredients, picked, onPick, onCreate, placement, inputRef,
+}: {
+  ingredients: Ingredient[];
+  picked: Ingredient | null;
+  onPick: (ingredient: Ingredient | null) => void;
+  onCreate: (name: string) => void;
+  placement: 'down' | 'up';
+  inputRef: React.RefObject<HTMLInputElement>;
+}) {
+  const { t } = useLanguage();
+  const listId = useId();
+  const [text, setText] = useState(picked?.name ?? '');
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+
+  // Only a real pick rewrites the text; clearing it is the typing itself.
+  useEffect(() => { if (picked) setText(picked.name); }, [picked]);
+
+  const q = searchKey(text);
+  const matches = useMemo(() => {
+    if (picked) return [];
+    const hits = q === '' ? ingredients : ingredients.filter((i) => searchKey(i.name).includes(q));
+    // Names that start with what was typed first; otherwise keep A–Z.
+    return [...hits]
+      .sort((a, b) => Number(searchKey(b.name).startsWith(q)) - Number(searchKey(a.name).startsWith(q)))
+      .slice(0, 50);
+  }, [ingredients, q, picked]);
+
+  const exists = ingredients.some((i) => searchKey(i.name) === q);
+  const canCreate = !picked && text.trim() !== '' && !exists;
+  const optionCount = matches.length + (canCreate ? 1 : 0);
+  const showList = open && !picked && (optionCount > 0 || text.trim() !== '');
+
+  useEffect(() => {
+    if (!showList) return;
+    document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: 'nearest' });
+  }, [active, showList, listId]);
+
+  const choose = (index: number) => {
+    if (index < matches.length) onPick(matches[index]);
+    else if (canCreate) onCreate(text.trim());
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative flex-1 min-w-[11rem]">
+      <Search
+        className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none"
+        aria-hidden="true"
+      />
+      <input
+        ref={inputRef}
+        type="text"
+        role="combobox"
+        aria-expanded={showList}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={showList && optionCount > 0 ? `${listId}-${active}` : undefined}
+        aria-label={t('menuCalc.addIngredient')}
+        placeholder={t('menuCalc.searchIngredient')}
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          setActive(0);
+          setOpen(true);
+          if (picked) onPick(null);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setOpen(true);
+            setActive((a) => Math.min(a + 1, Math.max(optionCount - 1, 0)));
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActive((a) => Math.max(a - 1, 0));
+          } else if (e.key === 'Enter' && showList && optionCount > 0) {
+            e.preventDefault();
+            choose(active);
+          } else if (e.key === 'Escape' && showList) {
+            e.stopPropagation();
+            setOpen(false);
+          }
+        }}
+        className={`${FIELD} w-full pl-8 ${picked ? 'font-medium' : ''}`}
+      />
+
+      {showList && (
+        <ul
+          id={listId}
+          role="listbox"
+          className={`absolute z-30 left-0 right-0 max-h-60 overflow-y-auto overscroll-contain
+                      rounded-lg border border-border bg-card shadow-lg py-1 ${
+                        placement === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'
+                      }`}
+        >
+          {matches.map((ing, i) => {
+            const cost = unitCostOf(ing);
+            return (
+              <li
+                key={ing.id}
+                id={`${listId}-${i}`}
+                role="option"
+                aria-selected={i === active}
+                onMouseDown={(e) => e.preventDefault()}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => choose(i)}
+                className={`flex items-center justify-between gap-3 px-3 py-2 text-sm cursor-pointer ${
+                  i === active ? 'bg-muted text-foreground' : 'text-foreground'
+                }`}
+              >
+                <span className="truncate">{ing.name}</span>
+                <span className={`shrink-0 text-[11px] tabular-nums ${cost === null ? 'text-warning' : 'text-muted-foreground'}`}>
+                  {cost === null ? t('menuCalc.noPriceLower') : `${formatMoneyExact(cost)}/${ing.unit}`}
+                </span>
+              </li>
+            );
+          })}
+          {canCreate && (
+            <li
+              id={`${listId}-${matches.length}`}
+              role="option"
+              aria-selected={active === matches.length}
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={() => setActive(matches.length)}
+              onClick={() => choose(matches.length)}
+              className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold text-primary-ink cursor-pointer ${
+                active === matches.length ? 'bg-muted' : ''
+              } ${matches.length > 0 ? 'border-t border-border-subtle' : ''}`}
+            >
+              <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+              {t('menuCalc.createNamed').replace('{name}', text.trim())}
+            </li>
+          )}
+          {optionCount === 0 && (
+            <li className="px-3 py-2 text-xs text-muted-foreground">{t('menuCalc.noIngredientMatch')}</li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Appears once dishes are ticked: one ingredient, added to all of them. */
+function BulkBar({
+  count, ingredients, busy, onAdd, onCreateIngredient, onCancel,
+}: {
+  count: number;
+  ingredients: Ingredient[];
+  busy: boolean;
+  onAdd: (ingredientId: string, quantity: number, unit: string) => Promise<boolean>;
+  onCreateIngredient: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const { t } = useLanguage();
+  const label =
+    count === 1 ? t('menuCalc.selectedOne') : t('menuCalc.selectedMany').replace('{n}', String(count));
+
+  return (
+    <div
+      role="region"
+      aria-label={label}
+      className="fixed z-40 inset-x-3 bottom-[calc(5rem+env(safe-area-inset-bottom))]
+                 md:bottom-6 md:left-1/2 md:right-auto md:w-[min(46rem,calc(100vw-3rem))] md:-translate-x-1/2
+                 rounded-2xl border border-primary/40 bg-card shadow-modal p-3 sm:p-4"
+    >
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <p className="text-sm font-semibold text-foreground" aria-live="polite">{label}</p>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+        >
+          {t('menuCalc.cancel')}
+        </button>
+      </div>
+      <AddLine
+        ingredients={ingredients}
+        busy={busy}
+        placement="up"
+        submitLabel={t('menuCalc.addToSelected')}
+        onAdd={onAdd}
+        onCreateIngredient={onCreateIngredient}
+      />
+      <p className="mt-2 text-[11px] text-muted-foreground">{t('menuCalc.bulkHint')}</p>
     </div>
   );
 }
@@ -686,9 +1316,11 @@ function DishDialog({
 }
 
 function IngredientDialog({
-  ingredient, onClose, onSave, onDelete,
+  ingredient, initialName = '', onClose, onSave, onDelete,
 }: {
   ingredient: Ingredient | null;
+  /** Typed into the recipe's search before deciding to create it. */
+  initialName?: string;
   onClose: () => void;
   onSave: (input: {
     name: string; unit: string; manualUnitCost: number | null; wastePercent: number;
@@ -696,7 +1328,7 @@ function IngredientDialog({
   onDelete?: () => void;
 }) {
   const { t } = useLanguage();
-  const [name, setName] = useState(ingredient?.name ?? '');
+  const [name, setName] = useState(ingredient?.name ?? initialName);
   const [unit, setUnit] = useState(ingredient?.unit ?? 'kg');
   const [useInvoice, setUseInvoice] = useState(ingredient ? ingredient.manualUnitCost === null : true);
   const [cost, setCost] = useState(
@@ -823,176 +1455,6 @@ function IngredientDialog({
         )}
       </div>
     </Dialog>
-  );
-}
-
-function RecipeDialog({
-  item, ingredients, busy, onClose, onAddLine, onRemoveLine, onNewIngredient,
-}: {
-  item: MenuItem;
-  ingredients: Ingredient[];
-  busy: boolean;
-  onClose: () => void;
-  onAddLine: (ingredientId: string, quantity: number, unit: string) => Promise<unknown>;
-  onRemoveLine: (ingredientId: string) => Promise<unknown>;
-  onNewIngredient: () => void;
-}) {
-  const { t } = useLanguage();
-  const [ingredientId, setIngredientId] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [unit, setUnit] = useState('g');
-
-  const used = new Set(item.costing.lines.map((l) => l.ingredientId));
-  const available = ingredients.filter((i) => !used.has(i.id));
-  const quantityValue = Number(quantity.replace(',', '.'));
-  const canAdd = ingredientId !== '' && Number.isFinite(quantityValue) && quantityValue > 0;
-
-  return (
-    <Dialog onClose={onClose} title={`${t('menuCalc.recipe')} — ${item.name}`}>
-      {item.costing.lines.length > 0 && (
-        <div className="-mx-5 mb-4 divide-y divide-border-subtle border-y border-border-subtle">
-          {item.costing.lines.map((line) => (
-            <div key={line.ingredientId} className="px-5 py-2.5 flex items-center gap-3">
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm text-foreground truncate">{line.name}</span>
-                <span className="block text-[11px] text-muted-foreground">
-                  {line.quantity} {line.unit}
-                  {line.problem === 'no-price' && (
-                    <span className="text-warning"> · {t('menuCalc.noPriceLower')}</span>
-                  )}
-                  {line.problem === 'bad-unit' && (
-                    <span className="text-warning"> · {t('menuCalc.badUnit')}</span>
-                  )}
-                  {line.source === 'invoice' && ` · ${t('menuCalc.fromInvoice')}`}
-                </span>
-              </span>
-              <span className="shrink-0 text-sm font-semibold text-foreground tabular-nums">
-                {line.cost === null ? '—' : formatMoneyExact(line.cost)}
-              </span>
-              <button
-                type="button"
-                onClick={() => onRemoveLine(line.ingredientId)}
-                disabled={busy}
-                className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-danger hover:bg-muted"
-                aria-label={`${t('menuCalc.removeAria')} ${line.name}`}
-              >
-                <X className="w-3.5 h-3.5" aria-hidden="true" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {available.length > 0 ? (
-        <div className="rounded-xl bg-muted/60 p-3">
-          <span className="text-xs text-muted-foreground block mb-2">{t('menuCalc.addIngredient')}</span>
-          <select
-            value={ingredientId}
-            onChange={(e) => {
-              setIngredientId(e.target.value);
-              // Follow how the thing is bought: something sold by the unit is
-              // counted in units, not weighed in grams.
-              const picked = ingredients.find((i) => i.id === e.target.value);
-              if (picked) setUnit(picked.unit === 'un' ? 'un' : picked.unit === 'L' ? 'ml' : 'g');
-            }}
-            className="input-field !py-2 !text-sm w-full"
-          >
-            <option value="">{t('menuCalc.choose')}</option>
-            {available.map((i) => (
-              <option key={i.id} value={i.id}>{i.name}</option>
-            ))}
-          </select>
-
-          <div className="mt-2 flex gap-2">
-            <input
-              type="text" inputMode="decimal" value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              placeholder="150" className="input-field !py-2 !text-sm flex-1"
-            />
-            <select
-              value={unit} onChange={(e) => setUnit(e.target.value)}
-              className="input-field !py-2 !text-sm w-24"
-            >
-              {RECIPE_UNITS.map((u) => (
-                <option key={u} value={u}>{u}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={async () => {
-                await onAddLine(ingredientId, quantityValue, unit);
-                setIngredientId('');
-                setQuantity('');
-              }}
-              disabled={!canAdd || busy}
-              className="cta-button !py-2 !px-3 !text-xs disabled:opacity-40 shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={onNewIngredient}
-          className="w-full rounded-xl border border-dashed border-border py-3 text-xs
-                     font-semibold text-primary hover:bg-muted transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5 inline mr-1" aria-hidden="true" />
-          {ingredients.length === 0
-            ? t('menuCalc.createFirstIngredient')
-            : t('menuCalc.createAnotherIngredient')}
-        </button>
-      )}
-
-      {/* The running total, where the owner is deciding. */}
-      {item.costing.lines.length > 0 && (
-        <div className="mt-4 rounded-xl bg-surface border border-border-subtle p-3 space-y-1.5 text-sm">
-          <Row label={t('menuCalc.menuPrice')} value={formatMoneyExact(item.costing.priceGross)} />
-          <Row
-            label={`${t('menuCalc.vat')} ${formatPercent(item.vatRate, 0)}`}
-            value={`-${formatMoneyExact(item.costing.vatAmount)}`}
-            tone="text-muted-foreground"
-          />
-          <Row label={t('menuCalc.priceExVat')} value={formatMoneyExact(item.costing.priceNet)} />
-          <Row
-            label={t('menuCalc.ingredientCost')}
-            value={`-${formatMoneyExact(item.costing.foodCost)}`}
-            tone="text-red-400"
-          />
-          <div className="pt-1.5 border-t border-border">
-            <Row
-              label={t('menuCalc.grossMargin')}
-              value={formatMoneyExact(item.costing.grossProfit)}
-              tone={item.costing.grossProfit <= 0 ? 'text-red-400' : 'text-green-400'}
-              bold
-            />
-          </div>
-          {item.costing.foodCostPercent !== null && (
-            <Row
-              label={t('menuCalc.foodCost')}
-              value={formatPercent(item.costing.foodCostPercent)}
-              tone="text-muted-foreground"
-            />
-          )}
-        </div>
-      )}
-    </Dialog>
-  );
-}
-
-function Row({
-  label, value, tone = 'text-foreground', bold = false,
-}: {
-  label: string; value: string; tone?: string; bold?: boolean;
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span className={`text-xs ${bold ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
-        {label}
-      </span>
-      <span className={`tabular-nums ${bold ? 'font-bold' : 'text-sm'} ${tone}`}>{value}</span>
-    </div>
   );
 }
 
