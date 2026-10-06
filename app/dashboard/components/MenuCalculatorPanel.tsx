@@ -16,6 +16,7 @@ import {
 } from '@/lib/menu-costing';
 import { formatMoneyExact, formatPercent } from '@/lib/format';
 import { useLanguage } from '@/lib/language-context';
+import CatalogueImport from './CatalogueImport';
 import InfoHint from '@/app/components/InfoHint';
 
 /**
@@ -157,6 +158,7 @@ export default function MenuCalculatorPanel() {
             hasIngredients={ingredients.length > 0}
             onAdd={() => setAddingItem(true)}
             onIngredients={() => setView('ingredients')}
+            onImported={load}
           />
         ) : (
           <>
@@ -455,11 +457,12 @@ function MenuClassBadge({ menuClass }: { menuClass: MenuClass }) {
 }
 
 function EmptyMenu({
-  hasIngredients, onAdd, onIngredients,
+  hasIngredients, onAdd, onIngredients, onImported,
 }: {
   hasIngredients: boolean;
   onAdd: () => void;
   onIngredients: () => void;
+  onImported: () => void;
 }) {
   const { t } = useLanguage();
   return (
@@ -470,6 +473,9 @@ function EmptyMenu({
         {t('menuCalc.emptyBody')}
       </p>
       <div className="mt-5 flex flex-wrap gap-2 justify-center">
+        {/* Before "add a dish", because a menu already in the till is
+            two hundred dishes nobody wants to type twice. */}
+        <CatalogueImport onImported={onImported} />
         <button type="button" onClick={onAdd} className="cta-button !py-2 !px-4 !text-sm">
           <Plus className="w-4 h-4" aria-hidden="true" />
           {t('menuCalc.addDish')}

@@ -44,6 +44,12 @@ export const CHANGELOG: Release[] = [
     entries: [
       {
         kind: 'new',
+        title: 'A sua carta vem do sistema de caixa',
+        detail:
+          'Na Ementa há agora um botão que traz os produtos que já importou das vendas: o que a cozinha compõe entra como prato com o preço real a que vende, e o que se compra tal como se vende — bebidas, molhos, ingredientes — entra em Preços à espera do custo das faturas. Mostra o que vai fazer antes de confirmar. Depois é só abrir cada prato e dizer o que leva.',
+      },
+      {
+        kind: 'new',
         title: 'Custos fixos que se lançam sozinhos todos os meses',
         detail:
           'Ao registar um custo em Custos › Inserir, marque "Repete todos os meses" — renda, internet, um contrato de 12 meses — e escolha o dia do mês e por quantos meses. A aplicação lança-o sozinha nesse dia, mesmo nos meses em que não abrir a aplicação. Por baixo do formulário vê os custos fixos em curso e pode mudar o valor ou terminá-los; os meses já lançados ficam como estão.',
