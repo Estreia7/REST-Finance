@@ -11,7 +11,7 @@ const SCAN_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 export async function POST(request: NextRequest) {
   try {
     // Check scanner availability
-    if (!isScannerAvailable()) {
+    if (!(await isScannerAvailable())) {
       return NextResponse.json(
         { error: 'Scanner de documentos indisponível. Contacte o suporte.' },
         { status: 503 }

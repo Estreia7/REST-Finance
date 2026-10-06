@@ -43,6 +43,12 @@ export const CHANGELOG: Release[] = [
     date: '2026-10-06',
     entries: [
       {
+        kind: 'fix',
+        title: 'Digitalizar faturas voltou a funcionar',
+        detail:
+          'Fotografar uma fatura dava "Scanner de documentos indisponível". O leitor estava a funcionar — era só a parte do cliente que procurava outro serviço, nunca ligado. Já lê as faturas e os relatórios do dia.',
+      },
+      {
         kind: 'improvement',
         title: 'Talões digitalizados com papel branco, sem sombras',
         detail:
