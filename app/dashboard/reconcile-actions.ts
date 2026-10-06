@@ -153,6 +153,23 @@ export async function commitReconciliation(input: {
     const vendor = await ensureVendor(owner.restaurantId, input.vendorName);
     const invoiceDate = new Date(input.invoiceDate);
 
+    // The same invoice photographed twice, or a save that was pressed
+    // twice, must not double the lines: an owner would see their beef
+    // costed at twice the weight and the price history would show a
+    // purchase that never happened. Matched on the document number, which
+    // is unique per supplier by law.
+    if (input.invoiceNumber?.trim()) {
+      const already = await prisma.invoiceItem.findFirst({
+        where: {
+          restaurantId: owner.restaurantId,
+          vendorId: vendor.id,
+          invoiceNumber: input.invoiceNumber.trim(),
+        },
+        select: { id: true },
+      });
+      if (already) return { error: 'reconcile.alreadyImported' };
+    }
+
     let linked = 0;
     let created = 0;
 

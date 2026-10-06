@@ -43,6 +43,24 @@ export const CHANGELOG: Release[] = [
     date: '2026-10-06',
     entries: [
       {
+        kind: 'improvement',
+        title: 'As quantidades das faturas de grossista',
+        detail:
+          'Numa fatura de cash-and-carry cada linha traz duas quantidades — o peso e o número de embalagens. Já distinguimos: a costelinha a 3,840 kg fica a 5,49 o quilo, e o ketchup de 5,7 kg fica como uma embalagem a 16,99. Antes trocávamos as colunas e o custo por quilo saía errado.',
+      },
+      {
+        kind: 'improvement',
+        title: 'A data e o número vêm do QR code da fatura',
+        detail:
+          'As faturas portuguesas certificadas trazem um QR com a data, o número do documento, o NIF e o total — assinados pelo sistema de faturação. Passámos a lê-lo: numa fotografia tremida, estes valores deixam de depender do que se consegue ver no papel.',
+      },
+      {
+        kind: 'fix',
+        title: 'A mesma fatura já não entra duas vezes',
+        detail:
+          'Se digitalizar a mesma fatura outra vez, avisamos em vez de duplicar as linhas — que fariam a mercadoria parecer o dobro do que foi comprada.',
+      },
+      {
         kind: 'new',
         title: 'Contabilidade: todas as faturas num sítio',
         detail:

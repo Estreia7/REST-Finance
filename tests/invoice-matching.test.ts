@@ -275,3 +275,52 @@ describe('finding ingredients counted twice', () => {
     ])).toEqual([]);
   });
 });
+
+describe('wholesale lines billed two different ways', () => {
+  /**
+   * From a real Makro invoice, which prints two quantities per line:
+   *
+   *   COSTELINHA   PR Unit/KG 5,490 | Unit/KG 3,840 | U.V. 21,08 | Quant 1
+   *   KETCHUP 5,7KG  PR Unit/KG 16,990 | Unit/KG 1  | U.V. 16,99 | Quant 1
+   *
+   * The first was billed by weight: 3,840 kg at 5,49. The second by the
+   * package: one tub that happens to hold 5,7 kg. Reading the pack column as
+   * the quantity would cost the pork at 21,08 a kilo; reading the pack size
+   * out of the description would cost the ketchup at 2,98 a kilo. Both are
+   * wrong, and both would quietly reprice every dish using them.
+   */
+  it('accepts a line billed by weight', () => {
+    expect(lineArithmeticHolds({
+      productName: 'COSTELINHA/PIANOS PORCO', quantity: 3.84, unit: 'kg', unitPrice: 5.49, total: 21.08,
+    })).toBe(true);
+  });
+
+  it('accepts a line billed by the package', () => {
+    expect(lineArithmeticHolds({
+      productName: 'KETCHUP 5,7KG HEINZ', quantity: 1, unit: 'un', unitPrice: 16.99, total: 16.99,
+    })).toBe(true);
+  });
+
+  it('catches the pack count read as a weight', () => {
+    // 1 × 5,49 is 5,49, not 21,08 — so the line does not add up and is
+    // flagged rather than saved as a cost per kilo four times too high.
+    expect(lineArithmeticHolds({
+      productName: 'COSTELINHA/PIANOS PORCO', quantity: 1, unit: 'kg', unitPrice: 5.49, total: 21.08,
+    })).toBe(false);
+  });
+
+  it('recovers the weight price when the pack count was read instead', () => {
+    // The total and the quantity are the two figures least likely to be
+    // misread, so the price comes back from them.
+    expect(impliedUnitPrice({
+      productName: 'COSTELINHA', quantity: 3.84, unit: 'kg', unitPrice: 0, total: 21.08,
+    })).toBeCloseTo(5.49, 2);
+  });
+
+  it('catches the pack size read out of the description', () => {
+    // "KETCHUP 5,7KG" is one tub, not 5,7 kg of ketchup.
+    expect(lineArithmeticHolds({
+      productName: 'KETCHUP 5,7KG HEINZ', quantity: 5.7, unit: 'kg', unitPrice: 16.99, total: 16.99,
+    })).toBe(false);
+  });
+});

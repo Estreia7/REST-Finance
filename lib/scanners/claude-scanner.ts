@@ -27,7 +27,7 @@ export const SCANNER_MODEL = 'claude-haiku-4-5';
  * prompt change rather than guessed at. Date-stamped rather than numbered:
  * the question asked later is always "what were we sending in September?".
  */
-export const PROMPT_VERSION = '2026-09-20.2';
+export const PROMPT_VERSION = '2026-10-06.1';
 
 /** Rough per-token prices, for showing what a run cost. USD per 1M tokens. */
 const PRICE_PER_MTOK = { input: 1.0, output: 5.0 } as const;
@@ -56,6 +56,9 @@ Rules that matter for Portuguese documents:
 - "IVA" is VAT. Totals labelled "Total", "Total a pagar" or "Importância Liquida" are the amount owed INCLUDING VAT unless the document says otherwise.
 - "NIF" or "Contribuinte" is the 9-digit tax number. Copy it exactly; do not reformat it.
 - A "fatura-recibo" is both invoice and receipt. Treat it as an invoice.
+- Wholesale invoices often print TWO quantities per line and two prices with them. A cash-and-carry line may read: PR Unit/KG 5,490 | Unit/KG 3,840 | Preço U.V. 21,08 | Quant 1 | Val.total 21,08. That is 3,840 kg bought at 5,49 per kilo, coming to 21,08 — not one unit at 21,08. Whenever a line is billed by weight or volume, report the weight or volume as the quantity and the price per kilo or litre as the unit price, so that quantity x unitPrice equals the line total. The pack count ("Quant 1") is how many packages, not how much was bought.
+- The weight column tells you which kind of line it is. On the same invoice: COSTELINHA with Unit/KG 3,840 was billed by weight, so it is 3,840 kg at 5,49 per kilo. KETCHUP 5,7KG with Unit/KG 1 was billed by the package, so it is 1 package at 16,99 — one tub that happens to hold 5,7 kg. Use unit "kg" for the first and "un" for the second.
+- A size inside the description — "KETCHUP 5,7KG", "TOPPING MORANGO 1KG" — is the pack size, never the quantity. Buying one 5,7 kg tub is quantity 1, unit "un", unitPrice 16,99. Do not report it as 5,7 kg, and do not divide the price by the pack size.
 - EVERY Portuguese invoice carries a document number, by law. Find it. It sits near the top, after a label like "Fatura", "Fatura Simplificada", "FT", "FS", "FR", "Documento n." or "Nº", and usually looks like PREFIX SERIES/NUMBER — for example "FS 4055TPV2/260014357" or "FR U005/267376". Copy the whole thing, exactly as printed. Do not drop the prefix, do not drop the series in the middle, and do not return only the digits after the slash. If the label and the number are on different lines, they still belong together.
 
 Read only what is printed. If a field is not on the page, omit it rather than inferring it — a missing invoice number is useful information, an invented one is not. If the photograph is too unclear to read a figure, omit that figure instead of guessing at it.`;
@@ -98,10 +101,22 @@ const COST_RECEIPT_SCHEMA = {
         type: 'object',
         properties: {
           product: { type: 'string', description: 'Description as printed.' },
-          quantity: { type: 'number' },
-          unit: { type: 'string', description: 'kg, L, un, cx — as printed.' },
-          unitPrice: { type: 'number', description: 'Price for one unit.' },
-          total: { type: 'number', description: 'Line total.' },
+          quantity: {
+            type: 'number',
+            description:
+              'How much was bought, in the unit below. A wholesale invoice often prints two quantities: a pack count and a weight. Give the one that matches the unit — for a line billed by weight, the weight (3.840), not the number of packs (1). The product description may also carry a size, such as "KETCHUP 5,7KG"; that is the pack size, not the quantity, unless no other quantity is printed.',
+          },
+          unit: {
+            type: 'string',
+            description:
+              'The unit the quantity is in: kg, L, un, cx. For a line billed per kilo this is kg even when the pack column says 1.',
+          },
+          unitPrice: {
+            type: 'number',
+            description:
+              'Price for one of the unit above, so that quantity x unitPrice equals the line total. For a line billed per kilo this is the price per kilo (5.49), not the price of the pack (21.08).',
+          },
+          total: { type: 'number', description: 'Line total, before VAT if the invoice shows both.' },
         },
         required: ['product', 'quantity', 'unitPrice', 'total'],
         additionalProperties: false,

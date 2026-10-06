@@ -943,6 +943,7 @@ export const translations = {
       saved: 'Guardadas {items} linhas, {linked} ligadas a ingredientes.',
       noLines: 'Esta fatura não tem linhas para conciliar.',
       noCostEntry: 'O lançamento de custo não foi encontrado.',
+      alreadyImported: 'Esta fatura já foi registada.',
     },
     scanner: {
       title: 'Digitalizar Recibo',
@@ -3301,6 +3302,7 @@ export const translations = {
       saved: 'Saved {items} lines, {linked} linked to ingredients.',
       noLines: 'This invoice has no lines to reconcile.',
       noCostEntry: 'The cost entry was not found.',
+      alreadyImported: 'This invoice has already been recorded.',
     },
     scanner: {
       title: 'Scan receipt',
