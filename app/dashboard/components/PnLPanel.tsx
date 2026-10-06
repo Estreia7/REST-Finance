@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 import { getPnLStatement } from '../actions';
 import AnnualPnL from './AnnualPnL';
-import { formatMoneyExact } from '@/lib/format';
+import { formatMoneyExact, formatPercent } from '@/lib/format';
 import InfoHint from '@/app/components/InfoHint';
 import Tooltip from '@/app/components/Tooltip';
 import { glossaryText, type GlossaryKey } from '@/lib/glossary';
@@ -18,6 +18,76 @@ interface PnLData {
   netIncome: number; netMargin: number;
   cogsBreakdown: Array<{ category: string; amount: number }>;
   opexBreakdown: Array<{ category: string; amount: number }>;
+}
+
+/**
+ * One detail line of the statement: a name, an amount, and what share it is.
+ *
+ * Two percentages, because the owner asks two different questions of the same
+ * figure and neither answers the other:
+ *
+ *   - **of revenue** is the one with a benchmark behind it. "Rent is 9.9% of
+ *     sales" can be held against what a Portuguese restaurant should pay;
+ *     "rent is 19.6% of overheads" cannot, because a restaurant with small
+ *     overheads would show a frightening number for a cheap rent.
+ *   - **of the section** is where the money inside that section actually
+ *     goes, which is the question when deciding what to cut.
+ *
+ * They are deliberately not given equal weight. Three figures of the same
+ * size on a phone row is a wall nobody reads, so the share of revenue sits
+ * beside the amount in the same ink as the rest of the line, and the share of
+ * the section follows it smaller and lighter — present when looked for, quiet
+ * when not.
+ */
+function DetailRow({
+  label,
+  amount,
+  revenue,
+  sectionTotal,
+  sectionLabel,
+  revenueLabel,
+  term,
+}: {
+  label: string;
+  amount: number;
+  revenue: number;
+  /** The section this line belongs to: COGS, OPEX, or revenue itself. */
+  sectionTotal: number;
+  /** Named in the title so "19.6%" says what it is a share of. */
+  sectionLabel: string;
+  /** Names the other denominator, for the same reason. */
+  revenueLabel: string;
+  /** Glossary entry, on the standard lines that have one. */
+  term?: GlossaryKey;
+}) {
+  const ofRevenue = revenue > 0 ? (amount / revenue) * 100 : null;
+  const ofSection = sectionTotal > 0 ? (amount / sectionTotal) * 100 : null;
+
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-2 pl-4">
+      <span className="text-sm text-muted-foreground [overflow-wrap:anywhere]">
+        {label}
+        {term && <InfoHint term={term} />}
+      </span>
+      <span className="flex items-baseline gap-2 shrink-0">
+        <span className="text-sm text-muted-foreground tabular-nums">{formatMoneyExact(amount)}</span>
+        {/* Fixed widths, so the percentages form columns the eye runs down
+            rather than drifting with the length of each amount. */}
+        <span
+          className="w-12 text-right text-sm text-muted-foreground tabular-nums"
+          title={ofRevenue === null ? undefined : `${formatPercent(ofRevenue)} ${revenueLabel}`}
+        >
+          {ofRevenue === null ? '' : formatPercent(ofRevenue)}
+        </span>
+        <span
+          className="w-12 text-right text-xs text-muted-foreground/60 tabular-nums"
+          title={ofSection === null ? undefined : `${formatPercent(ofSection)} ${sectionLabel}`}
+        >
+          {ofSection === null ? '' : formatPercent(ofSection)}
+        </span>
+      </span>
+    </div>
+  );
 }
 
 export default function PnLPanel() {
@@ -93,31 +163,78 @@ export default function PnLPanel() {
               {' '}— {months[month - 1]} {year}
             </h3>
 
+            {/* Two columns of percentages need saying which is which, or the
+                second reads as a stray number. Right-aligned over the columns
+                they label, and in the same widths. */}
+            <div className="flex items-baseline justify-end gap-2 pb-2 mb-1 border-b border-border-subtle">
+              <span className="w-12 text-right text-[10px] uppercase tracking-wider text-muted-foreground">
+                {t('pnl.ofRevenueShort')}
+              </span>
+              <span className="w-12 text-right text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                {t('pnl.ofSectionShort')}
+              </span>
+            </div>
+
             <div className="space-y-1">
               {/* Revenue */}
               <div className="flex justify-between py-3 border-b border-border-subtle">
                 <span className="font-bold text-foreground">Receita Total<InfoHint term="revenue" /></span>
-                <span className="font-bold text-foreground">{fmt(data.revenue)}</span>
+                <span className="flex items-baseline gap-2 shrink-0">
+                  <span className="font-bold text-foreground tabular-nums">{fmt(data.revenue)}</span>
+                  {/* The denominator everything below is measured
+                      against, so it is 100% by definition. */}
+                  <span className="w-12 text-right text-sm font-semibold text-muted-foreground tabular-nums">
+                    {data.revenue > 0 ? formatPercent(100) : ''}
+                  </span>
+                  <span className="w-12" aria-hidden="true" />
+                </span>
               </div>
-              <div className="flex justify-between py-2 pl-4">
-                <span className="text-sm text-muted-foreground">Local<InfoHint term="dineIn" /></span>
-                <span className="text-sm text-muted-foreground">{fmt(data.dineIn)}</span>
-              </div>
-              <div className="flex justify-between py-2 pl-4 border-b border-border-subtle">
-                <span className="text-sm text-muted-foreground">Takeaway<InfoHint term="takeaway" /></span>
-                <span className="text-sm text-muted-foreground">{fmt(data.takeaway)}</span>
+              {/* The two channels are a share of revenue and of revenue
+                  again, so the second column would repeat the first. Only the
+                  one that says something is drawn. */}
+              <DetailRow
+                label={t('pnl.dineIn')}
+                term="dineIn"
+                amount={data.dineIn}
+                revenue={data.revenue}
+                revenueLabel={t('pnl.ofRevenueLong')}
+                sectionTotal={0}
+                sectionLabel=""
+              />
+              <div className="border-b border-border-subtle">
+                <DetailRow
+                  label={t('pnl.takeaway')}
+                  term="takeaway"
+                  amount={data.takeaway}
+                  revenue={data.revenue}
+                  revenueLabel={t('pnl.ofRevenueLong')}
+                  sectionTotal={0}
+                  sectionLabel=""
+                />
               </div>
 
               {/* COGS */}
               <div className="flex justify-between py-3 border-b border-border-subtle">
                 <span className="font-semibold text-foreground">COGS<InfoHint term="cogs" /></span>
-                <span className="font-semibold text-red-400">-{fmt(data.cogs)}</span>
+                <span className="flex items-baseline gap-2 shrink-0">
+                  <span className="font-semibold text-red-400 tabular-nums">-{fmt(data.cogs)}</span>
+                  <span className="w-12 text-right text-sm font-semibold text-muted-foreground tabular-nums">
+                    {data.revenue > 0 ? formatPercent((data.cogs / data.revenue) * 100) : ''}
+                  </span>
+                  {/* A section is 100% of itself; saying so adds nothing. */}
+                  <span className="w-12" aria-hidden="true" />
+                </span>
               </div>
               {data.cogsBreakdown.map((item, i) => (
-                <div key={i} className="flex justify-between py-2 pl-4">
-                  <span className="text-sm text-muted-foreground">{item.category}</span>
-                  <span className="text-sm text-muted-foreground">{fmt(item.amount)}</span>
-                </div>
+                <DetailRow
+                  key={i}
+                  label={item.category}
+                  amount={item.amount}
+                  revenue={data.revenue}
+                  revenueLabel={t('pnl.ofRevenueLong')}
+                  sectionTotal={data.cogs}
+                  sectionLabel={t('pnl.ofCogs')}
+                />
               ))}
 
               {/* Gross Profit */}
@@ -136,13 +253,25 @@ export default function PnLPanel() {
               {/* OPEX */}
               <div className="flex justify-between py-3 border-b border-border-subtle">
                 <span className="font-semibold text-foreground">OPEX<InfoHint term="opex" /></span>
-                <span className="font-semibold text-red-400">-{fmt(data.opex)}</span>
+                <span className="flex items-baseline gap-2 shrink-0">
+                  <span className="font-semibold text-red-400 tabular-nums">-{fmt(data.opex)}</span>
+                  <span className="w-12 text-right text-sm font-semibold text-muted-foreground tabular-nums">
+                    {data.revenue > 0 ? formatPercent((data.opex / data.revenue) * 100) : ''}
+                  </span>
+                  {/* A section is 100% of itself; saying so adds nothing. */}
+                  <span className="w-12" aria-hidden="true" />
+                </span>
               </div>
               {data.opexBreakdown.map((item, i) => (
-                <div key={i} className="flex justify-between py-2 pl-4">
-                  <span className="text-sm text-muted-foreground">{item.category}</span>
-                  <span className="text-sm text-muted-foreground">{fmt(item.amount)}</span>
-                </div>
+                <DetailRow
+                  key={i}
+                  label={item.category}
+                  amount={item.amount}
+                  revenue={data.revenue}
+                  revenueLabel={t('pnl.ofRevenueLong')}
+                  sectionTotal={data.opex}
+                  sectionLabel={t('pnl.ofOpex')}
+                />
               ))}
 
               {/* Net Income */}

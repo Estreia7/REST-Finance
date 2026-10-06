@@ -35,9 +35,45 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.05.5';
+export const CHANGELOG_VERSION = '2026.10.06.1';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.06.1',
+    date: '2026-10-06',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'O peso de cada linha na demonstração de resultados',
+        detail:
+          'Cada linha do P&L mensal mostra agora duas percentagens: quanto pesa na receita — a que se compara com os valores de referência do setor — e quanto pesa dentro da sua secção, que diz onde o COGS ou as despesas se gastam de facto. Em Análises › P&L.',
+      },
+      {
+        kind: 'improvement',
+        title: 'No telemóvel, o P&L anual abre no ano',
+        detail:
+          'Carregar em Anual mostrava o mês em curso e os totais do ano não eram alcançáveis no telemóvel. Agora abre no ano inteiro, e o mês continua a um toque no mesmo seletor.',
+      },
+      {
+        kind: 'fix',
+        title: 'Os separadores já deslizam no telemóvel',
+        detail:
+          'Em Análises os últimos separadores ficavam fora do ecrã sem forma de lá chegar. A barra desliza, e o separador escolhido aparece sozinho.',
+      },
+      {
+        kind: 'fix',
+        title: 'Fechar os valores de um mês no gráfico',
+        detail:
+          'Nos gráficos do Painel, tocar num mês abria os valores e nada os fechava — tapavam o próprio gráfico. Agora fecham com um toque fora, ou tocando outra vez no mesmo mês.',
+      },
+      {
+        kind: 'fix',
+        title: 'Em Custos só se registam custos',
+        detail:
+          'O ecrã de digitalizar dentro de Custos deixava escolher Relatório Diário, que é receita. A escolha desapareceu: cada separador digitaliza o que lhe diz respeito.',
+      },
+    ],
+  },
   {
     version: '2026.10.05.5',
     date: '2026-10-05',

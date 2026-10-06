@@ -37,6 +37,7 @@ import MobileBottomNav  from './components/MobileBottomNav';
 import KPICards         from './components/KPICards';
 import RevenueChart     from './components/RevenueChart';
 import ProductsPanel    from './components/ProductsPanel';
+import SubTabs          from './components/SubTabs';
 import IngredientRanking from './components/IngredientRanking';
 import { getMonthProgress } from './product-actions';
 import type { MonthProgress } from '@/lib/trading-days';
@@ -611,12 +612,17 @@ function DashboardPageInner() {
 
           {activeTab === 'revenue' && (
             <>
-              <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle">
-                <button onClick={() => setRevenueSubView('entry')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'entry' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.entry')}</button>
-                <button onClick={() => setRevenueSubView('scan')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'scan' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.scan')}</button>
-                <button onClick={() => setRevenueSubView('history')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'history' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.history')}</button>
-                <button onClick={() => setRevenueSubView('import')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${revenueSubView === 'import' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.import')}</button>
-              </div>
+              <SubTabs
+                label={t('nav.revenue')}
+                active={revenueSubView}
+                onChange={setRevenueSubView}
+                tabs={[
+          { value: "entry", label: t('nav.entry') },
+          { value: "scan", label: t('nav.scan') },
+          { value: "history", label: t('nav.history') },
+          { value: "import", label: t('nav.import') },
+                ]}
+              />
               {revenueSubView === 'entry' && (
                 <QuickEntryPanel
                   activeTab="revenue"
@@ -654,11 +660,16 @@ function DashboardPageInner() {
 
           {activeTab === 'costs' && (
             <>
-              <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle">
-                <button onClick={() => setCostSubView('entry')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${costSubView === 'entry' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.entry')}</button>
-                <button onClick={() => setCostSubView('scan')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${costSubView === 'scan' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.scan')}</button>
-                <button onClick={() => setCostSubView('history')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${costSubView === 'history' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.history')}</button>
-              </div>
+              <SubTabs
+                label={t('nav.costs')}
+                active={costSubView}
+                onChange={setCostSubView}
+                tabs={[
+          { value: "entry", label: t('nav.entry') },
+          { value: "scan", label: t('nav.scan') },
+          { value: "history", label: t('nav.history') },
+                ]}
+              />
               {costSubView === 'entry' && (
                 <QuickEntryPanel
                   activeTab="costs"
@@ -691,16 +702,21 @@ function DashboardPageInner() {
 
           {activeTab === 'analytics' && (
             <>
-              <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle">
-                <button onClick={() => setAnalyticsSubView('pnl')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'pnl' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>P&L</button>
-                <button onClick={() => setAnalyticsSubView('compare')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'compare' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.comparison')}</button>
-                <button onClick={() => setAnalyticsSubView('tickets')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'tickets' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.tickets')}</button>
-                <button onClick={() => setAnalyticsSubView('products')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'products' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('products.tab')}</button>
-                <button onClick={() => setAnalyticsSubView('menu')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'menu' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.menuCalc')}</button>
-                <button onClick={() => setAnalyticsSubView('goals')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'goals' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.goals')}</button>
-                <button onClick={() => setAnalyticsSubView('report')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'report' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.report')}</button>
-                <button onClick={() => setAnalyticsSubView('prices')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${analyticsSubView === 'prices' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.prices')}</button>
-              </div>
+              <SubTabs
+                label={t('nav.analytics')}
+                active={analyticsSubView}
+                onChange={setAnalyticsSubView}
+                tabs={[
+                  { value: "pnl", label: 'P&L' },
+                  { value: "compare", label: t('nav.comparison') },
+                  { value: "tickets", label: t('nav.tickets') },
+                  { value: "products", label: t('products.tab') },
+                  { value: "menu", label: t('nav.menuCalc') },
+                  { value: "goals", label: t('nav.goals') },
+                  { value: "report", label: t('nav.report') },
+                  { value: "prices", label: t('nav.prices') },
+                ]}
+              />
               {analyticsSubView === 'pnl' && <PnLPanel />}
               {analyticsSubView === 'compare' && <ComparativePanel />}
               {analyticsSubView === 'tickets' && <TicketAnalysisPanel />}
@@ -741,10 +757,15 @@ function DashboardPageInner() {
             <div className="space-y-4">
               {/* Account and support live under the same tab: both are about
                   the account rather than the restaurant's numbers. */}
-              <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle">
-                <button onClick={() => setSettingsSubView('account')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${settingsSubView === 'account' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.account')}</button>
-                <button onClick={() => setSettingsSubView('support')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${settingsSubView === 'support' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{t('nav.support')}</button>
-              </div>
+              <SubTabs
+                label={t('nav.settings')}
+                active={settingsSubView}
+                onChange={setSettingsSubView}
+                tabs={[
+          { value: "account", label: t('nav.account') },
+          { value: "support", label: t('nav.support') },
+                ]}
+              />
 
               {settingsSubView === 'support' ? <SupportPanel /> : (
             <SettingsPanel

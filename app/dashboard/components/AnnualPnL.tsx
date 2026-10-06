@@ -8,7 +8,7 @@ import PnLDrilldown, { type DrillTarget } from './PnLDrilldown';
 import { rate, bandLabel, type PtBenchmarkKey } from '@/lib/benchmarks';
 import InfoHint from '@/app/components/InfoHint';
 import { type GlossaryKey } from '@/lib/glossary';
-import AnnualPnLMobile from './AnnualPnLMobile';
+import AnnualPnLMobile, { YEAR_VIEW } from './AnnualPnLMobile';
 import { useLanguage } from '@/lib/language-context';
 import {
   type Annual,
@@ -50,16 +50,16 @@ export default function AnnualPnL() {
    * month, top to bottom, every line present. The year stays on the desktop,
    * where twelve columns across is genuinely the better view.
    *
-   * Defaults to the current month when the chosen year is this one, and to
-   * December for a year already closed.
+   * Opens on the year, which is what the owner asked for by tapping "Anual".
+   * It used to open on a month, so tapping Anual showed October — the heading
+   * said one thing and the figures another. A month is one tap away in the
+   * same control.
    */
-  const [mobileMonth, setMobileMonth] = useState(
-    year === currentYear ? new Date().getMonth() : 11
-  );
+  const [mobileMonth, setMobileMonth] = useState<number>(YEAR_VIEW);
 
   useEffect(() => {
-    setMobileMonth(year === currentYear ? new Date().getMonth() : 11);
-  }, [year, currentYear]);
+    setMobileMonth(YEAR_VIEW);
+  }, [year]);
 
   useEffect(() => {
     setLoading(true);
@@ -302,12 +302,17 @@ export default function AnnualPnL() {
           </select>
         </div>
 
-        {/* ── Phone: one month, read top to bottom ───────────────────────── */}
+        {/* ── Phone: one period, read top to bottom ──────────────────────── */}
         <AnnualPnLMobile
           data={data}
           month={mobileMonth}
           onMonthChange={setMobileMonth}
-          onDrill={openDrill}
+          // The drill speaks in `null` for the whole year; the phone's period
+          // control speaks in YEAR_VIEW. Translated here rather than teaching
+          // one of them the other's vocabulary.
+          onDrill={(line, monthIndex) =>
+            openDrill(line, monthIndex === YEAR_VIEW ? null : monthIndex)
+          }
         />
 
         {/* ── Desktop: the full year across ──────────────────────────────

@@ -26,19 +26,28 @@ import {
  * share of. Shrinking the type only makes the same layout unreadable in a
  * smaller size.
  *
- * So the phone does not show the year. It shows one month, top to bottom,
- * every line present, which is how an owner reads the statement anyway: at the
- * end of service, checking the month they just finished. The year view stays
- * on the desktop, where twelve columns across is genuinely the better answer
- * and comparison across months is the point.
+ * So the phone shows one period at a time, top to bottom, every line present.
+ * The twelve-across grid stays on the desktop, where comparing months side by
+ * side is genuinely the better answer.
  *
- * Every figure keeps its share of that month's revenue beside it. Measuring a
- * September cost against annual takings would read absurdly small and tell the
- * owner nothing, so the denominator is the month, not the year.
+ * The period opens on the **year**, because that is what the owner asked for
+ * by tapping "Anual". An earlier version opened on a month, which meant
+ * tapping Anual and being shown October — the heading said one thing and the
+ * figures another, and the year's totals were not reachable on a phone at
+ * all. The month is still one tap away in the same control, since "how was
+ * September" is the other question this screen answers.
+ *
+ * Every figure keeps its share of that period's revenue beside it. Measuring
+ * a September cost against annual takings would read absurdly small, so the
+ * denominator follows the period on show.
  */
+
+/** The period in view: a month index, or the whole year. */
+export const YEAR_VIEW = -1;
 
 interface Props {
   data: Annual;
+  /** A month index 0-11, or YEAR_VIEW for the twelve months added up. */
   month: number;
   onMonthChange: (month: number) => void;
   onDrill: (line: Line, monthIndex: number) => void;
@@ -46,38 +55,41 @@ interface Props {
 
 export default function AnnualPnLMobile({ data, month, onMonthChange, onDrill }: Props) {
   const { t } = useLanguage();
-  const monthRevenue = data.revenue.months[month];
+  const isYear = month === YEAR_VIEW;
+  const periodRevenue = isYear ? data.revenue.total : data.revenue.months[month];
 
   return (
     <div className="md:hidden">
-      <MonthNav month={month} onChange={onMonthChange} />
+      <PeriodNav month={month} onChange={onMonthChange} />
 
-      {monthRevenue === 0 && (
+      {periodRevenue === 0 && (
         <p className="mt-4 rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
-          {t('annualPnl.noRevenueIn')} {t(`annualPnl.monthFull.${MONTH_KEYS[month]}`)}.{' '}
+          {isYear
+            ? `${t('annualPnl.noRevenueIn')} ${data.year}.`
+            : `${t('annualPnl.noRevenueIn')} ${t(`annualPnl.monthFull.${MONTH_KEYS[month]}`)}.`}{' '}
           {t('annualPnl.noRevenueHint')}
         </p>
       )}
 
       <div className="-mx-4 mt-4 divide-y divide-border-subtle border-y border-border-subtle">
-        <Row line={data.revenue} section="revenue" heading term="revenue" {...{ month, monthRevenue, onDrill }} />
-        <Row line={data.dineIn} section="revenue" indent term="dineIn" {...{ month, monthRevenue, onDrill }} />
+        <Row line={data.revenue} section="revenue" heading term="revenue" {...{ month, periodRevenue, onDrill }} />
+        <Row line={data.dineIn} section="revenue" indent term="dineIn" {...{ month, periodRevenue, onDrill }} />
         {/* What was sold, where the till has told us. Listed rather than
             collapsed: the phone shows one month at a time, so there is room,
             and a chevron to open four lines is a tap for nothing. */}
         {data.revenueLines.map((l) => (
-          <Row key={l.label} line={l} section="revenue" indent {...{ month, monthRevenue, onDrill }} />
+          <Row key={l.label} line={l} section="revenue" indent {...{ month, periodRevenue, onDrill }} />
         ))}
-        <Row line={data.takeaway} section="revenue" indent term="takeaway" {...{ month, monthRevenue, onDrill }} />
+        <Row line={data.takeaway} section="revenue" indent term="takeaway" {...{ month, periodRevenue, onDrill }} />
 
-        <Row line={data.cogs} section="cogs" heading term="cogs" {...{ month, monthRevenue, onDrill }} />
+        <Row line={data.cogs} section="cogs" heading term="cogs" {...{ month, periodRevenue, onDrill }} />
         {data.cogsLines.map((l) => (
-          <Row key={l.label} line={l} section="cogs" indent {...{ month, monthRevenue, onDrill }} />
+          <Row key={l.label} line={l} section="cogs" indent {...{ month, periodRevenue, onDrill }} />
         ))}
 
-        <Row line={data.labour} section="labour" heading term="labour" {...{ month, monthRevenue, onDrill }} />
+        <Row line={data.labour} section="labour" heading term="labour" {...{ month, periodRevenue, onDrill }} />
         {data.labourLines.map((l) => (
-          <Row key={l.label} line={l} section="labour" indent {...{ month, monthRevenue, onDrill }} />
+          <Row key={l.label} line={l} section="labour" indent {...{ month, periodRevenue, onDrill }} />
         ))}
 
         <Row
@@ -86,12 +98,12 @@ export default function AnnualPnLMobile({ data, month, onMonthChange, onDrill }:
           heading
           benchmark="primeCostPct"
           term="primeCost"
-          {...{ month, monthRevenue, onDrill }}
+          {...{ month, periodRevenue, onDrill }}
         />
 
-        <Row line={data.opex} section="opex" heading term="opex" {...{ month, monthRevenue, onDrill }} />
+        <Row line={data.opex} section="opex" heading term="opex" {...{ month, periodRevenue, onDrill }} />
         {data.opexLines.map((l) => (
-          <Row key={l.label} line={l} section="opex" indent {...{ month, monthRevenue, onDrill }} />
+          <Row key={l.label} line={l} section="opex" indent {...{ month, periodRevenue, onDrill }} />
         ))}
 
         <Row
@@ -101,12 +113,12 @@ export default function AnnualPnLMobile({ data, month, onMonthChange, onDrill }:
           benchmark="controllableIncomePct"
           higherIsBetter
           term="controllableIncome"
-          {...{ month, monthRevenue, onDrill }}
+          {...{ month, periodRevenue, onDrill }}
         />
 
-        <Row line={data.occupancy} section="occupancy" heading term="occupancy" {...{ month, monthRevenue, onDrill }} />
+        <Row line={data.occupancy} section="occupancy" heading term="occupancy" {...{ month, periodRevenue, onDrill }} />
         {data.occupancyLines.map((l) => (
-          <Row key={l.label} line={l} section="occupancy" indent {...{ month, monthRevenue, onDrill }} />
+          <Row key={l.label} line={l} section="occupancy" indent {...{ month, periodRevenue, onDrill }} />
         ))}
 
         <Row
@@ -116,7 +128,7 @@ export default function AnnualPnLMobile({ data, month, onMonthChange, onDrill }:
           benchmark="netIncomePct"
           higherIsBetter
           term="netIncome"
-          {...{ month, monthRevenue, onDrill }}
+          {...{ month, periodRevenue, onDrill }}
         />
       </div>
     </div>
@@ -124,29 +136,38 @@ export default function AnnualPnLMobile({ data, month, onMonthChange, onDrill }:
 }
 
 /**
- * The month stepper.
+ * The period stepper: the whole year, or one month of it.
+ *
+ * The year sits before January rather than in a separate control, so stepping
+ * left from January lands on it — the owner reads a month, wonders how the
+ * year is going, and the answer is one tap in the direction they were already
+ * going.
  *
  * Arrows rather than a dropdown alone: stepping back one month is the
- * overwhelmingly common move, and a twelve-item select turns that into a
- * two-tap operation for something that should be one tap. The month name is
- * itself a select, so jumping from October to March stays possible.
+ * overwhelmingly common move, and a thirteen-item select turns that into a
+ * two-tap operation for something that should be one tap. The name is itself
+ * a select, so jumping from October to March stays possible.
  *
  * Both arrows are 44px, the floor for a target meant to be hit with a thumb
  * while holding a phone one-handed.
  */
-function MonthNav({ month, onChange }: { month: number; onChange: (m: number) => void }) {
+function PeriodNav({ month, onChange }: { month: number; onChange: (m: number) => void }) {
   const { t } = useLanguage();
-  const step = (delta: number) => onChange(Math.min(11, Math.max(0, month + delta)));
+  // YEAR_VIEW is -1, so it already steps correctly at the bottom of the range.
+  const step = (delta: number) => onChange(Math.min(11, Math.max(YEAR_VIEW, month + delta)));
+
+  const arrow =
+    'w-11 h-11 shrink-0 rounded-xl border border-border flex items-center justify-center ' +
+    'text-muted-foreground disabled:opacity-30 active:bg-muted transition-colors ' +
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
   return (
     <div className="flex items-center gap-2">
       <button
         type="button"
         onClick={() => step(-1)}
-        disabled={month === 0}
-        className="w-11 h-11 shrink-0 rounded-xl border border-border flex items-center justify-center
-                   text-muted-foreground disabled:opacity-30 active:bg-muted transition-colors
-                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        disabled={month === YEAR_VIEW}
+        className={arrow}
         aria-label={t('annualPnl.previousMonth')}
       >
         <ChevronLeft className="w-5 h-5" aria-hidden="true" />
@@ -158,8 +179,9 @@ function MonthNav({ month, onChange }: { month: number; onChange: (m: number) =>
           onChange={(e) => onChange(Number(e.target.value))}
           className="w-full h-11 appearance-none rounded-xl bg-muted text-center text-sm font-semibold
                      text-foreground px-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label={t('annualPnl.month')}
+          aria-label={t('annualPnl.period')}
         >
+          <option value={YEAR_VIEW}>{t('annualPnl.wholeYear')}</option>
           {MONTH_KEYS.map((m, i) => (
             <option key={m} value={i}>{t(`annualPnl.monthFull.${m}`)}</option>
           ))}
@@ -174,9 +196,7 @@ function MonthNav({ month, onChange }: { month: number; onChange: (m: number) =>
         type="button"
         onClick={() => step(1)}
         disabled={month === 11}
-        className="w-11 h-11 shrink-0 rounded-xl border border-border flex items-center justify-center
-                   text-muted-foreground disabled:opacity-30 active:bg-muted transition-colors
-                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={arrow}
         aria-label={t('annualPnl.nextMonth')}
       >
         <ChevronRight className="w-5 h-5" aria-hidden="true" />
@@ -190,7 +210,7 @@ interface RowProps {
   section: Section;
   month: number;
   /** This month's revenue: the denominator for the share beside each figure. */
-  monthRevenue: number;
+  periodRevenue: number;
   onDrill: (line: Line, monthIndex: number) => void;
   heading?: boolean;
   indent?: boolean;
@@ -203,7 +223,7 @@ function Row({
   line,
   section,
   month,
-  monthRevenue,
+  periodRevenue,
   onDrill,
   heading = false,
   indent = false,
@@ -213,8 +233,11 @@ function Row({
 }: RowProps) {
   const { t } = useLanguage();
   const style = SECTION[section];
-  const amount = line.months[month];
-  const share = monthRevenue !== 0 ? (amount / monthRevenue) * 100 : null;
+  // The year's figure is the one the server already totalled, not a sum of
+  // the twelve done here: rounding each month and adding them drifts from
+  // the statement the desktop shows for the same year.
+  const amount = month === YEAR_VIEW ? line.total : line.months[month];
+  const share = periodRevenue !== 0 ? (amount / periodRevenue) * 100 : null;
 
   const health =
     benchmark && share !== null ? rate(benchmark, share / 100, { higherIsBetter }) : 'unknown';

@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useChartTheme } from '@/lib/chart-theme';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney, formatMoneyCompact } from '@/lib/format';
-import { ChartHeader, ChartLegend, TooltipCard, TooltipRow, barPath, monthLabel, useTooltipTrigger } from './chart-parts';
+import { ChartHeader, ChartLegend, TooltipCard, TooltipRow, barPath, monthLabel, useDismissableTooltip } from './chart-parts';
 
 /**
  * Revenue against costs, month by month.
@@ -45,7 +45,7 @@ export default function RevenueChart({
   availableYears = [],
 }: RevenueChartProps) {
   const chart = useChartTheme();
-  const tooltipTrigger = useTooltipTrigger();
+  const { plotRef, chartProps, tooltipProps } = useDismissableTooltip();
   const { t, language } = useLanguage();
 
   const points = data.map((d) => ({
@@ -94,77 +94,79 @@ export default function RevenueChart({
         ]}
       />
 
-      <ResponsiveContainer width="100%" height={240}>
-        <BarChart
-          data={points}
-          margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
-          // Two bars a month with a 2px gap between them; the space between
-          // months is wider than the bars, so each pair reads as one month.
-          barGap={2}
-          barCategoryGap="28%"
-        >
-          <CartesianGrid vertical={false} stroke={chart.grid} />
-          <XAxis
-            dataKey="label"
-            tick={{ fontSize: 11, fill: chart.axis }}
-            axisLine={false}
-            tickLine={false}
-            // All twelve on a laptop; on a phone the ones that would collide
-            // are dropped rather than drawn over each other.
-            interval="preserveStartEnd"
-            minTickGap={2}
-            tickMargin={8}
-          />
-          <YAxis
-            tick={{ fontSize: 11, fill: chart.axis }}
-            axisLine={false}
-            tickLine={false}
-            width={48}
-            tickFormatter={(v: number) => formatMoneyCompact(v)}
-          />
-          <Tooltip
-            trigger={tooltipTrigger}
-            cursor={{ fill: chart.grid, opacity: 0.35 }}
-            content={({ active, payload, label }) => {
-              if (!active || !payload?.length) return null;
-              const revenue = Number(payload.find((p) => p.dataKey === 'revenue')?.value ?? 0);
-              const costs = Number(payload.find((p) => p.dataKey === 'costs')?.value ?? 0);
-              const diff = revenue - costs;
-              return (
-                <TooltipCard title={`${label} ${year ?? ''}`.trim()}>
-                  <TooltipRow color={chart.data.revenue} label={t('charts.revenue')} value={formatMoney(revenue, { decimals: 2 })} />
-                  <TooltipRow color={chart.data.costs} label={t('charts.costs')} value={formatMoney(costs, { decimals: 2 })} />
-                  <div className="pt-1.5 mt-1.5 border-t border-border-subtle">
-                    <TooltipRow
-                      label={t('charts.difference')}
-                      value={`${diff < 0 ? '−' : '+'}${formatMoney(Math.abs(diff), { decimals: 2 })}`}
-                      strong
-                    />
-                  </div>
-                </TooltipCard>
-              );
-            }}
-          />
-          <Bar
-            dataKey="revenue"
-            name={t('charts.revenue')}
-            fill={chart.data.revenue}
-            maxBarSize={14}
-            shape={(p: { x?: number; y?: number; width?: number; height?: number; fill?: string }) => (
-              <path d={barPath(p.x ?? 0, p.y ?? 0, p.width ?? 0, p.height ?? 0, true)} fill={p.fill} />
-            )}
-          />
-          <Bar
-            dataKey="costs"
-            name={t('charts.costs')}
-            fill={chart.data.costs}
-            maxBarSize={14}
-            shape={(p: { x?: number; y?: number; width?: number; height?: number; fill?: string }) => (
-              <path d={barPath(p.x ?? 0, p.y ?? 0, p.width ?? 0, p.height ?? 0, true)} fill={p.fill} />
-            )}
-          />
-        </BarChart>
-      </ResponsiveContainer>
+      <div ref={plotRef}>
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart {...chartProps}
+            data={points}
+            margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+            // Two bars a month with a 2px gap between them; the space between
+            // months is wider than the bars, so each pair reads as one month.
+            barGap={2}
+            barCategoryGap="28%"
+          >
+            <CartesianGrid vertical={false} stroke={chart.grid} />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 11, fill: chart.axis }}
+              axisLine={false}
+              tickLine={false}
+              // All twelve on a laptop; on a phone the ones that would collide
+              // are dropped rather than drawn over each other.
+              interval="preserveStartEnd"
+              minTickGap={2}
+              tickMargin={8}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: chart.axis }}
+              axisLine={false}
+              tickLine={false}
+              width={48}
+              tickFormatter={(v: number) => formatMoneyCompact(v)}
+            />
+            <Tooltip
+              {...tooltipProps}
+              cursor={{ fill: chart.grid, opacity: 0.35 }}
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
+                const revenue = Number(payload.find((p) => p.dataKey === 'revenue')?.value ?? 0);
+                const costs = Number(payload.find((p) => p.dataKey === 'costs')?.value ?? 0);
+                const diff = revenue - costs;
+                return (
+                  <TooltipCard title={`${label} ${year ?? ''}`.trim()}>
+                    <TooltipRow color={chart.data.revenue} label={t('charts.revenue')} value={formatMoney(revenue, { decimals: 2 })} />
+                    <TooltipRow color={chart.data.costs} label={t('charts.costs')} value={formatMoney(costs, { decimals: 2 })} />
+                    <div className="pt-1.5 mt-1.5 border-t border-border-subtle">
+                      <TooltipRow
+                        label={t('charts.difference')}
+                        value={`${diff < 0 ? '−' : '+'}${formatMoney(Math.abs(diff), { decimals: 2 })}`}
+                        strong
+                      />
+                    </div>
+                  </TooltipCard>
+                );
+              }}
+            />
+            <Bar
+              dataKey="revenue"
+              name={t('charts.revenue')}
+              fill={chart.data.revenue}
+              maxBarSize={14}
+              shape={(p: { x?: number; y?: number; width?: number; height?: number; fill?: string }) => (
+                <path d={barPath(p.x ?? 0, p.y ?? 0, p.width ?? 0, p.height ?? 0, true)} fill={p.fill} />
+              )}
+            />
+            <Bar
+              dataKey="costs"
+              name={t('charts.costs')}
+              fill={chart.data.costs}
+              maxBarSize={14}
+              shape={(p: { x?: number; y?: number; width?: number; height?: number; fill?: string }) => (
+                <path d={barPath(p.x ?? 0, p.y ?? 0, p.width ?? 0, p.height ?? 0, true)} fill={p.fill} />
+              )}
+            />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 
@@ -23,6 +23,72 @@ export function useTooltipTrigger(): 'hover' | 'click' {
     return () => media.removeEventListener('change', update);
   }, []);
   return trigger;
+}
+
+/**
+ * A tap-opened tooltip that a tap elsewhere closes again.
+ *
+ * On a phone the tooltip opens on tap and stays open — which is right, since
+ * it is the only way to read a month's figures there. But it had no way out:
+ * it covered the chart it belonged to until another month was tapped, and the
+ * obvious gesture for dismissing something, tapping away from it, did
+ * nothing.
+ *
+ * Recharts owns that open state internally, so it cannot be closed from
+ * outside. Here it is controlled instead: the chart reports which month the
+ * finger landed on, and a tap anywhere off the chart clears it.
+ *
+ * Only on touch. With a pointer the tooltip follows the cursor and leaves
+ * when it does, so nothing needs dismissing and taking over the state would
+ * only break that.
+ */
+export function useDismissableTooltip() {
+  const trigger = useTooltipTrigger();
+  const byTap = trigger === 'click';
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const plot = useRef<HTMLDivElement>(null);
+
+  // Closed by a tap outside the chart, and by Escape for a keyboard.
+  useEffect(() => {
+    if (!byTap || openIndex === null) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (!plot.current?.contains(event.target as Node)) setOpenIndex(null);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenIndex(null);
+    };
+
+    // Capture, so this still runs when something inside stops propagation.
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [byTap, openIndex]);
+
+  return {
+    /** Wraps the chart: the region a tap counts as "inside". */
+    plotRef: plot,
+    /** Spread onto the Recharts chart element. */
+    chartProps: byTap
+      ? {
+          onClick: (state: { activeTooltipIndex?: number | null } | null) => {
+            const next = state?.activeTooltipIndex;
+            // Tapping the open month again closes it, which is what a
+            // toggle is expected to do.
+            setOpenIndex((current) =>
+              typeof next === 'number' ? (current === next ? null : next) : null,
+            );
+          },
+        }
+      : {},
+    /** Spread onto the `<Tooltip>`. */
+    tooltipProps: byTap
+      ? { trigger: 'click' as const, active: openIndex !== null }
+      : { trigger: 'hover' as const },
+  };
 }
 
 /**

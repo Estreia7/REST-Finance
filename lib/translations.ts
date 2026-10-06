@@ -842,6 +842,10 @@ export const translations = {
     },
     scanner: {
       title: 'Digitalizar Recibo',
+      // The heading names what this tab digitises, since the type
+      // selector is gone wherever the tab already decides it.
+      titleDailyReport: 'Digitalizar Relatório do Dia',
+      titleCostReceipt: 'Digitalizar Fatura ou Recibo',
       dailyReport: 'Relatório Diário',
       costReceipt: 'Recibo de Custo',
       photographDailyReport: 'Fotografar relatório do dia',
@@ -1037,6 +1041,9 @@ export const translations = {
       year: 'Ano',
       month: 'Mês',
       previousMonth: 'Mês anterior',
+      // The phone shows one period at a time: the year, or a month of it.
+      period: 'Período',
+      wholeYear: 'Ano inteiro',
       nextMonth: 'Mês seguinte',
       total: 'Total',
       pctOfRevenue: '% rec.',
@@ -1602,6 +1609,16 @@ export const translations = {
     pnl: {
       noData: 'Sem dados disponíveis.',
       netIncome: 'Lucro Líquido',
+      dineIn: 'Local',
+      takeaway: 'Take-away',
+      // Each detail line carries two shares: of the takings, which has a
+      // benchmark behind it, and of its own section, which says where
+      // that money actually goes. The column headings name both.
+      ofRevenueShort: '% rec.',
+      ofRevenueLong: 'da receita',
+      ofSectionShort: '% sec.',
+      ofCogs: 'do COGS',
+      ofOpex: 'do OPEX',
     },
     tickets: {
       noData: 'Sem dados de tickets para este período.',
@@ -3013,6 +3030,8 @@ export const translations = {
     },
     scanner: {
       title: 'Scan receipt',
+      titleDailyReport: "Scan the day's report",
+      titleCostReceipt: 'Scan an invoice or receipt',
       dailyReport: 'Daily report',
       costReceipt: 'Cost receipt',
       photographDailyReport: 'Photograph the day report',
@@ -3208,6 +3227,8 @@ export const translations = {
       year: 'Year',
       month: 'Month',
       previousMonth: 'Previous month',
+      period: 'Period',
+      wholeYear: 'Whole year',
       nextMonth: 'Next month',
       total: 'Total',
       pctOfRevenue: '% rev.',
@@ -3773,6 +3794,13 @@ export const translations = {
     pnl: {
       noData: 'No data yet.',
       netIncome: 'Net income',
+      dineIn: 'Dine-in',
+      takeaway: 'Takeaway',
+      ofRevenueShort: '% rev.',
+      ofRevenueLong: 'of revenue',
+      ofSectionShort: '% sec.',
+      ofCogs: 'of COGS',
+      ofOpex: 'of OPEX',
     },
     tickets: {
       noData: 'No ticket data for this period.',

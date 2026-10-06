@@ -14,7 +14,7 @@ import {
   TooltipRow,
   barPath,
   monthLabel,
-  useTooltipTrigger,
+  useDismissableTooltip,
 } from './chart-parts';
 
 /**
@@ -353,7 +353,7 @@ function MonthlyUnits({
   year: number;
   t: (key: string) => string;
 }) {
-  const tooltipTrigger = useTooltipTrigger();
+  const { plotRef, chartProps, tooltipProps } = useDismissableTooltip();
   const { language } = useLanguage();
   const locale = language === 'pt' ? 'pt-PT' : 'en-GB';
 
@@ -366,58 +366,60 @@ function MonthlyUnits({
   }
 
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <BarChart data={series} margin={{ top: 4, right: 4, bottom: 0, left: 0 }} barCategoryGap="28%">
-        <CartesianGrid vertical={false} stroke={chart.grid} />
-        <XAxis
-          dataKey="label"
-          tick={{ fontSize: 11, fill: chart.axis }}
-          axisLine={false}
-          tickLine={false}
-          interval="preserveStartEnd"
-          minTickGap={2}
-          tickMargin={8}
-        />
-        <YAxis
-          tick={{ fontSize: 11, fill: chart.axis }}
-          axisLine={false}
-          tickLine={false}
-          width={44}
-          allowDecimals={false}
-          tickFormatter={(v: number) => v.toLocaleString(locale)}
-        />
-        <Tooltip
-          trigger={tooltipTrigger}
-          cursor={{ fill: chart.grid, opacity: 0.35 }}
-          content={({ active, payload, label }) => {
-            if (!active || !payload?.length) return null;
-            const point = payload[0].payload as { quantity: number; revenue: number };
-            return (
-              <TooltipCard title={`${label} ${year}`}>
-                <TooltipRow
-                  color={chart.data.revenue}
-                  label={t('products.colUnits')}
-                  value={point.quantity.toLocaleString(locale)}
-                />
-                <TooltipRow
-                  label={t('charts.revenue')}
-                  value={formatMoney(point.revenue, { decimals: 2 })}
-                />
-              </TooltipCard>
-            );
-          }}
-        />
-        <Bar
-          dataKey="quantity"
-          name={t('products.colUnits')}
-          fill={chart.data.revenue}
-          maxBarSize={28}
-          shape={(p: { x?: number; y?: number; width?: number; height?: number; fill?: string }) => (
-            <path d={barPath(p.x ?? 0, p.y ?? 0, p.width ?? 0, p.height ?? 0, true)} fill={p.fill} />
-          )}
-        />
-      </BarChart>
-    </ResponsiveContainer>
+    <div ref={plotRef}>
+      <ResponsiveContainer width="100%" height={240}>
+        <BarChart {...chartProps} data={series} margin={{ top: 4, right: 4, bottom: 0, left: 0 }} barCategoryGap="28%">
+          <CartesianGrid vertical={false} stroke={chart.grid} />
+          <XAxis
+            dataKey="label"
+            tick={{ fontSize: 11, fill: chart.axis }}
+            axisLine={false}
+            tickLine={false}
+            interval="preserveStartEnd"
+            minTickGap={2}
+            tickMargin={8}
+          />
+          <YAxis
+            tick={{ fontSize: 11, fill: chart.axis }}
+            axisLine={false}
+            tickLine={false}
+            width={44}
+            allowDecimals={false}
+            tickFormatter={(v: number) => v.toLocaleString(locale)}
+          />
+          <Tooltip
+            {...tooltipProps}
+            cursor={{ fill: chart.grid, opacity: 0.35 }}
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null;
+              const point = payload[0].payload as { quantity: number; revenue: number };
+              return (
+                <TooltipCard title={`${label} ${year}`}>
+                  <TooltipRow
+                    color={chart.data.revenue}
+                    label={t('products.colUnits')}
+                    value={point.quantity.toLocaleString(locale)}
+                  />
+                  <TooltipRow
+                    label={t('charts.revenue')}
+                    value={formatMoney(point.revenue, { decimals: 2 })}
+                  />
+                </TooltipCard>
+              );
+            }}
+          />
+          <Bar
+            dataKey="quantity"
+            name={t('products.colUnits')}
+            fill={chart.data.revenue}
+            maxBarSize={28}
+            shape={(p: { x?: number; y?: number; width?: number; height?: number; fill?: string }) => (
+              <path d={barPath(p.x ?? 0, p.y ?? 0, p.width ?? 0, p.height ?? 0, true)} fill={p.fill} />
+            )}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 

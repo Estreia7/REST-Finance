@@ -43,6 +43,15 @@ interface ReceiptScannerProps {
    */
   defaultScanType?: ScanType;
   /**
+   * Whether the owner may change that.
+   *
+   * Off under Receita and Custos, where the tab has already answered the
+   * question: offering it again put "Relatório Diário" inside Custos, which
+   * is a way to file a day's takings on the screen for money going out. The
+   * toggle only earns its place somewhere that is about neither.
+   */
+  allowTypeChange?: boolean;
+  /**
    * Opens the camera on mount rather than the idle screen.
    *
    * Set when the owner already said "Fotografar" on the way here. Asking
@@ -57,11 +66,17 @@ interface ReceiptScannerProps {
 export default function ReceiptScanner({
   onSaved,
   defaultScanType = 'DAILY_REPORT',
+  allowTypeChange = false,
   autoStart = false,
   onAutoStarted,
 }: ReceiptScannerProps) {
   const { t } = useLanguage();
-  const [scanType, setScanType] = useState<ScanType>(defaultScanType);
+  // Where the tab decides the type, it is the type — not just the starting
+  // one. React keeps a mounted component's state across a prop change, so
+  // without this a scanner reused between Receita and Custos would carry the
+  // first tab's answer into the second.
+  const [chosenType, setScanType] = useState<ScanType>(defaultScanType);
+  const scanType = allowTypeChange ? chosenType : defaultScanType;
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -320,23 +335,33 @@ export default function ReceiptScanner({
 
   return (
     <div className="card-glass p-6">
-      <h2 className="text-xl font-bold text-foreground mb-6">{t('scanner.title')}</h2>
+      {/* With the selector gone, the heading is what says which document
+          this screen expects. */}
+      <h2 className="text-xl font-bold text-foreground mb-6">
+        {allowTypeChange
+          ? t('scanner.title')
+          : scanType === 'DAILY_REPORT'
+            ? t('scanner.titleDailyReport')
+            : t('scanner.titleCostReceipt')}
+      </h2>
 
-      {/* Scan type selector */}
-      <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle mb-6">
-        <button
-          onClick={() => { setScanType('DAILY_REPORT'); resetState(); }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${scanType === 'DAILY_REPORT' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-        >
-          <FileText className="w-3.5 h-3.5" /> {t('scanner.dailyReport')}
-        </button>
-        <button
-          onClick={() => { setScanType('COST_RECEIPT'); resetState(); }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${scanType === 'COST_RECEIPT' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-        >
-          <Receipt className="w-3.5 h-3.5" /> {t('scanner.costReceipt')}
-        </button>
-      </div>
+      {/* Scan type selector, only where the tab has not already settled it. */}
+      {allowTypeChange && (
+        <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle mb-6">
+          <button
+            onClick={() => { setScanType('DAILY_REPORT'); resetState(); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${scanType === 'DAILY_REPORT' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <FileText className="w-3.5 h-3.5" /> {t('scanner.dailyReport')}
+          </button>
+          <button
+            onClick={() => { setScanType('COST_RECEIPT'); resetState(); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${scanType === 'COST_RECEIPT' ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <Receipt className="w-3.5 h-3.5" /> {t('scanner.costReceipt')}
+          </button>
+        </div>
+      )}
 
       {/* Camera / upload */}
       {!imagePreview && (
