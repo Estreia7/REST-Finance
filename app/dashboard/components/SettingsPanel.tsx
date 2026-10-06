@@ -95,11 +95,23 @@ export default function SettingsPanel({
           </div>
 
           <div className="flex items-center gap-4 p-4 rounded-xl bg-surface border border-border-subtle">
-            <div className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">
-                {(name || currentUser?.email || 'U').charAt(0).toUpperCase()}
-              </span>
-            </div>
+            {currentUser?.image ? (
+              // eslint-disable-next-line @next/next/no-img-element -- served
+              // by an authenticated route, which next/image cannot fetch.
+              <img
+                src={currentUser.image.startsWith('http')
+                  ? currentUser.image
+                  : `/api/images/${currentUser.image}`}
+                alt=""
+                className="w-10 h-10 rounded-xl object-cover bg-muted"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center">
+                <span className="text-primary-foreground font-bold text-sm">
+                  {(name || currentUser?.email || 'U').charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
             <div className="text-xs text-muted-foreground">{currentUser?.email || '—'}</div>
           </div>
           <div>

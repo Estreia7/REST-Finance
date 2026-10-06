@@ -10,7 +10,7 @@ import { updateStaffPermissions, removeStaff } from '../actions';
 interface StaffMember {
   id: string;
   permissions?: string[];
-  user: { id: string; email: string; name: string | null };
+  user: { id: string; email: string; name: string | null; image?: string | null };
 }
 
 interface StaffPanelProps {
@@ -108,11 +108,23 @@ export default function StaffPanel({ staff, staffEmail, isSubmitting, onEmailCha
           <div className="space-y-2">
             {staff.map(member => (
               <div key={member.id} className="flex items-center gap-4 p-4 rounded-xl bg-surface border border-border-subtle hover:bg-muted transition-all">
-                <div className="w-9 h-9 rounded-xl gradient-bg flex items-center justify-center shrink-0">
-                  <span className="text-white font-bold text-xs">
-                    {(member.user.name || member.user.email).charAt(0).toUpperCase()}
-                  </span>
-                </div>
+                {member.user.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- served
+                  // by an authenticated route, which next/image cannot fetch.
+                  <img
+                    src={member.user.image.startsWith('http')
+                      ? member.user.image
+                      : `/api/images/${member.user.image}`}
+                    alt=""
+                    className="w-9 h-9 rounded-xl object-cover shrink-0 bg-muted"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-xl gradient-bg flex items-center justify-center shrink-0">
+                    <span className="text-white font-bold text-xs">
+                      {(member.user.name || member.user.email).charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm text-foreground">{member.user.name || '—'}</div>
                   <div className="text-xs text-muted-foreground truncate">{member.user.email}</div>

@@ -75,6 +75,7 @@ export async function getStaff() {
             id: true,
             email: true,
             name: true,
+            image: true,
           },
         },
       },
@@ -1063,6 +1064,11 @@ export async function getCurrentUser() {
         id: true,
         email: true,
         name: true,
+        // Without this the profile picture is uploaded, stored and then never
+        // read back: every screen asking for `currentUser.image` got
+        // undefined and drew the empty state, so a picture that saved
+        // correctly looked like one that had failed to save at all.
+        image: true,
       },
     });
 

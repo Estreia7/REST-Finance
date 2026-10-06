@@ -8,9 +8,10 @@ import { resolveStoredPath, kindFromPath, DOC_MIME } from '@/lib/uploads';
  * Serves uploaded logos, profile pictures and compliance documents.
  *
  * Uploads live outside the web root, so this is the only way to read them and
- * every request is checked: a logo is visible to members of that restaurant,
- * an avatar only to its owner. Without this, knowing a path would be enough,
- * and paths would leak through any shared screenshot.
+ * every request is checked: a logo and an avatar are visible to members of
+ * that restaurant, compliance papers to its owner alone. Without this,
+ * knowing a path would be enough, and paths leak through any shared
+ * screenshot.
  */
 export const dynamic = 'force-dynamic';
 
@@ -32,9 +33,24 @@ export async function GET(
   const [scope, ownerId] = params.path;
 
   if (scope === 'avatars') {
-    // Own picture only. Another member's avatar is not theirs to fetch.
+    // Your own, or a colleague's: a profile picture exists to put a face to
+    // a name on the rota and the team list, and one only its owner could see
+    // would serve no purpose at all. Still closed to anyone outside the
+    // restaurant, so knowing a path is not enough.
     if (ownerId !== auth.userId) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      const shared = await prisma.membership.findFirst({
+        where: {
+          userId: auth.userId,
+          active: true,
+          restaurant: {
+            memberships: { some: { userId: ownerId, active: true } },
+          },
+        },
+        select: { id: true },
+      });
+      if (!shared) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
     }
   } else if (scope === 'logos') {
     // Any active member of that restaurant may see its logo.

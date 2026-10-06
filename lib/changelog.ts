@@ -55,6 +55,12 @@ export const CHANGELOG: Release[] = [
     date: '2026-10-06',
     entries: [
       {
+        kind: 'fix',
+        title: 'A sua foto de perfil aparece mesmo',
+        detail:
+          'Carregar a foto dizia que tinha sido guardada — e tinha —, mas continuava a aparecer a inicial em todo o lado. Já se vê no menu lateral, nas definições e na lista da equipa, onde cada colega aparece com a sua.',
+      },
+      {
         kind: 'new',
         title: 'Relatório anual, e estimativa de impostos no PDF',
         detail:

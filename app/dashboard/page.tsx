@@ -72,7 +72,7 @@ interface Category {
 
 interface StaffMember {
   id: string;
-  user: { id: string; email: string; name: string | null };
+  user: { id: string; email: string; name: string | null; image?: string | null };
 }
 
 // ─── Page ──────────────────────────────────────────────────────────────────

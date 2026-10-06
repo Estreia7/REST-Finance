@@ -97,11 +97,26 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
       {/* User card */}
       <div className="p-3 border-t border-border-subtle shrink-0">
         <div className="flex items-center gap-3 p-3 rounded-xl bg-muted border border-border-subtle">
-          <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center shrink-0">
-            <span className="text-white font-bold text-xs">
-              {(currentUser?.name || currentUser?.email || 'U').charAt(0).toUpperCase()}
-            </span>
-          </div>
+          {/* The picture when there is one, the initial when there is not —
+              rather than the initial always, which is what made an uploaded
+              photo look like it had never saved. */}
+          {currentUser?.image ? (
+            // eslint-disable-next-line @next/next/no-img-element -- served by
+            // an authenticated route, which next/image cannot fetch.
+            <img
+              src={currentUser.image.startsWith('http')
+                ? currentUser.image
+                : `/api/images/${currentUser.image}`}
+              alt=""
+              className="w-8 h-8 rounded-lg object-cover shrink-0 bg-muted"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center shrink-0">
+              <span className="text-white font-bold text-xs">
+                {(currentUser?.name || currentUser?.email || 'U').charAt(0).toUpperCase()}
+              </span>
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <div className="text-xs font-semibold text-foreground truncate">
               {currentUser?.name || currentUser?.email || t('nav.userFallback')}
