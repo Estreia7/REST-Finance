@@ -39,6 +39,7 @@ import KPICards         from './components/KPICards';
 import RevenueChart     from './components/RevenueChart';
 import ProductsPanel    from './components/ProductsPanel';
 import SubTabs          from './components/SubTabs';
+import AccountingPanel  from './components/AccountingPanel';
 import IngredientRanking from './components/IngredientRanking';
 import { getMonthProgress } from './product-actions';
 import type { MonthProgress } from '@/lib/trading-days';
@@ -62,7 +63,7 @@ import TrialBanner      from '@/app/components/TrialBanner';
 // ─── Types ─────────────────────────────────────────────────────────────────
 type CostType = 'COGS' | 'OPEX';
 type CostTypeOrEmpty = CostType | '';
-type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
 interface Category {
   id: string;
@@ -772,6 +773,8 @@ function DashboardPageInner() {
           {activeTab === 'billing' && (
             <BillingPanel restaurant={restaurant} />
           )}
+
+          {activeTab === 'accounting' && <AccountingPanel />}
 
           {activeTab === 'compliance' && <CompliancePanel />}
 

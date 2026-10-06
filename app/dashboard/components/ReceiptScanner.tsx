@@ -6,6 +6,8 @@ import { Camera, Loader2, Check, X, RotateCcw, Receipt, FileText } from 'lucide-
 import { createDailySummary, createCostEntry, getCategories } from '../actions';
 import { useLanguage } from '@/lib/language-context';
 import { commitReconciliation } from '../reconcile-actions';
+import InvoiceReconcile from './InvoiceReconcile';
+import type { LineResolution } from '../reconcile-actions';
 import DocumentCamera from './DocumentCamera';
 import ScanPageEditor, { type ScannedPage } from './ScanPageEditor';
 import ScanTray, { type ScannedDocument, newDocumentId } from './ScanTray';
@@ -85,6 +87,16 @@ export default function ReceiptScanner({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
+  /**
+   * The invoice whose lines are being identified.
+   *
+   * Set once the cost entry is written, because the money should be
+   * recorded whether or not the owner finishes saying what each line is.
+   */
+  const [reconciling, setReconciling] = useState<{
+    costEntryId: string;
+    data: CostReceiptData;
+  } | null>(null);
   const [extracted, setExtracted] = useState<ExtractionResult | null>(null);
   const [editData, setEditData] = useState<ExtractionResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -305,35 +317,21 @@ export default function ReceiptScanner({
           description: `${d.vendor} - ${d.items.map(i => i.product).join(', ')}`,
         });
         if (result.success) {
-          // The lines were being thrown away: the money was kept and
-          // everything that makes an invoice useful — what was bought,
-          // at what price per kilo, from whom — went into a sentence in
-          // the description. Kept now, and linked to the ingredients.
           const entryId = (result as { data?: { id?: string } }).data?.id;
+
+          // The money is recorded; what the lines are is a separate
+          // question, and one only the owner can answer. Asking it here
+          // rather than guessing is the difference between an invoice
+          // that prices their Carne Smash and one that invents a second
+          // ingredient beside it.
           if (entryId && d.items.length > 0) {
-            const saved = await commitReconciliation({
-              costEntryId: entryId,
-              vendorName: d.vendor,
-              invoiceDate: d.date,
-              invoiceNumber: d.invoiceNumber ?? null,
-              lines: d.items.map((item) => ({
-                productName: item.product,
-                quantity: item.quantity,
-                unit: item.unit,
-                unitPrice: item.unitPrice,
-                total: item.total,
-                // Linked where the wording is already known, created
-                // otherwise. The screen that asks about the uncertain
-                // ones comes next; until then a new ingredient is the
-                // safe answer, since it keeps the price history rather
-                // than discarding the line.
-                createAs: item.product,
-              })),
-            });
-            // A failure here must not lose the cost entry that saved
-            // fine; the owner is told, and the money is still recorded.
-            if ('error' in saved) toast.error(t('scanner.costSaved'));
+            toast.success(t('scanner.costSaved'));
+            setReconciling({ costEntryId: entryId, data: d });
+            onSaved?.();
+            setSaving(false);
+            return;
           }
+
           toast.success(t('scanner.costSaved'));
           resetState();
           onSaved?.();
@@ -378,6 +376,48 @@ export default function ReceiptScanner({
             ? t('scanner.titleDailyReport')
             : t('scanner.titleCostReceipt')}
       </h2>
+
+      {/* Identifying the lines. Everything else stands down: the invoice
+          is saved, and this is the one thing left to do. */}
+      {reconciling ? (
+        <InvoiceReconcile
+          vendorName={reconciling.data.vendor}
+          lines={reconciling.data.items.map((item) => ({
+            productName: item.product,
+            quantity: item.quantity,
+            unit: item.unit,
+            unitPrice: item.unitPrice,
+            total: item.total,
+          }))}
+          busy={saving}
+          onResolved={async (lines: LineResolution[]) => {
+            setSaving(true);
+            const saved = await commitReconciliation({
+              costEntryId: reconciling.costEntryId,
+              vendorName: reconciling.data.vendor,
+              invoiceDate: reconciling.data.date,
+              invoiceNumber: reconciling.data.invoiceNumber ?? null,
+              lines,
+            });
+            setSaving(false);
+
+            if ('error' in saved) {
+              toast.error(t('scanner.saveFailed'));
+              return;
+            }
+
+            const { itemsWritten, linked } = saved.data;
+            toast.success(
+              t('reconcile.saved')
+                .replace('{items}', String(itemsWritten))
+                .replace('{linked}', String(linked)),
+            );
+            setReconciling(null);
+            resetState();
+            onSaved?.();
+          }}
+        />
+      ) : (<>
 
       {/* Scan type selector, only where the tab has not already settled it. */}
       {allowTypeChange && (
@@ -568,6 +608,8 @@ export default function ReceiptScanner({
       )}
 
       {/* ── Capture: camera, page editor, tray ─────────────────────────── */}
+      </>)}
+
       {stage === 'camera' && (
         <DocumentCamera
           onCapture={handleCaptured}

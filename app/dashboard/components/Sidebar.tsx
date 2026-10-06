@@ -3,9 +3,9 @@
 import { useLanguage } from '@/lib/language-context';
 import { Wordmark } from '@/app/components/Logo';
 import RestaurantSwitcher from './RestaurantSwitcher';
-import { LayoutDashboard, TrendingUp, DollarSign, Users, CreditCard, Settings, LogOut, X, BarChart3, ShieldCheck, CalendarDays, Landmark } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, DollarSign, Users, CreditCard, Settings, LogOut, X, BarChart3, ShieldCheck, CalendarDays, Landmark, FileText } from 'lucide-react';
 
-type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
 interface SidebarProps {
   activeTab:    Tab;
@@ -24,6 +24,8 @@ const NAV_MAIN = [
   { id: 'revenue'   as Tab, icon: TrendingUp,      tKey: 'nav.revenue' },
   { id: 'costs'     as Tab, icon: DollarSign,      tKey: 'nav.costs' },
   { id: 'analytics' as Tab, icon: BarChart3,       tKey: 'nav.analytics' },
+  // Beside Costs, because that is where its records come from.
+  { id: 'accounting' as Tab, icon: FileText,       tKey: 'nav.accounting' },
   { id: 'compliance' as Tab, icon: ShieldCheck,    tKey: 'nav.compliance' },
   { id: 'schedule'  as Tab, icon: CalendarDays,    tKey: 'nav.schedule' },
   { id: 'estado'    as Tab, icon: Landmark,        tKey: 'nav.estado' },

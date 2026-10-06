@@ -3,7 +3,7 @@
 import { LayoutDashboard, TrendingUp, DollarSign, Settings, BarChart3 } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 
-type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
 /** The label is a key: the bar is short on width, so it gets its own, abbreviated wording. */
 const items = [

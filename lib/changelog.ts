@@ -43,6 +43,24 @@ export const CHANGELOG: Release[] = [
     date: '2026-10-06',
     entries: [
       {
+        kind: 'new',
+        title: 'Contabilidade: todas as faturas num sítio',
+        detail:
+          'Uma página nova no menu. Todas as linhas de todas as faturas digitalizadas, com o preço de cada produto, o fornecedor e o número do documento — e pode procurar por produto ou por fatura. Mostra também quanto já pagou a cada fornecedor, e o que ainda falta identificar.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Ao digitalizar, perguntamos o que é cada linha',
+        detail:
+          'Antes criávamos um ingrediente novo por cada nome que o fornecedor usa. Agora mostramos as hipóteses — "Carne Picada Novilho" sugere a sua "Carne Smash" — e basta confirmar uma vez. Pode ligar a mais do que um, porque a mesma carne serve o hambúrguer e o extra.',
+      },
+      {
+        kind: 'new',
+        title: 'Juntar ingredientes repetidos',
+        detail:
+          'Em Contabilidade › Arrumar. Quando trouxemos os produtos do sistema de caixa ficou com "EXTRA CARNE" ao lado de "Carne Smash" para a mesma carne. Agora pode juntá-los: o nome mantém-se e o custo passa a ser um só.',
+      },
+      {
         kind: 'improvement',
         title: 'As faturas passam a alimentar os seus ingredientes',
         detail:
