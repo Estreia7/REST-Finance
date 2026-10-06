@@ -43,6 +43,24 @@ export const CHANGELOG: Release[] = [
     date: '2026-10-06',
     entries: [
       {
+        kind: 'new',
+        title: 'Relatório anual, e estimativa de impostos no PDF',
+        detail:
+          'O relatório em PDF já pode cobrir o ano inteiro, não só um mês. Em qualquer dos dois vem agora uma estimativa do IVA — o que liquidou nas vendas, o que pode deduzir nas compras e o que sobra para entregar. No anual junta-se o IRC estimado. São estimativas para planear, não substituem a declaração do contabilista. Em Análises › Relatório.',
+      },
+      {
+        kind: 'new',
+        title: 'Os produtos mais vendidos no relatório',
+        detail:
+          'O PDF passa a incluir dois tops de dez: por receita, que mostra o que sustenta o negócio, e por unidades, que mostra o que a cozinha mais produz. São listas diferentes e é isso que as torna úteis.',
+      },
+      {
+        kind: 'fix',
+        title: 'A data nos formulários deixou de aparecer ao centro',
+        detail:
+          'No iPhone o campo da data aparecia centrado enquanto os restantes começavam à esquerda, o que parecia um erro. Já alinha com os outros.',
+      },
+      {
         kind: 'improvement',
         title: 'O peso de cada linha na demonstração de resultados',
         detail:

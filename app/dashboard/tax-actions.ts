@@ -9,6 +9,9 @@ import {
 import {
   ASSUMED_PURCHASE_VAT, DEFAULT_DEDUCTIBILITY, IVA_RATES, type Region, type DeductibilityKey,
 } from '@/lib/tax-rules';
+import {
+  readTaxSettings, DEFAULT_TAX_SETTINGS, readSalesForPeriod, TAX_SETTING_KEY, type TaxSettings,
+} from '@/lib/tax-period';
 
 /**
  * The Estado tab's server side.
@@ -27,47 +30,13 @@ function fail(error: string) {
 }
 
 /**
- * Where the sales mix and the council's derrama rate live.
- *
- * Reuses the AppSetting table rather than adding columns to Restaurant: these
- * are a handful of preferences for one tab, and a migration for them would be
- * a migration to undo the first time the shape changes.
+ * The settings and the period readers live in lib/tax-period.ts, so the
+ * monthly report and this tab can never disagree about how much VAT a
+ * stretch of dates carried. Re-exported under the old names to keep the
+ * rest of this file unchanged.
  */
-const SETTING_KEY = 'tax.settings';
-
-interface TaxSettings {
-  mix: SalesMix;
-  region: Region;
-  derramaMunicipalRate: number;
-  isPme: boolean;
-  vatPeriodicity: 'quarterly' | 'monthly';
-}
-
-const DEFAULT_SETTINGS: TaxSettings = {
-  mix: DEFAULT_SALES_MIX,
-  region: 'continente',
-  derramaMunicipalRate: 1.5,
-  isPme: true,
-  vatPeriodicity: 'quarterly',
-};
-
-async function readSettings(restaurantId: string): Promise<TaxSettings> {
-  const row = await prisma.appSetting.findUnique({
-    where: { key: `${SETTING_KEY}.${restaurantId}` },
-  });
-  if (!row?.value) return DEFAULT_SETTINGS;
-  try {
-    const parsed = JSON.parse(row.value) as Partial<TaxSettings>;
-    return {
-      ...DEFAULT_SETTINGS,
-      ...parsed,
-      mix: { ...DEFAULT_SALES_MIX, ...(parsed.mix ?? {}) },
-    };
-  } catch {
-    // A corrupted preference must not take the whole tab down with it.
-    return DEFAULT_SETTINGS;
-  }
-}
+const readSettings = readTaxSettings;
+const DEFAULT_SETTINGS = DEFAULT_TAX_SETTINGS;
 
 export async function getTaxSettings() {
   const owner = await requireOwner();
@@ -89,7 +58,7 @@ export async function saveTaxSettings(input: Partial<TaxSettings>) {
   // The statutory ceiling is 1.5%; a council cannot charge above it.
   next.derramaMunicipalRate = Math.min(Math.max(next.derramaMunicipalRate, 0), 1.5);
 
-  const key = `${SETTING_KEY}.${owner.restaurantId}`;
+  const key = `${TAX_SETTING_KEY}.${owner.restaurantId}`;
   await prisma.appSetting.upsert({
     where: { key },
     create: { key, value: JSON.stringify(next) },
@@ -101,40 +70,7 @@ export async function saveTaxSettings(input: Partial<TaxSettings>) {
 
 // ── Sales ──────────────────────────────────────────────────────────────────
 
-/**
- * A period's takings, split into what the till already taxed and what the
- * sales mix has to estimate.
- *
- * Shared by IVA and IRC so the two tabs can never disagree about how much of
- * the takings was VAT.
- */
-async function readSales(restaurantId: string, start: Date, end: Date, region: Region) {
-  const [days, rows] = await Promise.all([
-    prisma.dailySummary.findMany({
-      where: { restaurantId, deletedAt: null, date: { gte: start, lte: end } },
-      select: { date: true, revenueTotal: true },
-    }),
-    prisma.dailyCategoryRevenue.findMany({
-      where: { restaurantId, date: { gte: start, lte: end }, revenueNet: { not: null } },
-      select: { date: true, revenue: true, revenueNet: true, category: { select: { name: true } } },
-    }),
-  ]);
-
-  const grossRevenue = days.reduce((s, d) => s + Number(d.revenueTotal), 0);
-
-  const { tillLines, estimatedGross } = splitTillSales({
-    days: days.map((d) => ({ date: d.date.toISOString().slice(0, 10), gross: Number(d.revenueTotal) })),
-    rows: rows.map((r) => ({
-      date: r.date.toISOString().slice(0, 10),
-      label: r.category.name,
-      gross: Number(r.revenue),
-      net: r.revenueNet === null ? null : Number(r.revenueNet),
-    })),
-    maxRate: IVA_RATES[region].normal,
-  });
-
-  return { grossRevenue, tillLines, estimatedGross };
-}
+const readSales = readSalesForPeriod;
 
 // ── IVA ────────────────────────────────────────────────────────────────────
 

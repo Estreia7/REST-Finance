@@ -18,14 +18,20 @@ export default function MonthlyReportPanel() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const [period, setPeriod] = useState<'month' | 'year'>('month');
   const [downloading, setDownloading] = useState(false);
 
   const handleDownload = async () => {
     setDownloading(true);
     try {
+      const annual = period === 'year';
       await downloadFile(
-        `/api/export/pdf?month=${month}&year=${year}`,
-        `relatorio-${year}-${String(month).padStart(2, '0')}.pdf`,
+        annual
+          ? `/api/export/pdf?period=year&year=${year}`
+          : `/api/export/pdf?month=${month}&year=${year}`,
+        annual
+          ? `relatorio-${year}.pdf`
+          : `relatorio-${year}-${String(month).padStart(2, '0')}.pdf`,
       );
     } catch {
       toast.error(t('monthlyReport.error'));
@@ -47,8 +53,27 @@ export default function MonthlyReportPanel() {
         {t('monthlyReport.intro')}
       </p>
 
-      <div className="flex items-end gap-4 mb-6">
-        <div>
+      {/* Monthly or the whole year. The month select goes with it rather
+          than sitting there inert, which would read as a control that
+          stopped working. */}
+      <div className="flex items-center gap-1 p-1 rounded-xl bg-muted w-fit mb-5">
+        {([['month', t('monthlyReport.periodMonth')], ['year', t('monthlyReport.periodYear')]] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setPeriod(value)}
+            className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              period === value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+            aria-pressed={period === value}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-4 mb-6">
+        <div className={period === 'year' ? 'hidden' : undefined}>
           <label className="text-xs font-medium text-muted-foreground block mb-2">{t('monthlyReport.month')}</label>
           <select value={month} onChange={e => setMonth(parseInt(e.target.value))} className="input-field">
             {MONTH_KEYS.map((key, i) => (

@@ -344,6 +344,34 @@
          transition-all duration-150;
 }
 
+/* Safari on iOS centres a full-width date field's text, where every other
+   input in the same form starts at the left edge — so the date sat alone in
+   the middle of the column and read as a mistake. The value is pushed back
+   to the left and the picker's own indicator to the right, which is where
+   the chevron on the selects beside it already is. */
+.input-field[type='date'],
+.input-field[type='time'],
+.input-field[type='datetime-local'],
+.input-field[type='month'] {
+  text-align: left;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.input-field[type='date']::-webkit-date-and-time-value,
+.input-field[type='time']::-webkit-date-and-time-value,
+.input-field[type='datetime-local']::-webkit-date-and-time-value,
+.input-field[type='month']::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+.input-field[type='date']::-webkit-calendar-picker-indicator,
+.input-field[type='time']::-webkit-calendar-picker-indicator,
+.input-field[type='datetime-local']::-webkit-calendar-picker-indicator,
+.input-field[type='month']::-webkit-calendar-picker-indicator {
+  margin-left: auto;
+}
+
 /* Section labels */
 .section-label {
   @apply text-[10px] uppercase tracking-[0.15em] font-semibold text-muted-foreground/60;

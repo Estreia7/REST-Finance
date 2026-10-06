@@ -6,6 +6,9 @@ import ReactPDF from '@react-pdf/renderer';
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer';
 import React from 'react';
 import { toClientError } from '@/lib/errors';
+import { vatForPeriod, readTaxSettings } from '@/lib/tax-period';
+import { estimateIrc } from '@/lib/tax-calc';
+import { isModifierFamilia } from '@/lib/products';
 
 // Authenticated + cookie-based: never statically rendered.
 export const dynamic = 'force-dynamic';
@@ -93,10 +96,12 @@ async function readLogo(logoPath: string | null): Promise<Buffer | null> {
  * which is most of the time. Horizontal bars because the labels are category
  * names — "PRODUTOS MAIN MENU" does not fit under a vertical column.
  */
-function ShareChart({ title, rows, total }: {
+function ShareChart({ title, rows, total, unit }: {
   title: string;
   rows: Array<{ name: string; total: number }>;
   total: number;
+  /** Counts rather than euros, for a ranking measured in portions. */
+  unit?: string;
 }) {
   if (rows.length === 0 || total <= 0) return null;
 
@@ -105,7 +110,7 @@ function ShareChart({ title, rows, total }: {
   const shown = rows.slice(0, 8);
   const rest = rows.slice(8);
   const bands = rest.length
-    ? [...shown, { name: `Outras (${rest.length})`, total: rest.reduce((s, r) => s + r.total, 0) }]
+    ? [...shown, { name: `Outros (${rest.length})`, total: rest.reduce((s, r) => s + r.total, 0) }]
     : shown;
 
   return React.createElement(View, { style: styles.chartBlock, wrap: false },
@@ -126,14 +131,15 @@ function ShareChart({ title, rows, total }: {
           }),
         ),
         React.createElement(Text, { style: styles.chartPct }, `${share.toFixed(1)}%`),
-        React.createElement(Text, { style: styles.chartValue }, fmt(band.total)),
+        React.createElement(Text, { style: styles.chartValue },
+          unit ? `${Math.round(band.total).toLocaleString('pt-PT')} ${unit}` : fmt(band.total)),
       );
     }),
   );
 }
 
 function MonthlyReport({ data }: { data: any }) {
-  const { restaurant, month, year, revenue, costs, pnl, kpis, logo } = data;
+  const { restaurant, annual, month, year, revenue, costs, pnl, kpis, logo, vat, irc, topProducts } = data;
   const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
   return React.createElement(Document, {},
@@ -144,8 +150,8 @@ function MonthlyReport({ data }: { data: any }) {
       React.createElement(View, { style: logo ? styles.headerRow : styles.header },
         ...(logo ? [React.createElement(Image, { key: 'logo', src: logo, style: styles.logo })] : []),
         React.createElement(View, { key: 'titles' },
-          React.createElement(Text, { style: styles.title }, `${restaurant} — Relatório Mensal`),
-          React.createElement(Text, { style: styles.subtitle }, `${monthNames[month - 1]} ${year}`),
+          React.createElement(Text, { style: styles.title }, `${restaurant} — ${annual ? 'Relatório Anual' : 'Relatório Mensal'}`),
+          React.createElement(Text, { style: styles.subtitle }, annual ? `${year}` : `${monthNames[month - 1]} ${year}`),
         ),
       ),
       // KPIs
@@ -240,9 +246,62 @@ function MonthlyReport({ data }: { data: any }) {
         total: pnl.totalOPEX,
       }),
 
+      // What sold. Two rankings on purpose: by takings is what carries the
+      // business, by units is what the kitchen produces — a coffee tops one
+      // and never the other. Absent for a restaurant that types in a daily
+      // total, which has no product detail to show.
+      ...(topProducts && topProducts.byRevenue.length > 0 ? [
+        React.createElement(Text, { key: 'ptitle', style: styles.sectionTitle }, 'Produtos mais vendidos'),
+        React.createElement(ShareChart, {
+          key: 'prev',
+          title: 'Por receita',
+          rows: topProducts.byRevenue,
+          total: topProducts.byRevenue.reduce((t: number, p: any) => t + p.total, 0),
+        }),
+        // Measured in units, so the bars are a share of the units sold by
+        // the ten listed, not of their money.
+        React.createElement(ShareChart, {
+          key: 'puni',
+          title: 'Por unidades vendidas',
+          rows: topProducts.byUnits.map((p: any) => ({ name: p.name, total: p.quantity })),
+          total: topProducts.byUnits.reduce((t: number, p: any) => t + p.quantity, 0),
+          unit: 'un',
+        }),
+      ] : []),
+
+      // Tax. Estimates, and the disclaimer below says so plainly — this is
+      // what to put aside, never the return that gets filed.
+      ...(vat ? [
+        React.createElement(Text, { key: 'ttitle', style: styles.sectionTitle }, 'Impostos (estimativa)'),
+        React.createElement(View, { key: 'v1', style: styles.row },
+          React.createElement(Text, { style: styles.label }, 'IVA liquidado nas vendas'),
+          React.createElement(Text, { style: styles.value }, fmt(vat.outputVat)),
+        ),
+        React.createElement(View, { key: 'v2', style: styles.row },
+          React.createElement(Text, { style: styles.label }, 'IVA dedutível nas compras'),
+          React.createElement(Text, { style: styles.value }, fmt(vat.deductibleVat)),
+        ),
+        React.createElement(View, { key: 'v3', style: styles.totalRow },
+          React.createElement(Text, { style: styles.totalLabel }, vat.balance >= 0 ? 'IVA a entregar ao Estado' : 'Crédito de IVA a reportar'),
+          React.createElement(Text, { style: styles.totalValue }, fmt(Math.abs(vat.balance))),
+        ),
+      ] : []),
+      ...(irc ? [
+        React.createElement(View, { key: 'i1', style: { ...styles.row, marginTop: 8 } },
+          React.createElement(Text, { style: styles.label }, 'Lucro tributável'),
+          React.createElement(Text, { style: styles.value }, fmt(irc.taxableProfit)),
+        ),
+        React.createElement(View, { key: 'i2', style: styles.totalRow },
+          React.createElement(Text, { style: styles.totalLabel }, 'IRC estimado'),
+          React.createElement(Text, { style: styles.totalValue }, fmt(irc.totalTax)),
+        ),
+      ] : []),
       // Disclaimer
       React.createElement(View, { style: styles.disclaimer },
-        React.createElement(Text, {}, 'Este relatório é mais preciso quando todas as entradas diárias do mês foram registadas. Verifique se todos os dados estão completos antes de tomar decisões com base neste documento.'),
+        React.createElement(Text, {}, `Este relatório é mais preciso quando todas as entradas diárias ${annual ? 'do ano' : 'do mês'} foram registadas. Verifique se todos os dados estão completos antes de tomar decisões com base neste documento.`),
+        // Said plainly, and separately from the data-completeness note:
+        // an owner must never take these figures to the Finanças.
+        ...(vat || irc ? [React.createElement(Text, { key: 'taxnote', style: { marginTop: 4 } }, 'Os valores de IVA e IRC são estimativas para planeamento, calculadas a partir dos dados registados e das definições do separador Estado. Não substituem a declaração preparada pelo seu contabilista.')] : []),
       ),
       // Footer
       React.createElement(Text, { style: styles.footer }, `REST Finance — Gerado em ${new Date().toLocaleDateString('pt-PT')}`),
@@ -261,10 +320,13 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
+    // A yearly report covers the twelve months; a monthly one keeps the
+    // behaviour it had, so an existing link still works.
+    const annual = searchParams.get('period') === 'year';
     const month = parseInt(searchParams.get('month') || `${new Date().getMonth() + 1}`);
     const year = parseInt(searchParams.get('year') || `${new Date().getFullYear()}`);
 
-    if (!Number.isInteger(month) || month < 1 || month > 12) {
+    if (!annual && (!Number.isInteger(month) || month < 1 || month > 12)) {
       return NextResponse.json({ error: 'Mês inválido' }, { status: 400 });
     }
     if (!Number.isInteger(year) || year < 2000 || year > 2100) {
@@ -283,8 +345,10 @@ export async function GET(request: NextRequest) {
     const rName = restaurant.name;
     const logo = await readLogo(restaurant.logoPath);
 
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0, 23, 59, 59);
+    const startDate = annual ? new Date(year, 0, 1) : new Date(year, month - 1, 1);
+    const endDate = annual
+      ? new Date(year, 11, 31, 23, 59, 59)
+      : new Date(year, month, 0, 23, 59, 59);
 
     // Revenue
     const revenues = await prisma.dailySummary.findMany({
@@ -363,8 +427,59 @@ export async function GET(request: NextRequest) {
       takeawayTickets,
     });
 
+
+    // ── Tax ──────────────────────────────────────────────────────────────
+    // Every figure here is an estimate and the report says so. VAT is shown
+    // for any period, because it is what an owner wants to put aside month
+    // by month. IRC is only on the yearly report: taxable profit is a figure
+    // of the whole exercise, and a single strong month would project a tax
+    // bill the year never confirms.
+    const vat = await vatForPeriod(rid, startDate, endDate);
+
+    const taxSettings = annual ? await readTaxSettings(rid) : null;
+    const irc = annual && taxSettings
+      ? estimateIrc({
+          year,
+          accountingProfit: kpis.netIncome,
+          derramaMunicipalRate: taxSettings.derramaMunicipalRate,
+          isPme: taxSettings.isPme,
+        })
+      : null;
+
+    // ── Products ─────────────────────────────────────────────────────────
+    // Two rankings, because they answer different questions: by takings is
+    // what carries the business, by units is what the kitchen actually
+    // produces. A coffee tops one and never the other.
+    const productSales = await prisma.posProductSale.findMany({
+      where: { restaurantId: rid, date: { gte: startDate, lte: endDate } },
+      select: {
+        quantity: true,
+        revenue: true,
+        product: { select: { name: true, category: { select: { name: true } } } },
+      },
+    });
+
+    const topProducts = (() => {
+      const byName = new Map<string, { name: string; total: number; quantity: number }>();
+      for (const row of productSales) {
+        // Modifiers ring at nothing so the kitchen display sees them; they
+        // would fill a best-sellers table with rows of zero.
+        if (isModifierFamilia(row.product.category?.name)) continue;
+        const name = row.product.name;
+        const acc = byName.get(name) ?? { name, total: 0, quantity: 0 };
+        acc.total += row.revenue.toNumber();
+        acc.quantity += row.quantity;
+        byName.set(name, acc);
+      }
+      const all = [...byName.values()];
+      return {
+        byRevenue: [...all].sort((a, b) => b.total - a.total).slice(0, 10),
+        byUnits: [...all].sort((a, b) => b.quantity - a.quantity).slice(0, 10),
+      };
+    })();
     const data = {
       restaurant: rName,
+      annual,
       month,
       year,
       logo,
@@ -383,11 +498,14 @@ export async function GET(request: NextRequest) {
         avgTicket: kpis.avgTicketOverall,
         primeCost: toPercent(kpis.primeCostPct),
       },
+      vat,
+      irc,
+      topProducts,
     };
 
     // Log export
     await prisma.exportLog.create({
-      data: { restaurantId: rid, userId: member.userId, type: 'PDF', resource: `monthly-report-${year}-${month}` },
+      data: { restaurantId: rid, userId: member.userId, type: 'PDF', resource: annual ? `annual-report-${year}` : `monthly-report-${year}-${month}` },
     });
 
     const pdfStream = await ReactPDF.renderToStream(MonthlyReport({ data }) as any);
@@ -401,7 +519,9 @@ export async function GET(request: NextRequest) {
     return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="relatorio-${year}-${String(month).padStart(2, '0')}.pdf"`,
+        'Content-Disposition': annual
+          ? `attachment; filename="relatorio-${year}.pdf"`
+          : `attachment; filename="relatorio-${year}-${String(month).padStart(2, '0')}.pdf"`,
       },
     });
   } catch (err: unknown) {
