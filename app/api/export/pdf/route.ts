@@ -6,7 +6,7 @@ import ReactPDF from '@react-pdf/renderer';
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer';
 import React from 'react';
 import { toClientError } from '@/lib/errors';
-import { vatForPeriod, readTaxSettings } from '@/lib/tax-period';
+import { vatForPeriod, readTaxSettings, derramaForYear } from '@/lib/tax-period';
 import { estimateIrc } from '@/lib/tax-calc';
 import { isModifierFamilia } from '@/lib/products';
 
@@ -437,11 +437,13 @@ export async function GET(request: NextRequest) {
     const vat = await vatForPeriod(rid, startDate, endDate);
 
     const taxSettings = annual ? await readTaxSettings(rid) : null;
-    const irc = annual && taxSettings
+    // The council's rate for the year, the same one the Estado tab uses.
+    const derrama = annual && taxSettings ? await derramaForYear(rid, taxSettings, year) : null;
+    const irc = annual && taxSettings && derrama
       ? estimateIrc({
           year,
           accountingProfit: kpis.netIncome,
-          derramaMunicipalRate: taxSettings.derramaMunicipalRate,
+          derramaMunicipalRate: derrama.resolved.rate,
           isPme: taxSettings.isPme,
         })
       : null;

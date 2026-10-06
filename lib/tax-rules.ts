@@ -245,8 +245,9 @@ export function ircForYear(year: number): IrcYear {
  * Derrama municipal.
  *
  * Each council sets its own, up to 1.5%, on taxable profit. Many exempt or
- * reduce it below a turnover threshold. There is no national table worth
- * shipping, so the rate is the owner's to enter — with the ceiling enforced.
+ * reduce it below a turnover threshold. The Tax Authority's yearly table of
+ * every council's rates lives in lib/derrama.ts; this ceiling is what a rate
+ * typed by hand is held to.
  */
 export const DERRAMA_MUNICIPAL_MAX = 1.5;
 

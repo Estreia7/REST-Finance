@@ -14,6 +14,9 @@ import type { SalesMix } from '@/lib/tax-calc';
 import { SALES_VAT_CLASSES, DERRAMA_MUNICIPAL_MAX } from '@/lib/tax-rules';
 import { formatMoneyExact, formatPercent } from '@/lib/format';
 import { useLanguage } from '@/lib/language-context';
+import { translateError } from '@/lib/error-messages';
+import type { DerramaChoice, MunicipalDerrama, ResolvedDerrama } from '@/lib/derrama';
+import type { Municipality } from '@/lib/municipalities';
 
 /**
  * IVA and IRC, as an owner needs to see them.
@@ -27,6 +30,27 @@ import { useLanguage } from '@/lib/language-context';
  * owner awake, and it is not the return their accountant files. Every screen
  * says so, and none of it is presented as advice.
  */
+
+/** The tax settings as the screen sees them. */
+interface TaxSettingsView {
+  mix: SalesMix;
+  derramaMunicipalRate: number;
+  derramaChoice: DerramaChoice;
+  isPme: boolean;
+}
+
+/** Which council, its rates, and which one the estimate used. */
+interface DerramaInfo {
+  municipality: Municipality | null;
+  resolved: ResolvedDerrama;
+  council: MunicipalDerrama | null;
+  /** The Tax Authority table read, and whether it is the period's own. */
+  table: { year: number; exact: boolean };
+  /** The period being estimated. */
+  taxYear: number;
+  /** Net takings the app holds for the period before; null when none. */
+  previousTurnover: number | null;
+}
 
 interface VatData {
   year: number;
@@ -45,7 +69,7 @@ interface VatData {
   deadline: { quarter: number; submit: string; pay: string } | null;
   grossRevenue: number;
   hasData: boolean;
-  settings: { mix: SalesMix; derramaMunicipalRate: number; isPme: boolean };
+  settings: TaxSettingsView;
 }
 
 interface IrcData {
@@ -68,11 +92,12 @@ interface IrcData {
   accountingProfit: number;
   nextYearInstalments: { total: number; perInstalment: number; exempt: boolean };
   hasData: boolean;
-  settings: { mix: SalesMix; derramaMunicipalRate: number; isPme: boolean };
+  settings: TaxSettingsView;
+  derrama: DerramaInfo;
 }
 
 export default function EstadoPanel() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const now = new Date();
   const [view, setView] = useState<'iva' | 'irc'>('iva');
   const [year, setYear] = useState(now.getUTCFullYear());
@@ -90,7 +115,7 @@ export default function EstadoPanel() {
         if (view === 'iva') setVat(r.data as unknown as VatData);
         else setIrc(r.data as unknown as IrcData);
       } else {
-        toast.error(r.error);
+        toast.error(translateError(language, r.error));
       }
       setLoading(false);
     });
@@ -167,6 +192,8 @@ export default function EstadoPanel() {
       {showSettings && (
         <SettingsDialog
           settings={(view === 'iva' ? vat?.settings : irc?.settings) ?? null}
+          // The council's rates come with the IRC estimate, where they apply.
+          derrama={view === 'irc' ? irc?.derrama ?? null : null}
           // The mix only matters while some takings lack the till's detail.
           // Unknown (nothing loaded yet) counts as in use, so it stays editable.
           mixInUse={((view === 'iva' ? vat?.estimatedGross : irc?.estimatedGross) ?? 1) > 0}
@@ -178,7 +205,7 @@ export default function EstadoPanel() {
               setShowSettings(false);
               load();
             } else {
-              toast.error(result.error || t('estado.saveFailed'));
+              toast.error(result.error ? translateError(language, result.error) : t('estado.saveFailed'));
             }
           }}
         />
@@ -510,7 +537,20 @@ function IrcView({
                   />
                 ))}
                 {data.derramaMunicipal > 0 && (
-                  <Line label={t('estado.derramaMunicipal')} value={formatMoneyExact(data.derramaMunicipal)} />
+                  <Line
+                    label={`${t('estado.derramaMunicipal')} (${
+                      data.derrama.municipality ? `${data.derrama.municipality.name} · ` : ''
+                    }${formatPercent(data.derrama.resolved.rate, 2)})`}
+                    value={formatMoneyExact(data.derramaMunicipal)}
+                  />
+                )}
+                {/* Said rather than left out, so a zero reads as the council's
+                    decision and not as something the app forgot. */}
+                {data.derrama.resolved.source === 'none' && data.derrama.municipality && (
+                  <Line
+                    label={t('estado.derramaNoneShort').replace('{name}', data.derrama.municipality.name)}
+                    value={formatMoneyExact(0)}
+                  />
                 )}
               </div>
             </div>
@@ -584,14 +624,16 @@ function Line({
 }
 
 function SettingsDialog({
-  settings, mixInUse, onClose, onSave,
+  settings, derrama: derramaInfo, mixInUse, onClose, onSave,
 }: {
-  settings: { mix: SalesMix; derramaMunicipalRate: number; isPme: boolean } | null;
+  settings: TaxSettingsView | null;
+  /** The council and its rates; null outside the IRC view. */
+  derrama: DerramaInfo | null;
   /** False when the till covered every sale in view, so the mix changes nothing. */
   mixInUse: boolean;
   onClose: () => void;
   onSave: (input: {
-    mix: SalesMix; derramaMunicipalRate: number; isPme: boolean;
+    mix: SalesMix; derramaMunicipalRate: number; derramaChoice: DerramaChoice; isPme: boolean;
   }) => void;
 }) {
   const { t } = useLanguage();
@@ -599,6 +641,7 @@ function SettingsDialog({
     settings?.mix ?? { food: 72, softDrink: 12, refrigerante: 4, alcohol: 12 }
   );
   const [derrama, setDerrama] = useState(String(settings?.derramaMunicipalRate ?? 1.5));
+  const [derramaChoice, setDerramaChoice] = useState<DerramaChoice>(settings?.derramaChoice ?? 'general');
   const [isPme, setIsPme] = useState(settings?.isPme ?? true);
 
   const total = SALES_VAT_CLASSES.reduce((s, c) => s + (mix[c.key] || 0), 0);
@@ -675,23 +718,35 @@ function SettingsDialog({
         </>
         )}
 
-        <label className="block mt-4">
-          <span className="text-xs text-muted-foreground block mb-1.5">
-            {t('estado.derramaMunicipal')}
-            <span className="block text-[10px] opacity-70">
-              {t('estado.derramaHintBefore')} {DERRAMA_MUNICIPAL_MAX}%.
+        {derramaInfo?.municipality && derramaInfo.council ? (
+          <DerramaChooser
+            info={derramaInfo}
+            choice={derramaChoice}
+            onChoice={setDerramaChoice}
+            manualRate={derrama}
+            onManualRate={setDerrama}
+          />
+        ) : (
+          <label className="block mt-4">
+            <span className="text-xs text-muted-foreground block mb-1.5">
+              {t('estado.derramaMunicipal')}
+              <span className="block text-[10px] opacity-70">
+                {derramaInfo
+                  ? t('estado.derramaPickMunicipality')
+                  : `${t('estado.derramaHintBefore')} ${DERRAMA_MUNICIPAL_MAX}%.`}
+              </span>
             </span>
-          </span>
-          <span className="flex items-center gap-2">
-            <input
-              type="number" min={0} max={DERRAMA_MUNICIPAL_MAX} step={0.1}
-              value={derrama} onChange={(e) => setDerrama(e.target.value)}
-              aria-label={t('estado.derramaMunicipal')}
-              className="input-field !py-1.5 !text-sm w-24"
-            />
-            <span className="text-xs text-muted-foreground">%</span>
-          </span>
-        </label>
+            <span className="flex items-center gap-2">
+              <input
+                type="number" min={0} max={DERRAMA_MUNICIPAL_MAX} step={0.1}
+                value={derrama} onChange={(e) => setDerrama(e.target.value)}
+                aria-label={t('estado.derramaMunicipal')}
+                className="input-field !py-1.5 !text-sm w-24"
+              />
+              <span className="text-xs text-muted-foreground">%</span>
+            </span>
+          </label>
+        )}
 
         <label className="flex items-start gap-2.5 mt-4 cursor-pointer">
           <input
@@ -710,7 +765,8 @@ function SettingsDialog({
           type="button"
           onClick={() => onSave({
             mix,
-            derramaMunicipalRate: Number(derrama) || 0,
+            derramaMunicipalRate: Number(derrama.replace(',', '.')) || 0,
+            derramaChoice,
             isPme,
           })}
           className="cta-button w-full mt-5 !py-2.5 !text-sm"
@@ -720,5 +776,161 @@ function SettingsDialog({
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * The council's own rates, from the Tax Authority's table, to pick the one
+ * that applies. The general rate is the default because it never understates
+ * the bill; a reduced rate or exemption is the owner's call, since most turn
+ * on conditions only they can confirm. Where the condition is plain turnover,
+ * the app's own figure for the previous year is put next to it.
+ */
+function DerramaChooser({
+  info, choice, onChoice, manualRate, onManualRate,
+}: {
+  info: DerramaInfo;
+  choice: DerramaChoice;
+  onChoice: (choice: DerramaChoice) => void;
+  manualRate: string;
+  onManualRate: (rate: string) => void;
+}) {
+  const { t } = useLanguage();
+  const { municipality, council, table, taxYear, previousTurnover, resolved } = info;
+  if (!municipality || !council) return null;
+
+  const source = t('estado.derramaSource').replace('{year}', String(table.year)) +
+    (table.exact ? '' : ` ${t('estado.derramaSourceNotYet').replace('{year}', String(taxYear))}`);
+
+  return (
+    <fieldset className="mt-4">
+      <legend className="text-xs text-muted-foreground mb-1.5">
+        {t('estado.derramaMunicipal')} · <strong className="font-semibold text-foreground">{municipality.name}</strong>
+        <span className="block text-[10px] opacity-70">{source}</span>
+      </legend>
+
+      {council.generalRate === null ? (
+        <p className="rounded-xl border border-border p-3 text-xs text-foreground">
+          {t('estado.derramaNone')
+            .replace('{name}', municipality.name)
+            .replace('{year}', String(table.year))}
+        </p>
+      ) : (
+        <div className="space-y-1.5" role="radiogroup">
+          <DerramaOption
+            checked={choice === 'general' || (resolved.choiceOutdated && choice !== 'manual')}
+            onSelect={() => onChoice('general')}
+            title={t('estado.derramaGeneral')}
+            rate={formatPercent(council.generalRate, 2)}
+          />
+          {council.rules.map((rule, i) => {
+            const value = `rule:${table.year}:${i}` as DerramaChoice;
+            const met =
+              rule.turnoverMax === null || previousTurnover === null ? null : previousTurnover <= rule.turnoverMax;
+            return (
+              <DerramaOption
+                key={value}
+                checked={choice === value}
+                onSelect={() => onChoice(value)}
+                title={rule.kind === 'exempt' ? t('estado.derramaExempt') : t('estado.derramaReduced')}
+                rate={rule.kind === 'exempt' ? formatPercent(0, 0) : formatPercent(rule.rate, 2)}
+                criterion={rule.criterion ? t(`estado.derramaCriterion.${rule.criterion}`) : null}
+                scope={rule.scope}
+                note={
+                  rule.turnoverMax === null ? null
+                    : met === null
+                      ? { tone: 'muted', text: t('estado.derramaNoTurnover').replace('{year}', String(taxYear - 1)) }
+                      : {
+                          tone: met ? 'ok' : 'muted',
+                          text: t(met ? 'estado.derramaTurnoverMet' : 'estado.derramaTurnoverNotMet')
+                            .replace('{year}', String(taxYear - 1))
+                            .replace('{amount}', formatMoneyExact(previousTurnover ?? 0)),
+                        }
+                }
+              />
+            );
+          })}
+          <DerramaOption
+            checked={choice === 'manual'}
+            onSelect={() => onChoice('manual')}
+            title={t('estado.derramaManual')}
+          >
+            {choice === 'manual' && (
+              <span className="mt-2 flex items-center gap-2">
+                <input
+                  type="text" inputMode="decimal"
+                  value={manualRate} onChange={(e) => onManualRate(e.target.value)}
+                  aria-label={t('estado.derramaManual')}
+                  className="input-field !py-1.5 !text-sm !w-24"
+                />
+                <span className="text-xs text-muted-foreground">%</span>
+              </span>
+            )}
+          </DerramaOption>
+        </div>
+      )}
+
+      {resolved.choiceOutdated && (
+        <p className="mt-2 text-[11px] text-warning">{t('estado.derramaChoiceOutdated')}</p>
+      )}
+    </fieldset>
+  );
+}
+
+function DerramaOption({
+  checked, onSelect, title, rate, criterion, scope, note, children,
+}: {
+  checked: boolean;
+  onSelect: () => void;
+  title: string;
+  rate?: string;
+  criterion?: string | null;
+  scope?: string;
+  note?: { tone: 'ok' | 'muted'; text: string } | null;
+  children?: React.ReactNode;
+}) {
+  const { t } = useLanguage();
+  const [expanded, setExpanded] = useState(false);
+  const long = (scope?.length ?? 0) > 160;
+
+  return (
+    <label
+      className={`flex items-start gap-2.5 rounded-xl border p-3 cursor-pointer transition-colors ${
+        checked ? 'border-primary/60 bg-primary/5' : 'border-border hover:bg-muted/50'
+      }`}
+    >
+      <input type="radio" name="derramaChoice" checked={checked} onChange={onSelect} className="mt-0.5 accent-primary" />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline justify-between gap-3">
+          <span className="text-sm text-foreground">
+            {title}
+            {criterion && <span className="text-muted-foreground"> · {criterion}</span>}
+          </span>
+          {rate && <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{rate}</span>}
+        </span>
+        {scope && (
+          // The circular's wording, untranslated: it is the legal condition.
+          <span lang="pt" className={`block mt-1 text-[11px] text-muted-foreground ${long && !expanded ? 'line-clamp-3' : ''}`}>
+            {scope}
+          </span>
+        )}
+        {long && (
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); setExpanded((v) => !v); }}
+            className="mt-0.5 text-[11px] font-semibold text-primary-ink hover:underline"
+            aria-expanded={expanded}
+          >
+            {expanded ? t('estado.derramaShowLess') : t('estado.derramaShowMore')}
+          </button>
+        )}
+        {note && (
+          <span className={`block mt-1 text-[11px] ${note.tone === 'ok' ? 'text-green-400' : 'text-muted-foreground'}`}>
+            {note.text}
+          </span>
+        )}
+        {children}
+      </span>
+    </label>
   );
 }

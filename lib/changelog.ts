@@ -35,9 +35,27 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.06.4';
+export const CHANGELOG_VERSION = '2026.10.06.5';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.06.5',
+    date: '2026-10-06',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'As faturas passam a alimentar os seus ingredientes',
+        detail:
+          'Ao digitalizar uma fatura, cada linha fica guardada com o preço por quilo e o fornecedor, e liga-se aos ingredientes que já tem — o "Carne Picada Novilho" do talho passa a ser a sua "Carne Smash". Perguntamos uma vez por produto novo e nunca mais. Uma linha pode alimentar vários ingredientes, porque a mesma carne serve o hambúrguer e o extra. Daqui vêm os avisos de subida de preço e o custo real dos pratos.',
+      },
+      {
+        kind: 'improvement',
+        title: 'A derrama do seu município, com as taxas oficiais',
+        detail:
+          'Em Configurações › Restaurante procure o município onde paga a derrama. A estimativa de IRC passa a usar as taxas que a Autoridade Tributária publicou para cada um dos 308 municípios — incluindo os que não cobram nada. Em Estado › IRC › Pressupostos escolhe se lhe cabe uma taxa reduzida ou uma isenção, com a condição de cada uma ao lado e o seu volume de negócios do ano anterior para comparar.',
+      },
+    ],
+  },
   {
     version: '2026.10.06.4',
     date: '2026-10-06',

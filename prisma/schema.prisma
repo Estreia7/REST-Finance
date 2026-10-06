@@ -86,6 +86,10 @@ model Restaurant {
   currency String  @default("EUR")
   taxId    String? @map("tax_id") // NIF for accountant reports
 
+  /// The council the restaurant pays its derrama to, by the Tax Authority's
+  /// district/council code ("0813" is Silves). See lib/derrama.ts.
+  municipalityCode String? @map("municipality_code")
+
   memberships       Membership[]
   categories        Category[]
   dailySummaries    DailySummary[]
@@ -110,6 +114,7 @@ model Restaurant {
   categoryRevenue   DailyCategoryRevenue[]
   posProducts       PosProduct[]
   posProductSales   PosProductSale[]
+  invoiceItemLinks  InvoiceItemLink[]
 
   @@map("restaurants")
 }
@@ -158,17 +163,17 @@ model User {
   accounts Account[]
   sessions Session[]
 
-  memberships      Membership[]
-  createdSummaries DailySummary[]   @relation("SummaryCreatedBy")
-  createdCosts     CostEntry[]      @relation("CostCreatedBy")
-  createdRecurringCosts RecurringCost[] @relation("RecurringCostCreatedBy")
-  auditLogs        AuditLog[]       @relation("AuditActor")
-  notifications    Notification[]
-  receiptScans     ReceiptScan[]
-  complianceDocs   ComplianceDoc[]  @relation("ComplianceUploadedBy")
-  supportTickets   SupportTicket[]  @relation("SupportRequester")
-  supportReplies   SupportTicket[]  @relation("SupportResponder")
-  extractionTests  ExtractionTest[]
+  memberships           Membership[]
+  createdSummaries      DailySummary[]   @relation("SummaryCreatedBy")
+  createdCosts          CostEntry[]      @relation("CostCreatedBy")
+  createdRecurringCosts RecurringCost[]  @relation("RecurringCostCreatedBy")
+  auditLogs             AuditLog[]       @relation("AuditActor")
+  notifications         Notification[]
+  receiptScans          ReceiptScan[]
+  complianceDocs        ComplianceDoc[]  @relation("ComplianceUploadedBy")
+  supportTickets        SupportTicket[]  @relation("SupportRequester")
+  supportReplies        SupportTicket[]  @relation("SupportResponder")
+  extractionTests       ExtractionTest[]
 
   @@map("users")
 }
@@ -275,9 +280,9 @@ model Category {
   isOccupancy Boolean @default(false) @map("is_occupancy")
 
   recurringCosts RecurringCost[]
-  costEntries  CostEntry[]
-  dailyRevenue DailyCategoryRevenue[]
-  posProducts  PosProduct[]
+  costEntries    CostEntry[]
+  dailyRevenue   DailyCategoryRevenue[]
+  posProducts    PosProduct[]
 
   @@index([restaurantId, isActive])
   @@map("categories")
@@ -357,10 +362,10 @@ model RecurringCost {
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
   restaurantId String     @map("restaurant_id")
 
-  type       CostType
-  category   Category? @relation(fields: [categoryId], references: [id])
-  categoryId String?   @map("category_id")
-  amount      Decimal  @db.Decimal(12, 2)
+  type        CostType
+  category    Category? @relation(fields: [categoryId], references: [id])
+  categoryId  String?   @map("category_id")
+  amount      Decimal   @db.Decimal(12, 2)
   description String?
 
   /// 1–31; a 31 falls on the last day of shorter months.
@@ -517,6 +522,7 @@ model Vendor {
 
   costEntries  CostEntry[]
   invoiceItems InvoiceItem[]
+  itemLinks    InvoiceItemLink[]
 
   @@unique([restaurantId, name])
   @@map("vendors")
@@ -726,9 +732,24 @@ model Ingredient {
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
   restaurantId String     @map("restaurant_id")
 
-  name           String
+  name String
+
+  /// Another ingredient this is really a portion of.
+  ///
+  /// The POS import brings in its modifiers as ingredients, so a kitchen
+  /// ends up with both "Carne Smash" and "EXTRA CARNE" — the same meat,
+  /// bought once, served two ways. Two separate ingredients would mean two
+  /// costs for one product, free to drift apart, and an invoice would have
+  /// to be told twice which it priced.
+  ///
+  /// So one points at the other. The alias keeps its own name, because that
+  /// is what the till prints and what the ingredients ranking counts, but
+  /// its cost is whatever the real ingredient costs.
+  aliasOf        Ingredient?  @relation("IngredientAlias", fields: [aliasOfId], references: [id], onDelete: SetNull)
+  aliasOfId      String?      @map("alias_of_id")
+  aliases        Ingredient[] @relation("IngredientAlias")
   /// Matches against InvoiceItem.normalizedName, so invoices can price this.
-  normalizedName String @map("normalized_name")
+  normalizedName String       @map("normalized_name")
 
   /// The unit the kitchen measures in: kg, L, un. Recipes state quantities in
   /// a sub-unit (g, ml) and convert, because nobody writes "0.15 kg of cod".
@@ -756,6 +777,7 @@ model Ingredient {
   deletedAt DateTime? @map("deleted_at")
 
   recipeLines RecipeLine[]
+  itemLinks   InvoiceItemLink[]
 
   @@index([restaurantId, deletedAt])
   @@index([restaurantId, normalizedName])
@@ -1075,4 +1097,48 @@ model PosProductSale {
   @@index([productId, date])
   @@index([restaurantId, date])
   @@map("pos_product_sales")
+}
+
+/// A supplier's wording for something the kitchen already has a name for.
+///
+/// "CARNE PICADA NOVILHO 80/20" is the same thing as "Carne Smash", and no
+/// amount of string comparison will ever be sure of that — only the owner
+/// knows. So they are asked once, and the answer is kept here against the
+/// supplier's exact wording, which is stable: next month's invoice prints the
+/// same line and nothing needs asking.
+///
+/// Scoped to the restaurant rather than shared across the platform. Two
+/// restaurants can buy the same product and mean different things by it, and
+/// one owner's correction must never reprice another's menu.
+model InvoiceItemLink {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  /// The supplier's wording, lower-cased and trimmed. What arrives on the
+  /// invoice, not what the kitchen calls it.
+  sourceName String @map("source_name")
+
+  /// Which supplier printed it. Null matches any: a product bought from two
+  /// wholesalers under the same name is still the same product, and asking
+  /// twice would be asking twice for nothing.
+  vendor   Vendor? @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  vendorId String? @map("vendor_id")
+
+  /// What it actually is. Deleting the ingredient takes the link with it,
+  /// since a link to nothing would silently stop matching.
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  ingredientId String     @map("ingredient_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// One row per wording per supplier per ingredient — not one answer.
+  /// A case of meat can feed both the burger mince and the extra portion
+  /// sold on the side: same product, same price per kilo, two places it
+  /// is used. Forcing a single choice would make the owner pick which of
+  /// their own ingredients to leave uncosted.
+  @@unique([restaurantId, sourceName, vendorId, ingredientId])
+  @@index([restaurantId, sourceName])
+  @@map("invoice_item_links")
 }

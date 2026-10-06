@@ -3,15 +3,17 @@
 import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import {
-  quarterRange, vatReturn, estimateIrc, paymentsOnAccount, salesVat, splitTillSales,
+  quarterRange, vatReturn, estimateIrc, paymentsOnAccount, splitTillSales,
   DEFAULT_SALES_MIX, type Quarter, type SalesMix,
 } from '@/lib/tax-calc';
 import {
   ASSUMED_PURCHASE_VAT, DEFAULT_DEDUCTIBILITY, IVA_RATES, type Region, type DeductibilityKey,
 } from '@/lib/tax-rules';
 import {
-  readTaxSettings, DEFAULT_TAX_SETTINGS, readSalesForPeriod, TAX_SETTING_KEY, type TaxSettings,
+  readTaxSettings, DEFAULT_TAX_SETTINGS, readSalesForPeriod, TAX_SETTING_KEY, netTurnover,
+  derramaForYear, type TaxSettings,
 } from '@/lib/tax-period';
+import { isDerramaChoice } from '@/lib/derrama';
 
 /**
  * The Estado tab's server side.
@@ -57,6 +59,7 @@ export async function saveTaxSettings(input: Partial<TaxSettings>) {
 
   // The statutory ceiling is 1.5%; a council cannot charge above it.
   next.derramaMunicipalRate = Math.min(Math.max(next.derramaMunicipalRate, 0), 1.5);
+  if (!isDerramaChoice(next.derramaChoice)) next.derramaChoice = 'general';
 
   const key = `${TAX_SETTING_KEY}.${owner.restaurantId}`;
   await prisma.appSetting.upsert({
@@ -142,12 +145,20 @@ export async function getIrcYear(year: number) {
   const end = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
   const scope = { restaurantId: owner.restaurantId, deletedAt: null };
 
-  const [sales, costs] = await Promise.all([
+  const [sales, costs, previousSales, derrama] = await Promise.all([
     readSales(owner.restaurantId, start, end, settings.region),
     prisma.costEntry.aggregate({
       where: { ...scope, date: { gte: start, lte: end } },
       _sum: { amount: true },
     }),
+    // Most councils' reduced rates turn on the previous period's turnover.
+    readSales(
+      owner.restaurantId,
+      new Date(Date.UTC(year - 1, 0, 1)),
+      new Date(Date.UTC(year - 1, 11, 31, 23, 59, 59, 999)),
+      settings.region,
+    ),
+    derramaForYear(owner.restaurantId, settings, year),
   ]);
 
   const { grossRevenue } = sales;
@@ -155,11 +166,9 @@ export async function getIrcYear(year: number) {
 
   // IRC is charged on profit net of VAT: the VAT inside the takings was never
   // the restaurant's money. Using the gross figure would overstate the profit
-  // by roughly a seventh and the tax with it. The till's own net figure where
-  // there is one; the mix only for takings it did not break down.
-  const totalNet =
-    sales.tillLines.reduce((s, l) => s + l.net, 0) +
-    salesVat(sales.estimatedGross, settings.mix, settings.region).totalNet;
+  // by roughly a seventh and the tax with it.
+  const totalNet = netTurnover(sales, settings);
+  const previousTurnover = netTurnover(previousSales, settings);
 
   const accountingProfit = totalNet - totalCosts;
 
@@ -167,7 +176,7 @@ export async function getIrcYear(year: number) {
     year,
     accountingProfit,
     isPme: settings.isPme,
-    derramaMunicipalRate: settings.derramaMunicipalRate,
+    derramaMunicipalRate: derrama.resolved.rate,
   });
 
   const instalments = paymentsOnAccount({
@@ -188,6 +197,15 @@ export async function getIrcYear(year: number) {
       nextYearInstalments: instalments,
       hasData: grossRevenue > 0 || totalCosts > 0,
       settings,
+      derrama: {
+        municipality: derrama.municipality,
+        resolved: derrama.resolved,
+        council: derrama.council,
+        table: derrama.table,
+        taxYear: year,
+        /** Null when the app holds no takings for the previous year. */
+        previousTurnover: previousTurnover > 0 ? previousTurnover : null,
+      },
     },
   };
 }

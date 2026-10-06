@@ -32,6 +32,13 @@ import {
   type Region,
   type DeductibilityKey,
 } from '@/lib/tax-rules';
+import {
+  findMunicipality,
+  resolveDerrama,
+  derramaTableFor,
+  isDerramaChoice,
+  type DerramaChoice,
+} from '@/lib/derrama';
 
 /** Where the Estado tab keeps the mix and the council's rate. */
 export const TAX_SETTING_KEY = 'tax.settings';
@@ -39,7 +46,10 @@ export const TAX_SETTING_KEY = 'tax.settings';
 export interface TaxSettings {
   mix: SalesMix;
   region: Region;
+  /** The rate typed by hand: used until a council is chosen, or when asked to. */
   derramaMunicipalRate: number;
+  /** Which of the council's rates applies. See lib/derrama.ts. */
+  derramaChoice: DerramaChoice;
   isPme: boolean;
   vatPeriodicity: 'quarterly' | 'monthly';
 }
@@ -48,6 +58,7 @@ export const DEFAULT_TAX_SETTINGS: TaxSettings = {
   mix: DEFAULT_SALES_MIX,
   region: 'continente',
   derramaMunicipalRate: 1.5,
+  derramaChoice: 'general',
   isPme: true,
   vatPeriodicity: 'quarterly',
 };
@@ -63,6 +74,7 @@ export async function readTaxSettings(restaurantId: string): Promise<TaxSettings
       ...DEFAULT_TAX_SETTINGS,
       ...parsed,
       mix: { ...DEFAULT_SALES_MIX, ...(parsed.mix ?? {}) },
+      derramaChoice: isDerramaChoice(parsed.derramaChoice) ? parsed.derramaChoice : 'general',
     };
   } catch {
     // A corrupted preference must not take the caller down with it.
@@ -105,6 +117,49 @@ export async function readSalesForPeriod(
   });
 
   return { grossRevenue, tillLines, estimatedGross };
+}
+
+/**
+ * Takings net of VAT — the "volume de negócios" councils set their derrama
+ * thresholds on. The till's own net figure where there is one; the sales mix
+ * only for takings it did not break down.
+ */
+export function netTurnover(
+  sales: { tillLines: TillSalesLine[]; estimatedGross: number },
+  settings: Pick<TaxSettings, 'mix' | 'region'>,
+): number {
+  return (
+    sales.tillLines.reduce((s, l) => s + l.net, 0) +
+    salesVat(sales.estimatedGross, settings.mix, settings.region).totalNet
+  );
+}
+
+/**
+ * The derrama municipal a tax period is estimated with, and everything the
+ * tax screen needs to explain it. One function, so the Estado tab and the
+ * annual report can never disagree about the rate.
+ */
+export async function derramaForYear(
+  restaurantId: string,
+  settings: TaxSettings,
+  taxYear: number,
+) {
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+    select: { municipalityCode: true },
+  });
+  const municipality = findMunicipality(restaurant?.municipalityCode);
+  const resolved = resolveDerrama({
+    municipalityCode: municipality?.code,
+    choice: settings.derramaChoice,
+    manualRate: settings.derramaMunicipalRate,
+    taxYear,
+  });
+  const { table, exact } = derramaTableFor(taxYear);
+  const council = municipality ? table.byCode[municipality.code] ?? null : null;
+  // The table is named even when the owner typed their own rate, so the
+  // options can still be offered against it.
+  return { municipality, resolved, council, table: { year: table.taxYear, exact } };
 }
 
 /** Purchases grouped the way the deductibility rules expect. */

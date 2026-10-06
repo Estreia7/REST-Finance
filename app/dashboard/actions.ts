@@ -12,6 +12,7 @@ import {
 } from '@/lib/validations';
 import { requireAuth, requireOwner, requireMember, isAuthError } from '@/lib/auth-helpers';
 import { isDemoAccount } from '@/lib/demo';
+import { findMunicipality } from '@/lib/derrama';
 import { calculateKpis, toPercent, safeDivide, percentChange } from '@/lib/kpi';
 // Keep these in sync with the Prisma enums in schema.prisma
 type CostType = 'COGS' | 'OPEX';
@@ -990,10 +991,18 @@ export async function updateRestaurantSettings(data: {
   name?: string;
   timezone?: string;
   currency?: string;
+  /** A council code from lib/municipalities.ts; null clears it. */
+  municipalityCode?: string | null;
 }) {
   try {
     const owner = await requireOwner();
     if (isAuthError(owner)) return { error: owner.error };
+
+    // Only a code the Tax Authority's list knows: anything else would leave
+    // the tax estimate pointing at a council with no rates.
+    if (data.municipalityCode && !findMunicipality(data.municipalityCode)) {
+      return { error: 'settings.municipalityInvalid' };
+    }
 
     await prisma.restaurant.update({
       where: { id: owner.restaurantId },
@@ -1001,6 +1010,7 @@ export async function updateRestaurantSettings(data: {
         ...(data.name && { name: data.name }),
         ...(data.timezone && { timezone: data.timezone }),
         ...(data.currency && { currency: data.currency }),
+        ...(data.municipalityCode !== undefined && { municipalityCode: data.municipalityCode }),
       },
     });
 

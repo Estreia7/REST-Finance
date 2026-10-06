@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Camera, Loader2, Check, X, RotateCcw, Receipt, FileText } from 'lucide-react';
 import { createDailySummary, createCostEntry, getCategories } from '../actions';
 import { useLanguage } from '@/lib/language-context';
+import { commitReconciliation } from '../reconcile-actions';
 import DocumentCamera from './DocumentCamera';
 import ScanPageEditor, { type ScannedPage } from './ScanPageEditor';
 import ScanTray, { type ScannedDocument, newDocumentId } from './ScanTray';
@@ -17,7 +18,11 @@ interface CostReceiptData {
   type: 'cost_receipt';
   date: string;
   vendor: string;
-  items: Array<{ product: string; quantity: number; unitPrice: number; total: number }>;
+  vendorTaxId?: string;
+  /** Extracted by the scanner and, until now, dropped on the way to the
+      database — it is how an invoice is found again. */
+  invoiceNumber?: string;
+  items: Array<{ product: string; quantity: number; unit?: string; unitPrice: number; total: number }>;
   grandTotal: number;
   suggestedType: 'COGS' | 'OPEX';
   suggestedCategory: string;
@@ -300,6 +305,35 @@ export default function ReceiptScanner({
           description: `${d.vendor} - ${d.items.map(i => i.product).join(', ')}`,
         });
         if (result.success) {
+          // The lines were being thrown away: the money was kept and
+          // everything that makes an invoice useful — what was bought,
+          // at what price per kilo, from whom — went into a sentence in
+          // the description. Kept now, and linked to the ingredients.
+          const entryId = (result as { data?: { id?: string } }).data?.id;
+          if (entryId && d.items.length > 0) {
+            const saved = await commitReconciliation({
+              costEntryId: entryId,
+              vendorName: d.vendor,
+              invoiceDate: d.date,
+              invoiceNumber: d.invoiceNumber ?? null,
+              lines: d.items.map((item) => ({
+                productName: item.product,
+                quantity: item.quantity,
+                unit: item.unit,
+                unitPrice: item.unitPrice,
+                total: item.total,
+                // Linked where the wording is already known, created
+                // otherwise. The screen that asks about the uncertain
+                // ones comes next; until then a new ingredient is the
+                // safe answer, since it keeps the price history rather
+                // than discarding the line.
+                createAs: item.product,
+              })),
+            });
+            // A failure here must not lose the cost entry that saved
+            // fine; the owner is told, and the money is still recorded.
+            if ('error' in saved) toast.error(t('scanner.costSaved'));
+          }
           toast.success(t('scanner.costSaved'));
           resetState();
           onSaved?.();
@@ -474,9 +508,15 @@ export default function ReceiptScanner({
                   <div className="text-xs text-muted-foreground">{t('scanner.items')}</div>
                   {(editData as CostReceiptData).items.map((item, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs bg-muted rounded-lg p-2">
-                      <span className="flex-1 text-foreground">{item.product}</span>
-                      <span className="text-muted-foreground">{item.quantity}x</span>
-                      <span className="font-semibold text-foreground">€{item.total.toFixed(2)}</span>
+                      <span className="flex-1 text-foreground [overflow-wrap:anywhere]">{item.product}</span>
+                      {/* The unit price is the figure an ingredient cost
+                          is built from, and it was being hidden: the
+                          model extracts it, the screen showed only the
+                          quantity and the total. */}
+                      <span className="text-muted-foreground tabular-nums shrink-0 whitespace-nowrap">
+                        {item.quantity}{item.unit ? ` ${item.unit}` : ''} × €{item.unitPrice.toFixed(2)}
+                      </span>
+                      <span className="font-semibold text-foreground tabular-nums shrink-0">€{item.total.toFixed(2)}</span>
                     </div>
                   ))}
                 </div>

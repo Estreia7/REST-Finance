@@ -10,7 +10,9 @@ import {
 } from '../image-actions';
 import ImageUpload from './ImageUpload';
 import CategoryManager from './CategoryManager';
+import MunicipalityPicker from './MunicipalityPicker';
 import { useLanguage } from '@/lib/language-context';
+import { translateError } from '@/lib/error-messages';
 import { MIN_PASSWORD_LENGTH } from '@/lib/validations';
 
 interface SettingsPanelProps {
@@ -27,7 +29,7 @@ interface SettingsPanelProps {
 export default function SettingsPanel({
   pendingTheme, hasUnsavedChanges, onThemeChange, onSaveTheme, onCancelTheme, currentUser, restaurant, onUpdate,
 }: SettingsPanelProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   // Profile
   const [name, setName] = useState(currentUser?.name || '');
@@ -43,6 +45,7 @@ export default function SettingsPanel({
   const [restaurantName, setRestaurantName] = useState(restaurant?.name || '');
   const [timezone, setTimezone] = useState(restaurant?.timezone || 'Europe/Lisbon');
   const [currency, setCurrency] = useState(restaurant?.currency || 'EUR');
+  const [municipalityCode, setMunicipalityCode] = useState<string | null>(restaurant?.municipalityCode ?? null);
   const [savingRestaurant, setSavingRestaurant] = useState(false);
 
   const handleSaveProfile = async () => {
@@ -67,9 +70,9 @@ export default function SettingsPanel({
 
   const handleSaveRestaurant = async () => {
     setSavingRestaurant(true);
-    const result = await updateRestaurantSettings({ name: restaurantName, timezone, currency });
+    const result = await updateRestaurantSettings({ name: restaurantName, timezone, currency, municipalityCode });
     if (result.success) { toast.success(t('settings.restaurantUpdated')); onUpdate?.(); }
-    else toast.error(result.error || t('settings.updateFailed'));
+    else toast.error(result.error ? translateError(language, result.error) : t('settings.updateFailed'));
     setSavingRestaurant(false);
   };
 
@@ -170,6 +173,11 @@ export default function SettingsPanel({
             <div>
               <label htmlFor="settings-restaurant-name" className="text-xs font-medium text-muted-foreground block mb-2">{t('settings.restaurantName')}</label>
               <input id="settings-restaurant-name" type="text" value={restaurantName} onChange={e => setRestaurantName(e.target.value)} className="input-field" />
+            </div>
+            <div>
+              <label htmlFor="settings-municipality" className="text-xs font-medium text-muted-foreground block mb-2">{t('settings.municipality')}</label>
+              <MunicipalityPicker id="settings-municipality" value={municipalityCode} onChange={setMunicipalityCode} />
+              <p className="text-[11px] text-muted-foreground mt-1.5">{t('settings.municipalityHint')}</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
