@@ -56,6 +56,93 @@ describe('applyFilter', () => {
     }
   });
 
+  it('removes a shadow: paper is white and ink dark at both ends of the page', () => {
+    // A till roll photographed with the bottom in shade: the paper falls from
+    // 230 at the top to 110 at the bottom, and the ink is 55% of the paper
+    // wherever it is. Ink at the bright top is lighter than paper at the dim
+    // bottom — no single global curve can fix that.
+    const width = 120;
+    const height = 240;
+    const data = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y++) {
+      const paper = 230 - (120 * y) / (height - 1);
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        const v = y % 8 === 0 ? paper * 0.55 : paper;
+        data[i] = data[i + 1] = data[i + 2] = v;
+        data[i + 3] = 255;
+      }
+    }
+    const page = { data, width, height, colorSpace: 'srgb' } as ImageData;
+    applyFilter(page, 'enhanced');
+
+    for (const y of [9, 121, 233]) expect(lumAt(page, 60, y)).toBeGreaterThanOrEqual(245);
+    for (const y of [8, 120, 232]) expect(lumAt(page, 60, y)).toBeLessThanOrEqual(90);
+  });
+
+  it('turns yellowed thermal paper white while the ink stays dark', () => {
+    const width = 120;
+    const height = 120;
+    const data = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        const ink = y % 6 === 0;
+        data[i] = ink ? 110 : 225;
+        data[i + 1] = ink ? 95 : 200;
+        data[i + 2] = ink ? 60 : 130;
+        data[i + 3] = 255;
+      }
+    }
+    const page = { data, width, height, colorSpace: 'srgb' } as ImageData;
+    applyFilter(page, 'enhanced');
+
+    const at = (x: number, y: number) => [...page.data.slice((y * width + x) * 4, (y * width + x) * 4 + 3)];
+    // Paper: white and neutral, not cream.
+    for (const v of at(60, 61)) expect(v).toBeGreaterThanOrEqual(245);
+    // Ink: dark in every channel.
+    for (const v of at(60, 60)) expect(v).toBeLessThanOrEqual(110);
+  });
+
+  it('keeps a document written in blue pen blue', () => {
+    // A strongly coloured ink is the document, not a cast to be removed.
+    const width = 120;
+    const height = 120;
+    const data = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        const ink = y % 6 === 0;
+        data[i] = ink ? 40 : 235;
+        data[i + 1] = ink ? 60 : 235;
+        data[i + 2] = ink ? 170 : 235;
+        data[i + 3] = 255;
+      }
+    }
+    const page = { data, width, height, colorSpace: 'srgb' } as ImageData;
+    applyFilter(page, 'enhanced');
+    const i = (60 * width + 60) * 4;
+    expect(page.data[i + 2] - page.data[i]).toBeGreaterThan(60);
+  });
+
+  it('keeps black and white clean under a shadow too', () => {
+    const width = 120;
+    const height = 240;
+    const data = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y++) {
+      const paper = 230 - (120 * y) / (height - 1);
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        data[i] = data[i + 1] = data[i + 2] = y % 8 === 0 ? paper * 0.55 : paper;
+        data[i + 3] = 255;
+      }
+    }
+    const page = { data, width, height, colorSpace: 'srgb' } as ImageData;
+    applyFilter(page, 'blackwhite');
+    for (const y of [9, 233]) expect(lumAt(page, 60, y)).toBe(255);
+    for (const y of [8, 232]) expect(lumAt(page, 60, y)).toBe(0);
+  });
+
   it('separates text from background completely in "blackwhite"', () => {
     const page = makePage(200, 120);
     applyFilter(page, 'blackwhite');

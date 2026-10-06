@@ -35,9 +35,21 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.06.3';
+export const CHANGELOG_VERSION = '2026.10.06.4';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.06.4',
+    date: '2026-10-06',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'Talões digitalizados com papel branco, sem sombras',
+        detail:
+          'O filtro Realçado agora limpa a sombra da mão e o fundo mais escuro de um talão comprido, e tira o amarelo do papel térmico: fica papel branco e letra preta de uma ponta à outra. O Preto e branco também deixou de perder a letra na parte mais escura.',
+      },
+    ],
+  },
   {
     version: '2026.10.06.3',
     date: '2026-10-06',
