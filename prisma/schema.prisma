@@ -115,6 +115,7 @@ model Restaurant {
   posProducts       PosProduct[]
   posProductSales   PosProductSale[]
   invoiceItemLinks  InvoiceItemLink[]
+  lineMemories      InvoiceLineMemory[]
 
   @@map("restaurants")
 }
@@ -283,6 +284,8 @@ model Category {
   costEntries    CostEntry[]
   dailyRevenue   DailyCategoryRevenue[]
   posProducts    PosProduct[]
+  invoiceItems   InvoiceItem[]
+  lineMemories   InvoiceLineMemory[]
 
   @@index([restaurantId, isActive])
   @@map("categories")
@@ -341,11 +344,22 @@ model CostEntry {
   invoiceItems InvoiceItem[]
   receiptScans ReceiptScan[]
 
+  /// The entry this one was split from, when one invoice held lines of
+  /// several categories. A Makro invoice with meat, beer and bleach is one
+  /// document but three costs: booked whole under "Comida", the bleach
+  /// inflated food cost and the beer hid inside it. Each part carries its
+  /// share of the total; the original keeps the largest. Null on the
+  /// original and on every entry that was never split.
+  splitFrom   CostEntry?  @relation("CostEntrySplit", fields: [splitFromId], references: [id])
+  splitFromId String?     @map("split_from_id")
+  splitParts  CostEntry[] @relation("CostEntrySplit")
+
   /// One booking per fixed cost per day: two dashboards opening at once
   /// must not book the same month twice.
   @@unique([recurringCostId, date])
   @@index([restaurantId, date])
   @@index([restaurantId, type, date])
+  @@index([splitFromId])
   @@map("cost_entries")
 }
 
@@ -523,6 +537,7 @@ model Vendor {
   costEntries  CostEntry[]
   invoiceItems InvoiceItem[]
   itemLinks    InvoiceItemLink[]
+  lineMemories InvoiceLineMemory[]
 
   @@unique([restaurantId, name])
   @@map("vendors")
@@ -552,11 +567,36 @@ model InvoiceItem {
   invoiceDate   DateTime? @map("invoice_date")
   invoiceNumber String?   @map("invoice_number")
 
+  /// What kind of cost this line is. Per line, not per invoice: one
+  /// delivery can hold food, drink and cleaning, and the P&L needs them
+  /// apart. The cost entry this line sits under has the same category.
+  category       Category?           @relation(fields: [categoryId], references: [id])
+  categoryId     String?             @map("category_id")
+  categorySource LineCategorySource? @map("category_source")
+
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([restaurantId, normalizedName, vendorId, invoiceDate])
   @@index([restaurantId, invoiceDate])
   @@map("invoice_items")
+}
+
+/// Where a line's category came from.
+///
+/// Kept so the app can tell how much it is deciding by itself: the share of
+/// MEMORY lines is how close a restaurant is to invoices that need no one.
+enum LineCategorySource {
+  /// The owner chose it, or changed what was suggested.
+  OWNER
+  /// The restaurant's memory already knew this wording.
+  MEMORY
+  /// Suggested — by a similar wording, the supplier's habit or the reader —
+  /// and accepted as it was.
+  SUGGESTED
+  /// Saved before lines had categories, and copied from the invoice's. Never
+  /// learned from: a mixed invoice booked whole under one category would
+  /// teach the wrong answer for every line but one.
+  INHERITED
 }
 
 /// A person on the roster.
@@ -1193,4 +1233,45 @@ model InvoiceItemLink {
   @@unique([restaurantId, sourceName, vendorId, ingredientId])
   @@index([restaurantId, sourceName])
   @@map("invoice_item_links")
+}
+
+/// What one restaurant knows about one supplier's wording.
+///
+/// The memory that makes invoices stop asking. Every line the owner saves
+/// teaches it — the category the line belongs to, and whether it is a kitchen
+/// ingredient at all — and the next invoice carrying that wording is filled in
+/// from here before anything else is consulted.
+///
+/// Per restaurant, never shared: one owner books coffee beans as food and
+/// another as a bar cost, and both are right about their own business.
+model InvoiceLineMemory {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  /// The supplier's wording, lower-cased and trimmed — the same key as
+  /// InvoiceItemLink.
+  sourceName String @map("source_name")
+
+  vendor   Vendor? @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  vendorId String? @map("vendor_id")
+
+  category   Category? @relation(fields: [categoryId], references: [id])
+  categoryId String?   @map("category_id")
+
+  /// The owner said this line is not one of the kitchen's ingredients: the
+  /// deposit on a crate, a delivery fee, a bottle of bleach.
+  notIngredient Boolean @default(false) @map("not_ingredient")
+
+  /// How many times this answer was given or accepted. Reset to one when
+  /// the owner changes it: a corrected answer starts again from scratch.
+  confirmations Int      @default(1)
+  lastSeenAt    DateTime @default(now()) @map("last_seen_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([restaurantId, sourceName, vendorId])
+  @@index([restaurantId, vendorId])
+  @@map("invoice_line_memories")
 }

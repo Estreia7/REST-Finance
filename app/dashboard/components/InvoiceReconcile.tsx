@@ -1,12 +1,17 @@
 'use client';
 
 import { useState, useEffect, useCallback, useId, useMemo, useRef } from 'react';
-import { Loader2, Link2, Plus, AlertTriangle, Check, Search } from 'lucide-react';
+import { Loader2, Link2, Plus, AlertTriangle, Check, Search, Brain } from 'lucide-react';
 import { matchesSearch } from './ListSearch';
-import { previewReconciliation, type ReconcilePreview, type LineResolution } from '../reconcile-actions';
+import {
+  previewReconciliation,
+  type ReconcilePreview,
+  type LineResolution,
+  type ScannedLine,
+} from '../reconcile-actions';
+import CategoryPicker from './CategoryPicker';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
-import type { InvoiceLine } from '@/lib/invoice-matching';
 
 /**
  * Deciding what an invoice's lines are, before they are saved.
@@ -24,7 +29,10 @@ import type { InvoiceLine } from '@/lib/invoice-matching';
 
 interface Props {
   vendorName: string;
-  lines: InvoiceLine[];
+  /** The supplier NIF, which finds what was remembered about it. */
+  vendorTaxId?: string | null;
+  /** The lines as read, each with the reader's guess at its category. */
+  lines: ScannedLine[];
   /** Called with the resolved lines when the owner is done. */
   onResolved: (lines: LineResolution[]) => void;
   busy?: boolean;
@@ -181,7 +189,7 @@ function IngredientSearch({
   );
 }
 
-export default function InvoiceReconcile({ vendorName, lines, onResolved, busy = false }: Props) {
+export default function InvoiceReconcile({ vendorName, vendorTaxId = null, lines, onResolved, busy = false }: Props) {
   const { t } = useLanguage();
   const [preview, setPreview] = useState<ReconcilePreview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -202,10 +210,18 @@ export default function InvoiceReconcile({ vendorName, lines, onResolved, busy =
    * to ask it.
    */
   const [packChoices, setPackChoices] = useState<Record<string, 'packages' | 'weight'>>({});
+  /**
+   * Per line, its cost category and whether the owner chose it.
+   *
+   * Starts as the preview's guess. Saving a guess as it stands is an answer
+   * too, and is remembered; `owner` only records that it was changed, so the
+   * app can tell what it is getting right by itself.
+   */
+  const [categoryChoices, setCategoryChoices] = useState<Record<string, { id: string | null; owner: boolean }>>({});
 
   useEffect(() => {
     let cancelled = false;
-    previewReconciliation({ vendorName, lines }).then((result) => {
+    previewReconciliation({ vendorName, vendorTaxId, lines }).then((result) => {
       if (cancelled) return;
       setLoading(false);
       if (!('data' in result) || !result.data) return;
@@ -215,16 +231,59 @@ export default function InvoiceReconcile({ vendorName, lines, onResolved, busy =
       // Pre-answered where the match was safe, so the owner only sees what
       // genuinely needs them.
       const initial: Record<string, string[]> = {};
+      const categories: Record<string, { id: string | null; owner: boolean }> = {};
       for (const line of data.lines) {
         initial[line.productName] =
           line.decision.kind === 'linked'
             ? line.decision.ingredients.map((i) => i.id)
-            : ['__new'];
+            // Said before that this is not an ingredient: not asked again.
+            : line.notIngredient ? ['__skip'] : ['__new'];
+        categories[line.productName] = { id: line.category.id, owner: false };
       }
       setChoices(initial);
+      setCategoryChoices(categories);
     });
     return () => { cancelled = true; };
-  }, [vendorName, lines]);
+  }, [vendorName, vendorTaxId, lines]);
+
+  /** A running cost — cleaning, gas — is never a kitchen ingredient. */
+  const isRunningCost = useCallback(
+    (product: string) => {
+      const id = categoryChoices[product]?.id;
+      return !!id && preview?.categories.find((c) => c.id === id)?.type === 'OPEX';
+    },
+    [categoryChoices, preview],
+  );
+
+  const setCategory = useCallback((product: string, id: string, applyToAll: boolean) => {
+    const typeOf = (categoryId: string | null) =>
+      preview?.categories.find((c) => c.id === categoryId)?.type;
+    const affected = applyToAll ? Object.keys(categoryChoices) : [product];
+
+    // Brought back from a running cost into food, a line skipped only for
+    // being a running cost is asked about the kitchen again: the flour filed
+    // as cleaning was always an ingredient.
+    if (typeOf(id) === 'COGS') {
+      setChoices((current) => {
+        const next = { ...current };
+        for (const key of affected) {
+          if (typeOf(categoryChoices[key]?.id ?? null) !== 'OPEX') continue;
+          if (!(current[key] ?? []).includes('__skip')) continue;
+          const line = preview?.lines.find((l) => l.productName === key);
+          next[key] = line?.decision.kind === 'linked'
+            ? line.decision.ingredients.map((i) => i.id)
+            : ['__new'];
+        }
+        return next;
+      });
+    }
+
+    setCategoryChoices((current) => {
+      const next = { ...current };
+      for (const key of affected) next[key] = { id, owner: true };
+      return next;
+    });
+  }, [categoryChoices, preview]);
 
   /**
    * Turns one choice on or off.
@@ -265,13 +324,21 @@ export default function InvoiceReconcile({ vendorName, lines, onResolved, busy =
           ? line.impliedUnitPrice
           : measured.unitPrice;
 
+        const category = categoryChoices[line.productName] ?? { id: null, owner: false };
+        const categorySource: LineResolution['categorySource'] = !category.id
+          ? undefined
+          : category.owner ? 'OWNER'
+          : line.category.origin === 'memory' ? 'MEMORY' : 'SUGGESTED';
+
         return {
           productName: line.productName,
           quantity: measured.quantity,
           unit: measured.unit,
           unitPrice,
           total: line.total,
-          ...(choice.includes('__skip')
+          categoryId: category.id,
+          categorySource,
+          ...(choice.includes('__skip') || isRunningCost(line.productName)
             ? { skip: true }
             : choice.filter((c) => c !== '__new').length > 0
               ? { ingredientIds: choice.filter((c) => c !== '__new') }
@@ -279,7 +346,7 @@ export default function InvoiceReconcile({ vendorName, lines, onResolved, busy =
         } satisfies LineResolution;
       }),
     );
-  }, [preview, choices, packChoices, onResolved]);
+  }, [preview, choices, packChoices, categoryChoices, isRunningCost, onResolved]);
 
   if (loading) {
     return (
@@ -291,7 +358,22 @@ export default function InvoiceReconcile({ vendorName, lines, onResolved, busy =
 
   if (!preview || preview.lines.length === 0) return null;
 
-  const asking = preview.lines.filter((l) => l.decision.kind !== 'linked').length;
+  // What still wants an answer: a line with no category, or an ingredient
+  // line nobody has identified. Running costs and lines known not to be
+  // ingredients have nothing to ask about the kitchen.
+  const asking = preview.lines.filter((l) => {
+    if (!categoryChoices[l.productName]?.id) return true;
+    if (isRunningCost(l.productName)) return false;
+    return l.decision.kind !== 'linked' && !l.notIngredient;
+  }).length;
+  const known = preview.lines.filter((l) => l.category.origin === 'memory').length;
+
+  // Where the money is going, by category, as the owner sets it.
+  const byCategory = new Map<string | null, number>();
+  for (const line of preview.lines) {
+    const id = categoryChoices[line.productName]?.id ?? null;
+    byCategory.set(id, (byCategory.get(id) ?? 0) + line.total);
+  }
 
   return (
     <div className="space-y-3">
@@ -302,12 +384,43 @@ export default function InvoiceReconcile({ vendorName, lines, onResolved, busy =
             ? t('reconcile.allKnown')
             : t('reconcile.asking').replace('{n}', String(asking))}
         </p>
+        {/* How much the restaurant's memory already knew. The number that
+            should climb, invoice by invoice, until nothing is asked. */}
+        <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-1">
+          <Brain className={`w-3 h-3 shrink-0 ${known > 0 ? 'text-success' : ''}`} aria-hidden="true" />
+          {known > 0
+            ? t('reconcile.knownLines')
+                .replace('{known}', String(known))
+                .replace('{total}', String(preview.lines.length))
+            : t('reconcile.firstTime')}
+        </p>
       </div>
+
+      <ul aria-label={t('reconcile.byCategory')} className="flex flex-wrap gap-1.5">
+        {[...byCategory.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([id, total]) => (
+            <li
+              key={id ?? 'none'}
+              className={`rounded-lg px-2 py-1 text-[11px] tabular-nums ${
+                id ? 'bg-muted text-foreground' : 'bg-warning/10 text-warning'
+              }`}
+            >
+              {id
+                ? preview.categories.find((c) => c.id === id)?.name ?? t('reconcile.noCategory')
+                : t('reconcile.noCategory')}
+              {' '}
+              <span className="font-semibold">{formatMoney(total)}</span>
+            </li>
+          ))}
+      </ul>
 
       <ul className="space-y-2">
         {preview.lines.map((line) => {
           const choice = choices[line.productName] ?? ['__new'];
           const known = line.decision.kind === 'linked';
+          const category = categoryChoices[line.productName] ?? { id: null, owner: false };
+          const runningCost = isRunningCost(line.productName);
 
           return (
             <li
@@ -328,6 +441,17 @@ export default function InvoiceReconcile({ vendorName, lines, onResolved, busy =
                   {' = '}
                   <span className="text-foreground font-semibold">{formatMoney(line.total)}</span>
                 </span>
+              </div>
+
+              <div className="mb-2">
+                <CategoryPicker
+                  categories={preview.categories}
+                  value={category.id}
+                  origin={category.owner ? 'owner' : line.category.origin}
+                  productName={line.productName}
+                  allowApplyToAll={preview.lines.length > 1}
+                  onChange={(id, all) => setCategory(line.productName, id, all)}
+                />
               </div>
 
               {/* Two readings, both arithmetically sound, and only the
@@ -382,6 +506,10 @@ export default function InvoiceReconcile({ vendorName, lines, onResolved, busy =
                 </p>
               )}
 
+              {/* A running cost has nothing to ask about the kitchen. */}
+              {runningCost ? (
+                <p className="text-[11px] text-muted-foreground">{t('reconcile.runningCost')}</p>
+              ) : (<>
               {/* Checkboxes, not a dropdown: a line can feed more than one
                   ingredient, and a multi-select is a control nobody uses
                   correctly. The suggestions come first because one of them
@@ -423,6 +551,7 @@ export default function InvoiceReconcile({ vendorName, lines, onResolved, busy =
                   onPick={(id) => toggle(line.productName, id)}
                 />
               </div>
+              </>)}
             </li>
           );
         })}

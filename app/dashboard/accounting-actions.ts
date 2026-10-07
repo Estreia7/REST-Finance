@@ -3,6 +3,9 @@
 import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { toClientError } from '@/lib/errors';
+import { lineKey, type CostCategory } from '@/lib/invoice-categories';
+import { rebalanceInvoice } from '@/lib/invoice-split-server';
+import { rememberLine } from '@/lib/invoice-memory-server';
 
 /**
  * The paperwork side of the business.
@@ -30,6 +33,19 @@ export interface InvoiceRow {
   ingredientName: string | null;
   /** How many kitchen ingredients this one wording feeds. */
   linkedCount: number;
+  /** The cost category this line was booked under. */
+  categoryId: string | null;
+  categoryName: string | null;
+  /**
+   * Whether that category was decided for this line. False for lines saved
+   * before lines had categories, which took their invoice's.
+   */
+  categoryConfirmed: boolean;
+  /**
+   * Not a kitchen ingredient — a running cost, or a line the owner said is
+   * not one — so it has nothing waiting to be identified.
+   */
+  notIngredient: boolean;
 }
 
 export interface AccountingSummary {
@@ -104,7 +120,7 @@ export async function getInvoiceLines(filters: {
         : {}),
     };
 
-    const [rows, total, vendorGroups, links] = await Promise.all([
+    const [rows, total, vendorGroups, links, notIngredients] = await Promise.all([
       prisma.invoiceItem.findMany({
         where,
         select: {
@@ -118,6 +134,8 @@ export async function getInvoiceLines(filters: {
           invoiceDate: true,
           invoiceNumber: true,
           vendor: { select: { id: true, name: true } },
+          category: { select: { id: true, name: true, type: true } },
+          categorySource: true,
         },
         orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }],
         // Everything up to the current page rather than one page of it:
@@ -137,7 +155,14 @@ export async function getInvoiceLines(filters: {
         where: { restaurantId: owner.restaurantId },
         select: { sourceName: true, ingredient: { select: { name: true } } },
       }),
+      // Wordings the owner said are not ingredients, so they stop being
+      // counted as work left to do.
+      prisma.invoiceLineMemory.findMany({
+        where: { restaurantId: owner.restaurantId, notIngredient: true },
+        select: { sourceName: true },
+      }),
     ]);
+    const notIngredientNames = new Set(notIngredients.map((m) => m.sourceName));
 
     // Several ingredients can share a wording — a case of meat feeding the
     // burger and the extra portion. Named together rather than one picked,
@@ -175,11 +200,16 @@ export async function getInvoiceLines(filters: {
       // How many kitchen ingredients this one wording feeds, so a line can
       // show it at a glance instead of the owner counting the names.
       linkedCount: identifiedNames.get(row.productName.trim().toLowerCase())?.size ?? 0,
+      categoryId: row.category?.id ?? null,
+      categoryName: row.category?.name ?? null,
+      categoryConfirmed: row.categorySource !== null && row.categorySource !== 'INHERITED',
+      notIngredient:
+        row.category?.type === 'OPEX' ||
+        notIngredientNames.has(row.productName.trim().toLowerCase()),
     }));
 
-    const filtered = filters.unlinkedOnly
-      ? mapped.filter((r) => r.ingredientName === null)
-      : mapped;
+    const waiting = (r: InvoiceRow) => r.ingredientName === null && !r.notIngredient;
+    const filtered = filters.unlinkedOnly ? mapped.filter(waiting) : mapped;
 
     return {
       success: true,
@@ -195,7 +225,7 @@ export async function getInvoiceLines(filters: {
             spend: Number(g._sum.totalPrice ?? 0),
           }))
           .sort((a, b) => b.spend - a.spend),
-        unlinked: mapped.filter((r) => r.ingredientName === null).length,
+        unlinked: mapped.filter(waiting).length,
       } satisfies AccountingSummary,
     };
   } catch (error: unknown) {
@@ -288,7 +318,7 @@ export async function getDuplicateVendors() {
     // since otherwise the only duplicates that can ever be tidied are the
     // ones where both readings already worked.
     for (const vendor of vendors) {
-      if (vendor.taxId?.replace(/D/g, '')) continue;
+      if (vendor.taxId?.replace(/\D/g, '')) continue;
       const key = simplify(vendor.name);
       if (!key) continue;
       for (const [nif, list] of byTax) {
@@ -387,6 +417,26 @@ export async function mergeVendors(input: { keepId: string; mergeIds: string[] }
         });
         if (clash) await tx.invoiceItemLink.delete({ where: { id: link.id } });
         else await tx.invoiceItemLink.update({ where: { id: link.id }, data: { vendorId: input.keepId } });
+      }
+
+      // The same for what each wording's category was: deleting the
+      // supplier would take those answers with it. Where both suppliers
+      // remember the same wording, the surer answer stays.
+      const memories = await tx.invoiceLineMemory.findMany({
+        where: { restaurantId: owner.restaurantId, vendorId: { in: mergeIds } },
+        select: { id: true, sourceName: true, confirmations: true },
+      });
+      for (const memory of memories) {
+        const clash = await tx.invoiceLineMemory.findFirst({
+          where: { restaurantId: owner.restaurantId, vendorId: input.keepId, sourceName: memory.sourceName },
+          select: { id: true, confirmations: true },
+        });
+        if (clash && clash.confirmations >= memory.confirmations) {
+          await tx.invoiceLineMemory.delete({ where: { id: memory.id } });
+          continue;
+        }
+        if (clash) await tx.invoiceLineMemory.delete({ where: { id: clash.id } });
+        await tx.invoiceLineMemory.update({ where: { id: memory.id }, data: { vendorId: input.keepId } });
       }
 
       await tx.vendor.deleteMany({
@@ -688,15 +738,27 @@ export async function getInvoices(filters: { search?: string; vendorId?: string;
         invoiceDate: true,
         invoiceNumber: true,
         vendor: { select: { id: true, name: true } },
+        category: { select: { type: true } },
       },
       orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }],
     });
 
-    const links = await prisma.invoiceItemLink.findMany({
-      where: { restaurantId: owner.restaurantId },
-      select: { sourceName: true },
-    });
-    const identified = new Set(links.map((l) => l.sourceName));
+    const [links, notIngredients] = await Promise.all([
+      prisma.invoiceItemLink.findMany({
+        where: { restaurantId: owner.restaurantId },
+        select: { sourceName: true },
+      }),
+      prisma.invoiceLineMemory.findMany({
+        where: { restaurantId: owner.restaurantId, notIngredient: true },
+        select: { sourceName: true },
+      }),
+    ]);
+    // Identified means linked to an ingredient, or known not to be one: the
+    // bleach on a Makro invoice is not work left to do.
+    const identified = new Set([
+      ...links.map((l) => l.sourceName),
+      ...notIngredients.map((m) => m.sourceName),
+    ]);
 
     const byDocument = new Map<string, InvoiceRow2>();
     for (const row of rows) {
@@ -705,7 +767,8 @@ export async function getInvoices(filters: { search?: string; vendorId?: string;
       const key = row.invoiceNumber?.trim() || `__no-number__${row.vendor?.id ?? ''}-${row.invoiceDate?.toISOString() ?? ''}`;
 
       const existing = byDocument.get(key);
-      const unidentified = identified.has(row.productName.trim().toLowerCase()) ? 0 : 1;
+      const unidentified =
+        row.category?.type === 'OPEX' || identified.has(row.productName.trim().toLowerCase()) ? 0 : 1;
 
       if (existing) {
         existing.total += Number(row.totalPrice);
@@ -790,8 +853,12 @@ export async function getInvoiceSources(search?: string) {
     const rows = await prisma.invoiceItem.findMany({
       where: {
         restaurantId: owner.restaurantId,
-        // A line whose cost entry was deleted is not something to link to.
-        AND: [{ OR: [{ costEntryId: null }, { costEntry: { deletedAt: null } }] }],
+        AND: [
+          // A line whose cost entry was deleted is not something to link to.
+          { OR: [{ costEntryId: null }, { costEntry: { deletedAt: null } }] },
+          // Nor is a running cost: the bleach is not anyone's ingredient.
+          { OR: [{ categoryId: null }, { category: { type: { not: 'OPEX' } } }] },
+        ],
         ...(term ? { productName: { contains: term, mode: 'insensitive' as const } } : {}),
       },
       select: {
@@ -963,5 +1030,102 @@ export async function unlinkInvoiceSource(input: {
     return { success: true };
   } catch (error: unknown) {
     return { error: toClientError('Failed to unlink the invoice line', error, 'write') };
+  }
+}
+
+/**
+ * The cost categories a line can be placed in, food and drink first.
+ */
+export async function getCostCategories() {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const rows = await prisma.category.findMany({
+      where: { restaurantId: owner.restaurantId, isActive: true, type: { in: ['COGS', 'OPEX'] } },
+      select: { id: true, name: true, type: true },
+      orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+    });
+
+    return {
+      success: true,
+      data: rows.map((c) => ({ id: c.id, name: c.name, type: c.type as CostCategory['type'] })),
+    };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to read the categories', error, 'read') };
+  }
+}
+
+/**
+ * Moves one invoice line to another cost category.
+ *
+ * The money follows: the invoice's total is shared out again, so the P&L
+ * shows the bleach under cleaning from now on rather than under food. And the
+ * answer is remembered, so the next invoice carrying the same wording arrives
+ * already right.
+ */
+export async function setInvoiceLineCategory(input: { itemId: string; categoryId: string }) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const [item, category] = await Promise.all([
+      prisma.invoiceItem.findFirst({
+        where: { id: input.itemId, restaurantId: owner.restaurantId },
+        select: {
+          id: true,
+          productName: true,
+          vendorId: true,
+          costEntryId: true,
+          category: { select: { type: true } },
+        },
+      }),
+      prisma.category.findFirst({
+        where: {
+          id: input.categoryId,
+          restaurantId: owner.restaurantId,
+          isActive: true,
+          type: { in: ['COGS', 'OPEX'] },
+        },
+        select: { id: true, type: true },
+      }),
+    ]);
+    if (!item) return { error: 'accounting.lineNotFound' };
+    if (!category) return { error: 'accounting.categoryNotFound' };
+
+    await prisma.$transaction(async (tx) => {
+      await tx.invoiceItem.update({
+        where: { id: item.id },
+        data: { categoryId: category.id, categorySource: 'OWNER' },
+      });
+      if (item.costEntryId) {
+        await rebalanceInvoice(tx, {
+          restaurantId: owner.restaurantId,
+          costEntryId: item.costEntryId,
+          userId: owner.userId,
+        });
+      }
+    });
+
+    if (item.vendorId) {
+      await rememberLine(
+        owner.restaurantId,
+        item.vendorId,
+        lineKey(item.productName),
+        category.id,
+        // A running cost is never an ingredient. Brought back from one into
+        // food, it may well be — the detergent filed by mistake was never
+        // the point, the flour was — so the flag goes with the category.
+        // Between two food categories nothing is said either way, and a
+        // deliberate "not an ingredient" (a crate deposit) is kept.
+        category.type === 'OPEX'
+          ? true
+          : item.category?.type === 'OPEX' ? false : null,
+      );
+    }
+
+    return { success: true, data: { categoryId: category.id } };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to change the category', error, 'write') };
   }
 }

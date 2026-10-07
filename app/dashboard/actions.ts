@@ -20,6 +20,7 @@ type CategoryType = 'REVENUE' | 'COGS' | 'OPEX';
 import { toClientError } from '@/lib/errors';
 import { endDateFor } from '@/lib/recurring-costs';
 import { bookDueRecurringCosts } from '@/lib/recurring-costs-server';
+import { invoiceEntryIds } from '@/lib/invoice-split-server';
 import { foldMonthlySeries, UNCATEGORISED_SERIES } from '@/lib/monthly-series';
 
 export async function getRestaurant() {
@@ -690,6 +691,23 @@ export async function updateCostEntry(id: string, data: {
     });
     if (!existing) return { error: 'Entry not found' };
 
+    // One part of an invoice shared out between categories. Its amount is
+    // that category's share of the document, worked out from the lines:
+    // changing it here would put the parts out of step with the invoice and
+    // be quietly undone the next time a line moved. The figures are changed
+    // where they come from — the lines, in Accounting. The description is
+    // the owner's own note and stays free.
+    const isPart =
+      existing.splitFromId !== null ||
+      (await prisma.costEntry.count({ where: { splitFromId: existing.id, deletedAt: null } })) > 0;
+    if (isPart) {
+      const changes = (parsed.data.amount !== undefined && parsed.data.amount !== Number(existing.amount)) ||
+        (parsed.data.categoryId !== undefined && parsed.data.categoryId !== existing.categoryId) ||
+        (parsed.data.type !== undefined && parsed.data.type !== existing.type) ||
+        (parsed.data.date !== undefined && parsed.data.date.getTime() !== existing.date.getTime());
+      if (changes) return { error: 'costHistory.splitPartLocked' };
+    }
+
     // A supplied categoryId must belong to this restaurant; otherwise an entry
     // could be reassigned to another tenant's category.
     if (parsed.data.categoryId && parsed.data.categoryId !== existing.categoryId) {
@@ -735,16 +753,22 @@ export async function deleteCostEntry(id: string) {
     // Hard-deleted rather than marked: an invoice line carries no history
     // of its own, and the cost entry it belonged to keeps the record that
     // something was there.
-    await prisma.$transaction([
-      prisma.invoiceItem.deleteMany({
-        where: { costEntryId: id, restaurantId: owner.restaurantId },
-      }),
-      prisma.costEntry.update({
-        where: { id },
+    //
+    // An invoice shared out between categories goes as a whole: deleting the
+    // food and keeping the beer would leave half of a document the owner
+    // meant to throw away.
+    const deleted = await prisma.$transaction(async (tx) => {
+      const ids = await invoiceEntryIds(tx, owner.restaurantId, id);
+      await tx.invoiceItem.deleteMany({
+        where: { costEntryId: { in: ids }, restaurantId: owner.restaurantId },
+      });
+      await tx.costEntry.updateMany({
+        where: { id: { in: ids }, restaurantId: owner.restaurantId, deletedAt: null },
         data: { deletedAt: new Date() },
-      }),
-    ]);
-    return { success: true as const };
+      });
+      return ids.length;
+    });
+    return { success: true as const, data: { deleted } };
   } catch (error: unknown) {
     return { success: false as const, error: toClientError('Failed to delete entry', error, 'delete') };
   }

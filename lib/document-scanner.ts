@@ -26,6 +26,18 @@ export interface ScanItem {
   unit?: string;
   unitPrice: number;
   total: number;
+  /**
+   * Which of the restaurant's cost categories the reader thinks this line
+   * belongs to, by name. Only a suggestion: the restaurant's own memory of
+   * past answers is consulted first.
+   */
+  category?: string;
+}
+
+/** A cost category the reader may choose from. */
+export interface ScanCategory {
+  name: string;
+  type: 'COGS' | 'OPEX';
 }
 
 export interface CostReceiptResult {
@@ -59,7 +71,9 @@ export type ScanType = 'COST_RECEIPT' | 'DAILY_REPORT';
 export async function scanDocument(
   imageBase64: string,
   mediaType: MediaType,
-  scanType: ScanType
+  scanType: ScanType,
+  /** The restaurant's cost categories, so each line can be placed in one. */
+  options: { categories?: ScanCategory[] } = {},
 ): Promise<ScanResult> {
   const apiUrl = process.env.DOCUMENT_SCANNER_API_URL;
 
@@ -73,7 +87,7 @@ export async function scanDocument(
   const apiKey = await readScannerKey();
   if (apiKey) {
     const { claudeScan } = await import('@/lib/scanners/claude-scanner');
-    const { result } = await claudeScan(imageBase64, mediaType, scanType, apiKey);
+    const { result } = await claudeScan(imageBase64, mediaType, scanType, apiKey, options);
     return result;
   }
 

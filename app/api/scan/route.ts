@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth, isAuthError } from '@/lib/auth-helpers';
+import { requireMember, isAuthError } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
 import { scanDocument, isScannerAvailable, type ScanResult } from '@/lib/document-scanner';
 import { readInvoiceQr, applyQrTruth } from '@/lib/pt-invoice-qr';
@@ -20,11 +20,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Auth check
-    const authResult = await requireAuth();
-    if (isAuthError(authResult)) {
-      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    // The restaurant the owner is looking at, resolved the same way as
+    // everywhere else. Looking up "a" membership of this user filed an
+    // owner's invoice under whichever of their restaurants came back first.
+    const membership = await requireMember();
+    if (isAuthError(membership)) {
+      return NextResponse.json(
+        { error: membership.error },
+        { status: membership.requiresAuth ? 401 : 403 },
+      );
     }
+    const authResult = membership;
 
     // Rate limiting
     if (!checkRateLimit(`scan:${authResult.userId}`, SCAN_RATE_LIMIT, SCAN_WINDOW_MS)) {
@@ -32,13 +38,6 @@ export async function POST(request: NextRequest) {
         { error: 'Limite de scans atingido. Tente novamente mais tarde.' },
         { status: 429 }
       );
-    }
-
-    const membership = await prisma.membership.findFirst({
-      where: { userId: authResult.userId, role: { in: ['OWNER', 'STAFF'] }, active: true },
-    });
-    if (!membership) {
-      return NextResponse.json({ error: 'No restaurant access' }, { status: 403 });
     }
 
     // Validate request body
@@ -50,8 +49,24 @@ export async function POST(request: NextRequest) {
 
     const { imageBase64, mediaType, scanType } = parsed.data;
 
+    // The restaurant's own cost categories, so the reader places each line
+    // in one that exists rather than inventing a name nothing matches.
+    const categories = scanType === 'COST_RECEIPT'
+      ? await prisma.category.findMany({
+          where: {
+            restaurantId: membership.restaurantId,
+            isActive: true,
+            type: { in: ['COGS', 'OPEX'] },
+          },
+          select: { name: true, type: true },
+          orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }],
+        })
+      : [];
+
     // Extract data using the document scanner adapter
-    const rawData = await scanDocument(imageBase64, mediaType, scanType);
+    const rawData = await scanDocument(imageBase64, mediaType, scanType, {
+      categories: categories.map((c) => ({ name: c.name, type: c.type as 'COGS' | 'OPEX' })),
+    });
 
     // A Portuguese certified invoice carries a QR code holding the date,
     // the document number, the issuer NIF and the totals — signed by the

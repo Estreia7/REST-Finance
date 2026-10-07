@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { ScanResult, MediaType, ScanType, CostReceiptResult, DailyReportResult } from '@/lib/document-scanner';
+import type { ScanResult, MediaType, ScanType, CostReceiptResult, DailyReportResult, ScanCategory } from '@/lib/document-scanner';
 
 /**
  * Reading a Portuguese invoice or a day's till roll with Claude.
@@ -27,7 +27,7 @@ export const SCANNER_MODEL = 'claude-haiku-4-5';
  * prompt change rather than guessed at. Date-stamped rather than numbered:
  * the question asked later is always "what were we sending in September?".
  */
-export const PROMPT_VERSION = '2026-10-06.1';
+export const PROMPT_VERSION = '2026-10-08.1';
 
 /** Rough per-token prices, for showing what a run cost. USD per 1M tokens. */
 const PRICE_PER_MTOK = { input: 1.0, output: 5.0 } as const;
@@ -143,6 +143,62 @@ const COST_RECEIPT_SCHEMA = {
   additionalProperties: false,
 };
 
+/**
+ * The invoice schema, with each line placed in one of the restaurant's own
+ * cost categories.
+ *
+ * A closed list rather than a free word. Asked for "a category", the reader
+ * answered "Carne" for a restaurant whose categories are "Comida" and
+ * "Bebidas", nothing matched, and the cost was booked under no category at
+ * all. Given the list, it can only answer with something that exists.
+ *
+ * Without categories — the administrator's bench — the schema is unchanged.
+ */
+function costReceiptSchema(categories: ScanCategory[]) {
+  // One entry per name, ignoring case: the answer is matched back that way.
+  const seen = new Set<string>();
+  const names = categories
+    .map((c) => c.name.trim())
+    .filter((name) => {
+      const key = name.toLowerCase();
+      if (!name || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  if (names.length === 0) return COST_RECEIPT_SCHEMA;
+
+  const listed = categories
+    .map((c) => `"${c.name}" (${c.type === 'COGS' ? 'goes into what is sold' : 'running cost'})`)
+    .join(', ');
+  const category = {
+    type: 'string',
+    enum: names,
+    description:
+      `Which of the restaurant's own cost categories this line belongs to: ${listed}. ` +
+      'Judge each line on its own: one invoice from a cash-and-carry can hold food, drink, cleaning products and packaging, and each goes to its own category.',
+  };
+
+  const items = COST_RECEIPT_SCHEMA.properties.items;
+  return {
+    ...COST_RECEIPT_SCHEMA,
+    properties: {
+      ...COST_RECEIPT_SCHEMA.properties,
+      items: {
+        ...items,
+        items: {
+          ...items.items,
+          properties: { ...items.items.properties, category },
+          required: [...items.items.required, 'category'],
+        },
+      },
+      suggestedCategory: {
+        ...category,
+        description: 'The category most of the invoice belongs to, from the same list.',
+      },
+    },
+  };
+}
+
 const DAILY_REPORT_SCHEMA = {
   type: 'object' as const,
   properties: {
@@ -182,6 +238,8 @@ export async function claudeScan(
   mediaType: MediaType,
   scanType: ScanType,
   apiKey: string,
+  /** The restaurant's cost categories; each invoice line is placed in one. */
+  options: { categories?: ScanCategory[] } = {},
 ): Promise<ClaudeScanOutcome> {
   const client = new Anthropic({ apiKey });
 
@@ -199,7 +257,7 @@ export async function claudeScan(
         description: isReceipt
           ? 'Records the contents of a supplier invoice.'
           : "Records a restaurant's end-of-day takings.",
-        input_schema: isReceipt ? COST_RECEIPT_SCHEMA : DAILY_REPORT_SCHEMA,
+        input_schema: isReceipt ? costReceiptSchema(options.categories ?? []) : DAILY_REPORT_SCHEMA,
         // Guarantees the arguments validate, so no defensive parsing below.
         strict: true,
       },

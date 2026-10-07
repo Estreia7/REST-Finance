@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Pencil, Trash2, Loader2, X, Check, Calendar, Filter, Download, Repeat, Eye } from 'lucide-react';
 import { getCostHistory, updateCostEntry, deleteCostEntry, getCategories } from '../actions';
 import { useLanguage } from '@/lib/language-context';
+import { translateError } from '@/lib/error-messages';
 import ListSearch, { matchesSearch } from './ListSearch';
 import InvoicePreview from './InvoicePreview';
 import { downloadFile, exportFilename } from '@/lib/download-file';
@@ -119,7 +120,7 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
       await loadEntries();
       onDataChange?.();
     } else {
-      toast.error(result.error || t('costHistory.toast.updateFailed'));
+      toast.error(result.error ? translateError(language, result.error) : t('costHistory.toast.updateFailed'));
     }
     setSaving(false);
   };
@@ -128,7 +129,14 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
     setDeletingId(id);
     const result = await deleteCostEntry(id);
     if (result.success) {
-      toast.success(t('costHistory.toast.deleted'));
+      // An invoice shared between categories goes as a whole, and saying so
+      // explains the other rows disappearing with this one.
+      const parts = result.data?.deleted ?? 1;
+      toast.success(
+        parts > 1
+          ? t('costHistory.toast.deletedInvoiceParts').replace('{n}', String(parts))
+          : t('costHistory.toast.deleted'),
+      );
       await loadEntries();
       onDataChange?.();
     } else {

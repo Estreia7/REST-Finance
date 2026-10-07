@@ -3,7 +3,18 @@
 import { useState, useEffect, useCallback, useDeferredValue } from 'react';
 import { toast } from 'sonner';
 import { Loader2, Search, FileText, Link2, Check, AlertTriangle, Eye, Trash2 } from 'lucide-react';
-import { getInvoiceLines, getInvoices, getDuplicateVendors, mergeVendors, type AccountingSummary, type InvoiceRow2 } from '../accounting-actions';
+import {
+  getInvoiceLines,
+  getInvoices,
+  getDuplicateVendors,
+  mergeVendors,
+  getCostCategories,
+  setInvoiceLineCategory,
+  type AccountingSummary,
+  type InvoiceRow2,
+} from '../accounting-actions';
+import type { CostCategory } from '@/lib/invoice-categories';
+import CategoryPicker from './CategoryPicker';
 import { getDuplicateIngredients, mergeIngredients } from '../reconcile-actions';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
@@ -83,6 +94,15 @@ function Invoices({ initialSearch = '', onSearchConsumed }: {
   const [page, setPage] = useState(0);
   /** The document whose photograph is on screen. */
   const [previewing, setPreviewing] = useState<string | null>(null);
+  const [categories, setCategories] = useState<CostCategory[]>([]);
+  /** The line whose category is being saved. */
+  const [savingCategory, setSavingCategory] = useState<string | null>(null);
+
+  useEffect(() => {
+    getCostCategories().then((result) => {
+      if ('data' in result && result.data) setCategories(result.data);
+    });
+  }, []);
 
   // Typing searches the database; deferring keeps the field responsive rather
   // than firing a query per keystroke.
@@ -107,6 +127,22 @@ function Invoices({ initialSearch = '', onSearchConsumed }: {
   useEffect(() => { setPage(0); }, [deferredSearch, vendorId, unlinkedOnly]);
 
   useEffect(() => { load(); }, [load]);
+
+  /**
+   * Moves a line to another category. The invoice's money is shared out
+   * again on the server, and the answer remembered for the next invoice.
+   */
+  const changeCategory = async (itemId: string, categoryId: string) => {
+    setSavingCategory(itemId);
+    const result = await setInvoiceLineCategory({ itemId, categoryId });
+    setSavingCategory(null);
+    if ('error' in result) {
+      toast.error(t(result.error ?? 'errors.write'));
+      return;
+    }
+    toast.success(t('accounting.categoryChanged'));
+    load();
+  };
 
   if (loading && !data) {
     return <Spinner label={t('common.loading')} />;
@@ -198,11 +234,29 @@ function Invoices({ initialSearch = '', onSearchConsumed }: {
                           </span>
                         )}
                       </span>
+                    ) : row.notIngredient ? (
+                      <span className="block text-[11px] text-muted-foreground mt-0.5">
+                        {t('accounting.notIngredient')}
+                      </span>
                     ) : (
                       <span className="flex items-center gap-1 text-[11px] text-muted-foreground mt-0.5">
                         <Link2 className="w-3 h-3 shrink-0" aria-hidden="true" />
                         {t('accounting.notIdentified')}
                       </span>
+                    )}
+                    {/* Which cost it was booked under, and the way to move
+                        it: the bleach that went in with the food. */}
+                    {categories.length > 0 && (
+                      <div className="mt-1">
+                        <CategoryPicker
+                          categories={categories}
+                          value={row.categoryId}
+                          origin={row.categoryConfirmed ? 'owner' : 'none'}
+                          productName={row.productName}
+                          disabled={savingCategory === row.id}
+                          onChange={(id) => changeCategory(row.id, id)}
+                        />
+                      </div>
                     )}
                     <span className="block md:hidden text-[11px] text-muted-foreground mt-0.5">
                       {row.vendorName ?? '—'}

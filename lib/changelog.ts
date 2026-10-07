@@ -44,6 +44,18 @@ export const CHANGELOG: Release[] = [
     entries: [
       {
         kind: 'new',
+        title: 'Cada linha da fatura vai para a sua categoria',
+        detail:
+          'Uma fatura do Makro com carne, cerveja e lixívia já não fica toda em "Comida". Cada linha tem a sua categoria e o total da fatura é repartido por elas, por isso o custo da comida deixa de levar a limpeza e as bebidas aparecem à parte. Ao confirmar a fatura vê a categoria de cada linha e o total por categoria; para mudar uma linha depois, está em Contabilidade › Linhas.',
+      },
+      {
+        kind: 'new',
+        title: 'A app aprende as categorias do seu restaurante',
+        detail:
+          'O que confirma numa fatura fica sabido para a próxima: a mesma linha do mesmo fornecedor chega já com a categoria certa, e o que disse que não é ingrediente deixa de ser perguntado. Cada fatura mostra quantas linhas já sabia — um número que vai subindo até deixar de ser preciso perguntar.',
+      },
+      {
+        kind: 'new',
         title: 'As bebidas passam a ter margem, como qualquer prato',
         detail:
           'Uma Super Bock não é um ingrediente, é um produto: vende-se tal como se compra. Até agora ficava em Preços sem preço de venda, e quase um quarto da receita não tinha margem em sítio nenhum. Agora está na Ementa com o preço a que vende, o IVA certo — 23% no álcool, 13% no resto — e o custo da garrafa por baixo, a contar nas médias ao lado dos hambúrgueres.',

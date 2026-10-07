@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Camera, Loader2, Check, X, RotateCcw, Receipt, FileText , AlertTriangle } from 'lucide-react';
 import { createDailySummary, createCostEntry, getCategories } from '../actions';
@@ -26,7 +26,8 @@ interface CostReceiptData {
   /** Extracted by the scanner and, until now, dropped on the way to the
       database — it is how an invoice is found again. */
   invoiceNumber?: string;
-  items: Array<{ product: string; quantity: number; unit?: string; unitPrice: number; total: number }>;
+  /** `category` is the reader's guess, from the restaurant's own list. */
+  items: Array<{ product: string; quantity: number; unit?: string; unitPrice: number; total: number; category?: string }>;
   grandTotal: number;
   suggestedType: 'COGS' | 'OPEX';
   suggestedCategory: string;
@@ -116,6 +117,24 @@ export default function ReceiptScanner({
     costEntryId: string;
     data: CostReceiptData;
   } | null>(null);
+  /**
+   * The lines handed to the reconcile screen, built once per invoice.
+   *
+   * Inline, a new array on every render made that screen fetch its preview
+   * again and reset every answer the owner had given so far.
+   */
+  const reconcileLines = useMemo(
+    () =>
+      reconciling?.data.items.map((item) => ({
+        productName: item.product,
+        quantity: item.quantity,
+        unit: item.unit,
+        unitPrice: item.unitPrice,
+        total: item.total,
+        category: item.category,
+      })) ?? [],
+    [reconciling],
+  );
   const [extracted, setExtracted] = useState<ExtractionResult | null>(null);
   const [editData, setEditData] = useState<ExtractionResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -467,13 +486,8 @@ export default function ReceiptScanner({
       {reconciling ? (
         <InvoiceReconcile
           vendorName={reconciling.data.vendor}
-          lines={reconciling.data.items.map((item) => ({
-            productName: item.product,
-            quantity: item.quantity,
-            unit: item.unit,
-            unitPrice: item.unitPrice,
-            total: item.total,
-          }))}
+          vendorTaxId={reconciling.data.vendorTaxId ?? null}
+          lines={reconcileLines}
           busy={saving}
           onResolved={async (lines: LineResolution[]) => {
             setSaving(true);
