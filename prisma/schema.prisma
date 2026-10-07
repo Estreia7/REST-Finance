@@ -779,9 +779,26 @@ model Ingredient {
   recipeLines RecipeLine[]
   itemLinks   InvoiceItemLink[]
 
+  /// The menu items sold as this exact purchase — see MenuItem.purchaseItem.
+  /// Empty for a real ingredient: lettuce goes into several dishes and is
+  /// the selling of none of them.
+  soldAs MenuItem[] @relation("PurchaseSource")
+
   @@index([restaurantId, deletedAt])
   @@index([restaurantId, normalizedName])
   @@map("ingredients")
+}
+
+/// How an item on the menu gets its cost.
+///
+/// Two honest answers, and the owner drew the line himself: a Super Bock is
+/// not an ingredient, it is a product. Lettuce, bacon and burger buns go
+/// *into* something; a bottle of beer is poured from no recipe.
+enum CostingMode {
+  /// Costed from its recipe lines — what the kitchen makes.
+  RECIPE
+  /// Costed from one purchase — sold exactly as it was bought.
+  PURCHASE
 }
 
 /// A dish, drink, or set menu that appears on the menu board.
@@ -815,6 +832,41 @@ model MenuItem {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
+
+  /// Whether this is costed from a recipe or from a single purchase.
+  ///
+  /// Defaults to RECIPE, which is every item that existed before this was
+  /// added: a dish with no lines yet reads as work still to do, which is
+  /// what it was already doing.
+  costingMode CostingMode @default(RECIPE) @map("costing_mode")
+
+  /// In PURCHASE mode, the bought thing this item is the selling of.
+  ///
+  /// A Super Bock is two numbers — EUR 1,73 on the board and what the
+  /// wholesaler charged for the bottle — so it is two rows. The cost stays on
+  /// the Ingredient because everything that prices anything is keyed there:
+  /// the invoice match on normalizedName, the price history, the reconcile
+  /// dialog, and InvoiceItemLink's foreign key. Putting a second cost on this
+  /// table would mean a second copy of all of it.
+  ///
+  /// SetNull, not Cascade: taking a drink off the board must not delete the
+  /// purchase line, because the owner's answer to "what is this invoice line"
+  /// hangs off it and has to outlive a menu change.
+  purchaseItem   Ingredient? @relation("PurchaseSource", fields: [purchaseItemId], references: [id], onDelete: SetNull)
+  purchaseItemId String?     @map("purchase_item_id")
+
+  /// Set when we worked this row out ourselves and are not certain.
+  ///
+  /// Guessing is unavoidable here -- no word list knows that "BRITANGO
+  /// GARRAFA" is a wine, and no price separates a lemonade the kitchen makes
+  /// from a beer it opens. So where the evidence agrees the row is taken as
+  /// settled, and where it does not the owner is asked once, in a list he can
+  /// work through in a minute. Cleared the moment he confirms or corrects it.
+  ///
+  /// Getting this wrong is not cosmetic: 13% on a wine is an understated tax
+  /// bill, and a milkshake with no recipe is a margin that looks fine and
+  /// is not.
+  needsReview Boolean @default(false) @map("needs_review")
 
   recipeLines RecipeLine[]
 
