@@ -267,7 +267,14 @@ export default function ReceiptScanner({
 
 
   // Measured on arrival, whether the page came from the camera, the tray
-  // or a file the owner picked.
+  // or a file the owner picked — every route goes through the editor, so
+  // what is measured here is always the finished page.
+  //
+  // That it is the *filtered* page matters more than it looks. The scan
+  // filter lifts contrast hard, and the same Makro photograph measures 63
+  // raw against 191 enhanced: measuring the file the owner picked would
+  // refuse photographs the product then reads perfectly well. Do not move
+  // this check earlier.
   useEffect(() => {
     if (!imagePreview) { setQuality(null); return; }
     let cancelled = false;

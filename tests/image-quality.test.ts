@@ -225,3 +225,39 @@ describe('readings taken from real photographs', () => {
     expect(check.reason).toBe('dark');
   });
 });
+
+describe('what gets measured is what the reader sees', () => {
+  /**
+   * Every page reaches the preview through `finishPage`, which applies the
+   * scan filter — a tone curve, a colour-cast removal and a contrast lift.
+   * That filter changes the measurement a great deal, and the owner was
+   * right to say so: the Makro photograph measures 63 raw, which this would
+   * refuse, and 191 once enhanced, which it accepts.
+   *
+   * Measuring the raw file would therefore reject photographs the product
+   * goes on to read perfectly well. The check runs on the filtered preview
+   * for exactly that reason, and these are the two readings.
+   */
+  it('refuses the raw file', () => {
+    expect(judge({ sharpness: 63, brightness: 158, contrast: 37 }).verdict).toBe('poor');
+  });
+
+  it('accepts the same page once the scan filter has run', () => {
+    expect(judge({ sharpness: 191, brightness: 162, contrast: 63 }).verdict).toBe('good');
+  });
+});
+
+describe('the black-and-white filter', () => {
+  it('accepts a properly thresholded page', () => {
+    // Binarised text is all edge, so it measures very high — 1897 on the
+    // Makro page. Nothing here should mistake that for a problem.
+    expect(judge({ sharpness: 1897, brightness: 210, contrast: 97 }).verdict).toBe('good');
+  });
+
+  it('refuses a threshold that took the page with it', () => {
+    // Everything one colour: the text is gone, and no amount of reading will
+    // bring it back.
+    expect(judge({ sharpness: 4, brightness: 0, contrast: 1 }).verdict).toBe('unusable');
+    expect(judge({ sharpness: 2, brightness: 255, contrast: 2 }).verdict).toBe('unusable');
+  });
+});
