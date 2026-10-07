@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ChevronDown, Loader2, Receipt, TrendingUp, TrendingDown } from 'lucide-react';
 import { getIngredientPriceHistory } from '../accounting-actions';
 import { useLanguage } from '@/lib/language-context';
+import InvoicePreview from './InvoicePreview';
 import { formatMoney } from '@/lib/format';
 
 /**
@@ -35,17 +36,22 @@ interface Entry {
 export default function IngredientPriceHistory({
   ingredientId,
   unit,
-  onOpenInvoice,
 }: {
   ingredientId: string;
   /** The ingredient's own purchase unit, for rows whose invoice omitted one. */
   unit: string;
-  /** Opens the paperwork a figure came from. */
-  onOpenInvoice?: (invoiceNumber: string) => void;
 }) {
   const { t, language } = useLanguage();
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<Entry[] | null>(null);
+  /**
+   * The document on screen.
+   *
+   * Shown here rather than by crossing to Accounting: someone checking
+   * where a price came from is in the middle of editing an ingredient,
+   * and sending them to another tab loses that.
+   */
+  const [previewing, setPreviewing] = useState<string | null>(null);
 
   const locale = language === 'pt' ? 'pt-PT' : 'en-GB';
 
@@ -99,7 +105,7 @@ export default function IngredientPriceHistory({
                   ? ((entry.unitPrice - previous.unitPrice) / previous.unitPrice) * 100
                   : null;
 
-                const openable = Boolean(entry.invoiceNumber && onOpenInvoice);
+                const openable = Boolean(entry.invoiceNumber);
                 const Row = openable ? 'button' : 'div';
 
                 return (
@@ -108,7 +114,7 @@ export default function IngredientPriceHistory({
                       {...(openable
                         ? {
                             type: 'button' as const,
-                            onClick: () => onOpenInvoice!(entry.invoiceNumber!),
+                            onClick: () => setPreviewing(entry.invoiceNumber!),
                           }
                         : {})}
                       className={`w-full flex items-center justify-between gap-3 py-2 text-left ${
@@ -162,6 +168,14 @@ export default function IngredientPriceHistory({
             </ul>
           )}
         </div>
+      )}
+
+      {previewing && (
+        <InvoicePreview
+          invoiceNumber={previewing}
+          onClose={() => setPreviewing(null)}
+          onDeleted={load}
+        />
       )}
     </div>
   );

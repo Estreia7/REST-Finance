@@ -35,9 +35,45 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.06.5';
+export const CHANGELOG_VERSION = '2026.10.07.1';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.07.1',
+    date: '2026-10-07',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Ver a fatura por trás de cada número',
+        detail:
+          'Em Contabilidade, cada linha tem um ícone que abre a fotografia da fatura. O mesmo no histórico de preços de um ingrediente: clicar num preço mostra o documento onde ele aparece, sem sair do sítio onde estava.',
+      },
+      {
+        kind: 'new',
+        title: 'Eliminar uma fatura e o que ela alimentou',
+        detail:
+          'A partir da fatura aberta pode eliminá-la. Saem as linhas, sai o custo do historial, e os ingredientes que tinham o preço dessa fatura voltam ao preço da anterior — em vez de ficarem com um valor de um documento que já não existe.',
+      },
+      {
+        kind: 'improvement',
+        title: 'As faturas mais recentes primeiro, quinze de cada vez',
+        detail:
+          'A lista começa nas quinze mais recentes, com um botão para mostrar mais.',
+      },
+      {
+        kind: 'new',
+        title: 'O mapa de férias, pronto a afixar',
+        detail:
+          'Em Equipa › Férias, o mapa de férias do ano sai numa folha A4 com o nome e o NIF do restaurante, as férias de cada colaborador num calendário do ano, os dias úteis e o lugar para assinar. A lei pede que esteja afixado de 15 de abril a 31 de outubro. Pode pré-visualizá-lo antes de descarregar o PDF.',
+      },
+      {
+        kind: 'fix',
+        title: 'As explicações dos valores já não ficam cortadas',
+        detail:
+          'Na demonstração de resultados anual, a explicação que aparece ao passar sobre o "i" ficava escondida atrás do cabeçalho da tabela. Agora aparece sempre por cima de tudo.',
+      },
+    ],
+  },
   {
     version: '2026.10.06.5',
     date: '2026-10-06',

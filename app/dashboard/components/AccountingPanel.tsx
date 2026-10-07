@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback, useDeferredValue } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Search, FileText, Building2, Link2, Check, AlertTriangle } from 'lucide-react';
+import { Loader2, Search, FileText, Link2, Check, AlertTriangle, Eye } from 'lucide-react';
 import { getInvoiceLines, getDuplicateVendors, mergeVendors, type AccountingSummary } from '../accounting-actions';
 import { getDuplicateIngredients, mergeIngredients } from '../reconcile-actions';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
 import SubTabs from './SubTabs';
+import InvoicePreview from './InvoicePreview';
 
 /**
  * The paperwork, in one place.
@@ -76,6 +77,9 @@ function Invoices({ initialSearch = '', onSearchConsumed }: {
      }, [initialSearch, onSearchConsumed]);
   const [vendorId, setVendorId] = useState('');
   const [unlinkedOnly, setUnlinkedOnly] = useState(false);
+  const [page, setPage] = useState(0);
+  /** The document whose photograph is on screen. */
+  const [previewing, setPreviewing] = useState<string | null>(null);
 
   // Typing searches the database; deferring keeps the field responsive rather
   // than firing a query per keystroke.
@@ -88,11 +92,16 @@ function Invoices({ initialSearch = '', onSearchConsumed }: {
       search: deferredSearch || undefined,
       vendorId: vendorId || undefined,
       unlinkedOnly,
+      page,
     }).then((result) => {
       setLoading(false);
       if ('data' in result && result.data) setData(result.data);
     });
-  }, [deferredSearch, vendorId, unlinkedOnly]);
+  }, [deferredSearch, vendorId, unlinkedOnly, page]);
+
+  // A new filter starts at the top: keeping page 3 while the list
+  // changes underneath shows a slice of something else.
+  useEffect(() => { setPage(0); }, [deferredSearch, vendorId, unlinkedOnly]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -163,6 +172,7 @@ function Invoices({ initialSearch = '', onSearchConsumed }: {
                 <Th align="right">{t('accounting.colQuantity')}</Th>
                 <Th align="right">{t('accounting.colUnitPrice')}</Th>
                 <Th align="right">{t('accounting.colTotal')}</Th>
+                <Th align="right" className="w-10"><span className="sr-only">{t('accounting.previewTitle')}</span></Th>
               </tr>
             </thead>
             <tbody>
@@ -211,6 +221,22 @@ function Invoices({ initialSearch = '', onSearchConsumed }: {
                   <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-foreground whitespace-nowrap">
                     {formatMoney(row.totalPrice)}
                   </td>
+                  <td className="px-2 py-2.5 text-right">
+                    {/* The page behind the figure. Only where there is a
+                        document number to find it by. */}
+                    {row.invoiceNumber && (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewing(row.invoiceNumber)}
+                        aria-label={t('accounting.previewInvoice').replace('{number}', row.invoiceNumber)}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground
+                                   hover:bg-muted transition-colors focus-visible:outline-none
+                                   focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Eye className="w-4 h-4" aria-hidden="true" />
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -223,6 +249,24 @@ function Invoices({ initialSearch = '', onSearchConsumed }: {
           </p>
         )}
       </div>
+
+      {data.rows.length < data.total && (
+        <button
+          type="button"
+          onClick={() => setPage((p) => p + 1)}
+          className="cta-button-secondary !py-2 !px-4 !text-sm w-full justify-center"
+        >
+          {t('accounting.showMore')}
+        </button>
+      )}
+
+      {previewing && (
+        <InvoicePreview
+          invoiceNumber={previewing}
+          onClose={() => setPreviewing(null)}
+          onDeleted={load}
+        />
+      )}
 
       <p className="text-xs text-muted-foreground">
         {t('accounting.showing')

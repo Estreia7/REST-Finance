@@ -4,13 +4,17 @@ import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 
-/** A plain centred dialog. Escape and the backdrop both close it. */
+/**
+ * A plain centred dialog. Escape and the backdrop both close it.
+ * `wide` is for showing a document, which needs the room a form does not.
+ */
 export default function Dialog({
-  title, onClose, children,
+  title, onClose, children, wide = false,
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  wide?: boolean;
 }) {
   const { t } = useLanguage();
 
@@ -31,9 +35,9 @@ export default function Dialog({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-full sm:max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl
+        className={`relative w-full ${wide ? 'sm:max-w-5xl' : 'sm:max-w-md'} bg-card border border-border rounded-t-2xl sm:rounded-2xl
                    p-5 shadow-modal max-h-[90dvh] overflow-y-auto overscroll-contain
-                   pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-5"
+                   pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-5`}
       >
         <div className="flex items-start justify-between gap-3 mb-4">
           <h4 className="font-bold text-foreground">{title}</h4>

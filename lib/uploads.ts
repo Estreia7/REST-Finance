@@ -138,7 +138,7 @@ export type SaveResult =
  *                 cannot reach outside the owner's own directory.
  */
 export async function saveImage(
-  scope: 'logos' | 'avatars' | 'extraction-tests',
+  scope: 'logos' | 'avatars' | 'extraction-tests' | 'invoices',
   ownerId: string,
   file: File
 ): Promise<SaveResult> {
@@ -147,7 +147,11 @@ export async function saveImage(
   // frame at full resolution runs to several megabytes — and downscaling it
   // before the reader has seen it would throw away the detail the extraction
   // depends on.
-  const limit = scope === 'extraction-tests' ? MAX_DOC_BYTES : MAX_IMAGE_BYTES;
+  // A photographed invoice, from either the bench or an owner, is a
+  // document rather than a picture and gets the larger allowance.
+  const limit = scope === 'extraction-tests' || scope === 'invoices'
+    ? MAX_DOC_BYTES
+    : MAX_IMAGE_BYTES;
   if (file.size > limit) {
     return {
       ok: false,

@@ -61,6 +61,18 @@ export async function GET(
     if (!membership) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
+  } else if (scope === 'invoices') {
+    // A photographed supplier invoice. Any active member of that
+    // restaurant may see it: it is the paperwork behind a cost on their
+    // own screens, and a figure nobody can check is a figure nobody
+    // should be asked to trust.
+    const membership = await prisma.membership.findFirst({
+      where: { userId: auth.userId, restaurantId: ownerId, active: true },
+      select: { id: true },
+    });
+    if (!membership) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
   } else if (scope === 'compliance') {
     // Insurance and licences are the restaurant's legal records: owner only,
     // not every member the way a logo is.

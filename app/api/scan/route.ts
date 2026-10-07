@@ -3,6 +3,7 @@ import { requireAuth, isAuthError } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
 import { scanDocument, isScannerAvailable, type ScanResult } from '@/lib/document-scanner';
 import { readInvoiceQr, applyQrTruth } from '@/lib/pt-invoice-qr';
+import { saveImage } from '@/lib/uploads';
 import { scanRequestSchema, formatZodError } from '@/lib/validations';
 import { checkRateLimit } from '@/lib/rate-limit';
 
@@ -63,6 +64,25 @@ export async function POST(request: NextRequest) {
     // written; the owner scanning an invoice never had it.
     const extractedData = await applyQrCorrections(imageBase64, mediaType, rawData);
 
+    // The photograph itself, kept so the owner can look at the document
+    // behind a figure rather than taking it on trust. It was being thrown
+    // away: the scan row stored an empty path, so nothing could ever be
+    // shown back.
+    //
+    // A failure here does not fail the scan. The reading is the valuable
+    // part and the owner is waiting; a document with no picture is worth
+    // more than an error on a screen holding a receipt up to a camera.
+    let imagePath = '';
+    try {
+      const bytes = Buffer.from(imageBase64, 'base64');
+      const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
+      const file = new File([new Uint8Array(bytes)], `invoice.${ext}`, { type: mediaType });
+      const saved = await saveImage('invoices', membership.restaurantId, file);
+      if (saved.ok) imagePath = saved.storedPath;
+    } catch {
+      // Left empty; the reading stands on its own.
+    }
+
     // Save scan record + create vendor/items in a transaction for cost receipts
     const result = await prisma.$transaction(async (tx) => {
       let vendorId: string | null = null;
@@ -96,7 +116,7 @@ export async function POST(request: NextRequest) {
         data: {
           restaurantId: membership.restaurantId,
           userId: authResult.userId,
-          imageUrl: '',
+          imageUrl: imagePath,
           scanType: scanType,
           extractedData: extractedData as any,
           status: 'PROCESSED',

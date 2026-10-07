@@ -39,8 +39,15 @@ export interface AccountingSummary {
   unlinked: number;
 }
 
-/** A page of rows; more than this on one screen is a scroll, not a search. */
-const PAGE_SIZE = 100;
+/**
+ * How many lines come back at once.
+ *
+ * Fifteen: enough that the recent invoices are all there without asking,
+ * few enough that the page is a page rather than a scroll. More arrive on
+ * request, newest first throughout, since what was bought last week is
+ * what someone is looking for.
+ */
+const PAGE_SIZE = 15;
 
 /**
  * Invoice lines, filtered.
@@ -111,8 +118,9 @@ export async function getInvoiceLines(filters: {
           vendor: { select: { id: true, name: true } },
         },
         orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }],
-        take: PAGE_SIZE,
-        skip: page * PAGE_SIZE,
+        // Everything up to the current page rather than one page of it:
+        // "show more" should add to the list, not replace it.
+        take: PAGE_SIZE * (page + 1),
       }),
       prisma.invoiceItem.count({ where }),
       prisma.invoiceItem.groupBy({
@@ -478,4 +486,147 @@ function simplify(name: string): string {
     .replace(/(lda|ltda|sa|s.a|unipessoal|comercio|cash|carry|portugal)/g, ' ')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+}
+
+/**
+ * The photograph behind an invoice.
+ *
+ * Matched on the document number, which is what both the scan's extracted
+ * data and the saved lines carry. The link could have been a foreign key, but
+ * the lines are written by the reconciliation screen long after the scan row
+ * exists, and a number that is unique by law is a sturdier join than an id
+ * threaded through three screens.
+ */
+export async function getInvoiceImage(invoiceNumber: string) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const number = invoiceNumber.trim();
+    if (!number) return { error: 'errors.read' };
+
+    // Newest first: an invoice photographed twice has the better picture last.
+    const scans = await prisma.receiptScan.findMany({
+      where: { restaurantId: owner.restaurantId, imageUrl: { not: '' } },
+      select: { id: true, imageUrl: true, extractedData: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    const match = scans.find((scan) => {
+      const data = scan.extractedData as { invoiceNumber?: string } | null;
+      return data?.invoiceNumber?.trim() === number;
+    });
+
+    if (!match) return { success: true, data: null };
+
+    return {
+      success: true,
+      data: { imagePath: match.imageUrl, scannedAt: match.createdAt.toISOString() },
+    };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to read the invoice image', error, 'read') };
+  }
+}
+
+/**
+ * Removes an invoice and everything it fed.
+ *
+ * Deleting the paperwork while leaving its figures behind would be worse than
+ * keeping both: the cost would stay in the P&L with nothing to check it
+ * against, and an ingredient would keep a price from a document that no
+ * longer exists. So the lines go, the cost entry goes, and any ingredient
+ * priced from this invoice falls back to whatever the invoice before it said.
+ *
+ * The remembered product links stay. They are the owner's answer to "this
+ * supplier's wording means my Carne Smash", which is still true however the
+ * invoice that prompted it was handled.
+ */
+export async function deleteInvoice(invoiceNumber: string) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const number = invoiceNumber.trim();
+    if (!number) return { error: 'errors.delete' };
+
+    const lines = await prisma.invoiceItem.findMany({
+      where: { restaurantId: owner.restaurantId, invoiceNumber: number },
+      select: { id: true, costEntryId: true, normalizedName: true },
+    });
+    if (lines.length === 0) return { error: 'accounting.invoiceNotFound' };
+
+    const costEntryIds = [...new Set(lines.map((l) => l.costEntryId).filter(Boolean))] as string[];
+    const names = [...new Set(lines.map((l) => l.normalizedName))];
+
+    await prisma.$transaction(async (tx) => {
+      await tx.invoiceItem.deleteMany({
+        where: { restaurantId: owner.restaurantId, invoiceNumber: number },
+      });
+
+      if (costEntryIds.length > 0) {
+        await tx.costEntry.updateMany({
+          where: { id: { in: costEntryIds }, restaurantId: owner.restaurantId },
+          data: { deletedAt: new Date() },
+        });
+      }
+    });
+
+    // Repriced after the deletion, from whatever invoice is now the newest.
+    // An ingredient left holding a price from a deleted document would be a
+    // margin computed on a purchase that did not happen.
+    const repriced = await repriceIngredients(owner.restaurantId, names);
+
+    return {
+      success: true,
+      data: { lines: lines.length, costs: costEntryIds.length, repriced },
+    };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to delete the invoice', error, 'delete') };
+  }
+}
+
+/**
+ * Points ingredients at their newest surviving invoice price.
+ *
+ * Only those taking their cost from invoices: a price the owner pinned by
+ * hand is their decision and not ours to move.
+ */
+async function repriceIngredients(restaurantId: string, normalizedNames: string[]): Promise<number> {
+  if (normalizedNames.length === 0) return 0;
+
+  const ingredients = await prisma.ingredient.findMany({
+    where: {
+      restaurantId,
+      deletedAt: null,
+      manualUnitCost: null,
+      normalizedName: { in: normalizedNames },
+    },
+    select: { id: true, normalizedName: true },
+  });
+
+  let changed = 0;
+  for (const ingredient of ingredients) {
+    const newest = await prisma.invoiceItem.findFirst({
+      where: {
+        restaurantId,
+        normalizedName: ingredient.normalizedName,
+        costEntry: { deletedAt: null },
+      },
+      select: { unitPrice: true, invoiceDate: true },
+      orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    await prisma.ingredient.update({
+      where: { id: ingredient.id },
+      data: newest
+        ? { invoiceUnitCost: newest.unitPrice, invoiceCostAt: newest.invoiceDate }
+        // Nothing left to price it from: cleared rather than left showing a
+        // figure from a document that no longer exists.
+        : { invoiceUnitCost: null, invoiceCostAt: null },
+    });
+    changed++;
+  }
+
+  return changed;
 }

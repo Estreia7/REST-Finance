@@ -114,10 +114,7 @@ function unitCostOf(ing: Ingredient): number | null {
   return ing.manualUnitCost ?? ing.invoiceUnitCost;
 }
 
-export default function MenuCalculatorPanel({ onOpenInvoice }: {
-  /** Crosses to Accounting with that invoice already searched. */
-  onOpenInvoice?: (invoiceNumber: string) => void;
-} = {}) {
+export default function MenuCalculatorPanel() {
   const { t, language } = useLanguage();
   const [data, setData] = useState<MenuData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -431,7 +428,6 @@ export default function MenuCalculatorPanel({ onOpenInvoice }: {
       {(addingIngredient || editingIngredient) && (
         <IngredientDialog
           ingredient={editingIngredient}
-          onOpenInvoice={onOpenInvoice}
           initialName={newIngredientName}
           onClose={() => { setAddingIngredient(false); setEditingIngredient(null); setNewIngredientName(''); }}
           onSave={async (input) => {
@@ -1235,8 +1231,6 @@ function DishDialog({
     vatRate: number; monthlyVolume: number | null;
   }) => void;
   onDelete?: () => void;
-  /** Opens the paperwork a price came from. */
-  onOpenInvoice?: (invoiceNumber: string) => void;
 }) {
   const { t } = useLanguage();
   const [name, setName] = useState(item?.name ?? '');
@@ -1345,7 +1339,7 @@ function DishDialog({
 }
 
 function IngredientDialog({
-  ingredient, initialName = '', onClose, onSave, onDelete, onOpenInvoice,
+  ingredient, initialName = '', onClose, onSave, onDelete,
 }: {
   ingredient: Ingredient | null;
   /** Typed into the recipe's search before deciding to create it. */
@@ -1355,8 +1349,6 @@ function IngredientDialog({
     name: string; unit: string; manualUnitCost: number | null; wastePercent: number;
   }) => void;
   onDelete?: () => void;
-  /** Opens the paperwork a price came from. */
-  onOpenInvoice?: (invoiceNumber: string) => void;
 }) {
   const { t } = useLanguage();
   const [name, setName] = useState(ingredient?.name ?? initialName);
@@ -1492,7 +1484,6 @@ function IngredientDialog({
         <IngredientPriceHistory
           ingredientId={ingredient.id}
           unit={ingredient.unit}
-          onOpenInvoice={onOpenInvoice}
         />
       )}
     </Dialog>

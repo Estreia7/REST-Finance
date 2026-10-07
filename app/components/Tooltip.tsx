@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect, useId } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useId } from 'react';
+import { createPortal } from 'react-dom';
 
 interface TooltipProps {
   text: string;
@@ -15,39 +16,65 @@ interface TooltipProps {
   label?: string;
 }
 
+interface Placement {
+  /** Where the arrow points: the trigger's horizontal centre, in viewport px. */
+  anchorX: number;
+  /** The bubble's left edge, slid back inside the viewport when needed. */
+  left: number;
+  top: number;
+  side: 'top' | 'bottom';
+}
+
+const GAP = 8;
+const MARGIN = 8;
+
+/**
+ * The bubble is rendered into document.body with fixed positioning. Drawn
+ * inside the trigger, it was clipped by any scrolling ancestor (the annual
+ * table scrolls sideways) and covered by its sticky header.
+ */
 export default function Tooltip({ text, children, underline = true, label }: TooltipProps) {
   const [show, setShow] = useState(false);
-  const [position, setPosition] = useState<'top' | 'bottom'>('top');
-  /**
-   * How far to slide the bubble back towards the viewport, in pixels. A
-   * tooltip on the first or last column of the annual table would otherwise
-   * hang off the edge of the screen with half its sentence unreadable.
-   */
-  const [shift, setShift] = useState(0);
+  const [placement, setPlacement] = useState<Placement | null>(null);
   const triggerRef = useRef<HTMLSpanElement>(null);
   const bubbleRef = useRef<HTMLSpanElement>(null);
   const describedBy = useId();
 
-  useEffect(() => {
-    if (!show || !triggerRef.current) return;
-
-    const rect = triggerRef.current.getBoundingClientRect();
-    // Too close to the top of the viewport: flip below rather than clip.
-    setPosition(rect.top < 96 ? 'bottom' : 'top');
-
-    // Measure after the flip so the bubble is where it will finally sit.
-    const bubble = bubbleRef.current;
-    if (!bubble) return;
-
-    const box = bubble.getBoundingClientRect();
-    const margin = 8;
-    let correction = 0;
-    if (box.left < margin) correction = margin - box.left;
-    else if (box.right > window.innerWidth - margin) {
-      correction = window.innerWidth - margin - box.right;
+  // Measure before paint so the bubble never flashes in the wrong place.
+  useLayoutEffect(() => {
+    if (!show) {
+      setPlacement(null);
+      return;
     }
-    setShift(correction);
-  }, [show]);
+
+    const place = () => {
+      const trigger = triggerRef.current;
+      const bubble = bubbleRef.current;
+      if (!trigger || !bubble) return;
+
+      const rect = trigger.getBoundingClientRect();
+      const box = bubble.getBoundingClientRect();
+      const anchorX = rect.left + rect.width / 2;
+
+      // Above by default; below when there is no room above.
+      const side = rect.top - box.height - GAP < MARGIN ? 'bottom' : 'top';
+      const top = side === 'top' ? rect.top - box.height - GAP : rect.bottom + GAP;
+
+      const maxLeft = window.innerWidth - MARGIN - box.width;
+      const left = Math.max(MARGIN, Math.min(anchorX - box.width / 2, maxLeft));
+
+      setPlacement({ anchorX, left, top, side });
+    };
+
+    place();
+    // The trigger can move under a fixed bubble: follow it.
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [show, text]);
 
   // Escape closes it, the same as any other transient layer.
   useEffect(() => {
@@ -83,26 +110,31 @@ export default function Tooltip({ text, children, underline = true, label }: Too
       >
         {children}
       </span>
-      <span
-        ref={bubbleRef}
-        id={describedBy}
-        role="tooltip"
-        className={`absolute left-1/2 z-50 px-3 py-2 text-xs font-normal leading-relaxed text-foreground bg-card-elevated border border-border rounded-lg shadow-modal whitespace-normal text-left max-w-[260px] w-max pointer-events-none transition-opacity duration-200
-          ${position === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'}
-          ${show ? 'opacity-100' : 'opacity-0'}
-        `}
-        style={{ transform: `translateX(calc(-50% + ${shift}px))` }}
-      >
-        {text}
-        {/* The arrow stays on the trigger even when the bubble slides, so it
-            still points at the thing being explained. */}
-        <span
-          className={`absolute w-2 h-2 bg-card-elevated border-border rotate-45
-            ${position === 'top' ? 'top-full -mt-1 border-b border-r' : 'bottom-full -mb-1 border-t border-l'}
-          `}
-          style={{ left: `calc(50% - ${shift}px)`, marginLeft: '-4px' }}
-        />
-      </span>
+      {show &&
+        createPortal(
+          <span
+            ref={bubbleRef}
+            id={describedBy}
+            role="tooltip"
+            className={`fixed z-[110] px-3 py-2 text-xs font-normal leading-relaxed text-foreground bg-card-elevated border border-border rounded-lg shadow-modal whitespace-normal text-left max-w-[260px] w-max pointer-events-none transition-opacity duration-150
+              ${placement ? 'opacity-100' : 'opacity-0'}
+            `}
+            style={{ top: placement?.top ?? 0, left: placement?.left ?? 0 }}
+          >
+            {text}
+            {/* The arrow stays on the trigger even when the bubble slides, so
+                it still points at the thing being explained. */}
+            {placement && (
+              <span
+                className={`absolute w-2 h-2 bg-card-elevated border-border rotate-45
+                  ${placement.side === 'top' ? 'top-full -mt-1 border-b border-r' : 'bottom-full -mb-1 border-t border-l'}
+                `}
+                style={{ left: placement.anchorX - placement.left - 4 }}
+              />
+            )}
+          </span>,
+          document.body,
+        )}
     </span>
   );
 }

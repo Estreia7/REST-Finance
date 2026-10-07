@@ -4,8 +4,10 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   Loader2, ChevronLeft, ChevronRight, Plus, Check, Trash2, AlertTriangle, CalendarDays, Palmtree,
+  Eye, Download, FileText,
 } from 'lucide-react';
 import { getLeaveOverview, saveLeave, removeLeave, setEmployeeStartDate } from '../leave-actions';
+import { downloadFile, DownloadError } from '@/lib/download-file';
 import {
   leaveBalance, leaveWorkingDays, holidayOn, onLeave, type LeaveBalance, type LeaveRange,
 } from '@/lib/leave';
@@ -365,6 +367,9 @@ export default function LeavePanel() {
         )}
       </div>
 
+      {/* ── The sheet the law asks to be posted ─────────────────────────── */}
+      <LeaveMapCard year={month.year} />
+
       {/* ── Where each person stands ────────────────────────────────────── */}
       <div className="card-glass p-4 sm:p-5">
         <h3 className="font-bold text-foreground">
@@ -422,6 +427,163 @@ export default function LeavePanel() {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
+
+/** Where the holiday map for a year is made, for the staff-room wall. */
+function leaveMapUrl(year: number, page?: number): string {
+  return page
+    ? `/api/export/leave-map?year=${year}&format=png&page=${page}`
+    : `/api/export/leave-map?year=${year}`;
+}
+
+/** The server answers failures with a dictionary key; anything else is generic. */
+async function errorKey(res: Response): Promise<string> {
+  try {
+    const body = await res.json();
+    if (typeof body?.error === 'string' && body.error.startsWith('leave.')) return body.error;
+  } catch { /* not JSON */ }
+  return 'leave.map.failed';
+}
+
+function useLeaveMapDownload(year: number) {
+  const { t } = useLanguage();
+  const [downloading, setDownloading] = useState(false);
+  const download = async () => {
+    setDownloading(true);
+    try {
+      await downloadFile(leaveMapUrl(year), `${t('leave.map.sheet.filename')}-${year}.pdf`);
+    } catch (err) {
+      toast.error(t(err instanceof DownloadError && err.status === 404 ? 'leave.map.noEmployees' : 'leave.map.failed'));
+    } finally {
+      setDownloading(false);
+    }
+  };
+  return { download, downloading };
+}
+
+function LeaveMapCard({ year }: { year: number }) {
+  const { t } = useLanguage();
+  const [previewing, setPreviewing] = useState(false);
+  const { download, downloading } = useLeaveMapDownload(year);
+  // Stable, so the preview does not fetch its pages again whenever the panel
+  // behind it re-renders.
+  const closePreview = useCallback(() => setPreviewing(false), []);
+
+  return (
+    <div className="card-glass p-4 sm:p-5 flex flex-wrap items-center gap-3">
+      <span className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-muted-foreground shrink-0" aria-hidden="true">
+        <FileText className="w-5 h-5" />
+      </span>
+      <div className="min-w-[12rem] flex-1">
+        <h3 className="font-bold text-foreground">
+          {t('leave.map.heading')} {year}
+        </h3>
+        <p className="text-xs text-muted-foreground">{t('leave.map.hint')}</p>
+      </div>
+      <div className="flex items-center gap-2 w-full sm:w-auto">
+        <button
+          type="button"
+          onClick={() => setPreviewing(true)}
+          className="cta-button-secondary !h-11 !py-0 !px-3.5 !text-xs flex-1 sm:flex-none"
+        >
+          <Eye className="w-4 h-4" aria-hidden="true" />
+          {t('leave.map.preview')}
+        </button>
+        <button
+          type="button"
+          onClick={download}
+          disabled={downloading}
+          className="cta-button !h-11 !py-0 !px-4 !text-xs flex-1 sm:flex-none disabled:opacity-60"
+        >
+          {downloading
+            ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+            : <Download className="w-4 h-4" aria-hidden="true" />}
+          {t('leave.map.download')}
+        </button>
+      </div>
+
+      {previewing && <LeaveMapPreview year={year} onClose={closePreview} />}
+    </div>
+  );
+}
+
+/**
+ * The sheet as it will print, page by page. Images rather than the PDF in a
+ * frame: a phone's browser shows a framed PDF's first page, or nothing.
+ */
+function LeaveMapPreview({ year, onClose }: { year: number; onClose: () => void }) {
+  const { t } = useLanguage();
+  const [pages, setPages] = useState<string[] | null>(null);
+  const { download, downloading } = useLeaveMapDownload(year);
+
+  useEffect(() => {
+    let cancelled = false;
+    const urls: string[] = [];
+    const fetchPage = async (page: number) => {
+      const res = await fetch(leaveMapUrl(year, page), { credentials: 'same-origin' });
+      if (!res.ok) throw new Error(await errorKey(res));
+      const url = URL.createObjectURL(await res.blob());
+      urls.push(url);
+      return { url, count: Number(res.headers.get('X-Page-Count')) || 1 };
+    };
+
+    (async () => {
+      try {
+        const first = await fetchPage(1);
+        const rest = await Promise.all(
+          Array.from({ length: first.count - 1 }, (_, i) => fetchPage(i + 2)),
+        );
+        if (!cancelled) setPages([first.url, ...rest.map((p) => p.url)]);
+      } catch (err) {
+        if (cancelled) return;
+        toast.error(t(err instanceof Error && err.message.startsWith('leave.') ? err.message : 'leave.map.failed'));
+        onClose();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      urls.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [year, t, onClose]);
+
+  return (
+    <Dialog title={`${t('leave.map.heading')} ${year}`} onClose={onClose} wide>
+      {pages === null ? (
+        <div className="aspect-[297/210] rounded-xl bg-muted flex items-center justify-center gap-3 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+          {t('leave.map.preparing')}
+        </div>
+      ) : (
+        <div className="space-y-3 rounded-xl bg-muted p-2 sm:p-3">
+          {pages.map((src, i) => (
+            // A blob URL of a generated page: next/image has nothing to optimise.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={src}
+              src={src}
+              alt={pages.length > 1 ? `${t('leave.map.previewAlt')} (${i + 1}/${pages.length})` : t('leave.map.previewAlt')}
+              className="block w-full h-auto rounded-md bg-white shadow-sm border border-border"
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="mt-4 flex justify-end">
+        <button
+          type="button"
+          onClick={download}
+          disabled={downloading || pages === null}
+          className="cta-button !py-2.5 !px-4 !text-sm w-full sm:w-auto disabled:opacity-50"
+        >
+          {downloading
+            ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+            : <Download className="w-4 h-4" aria-hidden="true" />}
+          {t('leave.map.download')}
+        </button>
+      </div>
+    </Dialog>
+  );
+}
 
 function EmployeeBalance({
   employee, balance, leaves, onBook, onEdit, onEditStart,

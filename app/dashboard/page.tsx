@@ -750,14 +750,7 @@ function DashboardPageInner() {
               {analyticsSubView === 'compare' && <ComparativePanel />}
               {analyticsSubView === 'tickets' && <TicketAnalysisPanel />}
               {analyticsSubView === 'products' && <ProductsPanel />}
-              {analyticsSubView === 'menu' && (
-                <MenuCalculatorPanel
-                  onOpenInvoice={(invoiceNumber) => {
-                    setAccountingSearch(invoiceNumber);
-                    handleTabChange('accounting');
-                  }}
-                />
-              )}
+              {analyticsSubView === 'menu' && <MenuCalculatorPanel />}
               {analyticsSubView === 'goals' && <GoalsPanel restaurant={restaurant} stats={stats} onUpdate={loadData} />}
               {analyticsSubView === 'report' && <MonthlyReportPanel />}
               {analyticsSubView === 'prices' && <PriceTrackingPanel />}
