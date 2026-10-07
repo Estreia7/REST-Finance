@@ -216,3 +216,254 @@ export async function getProductPriceHistory(normalizedName: string) {
     return { error: toClientError('Failed to read the price history', error, 'read') };
   }
 }
+
+/**
+ * Suppliers that are one company written several ways.
+ *
+ * A NIF is the company; a name is however the reader read the letterhead that
+ * day. One butcher arrived as four suppliers — "Profunda Origem", "PROFUNDA
+ * ORIGEM", and two longer spellings — each with its own price history, so no
+ * comparison between them was possible and the same invoice could be entered
+ * once under each.
+ *
+ * New invoices no longer do this, because the supplier is matched on its tax
+ * number first. This finds the ones already on file.
+ */
+export async function getDuplicateVendors() {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const vendors = await prisma.vendor.findMany({
+      where: { restaurantId: owner.restaurantId },
+      select: {
+        id: true,
+        name: true,
+        taxId: true,
+        _count: { select: { invoiceItems: true, costEntries: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    // Grouped by tax number, which is the only reliable identity. Suppliers
+    // with no NIF on file are left alone: two different butchers can have
+    // similar names, and merging those would be worse than leaving them.
+    const byTax = new Map<string, typeof vendors>();
+    for (const vendor of vendors) {
+      const nif = vendor.taxId?.replace(/\D/g, '');
+      if (!nif) continue;
+      byTax.set(nif, [...(byTax.get(nif) ?? []), vendor]);
+    }
+
+    // A supplier with no NIF on file, whose name matches one that has
+    // a NIF, is almost always the same company read less well — the tax
+    // number is near the top of an invoice and the easiest thing to miss
+    // on a poor photograph. Grouped with it rather than left orphaned,
+    // since otherwise the only duplicates that can ever be tidied are the
+    // ones where both readings already worked.
+    for (const vendor of vendors) {
+      if (vendor.taxId?.replace(/D/g, '')) continue;
+      const key = simplify(vendor.name);
+      if (!key) continue;
+      for (const [nif, list] of byTax) {
+        if (list.some((v) => simplify(v.name).startsWith(key) || key.startsWith(simplify(v.name)))) {
+          byTax.set(nif, [...list, vendor]);
+          break;
+        }
+      }
+    }
+
+    const groups = [...byTax.entries()]
+      .filter(([, list]) => list.length > 1)
+      .map(([taxId, list]) => {
+        // The one to keep must have the tax number, or the merged supplier
+        // would lose the only reliable thing identifying it and the next
+        // invoice would create a fifth row. After that, the fullest name:
+        // a reading that got the registered name is the better reading.
+        const keep = [...list].sort((a, b) => {
+          const aNif = a.taxId ? 1 : 0;
+          const bNif = b.taxId ? 1 : 0;
+          return bNif - aNif || b.name.length - a.name.length;
+        })[0];
+
+        return {
+          taxId,
+          keep: { id: keep.id, name: keep.name },
+          merge: list
+            .filter((v) => v.id !== keep.id)
+            .map((v) => ({
+              id: v.id,
+              name: v.name,
+              lines: v._count.invoiceItems,
+              costs: v._count.costEntries,
+            })),
+        };
+      });
+
+    return { success: true, data: groups };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to look for duplicate suppliers', error, 'read') };
+  }
+}
+
+/**
+ * Folds duplicate suppliers into one.
+ *
+ * Everything that pointed at the duplicates — invoice lines, cost entries,
+ * remembered product links — is repointed, and the empty suppliers removed.
+ * Nothing is deleted except the supplier rows themselves.
+ */
+export async function mergeVendors(input: { keepId: string; mergeIds: string[] }) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+    if (!input.mergeIds.length) return { error: 'accounting.noVendorsToMerge' };
+
+    // Every id must be this restaurant's, or a forged one would move another
+    // tenant's invoices onto this supplier.
+    const ids = [input.keepId, ...input.mergeIds];
+    const owned = await prisma.vendor.findMany({
+      where: { id: { in: ids }, restaurantId: owner.restaurantId },
+      select: { id: true },
+    });
+    if (owned.length !== ids.length) return { error: 'accounting.vendorNotFound' };
+
+    const mergeIds = input.mergeIds.filter((id) => id !== input.keepId);
+    if (!mergeIds.length) return { error: 'accounting.noVendorsToMerge' };
+
+    const moved = await prisma.$transaction(async (tx) => {
+      const items = await tx.invoiceItem.updateMany({
+        where: { restaurantId: owner.restaurantId, vendorId: { in: mergeIds } },
+        data: { vendorId: input.keepId },
+      });
+      const costs = await tx.costEntry.updateMany({
+        where: { restaurantId: owner.restaurantId, vendorId: { in: mergeIds } },
+        data: { vendorId: input.keepId },
+      });
+
+      // A remembered link belongs to a supplier's wording. Moved rather than
+      // dropped, or the owner would be asked again about products they have
+      // already identified. Conflicts are deleted: the kept supplier already
+      // has that answer.
+      const links = await tx.invoiceItemLink.findMany({
+        where: { restaurantId: owner.restaurantId, vendorId: { in: mergeIds } },
+        select: { id: true, sourceName: true, ingredientId: true },
+      });
+      for (const link of links) {
+        const clash = await tx.invoiceItemLink.findFirst({
+          where: {
+            restaurantId: owner.restaurantId,
+            vendorId: input.keepId,
+            sourceName: link.sourceName,
+            ingredientId: link.ingredientId,
+          },
+          select: { id: true },
+        });
+        if (clash) await tx.invoiceItemLink.delete({ where: { id: link.id } });
+        else await tx.invoiceItemLink.update({ where: { id: link.id }, data: { vendorId: input.keepId } });
+      }
+
+      await tx.vendor.deleteMany({
+        where: { id: { in: mergeIds }, restaurantId: owner.restaurantId },
+      });
+
+      return { items: items.count, costs: costs.count };
+    });
+
+    return {
+      success: true,
+      data: { merged: mergeIds.length, lines: moved.items, costs: moved.costs },
+    };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to merge suppliers', error, 'write') };
+  }
+}
+
+/**
+ * What one ingredient has cost, invoice by invoice.
+ *
+ * The question behind "is my supplier putting prices up", asked of a thing
+ * the kitchen uses rather than of a line on a document. Matched through the
+ * remembered links as well as the name, because "Carne Picada Novilho" and
+ * "Carne Smash" are the same purchase and their history is one history.
+ *
+ * Each entry carries the invoice it came from, so the owner can go and look
+ * at the paperwork rather than taking the figure on trust.
+ */
+export async function getIngredientPriceHistory(ingredientId: string) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+    if (!ingredientId.trim()) return { error: 'errors.read' };
+
+    const ingredient = await prisma.ingredient.findFirst({
+      where: { id: ingredientId, restaurantId: owner.restaurantId, deletedAt: null },
+      select: { id: true, name: true, normalizedName: true, unit: true },
+    });
+    if (!ingredient) return { error: 'errors.read' };
+
+    // Every supplier wording that was ever confirmed as this ingredient.
+    const links = await prisma.invoiceItemLink.findMany({
+      where: { restaurantId: owner.restaurantId, ingredientId },
+      select: { sourceName: true },
+    });
+
+    const wordings = [...new Set(links.map((l) => l.sourceName))];
+
+    const rows = await prisma.invoiceItem.findMany({
+      where: {
+        restaurantId: owner.restaurantId,
+        OR: [
+          { normalizedName: ingredient.normalizedName },
+          ...(wordings.length
+            ? [{ productName: { in: wordings, mode: 'insensitive' as const } }]
+            : []),
+        ],
+      },
+      select: {
+        id: true,
+        productName: true,
+        unit: true,
+        unitPrice: true,
+        quantity: true,
+        invoiceDate: true,
+        invoiceNumber: true,
+        vendor: { select: { id: true, name: true } },
+      },
+      orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }],
+      take: 40,
+    });
+
+    return {
+      success: true,
+      data: {
+        ingredient: { id: ingredient.id, name: ingredient.name, unit: ingredient.unit },
+        entries: rows.map((r) => ({
+          id: r.id,
+          productName: r.productName,
+          unitPrice: Number(r.unitPrice),
+          unit: r.unit,
+          quantity: Number(r.quantity),
+          date: r.invoiceDate ? r.invoiceDate.toISOString().slice(0, 10) : null,
+          invoiceNumber: r.invoiceNumber,
+          vendorName: r.vendor?.name ?? null,
+          vendorId: r.vendor?.id ?? null,
+        })),
+      },
+    };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to read the price history', error, 'read') };
+  }
+}
+
+/** A supplier name reduced to what identifies it, for loose matching. */
+function simplify(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    // The legal form says nothing about which company it is.
+    .replace(/(lda|ltda|sa|s.a|unipessoal|comercio|cash|carry|portugal)/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}

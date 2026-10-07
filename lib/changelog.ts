@@ -43,6 +43,24 @@ export const CHANGELOG: Release[] = [
     date: '2026-10-06',
     entries: [
       {
+        kind: 'fix',
+        title: 'Um fornecedor, não quatro',
+        detail:
+          'O mesmo talho aparecia quatro vezes, com nomes diferentes, porque cada leitura da fatura apanhava o nome de outra maneira. Agora reconhecemos o fornecedor pelo NIF, e em Contabilidade › Arrumar pode juntar os que já ficaram repetidos.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Os preços dizem de que unidade falam',
+        detail:
+          'Em Contabilidade, o preço unitário passa a trazer a unidade: €9,90/kg em vez de €9,90. Nove euros e noventa o quilo e nove euros e noventa a caixa são compras diferentes.',
+      },
+      {
+        kind: 'new',
+        title: 'O histórico de preço de cada ingrediente',
+        detail:
+          'Ao abrir um ingrediente, uma secção que se abre e fecha mostra o que pagou de cada vez, com a data e a subida ou descida face à compra anterior. Clicar numa linha leva à fatura que lhe deu origem.',
+      },
+      {
         kind: 'improvement',
         title: 'Procurar nas listas longas',
         detail:

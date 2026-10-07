@@ -20,6 +20,7 @@ import { translateError } from '@/lib/error-messages';
 import CatalogueImport from './CatalogueImport';
 import MenuGraph from './MenuGraph';
 import ListSearch, { matchesSearch } from './ListSearch';
+import IngredientPriceHistory from './IngredientPriceHistory';
 import InfoHint from '@/app/components/InfoHint';
 
 /**
@@ -113,7 +114,10 @@ function unitCostOf(ing: Ingredient): number | null {
   return ing.manualUnitCost ?? ing.invoiceUnitCost;
 }
 
-export default function MenuCalculatorPanel() {
+export default function MenuCalculatorPanel({ onOpenInvoice }: {
+  /** Crosses to Accounting with that invoice already searched. */
+  onOpenInvoice?: (invoiceNumber: string) => void;
+} = {}) {
   const { t, language } = useLanguage();
   const [data, setData] = useState<MenuData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -427,6 +431,7 @@ export default function MenuCalculatorPanel() {
       {(addingIngredient || editingIngredient) && (
         <IngredientDialog
           ingredient={editingIngredient}
+          onOpenInvoice={onOpenInvoice}
           initialName={newIngredientName}
           onClose={() => { setAddingIngredient(false); setEditingIngredient(null); setNewIngredientName(''); }}
           onSave={async (input) => {
@@ -1130,7 +1135,7 @@ function IngredientList({
   onAdd: () => void;
   onEdit: (i: Ingredient) => void;
 }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [search, setSearch] = useState('');
 
   // Ninety-odd rows on a real account, so finding one by scrolling is a
@@ -1194,6 +1199,14 @@ function IngredientList({
                           <Tag className="w-3 h-3" aria-hidden="true" />
                         )}
                         {fromInvoice ? t('menuCalc.fromInvoice') : t('menuCalc.fixedPrice')}
+                        {/* When, not just where from. A price with no date
+                            could be from last week or from last year, and
+                            an owner costing a dish needs to know which. */}
+                        {fromInvoice && ing.invoiceCostAt && (
+                          <span className="opacity-70">
+                            {' · '}{new Date(ing.invoiceCostAt).toLocaleDateString(language === 'pt' ? 'pt-PT' : 'en-GB')}
+                          </span>
+                        )}
                         {ing.wastePercent > 0 &&
                           ` · ${formatPercent(ing.wastePercent, 0)} ${t('menuCalc.wasteSuffix')}`}
                       </>
@@ -1222,6 +1235,8 @@ function DishDialog({
     vatRate: number; monthlyVolume: number | null;
   }) => void;
   onDelete?: () => void;
+  /** Opens the paperwork a price came from. */
+  onOpenInvoice?: (invoiceNumber: string) => void;
 }) {
   const { t } = useLanguage();
   const [name, setName] = useState(item?.name ?? '');
@@ -1330,7 +1345,7 @@ function DishDialog({
 }
 
 function IngredientDialog({
-  ingredient, initialName = '', onClose, onSave, onDelete,
+  ingredient, initialName = '', onClose, onSave, onDelete, onOpenInvoice,
 }: {
   ingredient: Ingredient | null;
   /** Typed into the recipe's search before deciding to create it. */
@@ -1340,6 +1355,8 @@ function IngredientDialog({
     name: string; unit: string; manualUnitCost: number | null; wastePercent: number;
   }) => void;
   onDelete?: () => void;
+  /** Opens the paperwork a price came from. */
+  onOpenInvoice?: (invoiceNumber: string) => void;
 }) {
   const { t } = useLanguage();
   const [name, setName] = useState(ingredient?.name ?? initialName);
@@ -1468,6 +1485,16 @@ function IngredientDialog({
           </button>
         )}
       </div>
+
+      {/* Only for an ingredient that exists: there is no history behind
+          one being created. */}
+      {ingredient && (
+        <IngredientPriceHistory
+          ingredientId={ingredient.id}
+          unit={ingredient.unit}
+          onOpenInvoice={onOpenInvoice}
+        />
+      )}
     </Dialog>
   );
 }

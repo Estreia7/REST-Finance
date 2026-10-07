@@ -480,6 +480,9 @@ export default function ReceiptScanner({
             const saved = await commitReconciliation({
               costEntryId: reconciling.costEntryId,
               vendorName: reconciling.data.vendor,
+              // The NIF identifies the company; the name is however the
+              // reader happened to read the letterhead that day.
+              vendorTaxId: reconciling.data.vendorTaxId ?? null,
               invoiceDate: reconciling.data.date,
               invoiceNumber: reconciling.data.invoiceNumber ?? null,
               lines,

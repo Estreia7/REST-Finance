@@ -133,6 +133,8 @@ export interface LineResolution {
 export async function commitReconciliation(input: {
   costEntryId: string;
   vendorName: string;
+  /** The supplier NIF, which identifies the company where the name does not. */
+  vendorTaxId?: string | null;
   invoiceDate: string;
   invoiceNumber: string | null;
   lines: LineResolution[];
@@ -150,7 +152,7 @@ export async function commitReconciliation(input: {
     });
     if (!costEntry) return { error: 'reconcile.noCostEntry' };
 
-    const vendor = await ensureVendor(owner.restaurantId, input.vendorName);
+    const vendor = await ensureVendor(owner.restaurantId, input.vendorName, input.vendorTaxId);
     const invoiceDate = new Date(input.invoiceDate);
 
     // The same invoice photographed twice, or a save that was pressed
@@ -162,7 +164,6 @@ export async function commitReconciliation(input: {
       const already = await prisma.invoiceItem.findFirst({
         where: {
           restaurantId: owner.restaurantId,
-          vendorId: vendor.id,
           invoiceNumber: input.invoiceNumber.trim(),
         },
         select: { id: true },
@@ -261,15 +262,51 @@ export async function commitReconciliation(input: {
 }
 
 /** The supplier, matched on name or created. */
-async function ensureVendor(restaurantId: string, name: string) {
+/**
+ * The supplier, found by tax number first and by name only after.
+ *
+ * A NIF is one company; a name is however the reader happened to read the
+ * letterhead that day. Matching on the name alone produced four suppliers
+ * for one butcher — "Profunda Origem", "PROFUNDA ORIGEM", "PROFUNDA ORIGEM
+ * - Profunda D'Origem-Comércio Carnes, Lda" — each with its own price
+ * history, so no price comparison between them was possible and the same
+ * invoice could be entered once under each.
+ *
+ * The longer name wins when a NIF turns up again, because a reading that
+ * got the full registered name is the better reading.
+ */
+async function ensureVendor(restaurantId: string, name: string, taxId?: string | null) {
   const trimmed = name.trim() || 'Fornecedor';
-  const existing = await prisma.vendor.findFirst({
+  const nif = taxId?.replace(/D/g, '') || null;
+
+  if (nif) {
+    const byTax = await prisma.vendor.findFirst({
+      where: { restaurantId, taxId: nif },
+      select: { id: true, name: true },
+    });
+    if (byTax) {
+      if (trimmed.length > byTax.name.length) {
+        await prisma.vendor.update({ where: { id: byTax.id }, data: { name: trimmed } });
+      }
+      return { id: byTax.id };
+    }
+  }
+
+  const byName = await prisma.vendor.findFirst({
     where: { restaurantId, name: { equals: trimmed, mode: 'insensitive' } },
-    select: { id: true },
+    select: { id: true, taxId: true },
   });
-  if (existing) return existing;
+  if (byName) {
+    // A NIF learned later is worth keeping: it is what the next invoice
+    // will be matched on.
+    if (nif && !byName.taxId) {
+      await prisma.vendor.update({ where: { id: byName.id }, data: { taxId: nif } });
+    }
+    return { id: byName.id };
+  }
+
   return prisma.vendor.create({
-    data: { restaurantId, name: trimmed },
+    data: { restaurantId, name: trimmed, taxId: nif },
     select: { id: true },
   });
 }
@@ -410,12 +447,14 @@ export async function findExistingInvoice(input: {
     const number = input.invoiceNumber?.trim();
     if (!number) return { success: true, data: null };
 
-    const vendor = await findVendor(owner.restaurantId, input.vendorName);
+    // The document number alone, not the number under that supplier. The
+    // same invoice read twice can produce two spellings of one butcher, and
+    // narrowing by supplier let it in a second time under the other
+    // spelling — which is exactly what happened.
     const existing = await prisma.invoiceItem.findFirst({
       where: {
         restaurantId: owner.restaurantId,
         invoiceNumber: number,
-        ...(vendor ? { vendorId: vendor.id } : {}),
       },
       select: {
         invoiceDate: true,

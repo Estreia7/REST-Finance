@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useDeferredValue } from 'react';
 import { toast } from 'sonner';
 import { Loader2, Search, FileText, Building2, Link2, Check, AlertTriangle } from 'lucide-react';
-import { getInvoiceLines, type AccountingSummary } from '../accounting-actions';
+import { getInvoiceLines, getDuplicateVendors, mergeVendors, type AccountingSummary } from '../accounting-actions';
 import { getDuplicateIngredients, mergeIngredients } from '../reconcile-actions';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
@@ -24,7 +24,18 @@ import SubTabs from './SubTabs';
 
 type View = 'invoices' | 'vendors' | 'tidy';
 
-export default function AccountingPanel() {
+/**
+ * @param initialSearch an invoice number to open on, when the owner
+ *   arrived here by tapping a price in the menu. Cleared once used, so
+ *   returning to the tab later does not re-apply a stale search.
+ */
+export default function AccountingPanel({
+  initialSearch = '',
+  onSearchConsumed,
+}: {
+  initialSearch?: string;
+  onSearchConsumed?: () => void;
+} = {}) {
   const { t } = useLanguage();
   const [view, setView] = useState<View>('invoices');
 
@@ -41,7 +52,7 @@ export default function AccountingPanel() {
         ]}
       />
 
-      {view === 'invoices' && <Invoices />}
+      {view === 'invoices' && <Invoices initialSearch={initialSearch} onSearchConsumed={onSearchConsumed} />}
       {view === 'vendors' && <Vendors />}
       {view === 'tidy' && <Tidy />}
     </div>
@@ -49,11 +60,20 @@ export default function AccountingPanel() {
 }
 
 /** Every line, searchable. */
-function Invoices() {
+function Invoices({ initialSearch = '', onSearchConsumed }: {
+  initialSearch?: string;
+  onSearchConsumed?: () => void;
+}) {
   const { t, language } = useLanguage();
   const [data, setData] = useState<AccountingSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch);
+
+  // Consumed once: a search applied again on every later visit would be a
+  // filter the owner cannot see the origin of.
+  useEffect(() => {
+    if (initialSearch) onSearchConsumed?.();
+     }, [initialSearch, onSearchConsumed]);
   const [vendorId, setVendorId] = useState('');
   const [unlinkedOnly, setUnlinkedOnly] = useState(false);
 
@@ -181,6 +201,12 @@ function Invoices() {
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-foreground whitespace-nowrap">
                     {formatMoney(row.unitPrice, { decimals: 2 })}
+                    {/* A price with no unit is a number nobody can check.
+                        9,90 the kilo and 9,90 the box are different
+                        purchases, and the column alone never said which. */}
+                    {row.unit && (
+                      <span className="text-muted-foreground">/{row.unit}</span>
+                    )}
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-foreground whitespace-nowrap">
                     {formatMoney(row.totalPrice)}
@@ -261,7 +287,24 @@ function Vendors() {
 }
 
 /** Ingredients the till left duplicated, offered for merging. */
+/**
+ * Putting right what the readings got wrong.
+ *
+ * Two kinds of duplicate, from two causes. Suppliers double up because a
+ * name is however the reader read the letterhead; ingredients double up
+ * because the POS brings its modifiers across as ingredients of their own.
+ * Both are proposed and neither is applied without being asked.
+ */
 function Tidy() {
+  return (
+    <div className="space-y-4">
+      <DuplicateVendors />
+      <DuplicateIngredients />
+    </div>
+  );
+}
+
+function DuplicateIngredients() {
   const { t } = useLanguage();
   const [pairs, setPairs] = useState<Array<{
     duplicate: { id: string; name: string };
@@ -387,6 +430,87 @@ function Empty({ title, body }: { title: string; body: string }) {
       <FileText className="w-8 h-8 mx-auto text-muted-foreground/40 mb-3" aria-hidden="true" />
       <p className="text-sm font-semibold text-foreground mb-1">{title}</p>
       <p className="text-xs text-muted-foreground max-w-sm mx-auto">{body}</p>
+    </div>
+  );
+}
+
+/**
+ * One butcher written four ways.
+ *
+ * Grouped by tax number, which is the only reliable identity a supplier has.
+ * Two with no NIF on file are never proposed: different companies can have
+ * similar names, and merging those would be worse than leaving them apart.
+ */
+function DuplicateVendors() {
+  const { t } = useLanguage();
+  const [groups, setGroups] = useState<Array<{
+    taxId: string;
+    keep: { id: string; name: string };
+    merge: Array<{ id: string; name: string; lines: number; costs: number }>;
+  }> | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(() => {
+    getDuplicateVendors().then((result) => {
+      setGroups('data' in result && result.data ? result.data : []);
+    });
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (groups === null || groups.length === 0) return null;
+
+  const merge = async (group: typeof groups[number]) => {
+    setBusy(true);
+    const result = await mergeVendors({
+      keepId: group.keep.id,
+      mergeIds: group.merge.map((v) => v.id),
+    });
+    setBusy(false);
+    if ('error' in result) {
+      toast.error(t('errors.write'));
+      return;
+    }
+    toast.success(
+      t('accounting.vendorsMerged')
+        .replace('{n}', String(result.data.merged))
+        .replace('{lines}', String(result.data.lines)),
+    );
+    load();
+  };
+
+  return (
+    <div className="card-glass p-6">
+      <h3 className="font-bold text-foreground mb-1">{t('accounting.dupVendorsTitle')}</h3>
+      <p className="text-xs text-muted-foreground mb-5 max-w-prose">
+        {t('accounting.dupVendorsBody')}
+      </p>
+
+      <ul className="space-y-3">
+        {groups.map((group) => (
+          <li key={group.taxId} className="rounded-xl border border-border-subtle bg-surface p-4">
+            <p className="text-sm text-foreground mb-1">
+              <span className="font-semibold [overflow-wrap:anywhere]">{group.keep.name}</span>
+              <span className="text-muted-foreground text-xs"> · NIF {group.taxId}</span>
+            </p>
+            {/* Named, not counted: the owner should see which spellings are
+                about to disappear into which. */}
+            <p className="text-xs text-muted-foreground mb-3">
+              {t('accounting.dupVendorsAbsorb')}{' '}
+              {group.merge.map((v) => v.name).join(' · ')}
+            </p>
+            <button
+              type="button"
+              onClick={() => merge(group)}
+              disabled={busy}
+              className="cta-button !py-1.5 !px-3 !text-xs"
+            >
+              {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />}
+              {t('accounting.mergeVendors')}
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

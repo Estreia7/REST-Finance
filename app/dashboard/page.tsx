@@ -129,6 +129,8 @@ function DashboardPageInner() {
   const [revenueYears, setRevenueYears] = useState<number[]>([]);
   // How far through the month the restaurant is, for the revenue card.
   const [monthProgress, setMonthProgress] = useState<MonthProgress | null>(null);
+  /** An invoice number to open Accounting on, set when arriving from a price. */
+  const [accountingSearch, setAccountingSearch] = useState('');
   // Each chart keeps its own year: comparing this year's sales with last
   // year's costs is a question an owner asks, and moving one chart should
   // not move the others.
@@ -748,7 +750,14 @@ function DashboardPageInner() {
               {analyticsSubView === 'compare' && <ComparativePanel />}
               {analyticsSubView === 'tickets' && <TicketAnalysisPanel />}
               {analyticsSubView === 'products' && <ProductsPanel />}
-              {analyticsSubView === 'menu' && <MenuCalculatorPanel />}
+              {analyticsSubView === 'menu' && (
+                <MenuCalculatorPanel
+                  onOpenInvoice={(invoiceNumber) => {
+                    setAccountingSearch(invoiceNumber);
+                    handleTabChange('accounting');
+                  }}
+                />
+              )}
               {analyticsSubView === 'goals' && <GoalsPanel restaurant={restaurant} stats={stats} onUpdate={loadData} />}
               {analyticsSubView === 'report' && <MonthlyReportPanel />}
               {analyticsSubView === 'prices' && <PriceTrackingPanel />}
@@ -774,7 +783,12 @@ function DashboardPageInner() {
             <BillingPanel restaurant={restaurant} />
           )}
 
-          {activeTab === 'accounting' && <AccountingPanel />}
+          {activeTab === 'accounting' && (
+            <AccountingPanel
+              initialSearch={accountingSearch}
+              onSearchConsumed={() => setAccountingSearch('')}
+            />
+          )}
 
           {activeTab === 'compliance' && <CompliancePanel />}
 
