@@ -28,6 +28,8 @@ export interface InvoiceRow {
   vendorId: string | null;
   /** The kitchen ingredient this line was identified as, if any. */
   ingredientName: string | null;
+  /** How many kitchen ingredients this one wording feeds. */
+  linkedCount: number;
 }
 
 export interface AccountingSummary {
@@ -137,15 +139,19 @@ export async function getInvoiceLines(filters: {
       }),
     ]);
 
-    const identifiedAs = new Map<string, string>();
+    // Several ingredients can share a wording — a case of meat feeding the
+    // burger and the extra portion. Named together rather than one picked,
+    // and through a Set because the same pair can have been written twice.
+    const identifiedNames = new Map<string, Set<string>>();
     for (const link of links) {
-      const existing = identifiedAs.get(link.sourceName);
-      // Several ingredients can share a wording — a case of meat feeding the
-      // burger and the extra portion. Named together rather than one picked.
-      identifiedAs.set(
-        link.sourceName,
-        existing ? `${existing}, ${link.ingredient.name}` : link.ingredient.name,
-      );
+      const names = identifiedNames.get(link.sourceName) ?? new Set<string>();
+      names.add(link.ingredient.name);
+      identifiedNames.set(link.sourceName, names);
+    }
+
+    const identifiedAs = new Map<string, string>();
+    for (const [source, names] of identifiedNames) {
+      identifiedAs.set(source, [...names].join(', '));
     }
 
     const vendorNames = await prisma.vendor.findMany({
@@ -166,6 +172,9 @@ export async function getInvoiceLines(filters: {
       vendorName: row.vendor?.name ?? null,
       vendorId: row.vendor?.id ?? null,
       ingredientName: identifiedAs.get(row.productName.trim().toLowerCase()) ?? null,
+      // How many kitchen ingredients this one wording feeds, so a line can
+      // show it at a glance instead of the owner counting the names.
+      linkedCount: identifiedNames.get(row.productName.trim().toLowerCase())?.size ?? 0,
     }));
 
     const filtered = filters.unlinkedOnly
@@ -756,5 +765,203 @@ export async function getInvoices(filters: { search?: string; vendorId?: string;
     };
   } catch (error: unknown) {
     return { error: toClientError('Failed to read the invoices', error, 'read') };
+  }
+}
+
+/**
+ * What a supplier calls things, so an ingredient can be told which is which.
+ *
+ * The automatic match works on the name, and a restaurant's own word for a
+ * thing is rarely the supplier's: the kitchen says "Piano Carne" and the
+ * invoice says "Carne Picada Novilho". Those never meet on their own, so the
+ * owner has to be able to say they are the same thing -- otherwise an
+ * ingredient waits forever for a price that is already in the system.
+ *
+ * Returns the distinct product names seen on invoices, newest first, with
+ * the supplier and the last price, and says which are already spoken for.
+ */
+export async function getInvoiceSources(search?: string) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const term = search?.trim().toLowerCase();
+
+    const rows = await prisma.invoiceItem.findMany({
+      where: {
+        restaurantId: owner.restaurantId,
+        // A line whose cost entry was deleted is not something to link to.
+        AND: [{ OR: [{ costEntryId: null }, { costEntry: { deletedAt: null } }] }],
+        ...(term ? { productName: { contains: term, mode: 'insensitive' as const } } : {}),
+      },
+      select: {
+        productName: true,
+        normalizedName: true,
+        unitPrice: true,
+        unit: true,
+        invoiceDate: true,
+        vendor: { select: { id: true, name: true } },
+      },
+      orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }],
+      take: 400,
+    });
+
+    const links = await prisma.invoiceItemLink.findMany({
+      where: { restaurantId: owner.restaurantId },
+      select: { sourceName: true, ingredient: { select: { id: true, name: true } } },
+    });
+
+    // One row per supplier wording, keeping the newest price for it: the
+    // same beef bought four times is one thing to link, not four.
+    const bySource = new Map<string, {
+      productName: string;
+      normalizedName: string;
+      vendorId: string | null;
+      vendorName: string | null;
+      unitPrice: number;
+      unit: string | null;
+      date: string | null;
+      linkedTo: string[];
+    }>();
+
+    for (const row of rows) {
+      const key = row.productName.trim().toLowerCase();
+      if (bySource.has(key)) continue;
+      bySource.set(key, {
+        productName: row.productName,
+        normalizedName: row.normalizedName,
+        vendorId: row.vendor?.id ?? null,
+        vendorName: row.vendor?.name ?? null,
+        unitPrice: Number(row.unitPrice),
+        unit: row.unit,
+        date: row.invoiceDate ? row.invoiceDate.toISOString().slice(0, 10) : null,
+        linkedTo: links
+          .filter((l) => l.sourceName === key)
+          .map((l) => l.ingredient.name),
+      });
+    }
+
+    return { success: true, data: { sources: [...bySource.values()] } };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to read the invoice names', error, 'read') };
+  }
+}
+
+/**
+ * Says that a line on a supplier's invoice is this ingredient.
+ *
+ * Written as a link rather than by renaming either side, because both names
+ * are right: the kitchen keeps calling it what the kitchen calls it, the
+ * invoice keeps saying what the supplier prints, and the price flows across.
+ * The same supplier wording may feed several ingredients -- minced beef is
+ * both the Carne Smash and the Extra Carne -- which is why the unique key
+ * covers the pair and not just the name.
+ */
+export async function linkInvoiceSource(input: {
+  sourceName: string;
+  ingredientId: string;
+  /** Restrict to one supplier, or null to match the wording anywhere. */
+  vendorId?: string | null;
+}) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const sourceName = input.sourceName?.trim().toLowerCase();
+    if (!sourceName) return { error: 'accounting.errNoSource' };
+
+    const ingredient = await prisma.ingredient.findFirst({
+      where: { id: input.ingredientId, restaurantId: owner.restaurantId, deletedAt: null },
+      select: { id: true, normalizedName: true },
+    });
+    if (!ingredient) return { error: 'menuCalc.errIngredientNotFound' };
+
+    // Both sides checked against this restaurant, so a guessed id from
+    // another cannot be linked into this one's costing.
+    const vendorId = input.vendorId ?? null;
+    if (vendorId) {
+      const vendor = await prisma.vendor.findFirst({
+        where: { id: vendorId, restaurantId: owner.restaurantId },
+        select: { id: true },
+      });
+      if (!vendor) return { error: 'accounting.vendorNotFound' };
+    }
+
+    // Found then created rather than upserted: a null vendor means "this
+    // wording, from anyone", and Prisma will not take a null inside a
+    // composite unique key.
+    const existing = await prisma.invoiceItemLink.findFirst({
+      where: {
+        restaurantId: owner.restaurantId,
+        sourceName,
+        vendorId,
+        ingredientId: ingredient.id,
+      },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      await prisma.invoiceItemLink.create({
+        data: {
+          restaurantId: owner.restaurantId,
+          sourceName,
+          vendorId,
+          ingredientId: ingredient.id,
+        },
+      });
+    }
+
+    // Price it now, from the newest invoice carrying that wording. Waiting
+    // for the next scan would leave the owner looking at the link he just
+    // made beside the empty price it was supposed to fill.
+    const latest = await prisma.invoiceItem.findFirst({
+      where: {
+        restaurantId: owner.restaurantId,
+        productName: { equals: sourceName, mode: 'insensitive' },
+        ...(vendorId ? { vendorId } : {}),
+      },
+      orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }],
+      select: { unitPrice: true, invoiceDate: true, createdAt: true },
+    });
+
+    if (latest) {
+      await prisma.ingredient.update({
+        where: { id: ingredient.id },
+        data: {
+          invoiceUnitCost: latest.unitPrice,
+          invoiceCostAt: latest.invoiceDate ?? latest.createdAt,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      data: { priced: latest ? Number(latest.unitPrice) : null },
+    };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to link the invoice line', error, 'write') };
+  }
+}
+
+/** Undoes a link, leaving the price that came from it in place. */
+export async function unlinkInvoiceSource(input: {
+  sourceName: string;
+  ingredientId: string;
+}) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    await prisma.invoiceItemLink.deleteMany({
+      where: {
+        restaurantId: owner.restaurantId,
+        sourceName: input.sourceName.trim().toLowerCase(),
+        ingredientId: input.ingredientId,
+      },
+    });
+
+    return { success: true };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to unlink the invoice line', error, 'write') };
   }
 }

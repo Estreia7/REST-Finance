@@ -22,6 +22,7 @@ import CatalogueImport from './CatalogueImport';
 import MenuGraph from './MenuGraph';
 import ListSearch, { matchesSearch } from './ListSearch';
 import IngredientPriceHistory from './IngredientPriceHistory';
+import IngredientSources from './IngredientSources';
 import InfoHint from '@/app/components/InfoHint';
 
 /**
@@ -521,6 +522,7 @@ export default function MenuCalculatorPanel() {
         <IngredientDialog
           ingredient={editingIngredient}
           initialName={newIngredientName}
+          onLinked={load}
           onClose={() => { setAddingIngredient(false); setEditingIngredient(null); setNewIngredientName(''); }}
           onSave={async (input) => {
             await run(
@@ -1855,12 +1857,14 @@ function DishDialog({
 }
 
 function IngredientDialog({
-  ingredient, initialName = '', onClose, onSave, onDelete,
+  ingredient, initialName = '', onClose, onSave, onDelete, onLinked,
 }: {
   ingredient: Ingredient | null;
   /** Typed into the recipe's search before deciding to create it. */
   initialName?: string;
   onClose: () => void;
+  /** A link changed, so the price behind this dialog has moved. */
+  onLinked?: () => void;
   onSave: (input: {
     name: string; unit: string; manualUnitCost: number | null; wastePercent: number;
   }) => void;
@@ -1997,10 +2001,19 @@ function IngredientDialog({
       {/* Only for an ingredient that exists: there is no history behind
           one being created. */}
       {ingredient && (
-        <IngredientPriceHistory
-          ingredientId={ingredient.id}
-          unit={ingredient.unit}
-        />
+        <>
+          {/* Above the history, because an ingredient with no price has
+              nothing to show below and this is how it gets one. */}
+          <IngredientSources
+            ingredientId={ingredient.id}
+            ingredientName={ingredient.name}
+            onChanged={onLinked}
+          />
+          <IngredientPriceHistory
+            ingredientId={ingredient.id}
+            unit={ingredient.unit}
+          />
+        </>
       )}
     </Dialog>
   );

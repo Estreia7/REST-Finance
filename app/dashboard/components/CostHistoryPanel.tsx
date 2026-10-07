@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Loader2, X, Check, Calendar, Filter, Download, Repeat } from 'lucide-react';
+import { Pencil, Trash2, Loader2, X, Check, Calendar, Filter, Download, Repeat, Eye } from 'lucide-react';
 import { getCostHistory, updateCostEntry, deleteCostEntry, getCategories } from '../actions';
 import { useLanguage } from '@/lib/language-context';
 import ListSearch, { matchesSearch } from './ListSearch';
+import InvoicePreview from './InvoicePreview';
 import { downloadFile, exportFilename } from '@/lib/download-file';
 
 interface CostEntry {
@@ -19,6 +20,8 @@ interface CostEntry {
   createdBy: string;
   /** Booked automatically from a fixed monthly cost. */
   recurring?: boolean;
+  /** The scanned document behind it, when there is one. */
+  invoiceNumber?: string | null;
 }
 
 interface Category {
@@ -36,6 +39,8 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ amount: number; description: string }>({ amount: 0, description: '' });
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // The invoice on screen, opened from the eye on a scanned row.
+  const [previewing, setPreviewing] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [filterType, setFilterType] = useState<'' | 'COGS' | 'OPEX'>('');
@@ -276,6 +281,19 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
                         <td className="py-3 text-right font-semibold text-foreground">{fmt(entry.amount)}</td>
                         <td className="py-3 text-right">
                           <div className="flex gap-1 justify-end">
+                            {/* The paperwork behind the figure, where there
+                                is any. Only for a scanned cost: a typed one
+                                has nothing to show, and an eye that opens an
+                                empty dialog teaches people not to press it. */}
+                            {entry.invoiceNumber && (
+                              <button
+                                onClick={() => setPreviewing(entry.invoiceNumber!)}
+                                aria-label={t('accounting.previewInvoice').replace('{number}', entry.invoiceNumber)}
+                                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                             <button onClick={() => handleEdit(entry)} aria-label={t('costHistory.action.edit')} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
@@ -303,6 +321,14 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
           </>
         )}
       </div>
+
+      {previewing && (
+        <InvoicePreview
+          invoiceNumber={previewing}
+          onClose={() => setPreviewing(null)}
+          onDeleted={loadEntries}
+        />
+      )}
     </div>
   );
 }

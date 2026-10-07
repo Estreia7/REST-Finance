@@ -50,6 +50,24 @@ export const CHANGELOG: Release[] = [
       },
       {
         kind: 'new',
+        title: 'Diga que linha da factura é o seu ingrediente',
+        detail:
+          'O fornecedor escreve "Carne Picada Novilho" e na cozinha é o "Piano Carne" — nomes que nunca se encontravam sozinhos, e o ingrediente ficava à espera de um preço que já estava no sistema. Abra o ingrediente, em "Nomes nas facturas", e marque o que é seu. O preço entra na hora, e pode marcar mais do que um.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Ver a factura a partir do histórico de custos',
+        detail:
+          'Cada custo que veio de uma digitalização tem agora um olho que abre a fotografia da factura, sem sair da página.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Saber quantos ingredientes vêm de cada linha',
+        detail:
+          'Em Contabilidade › Linhas, uma linha que alimenta mais do que um ingrediente passa a dizer quantos — uma caixa de carne costuma ser o hambúrguer e a dose extra.',
+      },
+      {
+        kind: 'new',
         title: 'Arraste entre as duas colunas',
         detail:
           'Se um produto estiver do lado errado, arraste-o para o outro. Ao passar para unitários pergunta a que preço o vende, porque sem preço não há margem; ao passar para ingredientes avisa que sai da Ementa antes de o fazer. Quem não quiser arrastar tem o mesmo numa seta em cada linha.',

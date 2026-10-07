@@ -642,6 +642,9 @@ export async function getCostHistory(dateFrom: Date, dateTo: Date, type?: CostTy
       include: {
         category: { select: { name: true, type: true } },
         createdBy: { select: { name: true, email: true } },
+        // Enough to offer the photograph behind the figure. One line is
+        // plenty: every line of one scan carries the same document number.
+        invoiceItems: { select: { invoiceNumber: true }, take: 1 },
       },
     });
 
@@ -656,6 +659,9 @@ export async function getCostHistory(dateFrom: Date, dateTo: Date, type?: CostTy
       createdBy: e.createdBy.name || e.createdBy.email,
       // Booked automatically from a fixed monthly cost.
       recurring: e.recurringCostId !== null,
+      // The document this was read off, when it was scanned rather than
+      // typed. What turns a figure in a list into one that can be checked.
+      invoiceNumber: e.invoiceItems[0]?.invoiceNumber ?? null,
     }));
 
     return { success: true, data };

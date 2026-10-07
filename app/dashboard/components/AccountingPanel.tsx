@@ -187,7 +187,16 @@ function Invoices({ initialSearch = '', onSearchConsumed }: {
                     {row.ingredientName ? (
                       <span className="flex items-center gap-1 text-[11px] text-success mt-0.5">
                         <Check className="w-3 h-3 shrink-0" aria-hidden="true" />
-                        {row.ingredientName}
+                        <span className="[overflow-wrap:anywhere]">{row.ingredientName}</span>
+                        {/* One supplier line often feeds several kitchen
+                            ingredients -- a case of beef is the burger and
+                            the extra portion -- so the count is said rather
+                            than left to be worked out from the names. */}
+                        {row.linkedCount > 1 && (
+                          <span className="shrink-0 px-1.5 py-px rounded-full bg-success/15 text-success tabular-nums">
+                            {t('accounting.linkedCount').replace('{n}', String(row.linkedCount))}
+                          </span>
+                        )}
                       </span>
                     ) : (
                       <span className="flex items-center gap-1 text-[11px] text-muted-foreground mt-0.5">
