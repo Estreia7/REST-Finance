@@ -23,10 +23,11 @@ function product(over: Partial<CatalogueProduct> = {}): CatalogueProduct {
 }
 
 describe('deciding what each till product becomes', () => {
-  it('makes a dish of something the kitchen composes', () => {
-    // A smashie duplo is meat, a bun and sauce — it needs a recipe.
+  it('puts anything the till sells for real money on the menu', () => {
+    // Whether the kitchen composes it or opens it is not in this data, so it
+    // is not decided here — the owner is asked once, afterwards.
     const p = classifyProduct(product());
-    expect(p.role).toBe('dish');
+    expect(p.role).toBe('menuItem');
     expect(p.priceGross).toBe(10);
   });
 
@@ -38,13 +39,41 @@ describe('deciding what each till product becomes', () => {
     expect(p.reason).toBe('modifier');
   });
 
-  it('makes an ingredient of a drink, and keeps its selling price', () => {
-    // A bottle is poured from no recipe: one cost, and a price to measure
-    // the margin against. It is both, so both are kept.
+  it('puts a drink on the menu at the price it sold for', () => {
+    // It used to become an ingredient, and its selling price was computed and
+    // thrown away because Ingredient has nowhere to put one -- which is how
+    // a quarter of one restaurant's takings ended up with no margin anywhere.
     const p = classifyProduct(product({ name: 'SUPER BOCK', familia: 'BEBIDAS', revenue: 1632.27, quantity: 878 }));
-    expect(p.role).toBe('ingredient');
-    expect(p.reason).toBe('soldAsBought');
+    expect(p.role).toBe('menuItem');
     expect(p.priceGross).toBeCloseTo(1.86, 2);
+    expect(p.vatRate).toBe(23);
+  });
+
+  it('files a product by what the till charged, not by the name of the shelf', () => {
+    // The point of the whole exercise. Across three real tills the same
+    // drinks appear under SUMOS E AGUAS, AGUAS, REFRIGERANTES and CRAFT
+    // SODAS, so a list of family names cannot be the thing that decides.
+    for (const familia of ['SUMOS E AGUAS', 'AGUAS', 'REFRIGERANTES', 'CRAFT SODAS', 'DRYCK']) {
+      const p = classifyProduct(product({ name: 'COCA COLA', familia, revenue: 2000, quantity: 1000 }));
+      expect(p.role).toBe('menuItem');
+    }
+  });
+
+  it('makes an ingredient of anything the till rings at a token price', () => {
+    // 29.205 orders of bacon for 0 EUR: the kitchen display needs the line,
+    // the customer never bought it as a thing.
+    const p = classifyProduct(product({ name: 'CEBOLA CARAMELIZADA', familia: 'QUALQUER COISA', revenue: 2, quantity: 1000 }));
+    expect(p.role).toBe('ingredient');
+    expect(p.reason).toBe('modifier');
+  });
+
+  it('keeps a sauce an ingredient even when it is sold as a paid extra', () => {
+    // Truffle mayonnaise took 11 EUR over 24 orders, which clears the token
+    // threshold, and is still mayonnaise that goes *on* a burger. Price
+    // cannot see this, so the modifier family keeps a veto.
+    const p = classifyProduct(product({ name: 'MAIONESE TRUFA', familia: 'MOLHOS', revenue: 11, quantity: 24 }));
+    expect(p.role).toBe('ingredient');
+    expect(p.reason).toBe('modifier');
   });
 
   it('leaves staff meals and discontinued dishes alone', () => {
@@ -121,8 +150,14 @@ describe('the whole catalogue at once', () => {
 
   it('splits the list three ways', () => {
     const plan = planCatalogue(CATALOGUE);
-    expect(plan.dishes.map((d) => d.name)).toEqual(['SMASHIE DUPLO C/QUEIJO', 'SMASHIE SIMPLES']);
-    expect(plan.ingredients.map((i) => i.name)).toEqual(['BACON', 'ALFACE', 'SUPER BOCK']);
+    // The beer is on the menu now, beside the burgers: it is something a
+    // customer buys, and it has a price to measure a margin against.
+    expect(plan.menuItems.map((d) => d.name)).toEqual([
+      // Ordered by takings, so the beer lands between the two burgers:
+      // 1.632 EUR against 1.628.  
+      'SMASHIE DUPLO C/QUEIJO', 'SUPER BOCK', 'SMASHIE SIMPLES',
+    ]);
+    expect(plan.ingredients.map((i) => i.name)).toEqual(['BACON', 'ALFACE']);
     expect(plan.skipped.map((s) => s.name)).toEqual(['MOUSSE DE OREO', 'INGREDIENTES']);
   });
 
@@ -130,7 +165,7 @@ describe('the whole catalogue at once', () => {
     // An owner reviewing a long list should meet the decisions that matter
     // before the ones that do not.
     const plan = planCatalogue(CATALOGUE);
-    expect(plan.dishes[0].name).toBe('SMASHIE DUPLO C/QUEIJO');
+    expect(plan.menuItems[0].name).toBe('SMASHIE DUPLO C/QUEIJO');
   });
 
   it('orders ingredients by how often they are asked for', () => {
@@ -141,7 +176,7 @@ describe('the whole catalogue at once', () => {
 
   it('loses nothing: every product lands somewhere', () => {
     const plan = planCatalogue(CATALOGUE);
-    expect(plan.dishes.length + plan.ingredients.length + plan.skipped.length).toBe(CATALOGUE.length);
+    expect(plan.menuItems.length + plan.ingredients.length + plan.skipped.length).toBe(CATALOGUE.length);
   });
 });
 
@@ -181,7 +216,7 @@ describe('the same dish sold twice', () => {
 
   it('names both after their family', () => {
     const plan = planCatalogue(BOTH);
-    const names = plan.dishes.map((d) => d.menuName);
+    const names = plan.menuItems.map((d) => d.menuName);
     // The sub-family is preferred where there is one, since "SMASHIES"
     // tells the owner more than "COMIDAS" does.
     expect(names).toContain('SMASHIE DUPLO C/QUEIJO (MENUS)');
@@ -192,13 +227,13 @@ describe('the same dish sold twice', () => {
     // Adding the family to everything would make the whole menu read like
     // a database dump.
     const plan = planCatalogue(BOTH);
-    expect(plan.dishes.find((d) => d.id === 'c')!.menuName).toBe('WRAP FRANGO');
+    expect(plan.menuItems.find((d) => d.id === 'c')!.menuName).toBe('WRAP FRANGO');
   });
 
   it('keeps each one its own price', () => {
     const plan = planCatalogue(BOTH);
-    const menu = plan.dishes.find((d) => d.familia === 'MENUS' && d.name.startsWith('SMASHIE'))!;
-    const carte = plan.dishes.find((d) => d.familia === 'COMIDAS')!;
+    const menu = plan.menuItems.find((d) => d.familia === 'MENUS' && d.name.startsWith('SMASHIE'))!;
+    const carte = plan.menuItems.find((d) => d.familia === 'COMIDAS')!;
     expect(menu.priceGross).toBeCloseTo(12.14, 2);
     expect(carte.priceGross).toBeCloseTo(7.41, 2);
   });
@@ -216,7 +251,7 @@ describe('names that must not collide', () => {
       product({ id: 'a', code: '94', name: 'SMASHIE FRANGO', familia: 'COMIDAS', subFamily: 'SMASHIES', revenue: 746.7, quantity: 70 }),
       product({ id: 'b', code: '206', name: 'SMASHIE FRANGO', familia: 'COMIDAS', subFamily: 'SMASHIES', revenue: 100, quantity: 10 }),
     ]);
-    const names = plan.dishes.map((d) => d.menuName);
+    const names = plan.menuItems.map((d) => d.menuName);
     expect(new Set(names).size).toBe(names.length);
   });
 
@@ -227,7 +262,7 @@ describe('names that must not collide', () => {
       product({ id: 'a', code: '285', name: 'PIANINHO BBQ', familia: 'COMIDAS', subFamily: 'ESPECIAIS', revenue: 500, quantity: 50 }),
       product({ id: 'b', code: '296', name: 'PIANINHO BBQ', familia: 'COMIDAS', subFamily: 'ALG. DIFERENTES', revenue: 300, quantity: 30 }),
     ]);
-    expect(plan.dishes.map((d) => d.menuName).sort()).toEqual([
+    expect(plan.menuItems.map((d) => d.menuName).sort()).toEqual([
       'PIANINHO BBQ (ALG. DIFERENTES)',
       'PIANINHO BBQ (ESPECIAIS)',
     ]);
@@ -239,7 +274,7 @@ describe('names that must not collide', () => {
       product({ id: 'b', code: '2', name: 'X', familia: 'COMIDAS', subFamily: null, revenue: 90, quantity: 9 }),
       product({ id: 'c', code: '3', name: 'X', familia: 'COMIDAS', subFamily: null, revenue: 80, quantity: 8 }),
     ]);
-    const names = plan.dishes.map((d) => d.menuName.toUpperCase());
+    const names = plan.menuItems.map((d) => d.menuName.toUpperCase());
     expect(new Set(names).size).toBe(3);
   });
 });

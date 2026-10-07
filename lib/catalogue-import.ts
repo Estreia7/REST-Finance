@@ -34,13 +34,13 @@ export interface CatalogueProduct {
   revenue: number;
 }
 
-export type CatalogueRole = 'dish' | 'ingredient' | 'skip';
+export type CatalogueRole = 'menuItem' | 'ingredient' | 'skip';
 
 export interface ClassifiedProduct extends CatalogueProduct {
   role: CatalogueRole;
   /** Why it was filed that way, so the owner can disagree before importing. */
   reason: string;
-  /** Selling price per unit, VAT included. Dishes only. */
+  /** Selling price per unit, VAT included. Menu items only. */
   priceGross: number | null;
   /** 13 on food, 23 on alcohol. */
   vatRate: number;
@@ -69,26 +69,14 @@ function duplicatedNames(products: CatalogueProduct[]): Set<string> {
 }
 
 /**
- * Families whose rows are the ingredients themselves.
+ * The price below which the till is not really selling something.
  *
- * These are the kitchen-display modifiers: bacon, caramelised onion, burger
- * sauce. They ring at nothing on the till because they go on something else,
- * which is exactly what makes them ingredients rather than dishes.
+ * Shared with the Produtos tab, which already had to tell a product from a
+ * side the till includes with a menu. Twenty cents sits under the cheapest
+ * thing a customer can choose -- an espresso at a euro -- and above the token
+ * prices a kitchen display uses.
  */
-const INGREDIENT_FAMILIAS = new Set([
-  'INGREDIENTES', 'MOLHOS', 'EXTRAS', 'ADICIONAIS', 'OPCOES', 'OPÇÕES',
-]);
-
-/**
- * Families that sell a thing as it was bought.
- *
- * A bottle of beer is poured from no recipe. Costing it needs one number —
- * what the bottle costs — so it is an ingredient with a selling price, not a
- * dish with a single line pointing at itself.
- */
-const SINGLE_ITEM_FAMILIAS = new Set([
-  'BEBIDAS', 'CAFETARIA', 'GARRAFEIRA', 'VINHOS', 'CERVEJAS',
-]);
+import { INCLUDED_UNIT_PRICE, isModifierFamilia } from './products';
 
 /**
  * Families with nothing to cost.
@@ -187,28 +175,46 @@ export function classifyProduct(
     return { ...base, role: 'skip', reason: 'catchAll' };
   }
 
-  if (INGREDIENT_FAMILIAS.has(familia)) {
-    return { ...base, role: 'ingredient', reason: 'modifier' };
-  }
-
-  if (SINGLE_ITEM_FAMILIAS.has(familia)) {
-    // Sold as bought, so it is priced like a dish and costed like an
-    // ingredient: both, and the importer writes both.
-    return { ...base, role: 'ingredient', reason: 'soldAsBought', priceGross: price };
-  }
-
-  // Everything else is something the kitchen makes. Without a price there is
-  // nothing to measure a margin against, so it waits rather than arriving
-  // priced at zero.
-  if (price === null) {
+  // Never ordered at all, so there is no price to measure a margin against
+  // and nothing to put on a menu. Distinct from the case below: this row did
+  // not sell, rather than selling for nothing.
+  if (product.quantity <= 0) {
     return { ...base, role: 'skip', reason: 'noSales' };
   }
 
-  return { ...base, role: 'dish', reason: 'composed', priceGross: price };
+  // Went out thousands of times and took nothing, or next to nothing. The
+  // till is not selling this: it is a modifier the kitchen display needs,
+  // booked at a token price because it goes *on* something else. Bacon rang
+  // 2.514 times for zero.
+  //
+  // This is the till's own behaviour deciding, rather than the name of the
+  // shelf -- which matters, because the next restaurant's POS spells every
+  // shelf differently: the same drinks appear under SUMOS E AGUAS, AGUAS,
+  // REFRIGERANTES and CRAFT SODAS across three real catalogues.
+  if (price === null || price < INCLUDED_UNIT_PRICE) {
+    return { ...base, role: 'ingredient', reason: 'modifier' };
+  }
+
+  // A sauce stays an ingredient even when it is sold as a paid extra: it goes
+  // *on* something, and the owner will want it inside a burger's recipe.
+  // Truffle mayonnaise took 11 EUR over 24 orders and is still mayonnaise.
+  // Price cannot see this, so the family keeps a veto -- never a say in what
+  // *is* a product, only in what cannot be one.
+  if (isModifierFamilia(familia)) {
+    return { ...base, role: 'ingredient', reason: 'modifier' };
+  }
+
+  // Everything the till sells for real money is something the owner puts on
+  // the board. Whether the kitchen makes it or opens it is not in this data
+  // -- a till records what was sold, never who assembled it -- so it is not
+  // guessed here. It arrives costable and the owner says which, once.
+  return { ...base, role: 'menuItem', reason: 'sold', priceGross: price };
 }
 
 export interface CataloguePlan {
-  dishes: ClassifiedProduct[];
+  /** What the till sells for real money, priced as it actually sold. */
+  menuItems: ClassifiedProduct[];
+  /** What rings at nothing, so it goes *into* something. */
   ingredients: ClassifiedProduct[];
   skipped: ClassifiedProduct[];
 }
@@ -242,7 +248,7 @@ export function planCatalogue(products: CatalogueProduct[]): CataloguePlan {
     b.quantity - a.quantity || a.name.localeCompare(b.name);
 
   return {
-    dishes: classified.filter((p) => p.role === 'dish').sort(byRevenue),
+    menuItems: classified.filter((p) => p.role === 'menuItem').sort(byRevenue),
     ingredients: classified.filter((p) => p.role === 'ingredient').sort(byQuantity),
     skipped: classified.filter((p) => p.role === 'skip').sort(byRevenue),
   };

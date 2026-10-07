@@ -222,3 +222,84 @@ describe('classify', () => {
     expect(classify(5, 50, 5, 50)).toBe('star');
   });
 });
+
+describe('costing something sold as it was bought', () => {
+  const bottle = (cost: number | null) => ({
+    unit: 'un',
+    manualUnitCost: cost,
+    invoiceUnitCost: null,
+    wastePercent: 0,
+  });
+
+  it('costs a beer from the bottle, with no recipe at all', () => {
+    // A Super Bock at 1,73 on 23% VAT: 1,41 net, 0,62 for the bottle.
+    const c = costMenuItem({
+      priceGross: 1.73,
+      vatRate: 23,
+      lines: [],
+      purchase: bottle(0.62),
+    });
+    expect(c.foodCost).toBeCloseTo(0.62, 2);
+    expect(c.priceNet).toBeCloseTo(1.41, 2);
+    expect(c.grossProfit).toBeCloseTo(0.79, 2);
+    expect(c.foodCostPercent).toBeCloseTo(44.1, 1);
+    expect(c.incomplete).toBe(false);
+    expect(c.purchase?.source).toBe('manual');
+  });
+
+  it('says so when the bottle has no price yet', () => {
+    // No drinks invoice has arrived. A margin of 100% would be a lie the
+    // owner might act on, so it reads as incomplete instead.
+    const c = costMenuItem({
+      priceGross: 1.73,
+      vatRate: 23,
+      lines: [],
+      purchase: bottle(null),
+    });
+    expect(c.foodCost).toBe(0);
+    expect(c.incomplete).toBe(true);
+    expect(c.missingCount).toBe(1);
+  });
+
+  it('ignores any recipe lines it was handed', () => {
+    // Switching a dish to "sold as bought" leaves its old lines on the row.
+    // They stop counting rather than being deleted behind the owner's back.
+    const c = costMenuItem({
+      priceGross: 1.73,
+      vatRate: 23,
+      lines: [{
+        ingredientId: 'i1', name: 'Gelado', quantity: 100, unit: 'g',
+        ingredient: { unit: 'kg', manualUnitCost: 5, invoiceUnitCost: null, wastePercent: 0 },
+      }],
+      purchase: bottle(0.62),
+    });
+    expect(c.foodCost).toBeCloseTo(0.62, 2);
+    expect(c.lines).toHaveLength(0);
+  });
+
+  it('does not charge waste on a bottle', () => {
+    // A bottle bought is a bottle sold. There is nothing to trim off it, so
+    // a stray waste percentage must not inflate what it cost.
+    const c = costMenuItem({
+      priceGross: 1.73,
+      vatRate: 23,
+      lines: [],
+      purchase: { ...bottle(0.62), wastePercent: 25 },
+    });
+    expect(c.foodCost).toBeCloseTo(0.62, 2);
+  });
+
+  it('still costs a dish from its recipe when there is no purchase', () => {
+    const c = costMenuItem({
+      priceGross: 10,
+      vatRate: 13,
+      lines: [{
+        ingredientId: 'i1', name: 'Carne', quantity: 150, unit: 'g',
+        ingredient: { unit: 'kg', manualUnitCost: 9.9, invoiceUnitCost: null, wastePercent: 0 },
+      }],
+      purchase: null,
+    });
+    expect(c.foodCost).toBeCloseTo(1.485, 3);
+    expect(c.purchase).toBeNull();
+  });
+});

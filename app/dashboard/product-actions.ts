@@ -10,6 +10,7 @@ import {
   extremes,
   isModifierFamilia,
   isNonSalesFamilia,
+  MODIFIER_FAMILIA_NAMES,
   type SaleRow,
   type ProductTotals,
 } from '@/lib/products';
@@ -292,16 +293,6 @@ export async function getTopIngredients(limit = 10) {
     return { error: toClientError('Failed to read ingredient ranking', error, 'read') };
   }
 }
-
-/**
- * The families the query above narrows to.
- *
- * Duplicated from `lib/products` as a list because Prisma needs an array for
- * `in` and the module exports a predicate. Kept next to the query that uses
- * it so the two cannot drift unnoticed, and the predicate still has the last
- * word — this only decides which rows are worth fetching.
- */
-const MODIFIER_FAMILIA_NAMES = ['INGREDIENTES', 'MOLHOS', 'EXTRAS', 'ADICIONAIS', 'OPCOES', 'OPÇÕES'];
 
 /**
  * How the current month is going: days traded, days left, and where it lands.

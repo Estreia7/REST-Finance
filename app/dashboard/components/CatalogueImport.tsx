@@ -46,10 +46,10 @@ export default function CatalogueImport({ onImported }: { onImported: () => void
       toast.error(result.error ? t(result.error) : t('errors.write'));
       return;
     }
-    const { dishesCreated, ingredientsCreated } = result.data;
+    const { itemsCreated, ingredientsCreated } = result.data;
     toast.success(
       t('catalogue.imported')
-        .replace('{dishes}', String(dishesCreated))
+        .replace('{items}', String(itemsCreated))
         .replace('{ingredients}', String(ingredientsCreated)),
     );
     setPreview(null);
@@ -72,7 +72,7 @@ export default function CatalogueImport({ onImported }: { onImported: () => void
     );
   }
 
-  const { dishes, ingredients, skipped } = preview;
+  const { menuItems, ingredients, skipped } = preview;
 
   return (
     <div className="card-glass p-6 text-left">
@@ -94,14 +94,14 @@ export default function CatalogueImport({ onImported }: { onImported: () => void
       <div className="grid sm:grid-cols-2 gap-3 mb-5">
         <Group
           icon={<ChefHat className="w-4 h-4" aria-hidden="true" />}
-          title={t('catalogue.asDishes').replace('{n}', String(dishes.length))}
-          hint={t('catalogue.asDishesHint')}
-          rows={dishes.slice(0, 6).map((d) => ({
+          title={t('catalogue.asMenuItems').replace('{n}', String(menuItems.length))}
+          hint={t('catalogue.asMenuItemsHint')}
+          rows={menuItems.slice(0, 6).map((d) => ({
             key: d.id,
             name: d.menuName,
             right: d.priceGross === null ? '—' : formatMoney(d.priceGross),
           }))}
-          more={Math.max(0, dishes.length - 6)}
+          more={Math.max(0, menuItems.length - 6)}
           moreLabel={t('catalogue.andMore')}
         />
         <Group
@@ -134,7 +134,7 @@ export default function CatalogueImport({ onImported }: { onImported: () => void
         <button
           type="button"
           onClick={commit}
-          disabled={importing || (dishes.length === 0 && ingredients.length === 0)}
+          disabled={importing || (menuItems.length === 0 && ingredients.length === 0)}
           className="cta-button !py-2 !px-4 !text-sm"
         >
           {importing && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}

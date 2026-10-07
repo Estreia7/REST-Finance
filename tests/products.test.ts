@@ -285,3 +285,31 @@ describe('what the till includes rather than sells', () => {
     expect(totals[0].quantity).toBe(2270);
   });
 });
+
+describe('the two lists of families nobody sells from', () => {
+  /**
+   * There are two, they look alike, and merging them would break something.
+   *
+   * isNonSalesFamilia answers "is this revenue?" for the Produtos tab.
+   * SKIP_FAMILIAS in catalogue-import answers "is this worth putting on the
+   * menu I sell from today?". They differ by two names, in both directions,
+   * and each difference is correct:
+   *
+   *   DESCONTINUADOS was real revenue and belongs in the Produtos history,
+   *   but importing 52 dead dishes would be a menu nobody sells from.
+   *
+   *   OFERTAS is not revenue -- it was given away -- but it is not
+   *   discontinued either, so it is still on the menu.
+   *
+   * This test exists so nobody tidies them into one.
+   */
+  it('keeps giveaways out of revenue', () => {
+    expect(isNonSalesFamilia('OFERTAS')).toBe(true);
+  });
+
+  it('keeps discontinued products in the revenue history', () => {
+    // They sold, for real money, and the owner may want to know what they
+    // did before being dropped.
+    expect(isNonSalesFamilia('DESCONTINUADOS')).toBe(false);
+  });
+});

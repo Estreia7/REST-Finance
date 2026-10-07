@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useId, useMemo, useRef } from 'react'
 import { toast } from 'sonner';
 import {
   Loader2, Plus, Trash2, Pencil, X, Check, ChefHat, Carrot,
-  AlertTriangle, Receipt, Tag, Search, ListChecks,
+  AlertTriangle, Receipt, Tag, Search, ListChecks, ChevronDown, ShoppingBag,
 } from 'lucide-react';
 import {
   getMenu, saveIngredient, deleteIngredient,
@@ -40,6 +40,12 @@ import InfoHint from '@/app/components/InfoHint';
 interface Ingredient {
   id: string;
   name: string;
+  /**
+   * Set when this exists to cost an item sold as bought, naming that item.
+   * Those rows are kept out of the ingredient list and the recipe picker: a
+   * bottle of Super Bock is not something that goes into a burger.
+   */
+  soldAsId: string | null;
   unit: string;
   manualUnitCost: number | null;
   invoiceUnitCost: number | null;
@@ -59,6 +65,8 @@ interface Costing {
   marginPercent: number | null;
   incomplete: boolean;
   missingCount: number;
+  /** Set when costed from one purchase instead of a recipe. */
+  purchase: { cost: number | null; source: CostedLine['source'] } | null;
 }
 
 interface MenuItem {
@@ -69,6 +77,12 @@ interface MenuItem {
   vatRate: number;
   monthlyVolume: number | null;
   active: boolean;
+  costingMode: 'RECIPE' | 'PURCHASE';
+  purchaseItemId: string | null;
+  purchaseItemName: string | null;
+  purchaseInvoiceCostAt: string | Date | null;
+  /** We could not tell whether the kitchen makes this. The owner can. */
+  needsReview: boolean;
   costing: Costing;
   menuClass: MenuClass | null;
 }
@@ -130,6 +144,9 @@ export default function MenuCalculatorPanel() {
   const [query, setQuery] = useState('');
   const [section, setSection] = useState<string | null>(null);
   const [selecting, setSelecting] = useState(false);
+  // Narrows the list to what we are unsure about, so the owner can work
+  // through them without the rest of the menu in the way.
+  const [reviewOnly, setReviewOnly] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   const load = useCallback(() => {
@@ -182,6 +199,11 @@ export default function MenuCalculatorPanel() {
   const ingredients = data?.ingredients ?? [];
   const ingredientById = new Map(ingredients.map((i) => [i.id, i]));
 
+  // What may go into a recipe. A bottle of Super Bock exists to cost the
+  // drink sold as it, and offering it here would let the owner put a beer
+  // inside a burger -- rebuilding by hand the confusion this cleared up.
+  const recipeIngredients = ingredients.filter((i) => i.soldAsId === null);
+
   // Sections in the order the menu itself has them; dishes without one last.
   const sectionOf = (item: MenuItem) => item.category?.trim() || '';
   const sectionCounts = new Map<string, number>();
@@ -194,11 +216,14 @@ export default function MenuCalculatorPanel() {
   );
   const sectionLabel = (key: string) => key || t('menuCalc.noSection');
 
+  const toReview = items.filter((i) => i.needsReview);
+
   const q = searchKey(query);
   const visible = items.filter(
     (item) =>
       (section === null || sectionOf(item) === section) &&
-      (q === '' || searchKey(item.name).includes(q))
+      (q === '' || searchKey(item.name).includes(q)) &&
+      (!reviewOnly || item.needsReview)
   );
   const groups = sections
     .map((key) => ({ key, items: visible.filter((i) => sectionOf(i) === key) }))
@@ -245,6 +270,40 @@ export default function MenuCalculatorPanel() {
         ) : (
           <>
             <MenuSummary items={items} />
+
+            {/* The one question the data could not answer, asked once.
+                A list rather than a dialog per item: a shelf of drinks is
+                settled in a minute when they are all on screen together, and
+                one modal at a time is how a thirty-item chore gets abandoned
+                half done. */}
+            {toReview.length > 0 && (
+              <div className="card-glass p-4 border-warning/40 bg-warning/5">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">
+                      {t('menuCalc.reviewTitle').replace('{n}', String(toReview.length))}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {t('menuCalc.reviewBody')}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReviewOnly((v) => !v)}
+                    aria-pressed={reviewOnly}
+                    className={`shrink-0 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors
+                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        reviewOnly
+                          ? 'border-primary/60 bg-primary/10 text-foreground'
+                          : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+                      }`}
+                  >
+                    {reviewOnly ? t('menuCalc.reviewShowAll') : t('menuCalc.reviewShowThese')}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-[12rem]">
@@ -351,7 +410,7 @@ export default function MenuCalculatorPanel() {
                       <DishCard
                         key={item.id}
                         item={item}
-                        ingredients={ingredients}
+                        ingredients={recipeIngredients}
                         ingredientById={ingredientById}
                         busy={busy}
                         selecting={selecting}
@@ -379,7 +438,7 @@ export default function MenuCalculatorPanel() {
                 <div className="h-48" aria-hidden="true" />
                 <BulkBar
                   count={selectedIds.length}
-                  ingredients={ingredients}
+                  ingredients={recipeIngredients}
                   busy={busy}
                   onCancel={stopSelecting}
                   onCreateIngredient={createIngredient}
@@ -460,7 +519,14 @@ export default function MenuCalculatorPanel() {
 
 function MenuSummary({ items }: { items: MenuItem[] }) {
   const { t } = useLanguage();
-  const costed = items.filter((i) => !i.costing.incomplete && i.costing.lines.length > 0);
+  // Costed with or without a recipe: a drink sold as bought has a real cost
+  // and no lines, and leaving it out would exclude a quarter of the takings
+  // from the averages the owner reads these cards for.
+  const costed = items.filter(
+    (i) =>
+      !i.costing.incomplete &&
+      (i.costing.lines.length > 0 || i.costing.purchase !== null)
+  );
   if (costed.length === 0) return null;
 
   const avgFoodCost =
@@ -537,14 +603,22 @@ function DishCard({
   onSetLine: (ingredientId: string, quantity: number, unit: string) => Promise<boolean>;
   onRemoveLine: (ingredientId: string) => Promise<boolean>;
 }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const c = item.costing;
+  const resale = item.costingMode === 'PURCHASE';
+  // Costed either way: a bottle has a cost without a recipe, and the figures
+  // below mean the same thing for a drink as for a burger.
   const hasRecipe = c.lines.length > 0;
+  const costed = resale ? c.purchase?.cost !== null && c.purchase !== null : hasRecipe;
   const suggested = suggestedPrice(c.foodCost, TARGET_FOOD_COST, item.vatRate);
   const used = new Set(c.lines.map((l) => l.ingredientId));
+  const locale = language === 'pt' ? 'pt-PT' : 'en-GB';
+  const purchaseIngredient = item.purchaseItemId
+    ? ingredientById.get(item.purchaseItemId)
+    : undefined;
 
   const tone =
-    !hasRecipe ? 'text-muted-foreground'
+    !costed ? 'text-muted-foreground'
       : c.grossProfit <= 0 ? 'text-red-400'
       : (c.foodCostPercent ?? 0) <= 32 ? 'text-green-400'
       : (c.foodCostPercent ?? 0) <= 38 ? 'text-amber-400'
@@ -604,7 +678,38 @@ function DishCard({
         </button>
       </div>
 
-      {hasRecipe ? (
+      {/* Sold as bought: one cost, no recipe, nothing to add to it. Showing
+          an empty ingredient list and an "add ingredient" box here would be
+          asking the owner to write a recipe for opening a bottle. */}
+      {resale ? (
+        <button
+          type="button"
+          onClick={() => purchaseIngredient && onEditIngredient(purchaseIngredient)}
+          disabled={!purchaseIngredient}
+          className="mt-3 w-full flex items-center justify-between gap-3 rounded-lg border
+                     border-border-subtle px-3 py-2 text-left transition-colors
+                     enabled:hover:bg-muted/50 disabled:opacity-60
+                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span className="min-w-0">
+            <span className="block text-[11px] uppercase tracking-wider text-muted-foreground">
+              {t('menuCalc.purchaseCost')}
+            </span>
+            <span className="block text-xs text-muted-foreground truncate">
+              {c.purchase?.source === 'invoice' && item.purchaseInvoiceCostAt
+                ? `${t('menuCalc.fromInvoice')} · ${new Date(item.purchaseInvoiceCostAt).toLocaleDateString(locale)}`
+                : c.purchase?.source === 'manual'
+                  ? t('menuCalc.fixedPrice')
+                  : t('menuCalc.noPurchaseCostYet')}
+            </span>
+          </span>
+          <span className="text-sm font-semibold text-foreground tabular-nums shrink-0">
+            {c.purchase?.cost === null || c.purchase === null
+              ? '—'
+              : `${formatMoneyExact(c.purchase.cost)}/${purchaseIngredient?.unit ?? 'un'}`}
+          </span>
+        </button>
+      ) : hasRecipe ? (
         <ul className="mt-3 rounded-lg border border-border-subtle divide-y divide-border-subtle">
           {c.lines.map((line) => (
             <RecipeLineRow
@@ -622,16 +727,18 @@ function DishCard({
         <p className="mt-3 text-xs text-muted-foreground">{t('menuCalc.noRecipeYet')}</p>
       )}
 
-      <div className="mt-2">
-        <AddLine
-          ingredients={ingredients.filter((i) => !used.has(i.id))}
-          busy={busy}
-          onAdd={(ingredientId, quantity, unit) => onSetLine(ingredientId, quantity, unit)}
-          onCreateIngredient={onCreateIngredient}
-        />
-      </div>
+      {!resale && (
+        <div className="mt-2">
+          <AddLine
+            ingredients={ingredients.filter((i) => !used.has(i.id))}
+            busy={busy}
+            onAdd={(ingredientId, quantity, unit) => onSetLine(ingredientId, quantity, unit)}
+            onCreateIngredient={onCreateIngredient}
+          />
+        </div>
+      )}
 
-      {hasRecipe && c.incomplete && (
+      {costed && c.incomplete && (
         <p className="mt-3 flex items-start gap-1.5 text-[11px] text-warning">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" aria-hidden="true" />
           {c.missingCount}{' '}
@@ -641,7 +748,7 @@ function DishCard({
         </p>
       )}
 
-      {hasRecipe && c.grossProfit <= 0 && (
+      {costed && c.grossProfit <= 0 && (
         <p className="mt-3 flex items-start gap-1.5 text-[11px] text-red-400">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" aria-hidden="true" />
           {t('menuCalc.dishLoses')}
@@ -649,7 +756,7 @@ function DishCard({
         </p>
       )}
 
-      {hasRecipe && c.grossProfit > 0 && (c.foodCostPercent ?? 0) > 38 && suggested && (
+      {costed && c.grossProfit > 0 && (c.foodCostPercent ?? 0) > 38 && suggested && (
         <p className="mt-3 text-[11px] text-muted-foreground">
           {t('menuCalc.forTargetPriceWouldBe')}{' '}
           <strong className="text-foreground">{formatMoneyExact(suggested)}</strong>.
@@ -1133,10 +1240,21 @@ function IngredientList({
 }) {
   const { t, language } = useLanguage();
   const [search, setSearch] = useState('');
+  const [showResale, setShowResale] = useState(false);
+
+  // The owner's own words: a Super Bock is not an ingredient. The rows that
+  // exist only to cost a drink are real and editable, but they are not what
+  // anyone means by "ingredients", so they wait behind a disclosure while the
+  // lettuce, the bacon and the buns are the list.
+  const real = ingredients.filter((ing) => ing.soldAsId === null);
+  const resale = ingredients.filter((ing) => ing.soldAsId !== null);
 
   // Ninety-odd rows on a real account, so finding one by scrolling is a
-  // worse version of a job the browser does in a keystroke.
-  const shown = ingredients.filter((ing) => matchesSearch(search, ing.name));
+  // worse version of a job the browser does in a keystroke. Searching looks
+  // in both groups: someone typing "super bock" wants it found, not hidden.
+  const shown = (showResale || search.trim() ? ingredients : real).filter((ing) =>
+    matchesSearch(search, ing.name)
+  );
   return (
     <div className="card-glass p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3 mb-4">
@@ -1217,6 +1335,33 @@ function IngredientList({
           })}
         </div>
       )}
+
+      {/* Not hidden, just not in the way. Collapsed because the question
+          "what does my lettuce cost" is asked far more often than "what does
+          the Super Bock bottle cost", and one buried the other. */}
+      {resale.length > 0 && !search.trim() && (
+        <button
+          type="button"
+          onClick={() => setShowResale((v) => !v)}
+          aria-expanded={showResale}
+          className="mt-3 w-full flex items-center justify-between gap-2 py-2 text-left text-xs
+                     font-semibold text-muted-foreground hover:text-foreground transition-colors
+                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+        >
+          <span>
+            {t('menuCalc.resaleGroup').replace('{n}', String(resale.length))}
+          </span>
+          <ChevronDown
+            className={`w-4 h-4 shrink-0 transition-transform ${showResale ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+          />
+        </button>
+      )}
+      {resale.length > 0 && showResale && !search.trim() && (
+        <p className="text-[11px] text-muted-foreground pb-1">
+          {t('menuCalc.resaleGroupHint')}
+        </p>
+      )}
     </div>
   );
 }
@@ -1229,6 +1374,7 @@ function DishDialog({
   onSave: (input: {
     name: string; category: string | null; priceGross: number;
     vatRate: number; monthlyVolume: number | null;
+    costingMode?: 'RECIPE' | 'PURCHASE';
   }) => void;
   onDelete?: () => void;
 }) {
@@ -1238,6 +1384,7 @@ function DishDialog({
   const [price, setPrice] = useState(item ? String(item.priceGross) : '');
   const [vatRate, setVatRate] = useState(item?.vatRate ?? 13);
   const [volume, setVolume] = useState(item?.monthlyVolume ? String(item.monthlyVolume) : '');
+  const [mode, setMode] = useState<'RECIPE' | 'PURCHASE'>(item?.costingMode ?? 'RECIPE');
 
   const priceValue = Number(price.replace(',', '.'));
   const valid = name.trim().length > 0 && Number.isFinite(priceValue) && priceValue >= 0;
@@ -1306,11 +1453,62 @@ function DishDialog({
         />
       </label>
 
+      {/* The one thing the till cannot tell us.
+          A milkshake is made and a beer is opened, and nothing in the sales
+          data says which -- so it is asked here rather than guessed, because
+          a wrong answer is a margin that looks right and is not. */}
+      <fieldset className="mt-4">
+        <legend className="text-xs text-muted-foreground mb-1.5">
+          {t('menuCalc.howCosted')}
+        </legend>
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            { value: 'RECIPE' as const, icon: ChefHat, label: t('menuCalc.modeRecipe'), hint: t('menuCalc.modeRecipeHint') },
+            { value: 'PURCHASE' as const, icon: ShoppingBag, label: t('menuCalc.modePurchase'), hint: t('menuCalc.modePurchaseHint') },
+          ]).map((option) => {
+            const Icon = option.icon;
+            const on = mode === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setMode(option.value)}
+                aria-pressed={on}
+                className={`rounded-xl border p-3 text-left transition-colors
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    on
+                      ? 'border-primary/50 bg-primary/10'
+                      : 'border-border-subtle hover:bg-muted/50'
+                  }`}
+              >
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <Icon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  {option.label}
+                </span>
+                <span className="block text-[11px] text-muted-foreground mt-1">
+                  {option.hint}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {/* Said once, where the consequence is: the lines stay on the row and
+            stop counting, rather than being deleted behind the owner's back. */}
+        {item && item.costingMode === 'RECIPE' && mode === 'PURCHASE'
+          && item.costing.lines.length > 0 && (
+          <p className="mt-2 flex items-start gap-1.5 text-[11px] text-warning">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" aria-hidden="true" />
+            {t('menuCalc.modeRecipeLinesIgnored')}
+          </p>
+        )}
+      </fieldset>
+
       <div className="mt-5 flex gap-2">
         <button
           type="button"
           onClick={() =>
             valid && onSave({
+              costingMode: mode,
               name: name.trim(),
               category: category.trim() || null,
               priceGross: priceValue,

@@ -90,11 +90,18 @@ export async function getMenu() {
           orderBy: { sortOrder: 'asc' },
           include: { ingredient: true },
         },
+        // The bought thing a resale item is the selling of. Its cost is the
+        // item cost, so it travels with the item rather than being looked up.
+        purchaseItem: true,
       },
     }),
     prisma.ingredient.findMany({
       where: { restaurantId: owner.restaurantId, deletedAt: null },
       orderBy: { name: 'asc' },
+      include: {
+        // At most one by design, but a list is what a back-relation gives.
+        soldAs: { where: { deletedAt: null }, select: { id: true }, take: 1 },
+      },
     }),
   ]);
 
@@ -118,6 +125,21 @@ export async function getMenu() {
       priceGross: Number(item.priceGross),
       vatRate: Number(item.vatRate),
       lines,
+      purchase:
+        item.costingMode === 'PURCHASE' && item.purchaseItem
+          ? {
+              unit: item.purchaseItem.unit,
+              manualUnitCost:
+                item.purchaseItem.manualUnitCost === null
+                  ? null
+                  : Number(item.purchaseItem.manualUnitCost),
+              invoiceUnitCost:
+                item.purchaseItem.invoiceUnitCost === null
+                  ? null
+                  : Number(item.purchaseItem.invoiceUnitCost),
+              wastePercent: Number(item.purchaseItem.wastePercent),
+            }
+          : null,
     });
 
     return {
@@ -128,6 +150,11 @@ export async function getMenu() {
       vatRate: Number(item.vatRate),
       monthlyVolume: item.monthlyVolume,
       active: item.active,
+      costingMode: item.costingMode,
+      purchaseItemId: item.purchaseItemId,
+      purchaseItemName: item.purchaseItem?.name ?? null,
+      purchaseInvoiceCostAt: item.purchaseItem?.invoiceCostAt ?? null,
+      needsReview: item.needsReview,
       costing,
     };
   });
@@ -136,7 +163,12 @@ export async function getMenu() {
   // thresholds are this menu's own averages. Only dishes that are costed and
   // carry a volume take part: a dish with no recipe would drag the average
   // down and mislabel everything else.
-  const rated = costed.filter((c) => !c.costing.incomplete && c.costing.lines.length > 0);
+  // Costed means costed, with or without a recipe. A drink sold as bought has
+  // no lines and a real cost, and leaving it out of the averages would exclude
+  // the thing earning a quarter of the takings from "what carries the room".
+  const rated = costed.filter(
+    (c) => !c.costing.incomplete && (c.costing.lines.length > 0 || c.costing.purchase !== null)
+  );
   const withVolume = rated.filter((c) => c.monthlyVolume && c.monthlyVolume > 0);
 
   const avgGrossProfit =
@@ -159,6 +191,9 @@ export async function getMenu() {
       ingredients: ingredients.map((i) => ({
         id: i.id,
         name: i.name,
+        // Set when this exists to cost a resale item rather than to go into a
+        // recipe, so the ingredient list can keep bottles out of the lettuce.
+        soldAsId: i.soldAs[0]?.id ?? null,
         unit: i.unit,
         manualUnitCost: i.manualUnitCost === null ? null : Number(i.manualUnitCost),
         invoiceUnitCost: i.invoiceUnitCost === null ? null : Number(i.invoiceUnitCost),
@@ -262,6 +297,11 @@ export async function saveMenuItem(input: {
   priceGross: number;
   vatRate: number;
   monthlyVolume?: number | null;
+  /**
+   * How this is costed. Omitted leaves it as it was, so a dialog that does
+   * not offer the choice cannot silently reset it.
+   */
+  costingMode?: 'RECIPE' | 'PURCHASE';
 }) {
   const owner = await requireOwner();
   if (isAuthError(owner)) return fail(owner.error);
@@ -286,6 +326,9 @@ export async function saveMenuItem(input: {
     priceGross: price,
     vatRate: vat,
     monthlyVolume: volume,
+    // Answering the question settles it, whichever way the owner answered:
+    // the row was flagged because we could not tell, and now we have been told.
+    ...(input.costingMode ? { costingMode: input.costingMode, needsReview: false } : {}),
   };
 
   if (input.id) {
@@ -314,11 +357,36 @@ export async function deleteMenuItem(id: string) {
 
   const existing = await prisma.menuItem.findFirst({
     where: { id, restaurantId: owner.restaurantId, deletedAt: null },
-    select: { id: true },
+    select: { id: true, costingMode: true, purchaseItemId: true },
   });
-  if (!existing) return fail('Prato não encontrado');
+  if (!existing) return fail('menuCalc.errDishNotFound');
 
-  await prisma.menuItem.update({ where: { id }, data: { deletedAt: new Date(), active: false } });
+  const now = new Date();
+
+  // A resale item's purchase line exists only to cost it, so taking the drink
+  // off the board takes the bottle with it -- otherwise Preços slowly fills
+  // with bottles for drinks nobody sells any more, which is the mess this
+  // whole thing was meant to end.
+  //
+  // Soft, and only when no recipe borrowed it in the meantime: the invoice
+  // links hang off that row and the owner's answer to "what is this line on
+  // my invoice" has to outlive a menu change.
+  const orphan =
+    existing.costingMode === 'PURCHASE' && existing.purchaseItemId
+      ? await prisma.recipeLine.count({ where: { ingredientId: existing.purchaseItemId } })
+      : null;
+
+  await prisma.$transaction([
+    prisma.menuItem.update({ where: { id }, data: { deletedAt: now, active: false } }),
+    ...(orphan === 0 && existing.purchaseItemId
+      ? [
+          prisma.ingredient.update({
+            where: { id: existing.purchaseItemId },
+            data: { deletedAt: now },
+          }),
+        ]
+      : []),
+  ]);
   return { success: true as const };
 }
 
@@ -369,11 +437,19 @@ export async function addIngredientToItems(input: {
     }),
     prisma.ingredient.findFirst({
       where: { id: input.ingredientId, restaurantId: owner.restaurantId, deletedAt: null },
-      select: { id: true },
+      select: {
+        id: true,
+        soldAs: { where: { deletedAt: null }, select: { id: true }, take: 1 },
+      },
     }),
   ]);
   if (items.length !== ids.length) return fail('menuCalc.errDishNotFound');
   if (!ingredient) return fail('menuCalc.errIngredientNotFound');
+
+  // A bottle of Super Bock is not an ingredient of a burger. It exists to cost
+  // the drink that is sold as it, and letting it into another recipe would let
+  // the owner rebuild by hand exactly the confusion this was meant to clear.
+  if (ingredient.soldAs.length > 0) return fail('menuCalc.errPurchaseIngredient');
 
   await prisma.$transaction(
     items.map((item) =>

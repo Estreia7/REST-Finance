@@ -28,14 +28,23 @@
  * in the products table where the owner will see it, rather than silently
  * vanishing into a ranking it does not belong in.
  */
-const MODIFIER_FAMILIAS = new Set([
+/**
+ * The modifier families, as a list.
+ *
+ * Exported because Prisma needs an array for an `in` filter while the rest of
+ * the app wants the predicate below. One definition either way: three copies
+ * of this list existed, and one of them had already drifted.
+ */
+export const MODIFIER_FAMILIA_NAMES = [
   'INGREDIENTES',
   'MOLHOS',
   'EXTRAS',
   'ADICIONAIS',
   'OPCOES',
   'OPÇÕES',
-]);
+];
+
+const MODIFIER_FAMILIAS: ReadonlySet<string> = new Set(MODIFIER_FAMILIA_NAMES);
 
 export function isModifierFamilia(familia: string | null | undefined): boolean {
   if (!familia) return false;
@@ -198,7 +207,7 @@ export function monthlySeries(rows: SaleRow[]): Array<{ monthIndex: number; quan
  * and well under the cheapest thing anyone actually buys (an espresso at a
  * euro), so nothing a customer chooses is caught by it.
  */
-const INCLUDED_UNIT_PRICE = 0.2;
+export const INCLUDED_UNIT_PRICE = 0.2;
 
 /**
  * The best and worst seller over the period.

@@ -35,9 +35,45 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.07.3';
+export const CHANGELOG_VERSION = '2026.10.08.1';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.08.1',
+    date: '2026-10-08',
+    entries: [
+      {
+        kind: 'new',
+        title: 'As bebidas passam a ter margem, como qualquer prato',
+        detail:
+          'Uma Super Bock não é um ingrediente, é um produto: vende-se tal como se compra. Até agora ficava em Preços sem preço de venda, e quase um quarto da receita não tinha margem em sítio nenhum. Agora está na Ementa com o preço a que vende, o IVA certo — 23% no álcool, 13% no resto — e o custo da garrafa por baixo, a contar nas médias ao lado dos hambúrgueres.',
+      },
+      {
+        kind: 'new',
+        title: 'Diga quais é que a cozinha faz',
+        detail:
+          'Um batido leva ingredientes, uma cerveja não, e a caixa registadora não sabe a diferença — só regista o que vendeu. Por isso em Análises › Ementa cada produto tem agora duas opções: "a cozinha faz" ou "vende-se como se compra". Os que trouxemos da caixa ficam marcados até dizer, e um aviso em cima leva-o a eles.',
+      },
+      {
+        kind: 'improvement',
+        title: 'A lista de ingredientes voltou a ser de ingredientes',
+        detail:
+          'As garrafas e os cafés saíram do meio da alface, do bacon e do pão. Continuam a dar-se para editar — ficam num grupo à parte, no fim da lista, com o que cada um custou.',
+      },
+      {
+        kind: 'fix',
+        title: 'Uma garrafa de meio litro conta como uma garrafa',
+        detail:
+          'A "AGUA 0.5L" estava a contar-se ao litro por causa do nome, e uma fatura de garrafas teria ficado com metade do custo real. Passa a contar-se à unidade. Nenhuma receita que já estivesse escrita foi tocada.',
+      },
+      {
+        kind: 'fix',
+        title: 'Trazer a carta da caixa funciona em qualquer sistema',
+        detail:
+          'Antes só reconhecia as bebidas se a família na caixa se chamasse BEBIDAS ou CAFETARIA. Agora olha para o que a caixa cobrou: o que levou dinheiro é um produto, o que ringe a zero é um extra que vai dentro de outra coisa. Funciona com qualquer nomenclatura — e os molhos continuam ingredientes mesmo quando são vendidos como extra pago.',
+      },
+    ],
+  },
   {
     version: '2026.10.07.3',
     date: '2026-10-07',

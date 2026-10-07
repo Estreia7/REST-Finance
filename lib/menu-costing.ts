@@ -170,6 +170,15 @@ export interface MenuCosting {
   /** True when a line could not be costed, so the total understates reality. */
   incomplete: boolean;
   missingCount: number;
+
+  /**
+   * Set when this was costed from one purchase rather than from a recipe.
+   *
+   * Lets a caller tell "sold as bought, costed" from "a dish with no recipe
+   * yet", which look identical in the numbers — both have no lines — and
+   * mean opposite things.
+   */
+  purchase: { cost: number | null; source: CostSource } | null;
 }
 
 /**
@@ -183,10 +192,22 @@ export function netFromGross(gross: number, vatRate: number): number {
   return gross / (1 + vatRate / 100);
 }
 
+/**
+ * What an item costs and earns, from a recipe or from a single purchase.
+ *
+ * Pass `purchase` for something sold exactly as it was bought. There is no
+ * recipe to add up and no waste to allow for -- a bottle bought is a bottle
+ * sold -- so the plate cost is simply what the bottle cost. Everything after
+ * that is the same arithmetic as a dish, which is the point: a drink earns a
+ * margin the same way a burger does, and an owner who cannot see it is
+ * guessing about a quarter of the takings.
+ */
 export function costMenuItem(input: {
   priceGross: number;
   vatRate: number;
   lines: RecipeLineInput[];
+  /** The bought thing this item is the selling of, when it is one. */
+  purchase?: CostedIngredient | null;
 }): MenuCosting {
   const priceGross = Number.isFinite(input.priceGross) ? input.priceGross : 0;
   const vatRate = Number.isFinite(input.vatRate) ? input.vatRate : 0;
@@ -194,9 +215,19 @@ export function costMenuItem(input: {
   const priceNet = netFromGross(priceGross, vatRate);
   const vatAmount = priceGross - priceNet;
 
-  const lines = input.lines.map(costLine);
-  const foodCost = lines.reduce((sum, l) => sum + (l.cost ?? 0), 0);
-  const missingCount = lines.filter((l) => l.problem !== null).length;
+  // Sold as bought: one number, no lines, no waste. A recipe is not written
+  // for a bottle, so a quantity of one is not worth storing to multiply by.
+  const purchase = input.purchase ? effectiveUnitCost(input.purchase) : null;
+
+  const lines = purchase ? [] : input.lines.map(costLine);
+  const foodCost = purchase
+    ? (purchase.cost ?? 0)
+    : lines.reduce((sum, l) => sum + (l.cost ?? 0), 0);
+  // An unpriced purchase is the same gap as an unpriced ingredient: the total
+  // understates reality and must say so rather than read as a fat margin.
+  const missingCount = purchase
+    ? (purchase.cost === null ? 1 : 0)
+    : lines.filter((l) => l.problem !== null).length;
 
   const grossProfit = priceNet - foodCost;
 
@@ -214,6 +245,7 @@ export function costMenuItem(input: {
     marginPercent: priceNet > 0 ? (grossProfit / priceNet) * 100 : null,
     incomplete: missingCount > 0,
     missingCount,
+    purchase,
   };
 }
 

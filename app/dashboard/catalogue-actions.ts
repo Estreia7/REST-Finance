@@ -28,7 +28,7 @@ import {
 
 /** What the preview shows and the import writes. */
 export interface CataloguePreview {
-  dishes: ClassifiedProduct[];
+  menuItems: ClassifiedProduct[];
   ingredients: ClassifiedProduct[];
   skipped: ClassifiedProduct[];
   /** Already on the menu, so a second run adds rather than duplicates. */
@@ -125,25 +125,57 @@ export async function commitCatalogueImport() {
     const haveItem = new Set(existingItems.map((i) => i.name.trim().toUpperCase()));
     const haveIngredient = new Set(existingIngredients.map((i) => i.name.trim().toUpperCase()));
 
-    const newDishes = plan.dishes.filter((d) => !haveItem.has(d.menuName.trim().toUpperCase()));
+    const newItems = plan.menuItems.filter(
+      (d) => !haveItem.has(d.menuName.trim().toUpperCase()),
+    );
     const newIngredients = plan.ingredients.filter(
       (i) => !haveIngredient.has(i.menuName.trim().toUpperCase()),
     );
 
-    if (newDishes.length > 0) {
-      await prisma.menuItem.createMany({
-        data: newDishes.map((d, i) => ({
-          restaurantId: owner.restaurantId,
-          name: d.menuName,
-          category: d.familia,
-          priceGross: d.priceGross ?? 0,
-          vatRate: d.vatRate,
-          // What it sold over the imported period, which is what ranks a
-          // dish by what it actually contributes rather than by its margin.
-          monthlyVolume: d.quantity > 0 ? Math.max(1, Math.round(d.quantity / 12)) : null,
-          sortOrder: i,
-        })),
-      });
+    if (newItems.length > 0) {
+      // Each one arrives as a pair: the menu item carries the price and the
+      // VAT, and a purchase line carries what it cost to buy. Written together
+      // so the item is costable the moment the first invoice names it -- a
+      // drink with a price and nowhere to put its cost was the whole bug.
+      //
+      // Both are created even for something the kitchen makes, because this
+      // data cannot tell the two apart. The owner says which, once, and
+      // changing a dish to RECIPE leaves its purchase line unused rather than
+      // wrong -- an unused row costs nothing and keeps the invoice links the
+      // scanner may already have hung off it.
+      await prisma.$transaction(
+        newItems.map((d, i) =>
+          prisma.menuItem.create({
+            data: {
+              // The relation form rather than the scalar: Prisma will not mix
+              // a plain restaurantId with a nested create in the same object.
+              restaurant: { connect: { id: owner.restaurantId } },
+              name: d.menuName,
+              category: d.familia,
+              priceGross: d.priceGross ?? 0,
+              vatRate: d.vatRate,
+              // What it sold over the imported period, which is what ranks an
+              // item by what it actually contributes rather than by margin.
+              monthlyVolume: d.quantity > 0 ? Math.max(1, Math.round(d.quantity / 12)) : null,
+              sortOrder: i,
+              costingMode: 'PURCHASE',
+              // Flagged, not guessed: see the note above.
+              needsReview: true,
+              purchaseItem: {
+                create: {
+                  restaurantId: owner.restaurantId,
+                  name: d.menuName,
+                  normalizedName: normalizeProductName(d.menuName),
+                  // Sold by the bottle, bought by the bottle. Reading "AGUA
+                  // 0.5L" as litres would halve the cost of every one.
+                  unit: 'un',
+                  manualUnitCost: null,
+                },
+              },
+            },
+          }),
+        ),
+      );
     }
 
     if (newIngredients.length > 0) {
@@ -166,9 +198,9 @@ export async function commitCatalogueImport() {
     return {
       success: true,
       data: {
-        dishesCreated: newDishes.length,
+        itemsCreated: newItems.length,
         ingredientsCreated: newIngredients.length,
-        dishesSkipped: plan.dishes.length - newDishes.length,
+        itemsSkipped: plan.menuItems.length - newItems.length,
         ingredientsSkipped: plan.ingredients.length - newIngredients.length,
       },
     };
