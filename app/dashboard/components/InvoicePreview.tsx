@@ -23,15 +23,22 @@ export default function InvoicePreview({
   invoiceNumber,
   onClose,
   onDeleted,
+  startConfirmingDelete = false,
 }: {
   invoiceNumber: string;
   onClose: () => void;
   /** Called after the invoice and its figures have been removed. */
   onDeleted?: () => void;
+  /**
+   * Opens with the delete warning already showing. Set when the owner
+   * came by the bin on an invoice row: they have said what they want, but
+   * what deleting takes with it still has to be read before it happens.
+   */
+  startConfirmingDelete?: boolean;
 }) {
   const { t } = useLanguage();
   const [image, setImage] = useState<{ imagePath: string; scannedAt: string } | null | 'loading'>('loading');
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState(startConfirmingDelete);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {

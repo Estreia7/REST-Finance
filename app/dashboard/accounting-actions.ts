@@ -630,3 +630,131 @@ async function repriceIngredients(restaurantId: string, normalizedNames: string[
 
   return changed;
 }
+
+/** One invoice, as a document rather than as its lines. */
+export interface InvoiceRow2 {
+  invoiceNumber: string | null;
+  vendorName: string | null;
+  vendorId: string | null;
+  date: string | null;
+  /** What the document came to. */
+  total: number;
+  lineCount: number;
+  /** Lines nobody has said what they are, on this invoice. */
+  unidentified: number;
+  /** A photograph exists to show. */
+  hasImage: boolean;
+}
+
+/**
+ * The invoices, as documents.
+ *
+ * The lines view answers "what did I pay for beef in March". This answers the
+ * question the tab's own name asks — which invoices do I have — and it is the
+ * one an owner arrives with: there were two documents, not six product rows.
+ *
+ * Grouped in code rather than by the database, because a line carries its
+ * document number as text and the grouping wants the vendor, the date and the
+ * lines beside it, which is three joins to express in SQL and one pass here
+ * over a few hundred rows.
+ */
+export async function getInvoices(filters: { search?: string; vendorId?: string; page?: number } = {}) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const search = filters.search?.trim().toLowerCase();
+    const page = Math.max(0, Math.trunc(filters.page ?? 0));
+
+    const rows = await prisma.invoiceItem.findMany({
+      where: {
+        restaurantId: owner.restaurantId,
+        // Lines whose cost entry was deleted are not invoices the owner has.
+        AND: [{ OR: [{ costEntryId: null }, { costEntry: { deletedAt: null } }] }],
+        ...(filters.vendorId ? { vendorId: filters.vendorId } : {}),
+      },
+      select: {
+        productName: true,
+        totalPrice: true,
+        invoiceDate: true,
+        invoiceNumber: true,
+        vendor: { select: { id: true, name: true } },
+      },
+      orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    const links = await prisma.invoiceItemLink.findMany({
+      where: { restaurantId: owner.restaurantId },
+      select: { sourceName: true },
+    });
+    const identified = new Set(links.map((l) => l.sourceName));
+
+    const byDocument = new Map<string, InvoiceRow2>();
+    for (const row of rows) {
+      // A line with no document number is its own entry rather than being
+      // lumped with every other unnumbered line into one phantom invoice.
+      const key = row.invoiceNumber?.trim() || `__no-number__${row.vendor?.id ?? ''}-${row.invoiceDate?.toISOString() ?? ''}`;
+
+      const existing = byDocument.get(key);
+      const unidentified = identified.has(row.productName.trim().toLowerCase()) ? 0 : 1;
+
+      if (existing) {
+        existing.total += Number(row.totalPrice);
+        existing.lineCount += 1;
+        existing.unidentified += unidentified;
+      } else {
+        byDocument.set(key, {
+          invoiceNumber: row.invoiceNumber?.trim() || null,
+          vendorName: row.vendor?.name ?? null,
+          vendorId: row.vendor?.id ?? null,
+          date: row.invoiceDate ? row.invoiceDate.toISOString().slice(0, 10) : null,
+          total: Number(row.totalPrice),
+          lineCount: 1,
+          unidentified,
+          hasImage: false,
+        });
+      }
+    }
+
+    // Which of them have a photograph, so the eye is only offered where it
+    // opens something.
+    const scans = await prisma.receiptScan.findMany({
+      where: { restaurantId: owner.restaurantId, imageUrl: { not: '' } },
+      select: { extractedData: true },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    const photographed = new Set(
+      scans
+        .map((s) => (s.extractedData as { invoiceNumber?: string } | null)?.invoiceNumber?.trim())
+        .filter(Boolean) as string[],
+    );
+
+    let invoices = [...byDocument.values()].map((invoice) => ({
+      ...invoice,
+      total: Math.round((invoice.total + Number.EPSILON) * 100) / 100,
+      hasImage: invoice.invoiceNumber ? photographed.has(invoice.invoiceNumber) : false,
+    }));
+
+    if (search) {
+      invoices = invoices.filter(
+        (i) =>
+          i.invoiceNumber?.toLowerCase().includes(search) ||
+          i.vendorName?.toLowerCase().includes(search),
+      );
+    }
+
+    // Newest first: what arrived last week is what someone is looking for.
+    invoices.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+
+    return {
+      success: true,
+      data: {
+        invoices: invoices.slice(0, PAGE_SIZE * (page + 1)),
+        total: invoices.length,
+      },
+    };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to read the invoices', error, 'read') };
+  }
+}

@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback, useDeferredValue } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Search, FileText, Link2, Check, AlertTriangle, Eye } from 'lucide-react';
-import { getInvoiceLines, getDuplicateVendors, mergeVendors, type AccountingSummary } from '../accounting-actions';
+import { Loader2, Search, FileText, Link2, Check, AlertTriangle, Eye, Trash2 } from 'lucide-react';
+import { getInvoiceLines, getInvoices, getDuplicateVendors, mergeVendors, type AccountingSummary, type InvoiceRow2 } from '../accounting-actions';
 import { getDuplicateIngredients, mergeIngredients } from '../reconcile-actions';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
 import SubTabs from './SubTabs';
+import ListSearch from './ListSearch';
 import InvoicePreview from './InvoicePreview';
 
 /**
@@ -23,7 +24,7 @@ import InvoicePreview from './InvoicePreview';
  * that quietly stop the costing from being true.
  */
 
-type View = 'invoices' | 'vendors' | 'tidy';
+type View = 'invoices' | 'lines' | 'vendors' | 'tidy';
 
 /**
  * @param initialSearch an invoice number to open on, when the owner
@@ -48,12 +49,14 @@ export default function AccountingPanel({
         onChange={setView}
         tabs={[
           { value: 'invoices', label: t('accounting.tabInvoices') },
+          { value: 'lines', label: t('accounting.tabLines') },
           { value: 'vendors', label: t('accounting.tabVendors') },
           { value: 'tidy', label: t('accounting.tabTidy') },
         ]}
       />
 
-      {view === 'invoices' && <Invoices initialSearch={initialSearch} onSearchConsumed={onSearchConsumed} />}
+      {view === 'invoices' && <InvoiceList />}
+      {view === 'lines' && <Invoices initialSearch={initialSearch} onSearchConsumed={onSearchConsumed} />}
       {view === 'vendors' && <Vendors />}
       {view === 'tidy' && <Tidy />}
     </div>
@@ -555,6 +558,150 @@ function DuplicateVendors() {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * The invoices, as documents.
+ *
+ * What the tab's name promises. The line view beside it answers "what did I
+ * pay for beef in March"; this answers "which invoices do I have", which is
+ * the question an owner arrives with — there were two documents, not six
+ * product rows.
+ */
+function InvoiceList() {
+  const { t, language } = useLanguage();
+  const [data, setData] = useState<{ invoices: InvoiceRow2[]; total: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [previewing, setPreviewing] = useState<{ number: string; deleting: boolean } | null>(null);
+
+  const deferredSearch = useDeferredValue(search);
+  const locale = language === 'pt' ? 'pt-PT' : 'en-GB';
+
+  const load = useCallback(() => {
+    setLoading(true);
+    getInvoices({ search: deferredSearch || undefined, page }).then((result) => {
+      setLoading(false);
+      if ('data' in result && result.data) setData(result.data);
+    });
+  }, [deferredSearch, page]);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { setPage(0); }, [deferredSearch]);
+
+  if (loading && !data) return <Spinner label={t('common.loading')} />;
+
+  if (!data || (data.total === 0 && !deferredSearch)) {
+    return <Empty title={t('accounting.emptyTitle')} body={t('accounting.emptyBody')} />;
+  }
+
+  return (
+    <div className="space-y-3">
+      <ListSearch
+        value={search}
+        onChange={setSearch}
+        placeholder={t('accounting.searchInvoices')}
+        count={data.total}
+        matches={data.invoices.length}
+        showFrom={6}
+      />
+
+      {data.invoices.length === 0 ? (
+        <div className="card-glass p-8 text-center text-sm text-muted-foreground">
+          {t('accounting.noMatches')}
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {data.invoices.map((invoice) => (
+            <li
+              key={`${invoice.invoiceNumber ?? ''}-${invoice.date ?? ''}-${invoice.vendorId ?? ''}`}
+              className="card-glass p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
+                    {invoice.invoiceNumber ?? t('accounting.noNumber')}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5 [overflow-wrap:anywhere]">
+                    {invoice.vendorName ?? '—'}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">
+                    {invoice.date
+                      ? new Date(invoice.date).toLocaleDateString(locale)
+                      : '—'}
+                    {' · '}
+                    {t('accounting.lineCount').replace('{n}', String(invoice.lineCount))}
+                    {/* Only where there is work left: a count of zero is not
+                        news, and every invoice would carry one. */}
+                    {invoice.unidentified > 0 && (
+                      <span className="text-warning">
+                        {' · '}
+                        {t('accounting.toIdentify').replace('{n}', String(invoice.unidentified))}
+                      </span>
+                    )}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-sm font-bold text-foreground tabular-nums">
+                    {formatMoney(invoice.total)}
+                  </span>
+                  {invoice.invoiceNumber && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewing({ number: invoice.invoiceNumber!, deleting: false })}
+                        aria-label={t('accounting.previewInvoice').replace('{number}', invoice.invoiceNumber)}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground
+                                   hover:bg-muted transition-colors focus-visible:outline-none
+                                   focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Eye className="w-4 h-4" aria-hidden="true" />
+                      </button>
+                      {/* Opens the same dialog on its warning rather than
+                          deleting here: what goes with an invoice — the cost
+                          in the history, the ingredient prices it set — is
+                          not guessable from a bin icon. */}
+                      <button
+                        type="button"
+                        onClick={() => setPreviewing({ number: invoice.invoiceNumber!, deleting: true })}
+                        aria-label={t('accounting.deleteInvoice')}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-danger
+                                   hover:bg-danger/10 transition-colors focus-visible:outline-none
+                                   focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Trash2 className="w-4 h-4" aria-hidden="true" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {data.invoices.length < data.total && (
+        <button
+          type="button"
+          onClick={() => setPage((p) => p + 1)}
+          className="cta-button-secondary !py-2 !px-4 !text-sm w-full justify-center"
+        >
+          {t('accounting.showMore')}
+        </button>
+      )}
+
+      {previewing && (
+        <InvoicePreview
+          invoiceNumber={previewing.number}
+          startConfirmingDelete={previewing.deleting}
+          onClose={() => setPreviewing(null)}
+          onDeleted={load}
+        />
+      )}
     </div>
   );
 }

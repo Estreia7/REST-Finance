@@ -35,13 +35,19 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.07.2';
+export const CHANGELOG_VERSION = '2026.10.07.3';
 
 export const CHANGELOG: Release[] = [
   {
-    version: '2026.10.07.2',
+    version: '2026.10.07.3',
     date: '2026-10-07',
     entries: [
+      {
+        kind: 'improvement',
+        title: 'A aba das faturas mostra faturas, não linhas de produto',
+        detail:
+          'Em Contabilidade › Faturas passa a ver uma fatura por linha: o número do documento, o fornecedor, a data, o total e quantas linhas tem. Os ícones ao lado abrem a fotografia ou eliminam a fatura com os dados que ela alimentou. A lista por produto continua ao lado, em Linhas.',
+      },
       {
         kind: 'fix',
         title: 'O recorte deixou de agarrar o QR code',
