@@ -9,6 +9,7 @@ import {
   findAliasCandidates,
   packSizeOf,
   inPurchaseUnits,
+  packConversion,
   type MatchCandidate,
 } from '@/lib/invoice-matching';
 
@@ -407,21 +408,22 @@ describe('restating a line in the unit the kitchen buys in', () => {
     expect(out.unitPrice).toBeCloseTo(16.99, 2);
   });
 
-  it('turns one 5,7 kg tub into 5,7 kilos at the price per kilo', () => {
-    // Same money, counted in what the kitchen measures.
+  it('leaves a 5,7 kg tub for the owner to decide', () => {
+    // Both readings are sound and getting it wrong puts 16,99 a kilo on
+    // something that cost 2,98, so this one is asked rather than assumed.
+    // The two options are in the test above.
     const out = inPurchaseUnits({
       productName: 'KETCHUP 5,7KG HEINZ',
       quantity: 1, unit: 'un', unitPrice: 16.99, total: 16.99,
     });
-    expect(out.quantity).toBeCloseTo(5.7, 3);
-    expect(out.unit).toBe('kg');
-    expect(out.unitPrice).toBeCloseTo(2.98, 2);
+    expect(out.quantity).toBe(1);
+    expect(out.unit).toBe('un');
   });
 
   it('keeps the line total exactly', () => {
     // The money is not being restated, only how it is counted.
     const line = {
-      productName: 'KETCHUP 5,7KG', quantity: 1, unit: 'un', unitPrice: 16.99, total: 16.99,
+      productName: 'TOPPING MORANGO 1KG', quantity: 1, unit: 'un', unitPrice: 16.99, total: 16.99,
     };
     const out = inPurchaseUnits(line);
     expect(out.total).toBe(line.total);
@@ -458,5 +460,88 @@ describe('restating a line in the unit the kitchen buys in', () => {
       productName: 'TOPPING MORANGO 1KG', quantity: 2.5, unit: 'un', unitPrice: 16.99, total: 42.48,
     };
     expect(inPurchaseUnits(line)).toEqual(line);
+  });
+});
+
+describe('when to ask and when to just convert', () => {
+  /**
+   * Both readings of a package line are arithmetically sound — one tub at
+   * 16,99 and 5,7 kilos at 2,98 both come to 16,99 — which is why the model
+   * cannot settle it and why the owner is asked. Except where the package is
+   * one kilo: there a unit *is* a kilo, and asking would be noise.
+   */
+  it('converts a one-kilo tub without asking', () => {
+    const c = packConversion({
+      productName: 'TOPPING MORANGO 1KG', quantity: 1, unit: 'un', unitPrice: 16.99, total: 16.99,
+    });
+    expect(c?.certain).not.toBeNull();
+    expect(c?.certain?.unit).toBe('kg');
+    expect(c?.certain?.quantity).toBe(1);
+  });
+
+  it('converts six one-kilo tubs without asking', () => {
+    const c = packConversion({
+      productName: 'TOPPING CHOCOLATE 1KG', quantity: 6, unit: 'un', unitPrice: 6.36, total: 38.16,
+    });
+    expect(c?.certain?.quantity).toBe(6);
+    expect(c?.certain?.unit).toBe('kg');
+  });
+
+  it('asks about a 5,7 kg tub', () => {
+    // Getting this wrong puts 16,99 a kilo on something that cost 2,98.
+    const c = packConversion({
+      productName: 'KETCHUP 5,7KG HEINZ', quantity: 1, unit: 'un', unitPrice: 16.99, total: 16.99,
+    });
+    expect(c?.certain).toBeNull();
+    expect(c?.asPackages.quantity).toBe(1);
+    expect(c?.asWeight.quantity).toBeCloseTo(5.7, 3);
+    expect(c?.asWeight.unitPrice).toBeCloseTo(2.98, 2);
+  });
+
+  it('asks about twelve 1,5 litre bottles', () => {
+    // 12 bottles or 18 litres: both true, and which to store depends on
+    // whether the water is sold or cooked with.
+    const c = packConversion({
+      productName: 'AGUA 1.5L', quantity: 12, unit: 'un', unitPrice: 0.45, total: 5.4,
+    });
+    expect(c?.certain).toBeNull();
+    expect(c?.asWeight.quantity).toBeCloseTo(18, 3);
+    expect(c?.asWeight.unit).toBe('L');
+  });
+
+  it('has nothing to ask about a line already weighed', () => {
+    expect(packConversion({
+      productName: 'COSTELINHA PORCO', quantity: 3.84, unit: 'kg', unitPrice: 5.49, total: 21.08,
+    })).toBeNull();
+  });
+
+  it('has nothing to ask about a name with no size', () => {
+    expect(packConversion({
+      productName: 'SACO PLASTICO', quantity: 10, unit: 'un', unitPrice: 0.2, total: 2,
+    })).toBeNull();
+  });
+
+  it('keeps both readings tying to the same total', () => {
+    // Whichever the owner picks, the money is unchanged.
+    const c = packConversion({
+      productName: 'KETCHUP 5,7KG', quantity: 1, unit: 'un', unitPrice: 16.99, total: 16.99,
+    })!;
+    expect(c.asPackages.quantity * c.asPackages.unitPrice).toBeCloseTo(16.99, 2);
+    expect(c.asWeight.quantity * c.asWeight.unitPrice).toBeCloseTo(16.99, 2);
+    expect(c.asPackages.total).toBe(c.asWeight.total);
+  });
+
+  it('still converts the certain ones through the old entry point', () => {
+    // inPurchaseUnits applies only what needs no asking, so anything calling
+    // it keeps working and never silently picks a side.
+    const tub = inPurchaseUnits({
+      productName: 'TOPPING MORANGO 1KG', quantity: 1, unit: 'un', unitPrice: 16.99, total: 16.99,
+    });
+    expect(tub.unit).toBe('kg');
+
+    const ketchup = inPurchaseUnits({
+      productName: 'KETCHUP 5,7KG', quantity: 1, unit: 'un', unitPrice: 16.99, total: 16.99,
+    });
+    expect(ketchup.unit).toBe('un');
   });
 });

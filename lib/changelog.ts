@@ -44,6 +44,12 @@ export const CHANGELOG: Release[] = [
     entries: [
       {
         kind: 'improvement',
+        title: 'Perguntamos quando a embalagem levanta dúvidas',
+        detail:
+          'Uma embalagem de 1 kg entra como 1 kg sem perguntar nada. Mas quando é um balde de 5,7 kg ou garrafas de 1,5 L, as duas leituras fazem contas certas e só o dono sabe qual quer — por isso mostramos as duas e escolhe. Um engano aqui punha 16,99 o quilo em algo que custou 2,98.',
+      },
+      {
+        kind: 'improvement',
         title: 'Uma embalagem de 1 kg entra como 1 kg',
         detail:
           'Quando a fatura diz "TOPPING MORANGO 1KG" e cobra uma embalagem, passamos a guardar um quilo e não uma unidade. Assim uma receita que leve 50 g consegue calcular o custo — com "unidades" não conseguia. O ketchup de 5,7 kg fica a 2,98 o quilo, e o total da fatura não muda.',

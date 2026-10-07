@@ -8,7 +8,7 @@ import { guessPurchaseUnit } from '@/lib/catalogue-import';
 import {
   reconcileInvoice,
   lineArithmeticHolds,
-  inPurchaseUnits,
+  packConversion,
   impliedUnitPrice,
   type InvoiceLine,
   findAliasCandidates,
@@ -38,6 +38,16 @@ export interface ReconcilePreview {
     suspect: boolean;
     /** What the unit price would be if the total and quantity are right. */
     impliedUnitPrice: number | null;
+    /**
+     * Set when the line could be read two ways and only the owner knows
+     * which: so many packages, or the weight they hold. Null when there is
+     * nothing to decide.
+     */
+    packChoice: {
+      packAmount: number;
+      packUnit: string;
+      asWeight: InvoiceLine;
+    } | null;
   }>;
   /** Ingredients to choose from, for the lines that need an answer. */
   candidates: Array<{ id: string; name: string; unit: string }>;
@@ -86,11 +96,15 @@ export async function previewReconciliation(input: {
       remembered.set(link.sourceName, list);
     }
 
-    // Restated in what the kitchen buys in before anything else looks at
-    // them. One 1 kg tub of topping stored as "1 un" is true and useless:
-    // a recipe measuring in grams cannot convert grams to units, so the
-    // dish cannot be costed at all.
-    const lines = input.lines.map(inPurchaseUnits);
+    // Restated in what the kitchen buys in. A 1 kg tub stored as "1 un"
+    // is true and useless: a recipe measuring in grams cannot convert
+    // grams to units, so the dish cannot be costed at all.
+    //
+    // Only the certain ones are applied here. Where a package is some
+    // other size, both readings are arithmetically sound and the owner
+    // is asked rather than guessed at.
+    const conversions = input.lines.map((line) => packConversion(line));
+    const lines = input.lines.map((line, i) => conversions[i]?.certain ?? line);
 
     const reconciled = reconcileInvoice(lines, ingredients, remembered);
 
@@ -99,11 +113,26 @@ export async function previewReconciliation(input: {
       data: {
         vendorId: vendor?.id ?? null,
         vendorName: input.vendorName.trim(),
-        lines: reconciled.map((line) => ({
-          ...line,
-          suspect: !lineArithmeticHolds(line),
-          impliedUnitPrice: impliedUnitPrice(line),
-        })),
+        lines: reconciled.map((line) => {
+          // Matched back by name, since reconcileInvoice reorders by
+          // what each line cost.
+          const conversion = conversions.find(
+            (c, i) => c && !c.certain && input.lines[i].productName === line.productName,
+          );
+          return {
+            ...line,
+            suspect: !lineArithmeticHolds(line),
+            impliedUnitPrice: impliedUnitPrice(line),
+            // Null unless the owner has a choice to make.
+            packChoice: conversion
+              ? {
+                  packAmount: conversion.pack.amount,
+                  packUnit: conversion.pack.unit,
+                  asWeight: conversion.asWeight,
+                }
+              : null,
+          };
+        }),
         candidates: ingredients,
       } satisfies ReconcilePreview,
     };

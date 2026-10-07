@@ -194,6 +194,14 @@ export default function InvoiceReconcile({ vendorName, lines, onResolved, busy =
    * means this line is not an ingredient at all.
    */
   const [choices, setChoices] = useState<Record<string, string[]>>({});
+  /**
+   * Per line, whether its quantity means packages or the weight they hold.
+   *
+   * Defaults to packages — what the invoice literally printed. A default
+   * that restated the line would be deciding the question while appearing
+   * to ask it.
+   */
+  const [packChoices, setPackChoices] = useState<Record<string, 'packages' | 'weight'>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -248,14 +256,19 @@ export default function InvoiceReconcile({ vendorName, lines, onResolved, busy =
         // The unit price is recovered where the printed one does not multiply
         // out: the total and the quantity are the figures least likely to be
         // misread, so they are what an ingredient cost should come from.
+        // The owner's answer wins over the printed figures.
+        const useWeight =
+          line.packChoice && packChoices[line.productName] === 'weight';
+        const measured = useWeight ? line.packChoice!.asWeight : line;
+
         const unitPrice = line.suspect && line.impliedUnitPrice
           ? line.impliedUnitPrice
-          : line.unitPrice;
+          : measured.unitPrice;
 
         return {
           productName: line.productName,
-          quantity: line.quantity,
-          unit: line.unit,
+          quantity: measured.quantity,
+          unit: measured.unit,
           unitPrice,
           total: line.total,
           ...(choice.includes('__skip')
@@ -266,7 +279,7 @@ export default function InvoiceReconcile({ vendorName, lines, onResolved, busy =
         } satisfies LineResolution;
       }),
     );
-  }, [preview, choices, onResolved]);
+  }, [preview, choices, packChoices, onResolved]);
 
   if (loading) {
     return (
@@ -316,6 +329,45 @@ export default function InvoiceReconcile({ vendorName, lines, onResolved, busy =
                   <span className="text-foreground font-semibold">{formatMoney(line.total)}</span>
                 </span>
               </div>
+
+              {/* Two readings, both arithmetically sound, and only the
+                  owner knows which. Asked rather than guessed, because
+                  guessing wrong puts a wrong cost per kilo on every dish
+                  that uses it. */}
+              {line.packChoice && (
+                <div className="mb-2 rounded-lg bg-muted/60 p-2.5">
+                  <p className="text-[11px] text-muted-foreground mb-2">
+                    {t('reconcile.packQuestion')}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {(['packages', 'weight'] as const).map((choice) => {
+                      const picked = (packChoices[line.productName] ?? 'packages') === choice;
+                      const shown =
+                        choice === 'weight' ? line.packChoice!.asWeight : line;
+                      return (
+                        <button
+                          key={choice}
+                          type="button"
+                          onClick={() =>
+                            setPackChoices((c) => ({ ...c, [line.productName]: choice }))
+                          }
+                          aria-pressed={picked}
+                          className={`px-2.5 py-1.5 rounded-lg text-[11px] tabular-nums transition-colors
+                                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                            picked
+                              ? 'bg-primary text-primary-foreground font-semibold'
+                              : 'bg-card text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {shown.quantity.toLocaleString('pt-PT')} {shown.unit}
+                          {' × '}
+                          {formatMoney(shown.unitPrice, { decimals: 2 })}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Said plainly rather than silently corrected: a misread price
                   becomes a wrong cost on every dish using the ingredient. */}

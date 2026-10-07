@@ -420,22 +420,60 @@ export function packSizeOf(description: string): PackSize | null {
  * line reading 3,84 of something is a weight already, whatever its name says.
  */
 export function inPurchaseUnits(line: InvoiceLine): InvoiceLine {
+  const converted = packConversion(line);
+  return converted?.certain ?? line;
+}
+
+/**
+ * What a line billed by the package could be.
+ *
+ * Both readings are arithmetically sound — one tub at 16,99 and 5,7 kilos at
+ * 2,98 both come to 16,99 — which is exactly why the model cannot settle it
+ * and why the owner has to be asked.
+ *
+ * Except when the package is one kilo or one litre. There a unit *is* a kilo
+ * and the two readings are the same purchase counted the same way, so there
+ * is nothing to ask and asking would be noise on a ten-line invoice.
+ */
+export interface PackConversion {
+  /** Applied without asking. Null when the owner should choose. */
+  certain: InvoiceLine | null;
+  /** As the invoice printed it: so many packages at the package price. */
+  asPackages: InvoiceLine;
+  /** The same purchase in what the kitchen measures. */
+  asWeight: InvoiceLine;
+  pack: PackSize;
+}
+
+export function packConversion(line: InvoiceLine): PackConversion | null {
   const unit = (line.unit ?? '').trim().toLowerCase();
-  // Already weighed or measured.
-  if (unit === 'kg' || unit === 'l') return line;
+  // Already weighed or measured: nothing to restate, nothing to ask.
+  if (unit === 'kg' || unit === 'l') return null;
 
   const pack = packSizeOf(line.productName);
-  if (!pack) return line;
+  if (!pack) return null;
 
-  // Whole packages only. Anything else is a weight the reader labelled badly,
-  // and multiplying it by a pack size would invent goods.
-  if (!Number.isInteger(line.quantity) || line.quantity <= 0) return line;
+  // Whole packages only. A fractional quantity is a weight the reader
+  // labelled badly, and multiplying it by a pack size would invent goods.
+  if (!Number.isInteger(line.quantity) || line.quantity <= 0) return null;
 
-  const quantity = line.quantity * pack.amount;
-  return {
+  const quantity = round3(line.quantity * pack.amount);
+  const asWeight: InvoiceLine = {
     ...line,
-    quantity: Math.round(quantity * 1000) / 1000,
+    quantity,
     unit: pack.unit,
     unitPrice: Math.round((line.total / quantity) * 10000) / 10000,
   };
+
+  return {
+    // A one-kilo tub is one kilo however it is counted.
+    certain: pack.amount === 1 ? asWeight : null,
+    asPackages: line,
+    asWeight,
+    pack,
+  };
+}
+
+function round3(n: number): number {
+  return Math.round(n * 1000) / 1000;
 }
