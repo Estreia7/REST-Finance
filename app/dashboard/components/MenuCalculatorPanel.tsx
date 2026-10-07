@@ -244,7 +244,7 @@ export default function MenuCalculatorPanel() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-1 p-1 rounded-xl bg-muted w-fit">
-        {([['menu', t('menuCalc.tabMenu')], ['ingredients', t('menuCalc.tabIngredients')], ['map', t('menuGraph.title')]] as const).map(([value, label]) => (
+        {([['menu', t('menuCalc.tabMenu')], ['ingredients', t('menuCalc.tabProducts')], ['map', t('menuGraph.title')]] as const).map(([value, label]) => (
           <button
             key={value}
             type="button"
@@ -1297,30 +1297,29 @@ function IngredientList({
   onAdd: () => void;
   onEdit: (i: Ingredient) => void;
 }) {
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const [search, setSearch] = useState('');
-  const [showResale, setShowResale] = useState(false);
 
-  // The owner's own words: a Super Bock is not an ingredient. The rows that
-  // exist only to cost a drink are real and editable, but they are not what
-  // anyone means by "ingredients", so they wait behind a disclosure while the
-  // lettuce, the bacon and the buns are the list.
-  const real = ingredients.filter((ing) => ing.soldAsId === null);
-  const resale = ingredients.filter((ing) => ing.soldAsId !== null);
+  // Two kinds of bought thing, side by side rather than one hidden behind the
+  // other.
+  //
+  // An ingredient is bought by weight and goes *into* something: lettuce,
+  // bacon, buns. A unit is bought by the bottle or the pack and sold as it
+  // stands: a Super Bock, a coffee. Both are things the restaurant buys and
+  // both carry a price from the invoices, so they belong on one page -- but
+  // they are not the same kind of thing, and a single list of ninety rows
+  // said they were.
+  const shown = ingredients.filter((ing) => matchesSearch(search, ing.name));
+  const asIngredients = shown.filter((ing) => ing.soldAsId === null);
+  const asUnits = shown.filter((ing) => ing.soldAsId !== null);
 
-  // Ninety-odd rows on a real account, so finding one by scrolling is a
-  // worse version of a job the browser does in a keystroke. Searching looks
-  // in both groups: someone typing "super bock" wants it found, not hidden.
-  const shown = (showResale || search.trim() ? ingredients : real).filter((ing) =>
-    matchesSearch(search, ing.name)
-  );
   return (
     <div className="card-glass p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
-          <h4 className="font-semibold text-foreground">{t('menuCalc.tabIngredients')}</h4>
+          <h4 className="font-semibold text-foreground">{t('menuCalc.tabProducts')}</h4>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {t('menuCalc.ingredientsHint')}
+            {t('menuCalc.productsHint')}
           </p>
         </div>
         <button
@@ -1345,9 +1344,76 @@ function IngredientList({
         <p className="py-8 text-center text-sm text-muted-foreground">
           {t('menuCalc.noIngredients')}
         </p>
+      ) : shown.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          {t('menuCalc.noIngredientMatches')}
+        </p>
       ) : (
-        <div className="-mx-4 sm:-mx-5 divide-y divide-border-subtle border-y border-border-subtle">
-          {shown.map((ing) => {
+        /* Side by side on a desktop, stacked on a phone. Two columns because
+           they answer different questions -- "what does my beef cost a kilo"
+           against "what did that bottle cost me" -- and one list of ninety
+           rows made the owner read every name to work out which kind he had. */
+        <div className="grid lg:grid-cols-2 gap-x-6 gap-y-5">
+          <ProductGroup
+            icon={<Carrot className="w-4 h-4 text-success" aria-hidden="true" />}
+            title={t('menuCalc.groupIngredients')}
+            hint={t('menuCalc.groupIngredientsHint')}
+            rows={asIngredients}
+            onEdit={onEdit}
+          />
+          <ProductGroup
+            icon={<ShoppingBag className="w-4 h-4 text-primary" aria-hidden="true" />}
+            title={t('menuCalc.groupUnits')}
+            hint={t('menuCalc.groupUnitsHint')}
+            rows={asUnits}
+            onEdit={onEdit}
+          />
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+/**
+ * One column of bought things, with a heading saying what kind they are.
+ *
+ * Shared by both columns so the two can never drift into looking like
+ * different features. The icon carries the distinction at a glance -- a
+ * carrot for what goes into something, a bag for what is sold as it stands --
+ * and the count sits on the heading because "have I got any of these at all"
+ * is the first question an empty-looking column raises.
+ */
+function ProductGroup({
+  icon, title, hint, rows, onEdit,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  hint: string;
+  rows: Ingredient[];
+  onEdit: (i: Ingredient) => void;
+}) {
+  const { t, language } = useLanguage();
+
+  return (
+    <section>
+      <div className="flex items-center gap-2">
+        {icon}
+        <h5 className="text-xs font-bold text-foreground uppercase tracking-wider">
+          {title}
+        </h5>
+        <span className="text-xs text-muted-foreground tabular-nums">{rows.length}</span>
+      </div>
+      <p className="text-[11px] text-muted-foreground mt-0.5 mb-2">{hint}</p>
+
+      {rows.length === 0 ? (
+        <p className="py-6 text-center text-xs text-muted-foreground
+                      border border-dashed border-border-subtle rounded-xl">
+          {t('menuCalc.groupEmpty')}
+        </p>
+      ) : (
+        <div className="divide-y divide-border-subtle border-y border-border-subtle">
+          {rows.map((ing) => {
             const fromInvoice = ing.manualUnitCost === null && ing.invoiceUnitCost !== null;
             const cost = ing.manualUnitCost ?? ing.invoiceUnitCost;
             return (
@@ -1355,7 +1421,7 @@ function IngredientList({
                 key={ing.id}
                 type="button"
                 onClick={() => onEdit(ing)}
-                className="w-full min-h-[56px] px-4 sm:px-5 py-3 flex items-center gap-3 text-left
+                className="w-full min-h-[56px] px-1 py-3 flex items-center gap-3 text-left
                            hover:bg-muted/50 active:bg-muted transition-colors
                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
@@ -1394,34 +1460,7 @@ function IngredientList({
           })}
         </div>
       )}
-
-      {/* Not hidden, just not in the way. Collapsed because the question
-          "what does my lettuce cost" is asked far more often than "what does
-          the Super Bock bottle cost", and one buried the other. */}
-      {resale.length > 0 && !search.trim() && (
-        <button
-          type="button"
-          onClick={() => setShowResale((v) => !v)}
-          aria-expanded={showResale}
-          className="mt-3 w-full flex items-center justify-between gap-2 py-2 text-left text-xs
-                     font-semibold text-muted-foreground hover:text-foreground transition-colors
-                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-        >
-          <span>
-            {t('menuCalc.resaleGroup').replace('{n}', String(resale.length))}
-          </span>
-          <ChevronDown
-            className={`w-4 h-4 shrink-0 transition-transform ${showResale ? 'rotate-180' : ''}`}
-            aria-hidden="true"
-          />
-        </button>
-      )}
-      {resale.length > 0 && showResale && !search.trim() && (
-        <p className="text-[11px] text-muted-foreground pb-1">
-          {t('menuCalc.resaleGroupHint')}
-        </p>
-      )}
-    </div>
+    </section>
   );
 }
 
