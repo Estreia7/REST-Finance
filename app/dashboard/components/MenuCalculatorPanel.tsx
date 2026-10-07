@@ -425,6 +425,26 @@ export default function MenuCalculatorPanel() {
                         onRemoveLine={(ingredientId) =>
                           run(() => removeRecipeLine(item.id, ingredientId))
                         }
+                        onAnswer={(costingMode) =>
+                          run(
+                            () =>
+                              saveMenuItem({
+                                id: item.id,
+                                name: item.name,
+                                category: item.category,
+                                priceGross: item.priceGross,
+                                vatRate: item.vatRate,
+                                monthlyVolume: item.monthlyVolume,
+                                costingMode,
+                              }),
+                            // Says what it did, because the row's own change
+                            // -- a recipe box appearing, or not -- is easy to
+                            // miss on a long list.
+                            costingMode === 'RECIPE'
+                              ? t('menuCalc.reviewSavedMade')
+                              : t('menuCalc.reviewSavedBought')
+                          )
+                        }
                       />
                     ))}
                   </section>
@@ -588,7 +608,7 @@ function MenuSummary({ items }: { items: MenuItem[] }) {
 
 function DishCard({
   item, ingredients, ingredientById, busy, selecting, isSelected,
-  onToggle, onEdit, onEditIngredient, onCreateIngredient, onSetLine, onRemoveLine,
+  onToggle, onEdit, onEditIngredient, onCreateIngredient, onSetLine, onRemoveLine, onAnswer,
 }: {
   item: MenuItem;
   ingredients: Ingredient[];
@@ -602,6 +622,8 @@ function DishCard({
   onCreateIngredient: (name: string) => void;
   onSetLine: (ingredientId: string, quantity: number, unit: string) => Promise<boolean>;
   onRemoveLine: (ingredientId: string) => Promise<boolean>;
+  /** Settles the made-or-bought question from the row itself. */
+  onAnswer: (mode: 'RECIPE' | 'PURCHASE') => void;
 }) {
   const { t, language } = useLanguage();
   const c = item.costing;
@@ -652,7 +674,7 @@ function DishCard({
         </div>
 
         {/* Full width under the name on a phone; beside it from there up. */}
-        {hasRecipe && (
+        {costed && (
           <div className="order-last basis-full grid grid-cols-3 gap-3 sm:order-none sm:basis-auto sm:gap-6 sm:text-right">
             <Figure label={t('menuCalc.dishCost')} value={formatMoneyExact(c.foodCost)} />
             <Figure
@@ -677,6 +699,43 @@ function DishCard({
           <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
         </button>
       </div>
+
+      {/* The question, asked on the row itself.
+          The banner above says "open each one and tell us", and the obvious
+          thing to press was the purchase-cost box, which opens the bottle --
+          the wrong dialog, with no question in it. So the question is put
+          here, where it is being asked, and answers in one press. */}
+      {item.needsReview && (
+        <div className="mt-3 rounded-lg border border-warning/40 bg-warning/5 p-3">
+          <p className="text-xs text-foreground">{t('menuCalc.reviewAsk')}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onAnswer('PURCHASE')}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border
+                         text-xs font-semibold text-foreground hover:bg-muted transition-colors
+                         disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2
+                         focus-visible:ring-ring"
+            >
+              <ShoppingBag className="w-3.5 h-3.5" aria-hidden="true" />
+              {t('menuCalc.reviewBought')}
+            </button>
+            <button
+              type="button"
+              onClick={() => onAnswer('RECIPE')}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border
+                         text-xs font-semibold text-foreground hover:bg-muted transition-colors
+                         disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2
+                         focus-visible:ring-ring"
+            >
+              <ChefHat className="w-3.5 h-3.5" aria-hidden="true" />
+              {t('menuCalc.reviewMade')}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Sold as bought: one cost, no recipe, nothing to add to it. Showing
           an empty ingredient list and an "add ingredient" box here would be

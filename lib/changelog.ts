@@ -49,6 +49,12 @@ export const CHANGELOG: Release[] = [
           'Uma Super Bock não é um ingrediente, é um produto: vende-se tal como se compra. Até agora ficava em Preços sem preço de venda, e quase um quarto da receita não tinha margem em sítio nenhum. Agora está na Ementa com o preço a que vende, o IVA certo — 23% no álcool, 13% no resto — e o custo da garrafa por baixo, a contar nas médias ao lado dos hambúrgueres.',
       },
       {
+        kind: 'fix',
+        title: 'Responder à pergunta ficou a um toque',
+        detail:
+          'O aviso dizia para abrir cada produto, mas o sítio mais à mão abria o custo da garrafa e não a pergunta. Agora a pergunta está na própria linha, com dois botões — "a cozinha faz" ou "vende-se como se compra" — e as bebidas passaram a mostrar o custo, a margem e o food cost como os pratos.',
+      },
+      {
         kind: 'new',
         title: 'Diga quais é que a cozinha faz',
         detail:

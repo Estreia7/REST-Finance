@@ -875,6 +875,11 @@ export const translations = {
       reviewBody: 'Trouxemos tudo o que vende, mas não sabemos quais a cozinha faz. Abra cada um e diga — um batido leva ingredientes, uma cerveja não.',
       reviewShowThese: 'Ver só estes',
       reviewShowAll: 'Ver todos',
+      reviewAsk: 'A cozinha faz este, ou vende-se tal como se compra?',
+      reviewBought: 'Vende-se como se compra',
+      reviewMade: 'A cozinha faz',
+      reviewSavedBought: 'Guardado. O custo é o que pagou por ele.',
+      reviewSavedMade: 'Guardado. Agora diga o que leva.',
       class: {
         star: {
           label: 'Estrela',
@@ -3322,6 +3327,11 @@ export const translations = {
       reviewBody: 'We brought in everything you sell, but we cannot tell which ones the kitchen makes. Open each one and say — a milkshake takes ingredients, a beer does not.',
       reviewShowThese: 'Show only these',
       reviewShowAll: 'Show all',
+      reviewAsk: 'Does the kitchen make this, or is it sold as it is bought?',
+      reviewBought: 'Sold as bought',
+      reviewMade: 'The kitchen makes it',
+      reviewSavedBought: 'Saved. The cost is what you paid for it.',
+      reviewSavedMade: 'Saved. Now say what goes in it.',
       class: {
         star: {
           label: 'Star',
