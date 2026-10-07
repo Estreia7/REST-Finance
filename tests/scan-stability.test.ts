@@ -4,6 +4,7 @@ import {
   maxCornerShift,
   areaRatio,
   isTrustworthy,
+  isPageShaped,
   STABLE_MS,
   STABLE_TOLERANCE,
   type Corners,
@@ -191,5 +192,58 @@ describe('stabilityStep', () => {
     const readings = Array.from({ length: 12 }, () => ({ corners: quad(), score: null }));
     const { fired } = run(readings);
     expect(fired.length).toBeGreaterThan(0);
+  });
+});
+
+describe('telling a page from something printed on it', () => {
+  const quad = (tl: number[], tr: number[], br: number[], bl: number[]) => ({
+    topLeft: { x: tl[0], y: tl[1] },
+    topRight: { x: tr[0], y: tr[1] },
+    bottomRight: { x: br[0], y: br[1] },
+    bottomLeft: { x: bl[0], y: bl[1] },
+  });
+
+  it('accepts a page photographed square on', () => {
+    expect(isPageShaped(quad([100, 100], [500, 100], [500, 700], [100, 700]))).toBe(true);
+  });
+
+  it('accepts a page photographed at an angle', () => {
+    // Perspective narrows the far edge; that is a trapezium, not a fault.
+    expect(isPageShaped(quad([120, 100], [480, 130], [500, 680], [100, 650]))).toBe(true);
+  });
+
+  it('refuses the QR code the detector found instead of the invoice', () => {
+    /**
+     * Read off the owner's screenshot. The detector returned a confident quad
+     * around the QR block on a Makro invoice — square, high-contrast,
+     * everything a document detector looks for — and the crop came out at
+     * 1.7% of the frame with one side a third of its opposite.
+     */
+    expect(isPageShaped(quad([400, 120], [477, 40], [480, 178], [399, 170]))).toBe(false);
+  });
+
+  it('refuses a quad whose sides do not pair up', () => {
+    // A top five times its own bottom is not perspective, it is a mistake.
+    expect(isPageShaped(quad([100, 100], [600, 100], [400, 500], [300, 500]))).toBe(false);
+  });
+
+  it('refuses a strip too thin to be paper', () => {
+    expect(isPageShaped(quad([0, 300], [900, 300], [900, 360], [0, 360]))).toBe(false);
+  });
+
+  it('refuses a quad collapsed to a line', () => {
+    expect(isPageShaped(quad([100, 100], [500, 100], [500, 100], [100, 100]))).toBe(false);
+  });
+
+  it('is part of the trust check, not a separate step', () => {
+    // A big enough but wrongly shaped quad must still be refused, or the
+    // camera fires on a page-sized reflection.
+    const strip = quad([0, 200], [1000, 200], [1000, 400], [0, 400]);
+    expect(isTrustworthy(strip, 0.9, 1000, 1000)).toBe(false);
+  });
+
+  it('still accepts a real page through the trust check', () => {
+    const page = quad([100, 100], [900, 100], [900, 900], [100, 900]);
+    expect(isTrustworthy(page, 0.9, 1000, 1000)).toBe(true);
   });
 });

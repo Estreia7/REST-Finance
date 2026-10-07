@@ -43,6 +43,12 @@ export const CHANGELOG: Release[] = [
     date: '2026-10-07',
     entries: [
       {
+        kind: 'fix',
+        title: 'O recorte deixou de agarrar o QR code',
+        detail:
+          'Ao fotografar uma fatura, o recorte automático às vezes agarrava o quadrado do QR em vez da folha. Agora verificamos que o que foi encontrado tem forma de página — e quando não tem, abre a folha inteira para ajustar à mão, em vez de um canto dela.',
+      },
+      {
         kind: 'improvement',
         title: 'Perguntamos quando a embalagem levanta dúvidas',
         detail:

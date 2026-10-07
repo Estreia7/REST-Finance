@@ -82,7 +82,11 @@ export function isTrustworthy(
   if (!corners) return false;
   // `score` is null on the classical detector; absence is not disbelief.
   if (typeof score === 'number' && score < MIN_SCORE) return false;
-  return areaRatio(corners, width, height) >= MIN_AREA_RATIO;
+  if (areaRatio(corners, width, height) < MIN_AREA_RATIO) return false;
+  // Big enough is not the same as page-shaped: a detector can return a
+  // confident quad around a QR code, which is square and high-contrast and
+  // everything it is looking for.
+  return isPageShaped(corners);
 }
 
 /** What the camera should do with the reading it just took. */
@@ -136,4 +140,49 @@ export function stabilityStep(
     shouldCapture: now - steadySince >= STABLE_MS,
     holding: true,
   };
+}
+
+/**
+ * Whether a quad is shaped like a page rather than like something printed on
+ * one.
+ *
+ * Area alone does not catch it. The QR code on a Makro invoice is square,
+ * high-contrast and sits in a corner — everything a document detector looks
+ * for — and a detector that finds it returns a confident, well-formed quad
+ * around the wrong thing.
+ *
+ * Two tests, both about shape:
+ *
+ *   - **Opposite sides** should roughly match. A sheet photographed at an
+ *     angle is a trapezium, not a triangle, so a top five times its own
+ *     bottom is not perspective, it is a misdetection.
+ *   - **Aspect** should be plausible for paper. A quad four times wider than
+ *     tall is a strip, not a page.
+ *
+ * Deliberately loose. A page held at a steep angle is a real photograph and
+ * refusing it would send the owner to the manual crop for something that
+ * would have read perfectly.
+ */
+export const MIN_SIDE_RATIO = 0.45;
+export const MAX_ASPECT = 4;
+
+export function isPageShaped(c: Corners): boolean {
+  const side = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
+
+  const top = side(c.topLeft, c.topRight);
+  const right = side(c.topRight, c.bottomRight);
+  const bottom = side(c.bottomRight, c.bottomLeft);
+  const left = side(c.bottomLeft, c.topLeft);
+
+  // A degenerate quad has collapsed to a line or a point.
+  if (Math.min(top, right, bottom, left) < 1) return false;
+
+  const horizontal = Math.min(top, bottom) / Math.max(top, bottom);
+  const vertical = Math.min(left, right) / Math.max(left, right);
+  if (horizontal < MIN_SIDE_RATIO || vertical < MIN_SIDE_RATIO) return false;
+
+  const width = (top + bottom) / 2;
+  const height = (left + right) / 2;
+  const aspect = Math.max(width, height) / Math.min(width, height);
+  return aspect <= MAX_ASPECT;
 }

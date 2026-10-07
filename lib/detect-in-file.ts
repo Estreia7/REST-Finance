@@ -13,7 +13,7 @@
  * the app could have found itself.
  */
 
-import type { Corners } from '@/lib/scan-stability';
+import { isTrustworthy, type Corners } from '@/lib/scan-stability';
 
 /** Width the detector sees. Matching DocumentCamera: shape, not detail. */
 const DETECT_WIDTH = 480;
@@ -58,20 +58,33 @@ export async function loadFrameFromFile(file: File): Promise<LoadedFrame> {
     const ctx = small.getContext('2d', { willReadFrequently: true });
     if (ctx) {
       ctx.drawImage(frame, 0, 0, small.width, small.height);
-      const result = await scanDocument(small, DETECTOR_OPTIONS);
+      const scale = frame.width / DETECT_WIDTH;
 
-      if (result?.corners) {
-        // Detector coordinates are on the small copy; the editor works
-        // against the full frame.
-        const scale = frame.width / DETECT_WIDTH;
+      const read = async (options: Parameters<typeof scanDocument>[1]) => {
+        const result = await scanDocument(small, options);
+        if (!result?.corners) return null;
         const c = result.corners;
-        corners = {
+        const found = {
           topLeft: { x: c.topLeft.x * scale, y: c.topLeft.y * scale },
           topRight: { x: c.topRight.x * scale, y: c.topRight.y * scale },
           bottomRight: { x: c.bottomRight.x * scale, y: c.bottomRight.y * scale },
           bottomLeft: { x: c.bottomLeft.x * scale, y: c.bottomLeft.y * scale },
         };
-      }
+        // Held to the same bar the camera holds its own readings to. This
+        // path trusted whatever came back, and on a Makro invoice the ML
+        // detector found the QR code — square, high-contrast, everything
+        // it looks for — and cropped to 1.7% of the frame.
+        return isTrustworthy(found, result.score, frame.width, frame.height) ? found : null;
+      };
+
+      // The model first, and the contour detector after it. They fail
+      // differently: the model is drawn to anything that looks like a
+      // document and a QR block looks exactly like one, while the classical
+      // detector follows the largest quadrilateral edge in the frame, which
+      // on a sheet of paper is the sheet.
+      corners =
+        (await read(DETECTOR_OPTIONS)) ??
+        (await read({ ...DETECTOR_OPTIONS, detector: 'classical' as const }));
     }
   } catch {
     // A missing model or a detector that cannot read this image is not a

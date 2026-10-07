@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Camera, Loader2, ImageUp } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
-import { stabilityStep, type Corners, type StabilityState } from '@/lib/scan-stability';
+import { stabilityStep, isTrustworthy, type Corners, type StabilityState } from '@/lib/scan-stability';
 
 /**
  * The live camera, with the document outlined as you point at it.
@@ -184,7 +184,15 @@ export default function DocumentCamera({ onCapture, onClose, onPickFile }: Docum
           sctx.drawImage(video, 0, 0, small.width, small.height);
           const result = await scanDocument(small, useMl ? DETECTOR_OPTIONS : undefined);
           if (!cancelled) {
-            const corners = result?.corners ?? null;
+            // Filtered before it is drawn or cropped to, not only before
+            // the shutter fires. The outline and the crop both read this,
+            // so an unfiltered reading drew a box around a QR code and
+            // then cropped to it.
+            const raw = result?.corners ?? null;
+            const corners =
+              raw && isTrustworthy(raw, result?.score, small.width, small.height)
+                ? raw
+                : null;
             cornersRef.current = corners;
             setFound(Boolean(corners));
 
