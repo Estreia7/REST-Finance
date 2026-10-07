@@ -6,9 +6,7 @@ import { readActiveRestaurantCookie, resolveActiveRestaurant } from '@/lib/activ
  * Authorisation helpers.
  *
  * Every server action and route handler goes through one of these rather than
- * querying memberships inline. The signatures are unchanged from the Supabase
- * implementation so call sites did not have to move; only the session lookup
- * underneath is different.
+ * querying memberships inline, so the rules live in one place.
  *
  * Roles are read fresh from the database on each call, never from the session,
  * so deactivating a member takes effect on their next request.

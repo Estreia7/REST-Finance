@@ -89,7 +89,7 @@ if [ ! -f "${APP_DIR}/.env" ]; then
   cp "${APP_DIR}/.env.example" "${APP_DIR}/.env"
   chmod 600 "${APP_DIR}/.env"
   warn "Created ${APP_DIR}/.env from the template. Fill it in before deploying:"
-  warn "  DATABASE_URL, DIRECT_URL, Supabase keys, NEXT_PUBLIC_APP_URL"
+  warn "  DATABASE_URL, DIRECT_URL, AUTH_SECRET, AUTH_URL, NEXT_PUBLIC_APP_URL"
   warn "Then re-run this script, or run deploy.sh manually."
   exit 0
 fi
@@ -180,6 +180,6 @@ cat <<'NOTES'
      Before real client data lands, add an off-box target and include
      /var/www/rest-finance/storage in the backup set. Then test a restore.
 
-  3. Disconnect the Vercel and Railway GitHub Apps from the repository, or
-     they will keep firing failed deploys on every push.
+  3. Make sure no other GitHub App deploys this repository (Settings ›
+     GitHub Apps): deploy.yml is the only deploy path.
 NOTES

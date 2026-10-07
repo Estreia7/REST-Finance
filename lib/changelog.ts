@@ -35,13 +35,25 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.07.1';
+export const CHANGELOG_VERSION = '2026.10.07.2';
 
 export const CHANGELOG: Release[] = [
   {
-    version: '2026.10.07.1',
+    version: '2026.10.07.2',
     date: '2026-10-07',
     entries: [
+      {
+        kind: 'improvement',
+        title: 'Uma embalagem de 1 kg entra como 1 kg',
+        detail:
+          'Quando a fatura diz "TOPPING MORANGO 1KG" e cobra uma embalagem, passamos a guardar um quilo e não uma unidade. Assim uma receita que leve 50 g consegue calcular o custo — com "unidades" não conseguia. O ketchup de 5,7 kg fica a 2,98 o quilo, e o total da fatura não muda.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Ligar uma linha da fatura a vários ingredientes, sem andar à procura',
+        detail:
+          'Ao digitalizar uma fatura, cada linha mostra também os ingredientes parecidos — a carne picada traz a Carne Smash e a Extra Carne para marcar com um toque. Para qualquer outro, escreva parte do nome na caixa de procura em vez de percorrer a lista inteira.',
+      },
       {
         kind: 'new',
         title: 'Ver a fatura por trás de cada número',

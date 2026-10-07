@@ -11,7 +11,7 @@ export default function PrivacyPage() {
         <Link href="/" className="text-sm text-muted-foreground hover:text-foreground mb-8 inline-block">&larr; Voltar</Link>
 
         <h1 className="text-3xl font-bold mb-2">Política de Privacidade</h1>
-        <p className="text-sm text-muted-foreground mb-8">Última atualização: Março 2026</p>
+        <p className="text-sm text-muted-foreground mb-8">Última atualização: Outubro 2026</p>
 
         <div className="prose prose-invert prose-sm max-w-none space-y-6 text-muted-foreground">
           <section>
@@ -56,9 +56,11 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-semibold text-foreground">5. Subprocessadores</h2>
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong>Supabase (Singapura/EUA):</strong> autenticação e base de dados</li>
+              <li><strong>Hetzner Online (Alemanha, UE):</strong> alojamento da aplicação, da base de dados e dos documentos digitalizados</li>
+              <li><strong>Cloudflare (EUA):</strong> entrega do site e proteção contra ataques</li>
+              <li><strong>Anthropic (EUA):</strong> leitura automática das faturas e recibos que digitaliza</li>
+              <li><strong>Google (EUA):</strong> início de sessão com Google, apenas se o escolher</li>
               <li><strong>Stripe (EUA):</strong> processamento de pagamentos</li>
-              <li><strong>Railway (EUA):</strong> alojamento da aplicação</li>
             </ul>
             <p>Todos os subprocessadores mantêm padrões adequados de proteção de dados e conformidade com o RGPD.</p>
           </section>

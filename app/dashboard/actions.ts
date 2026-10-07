@@ -99,8 +99,7 @@ export async function addStaff(email: string) {
     });
 
     if (!staffUser) {
-      // User doesn't exist, we need to create them in Supabase first
-      // For now, return error - they need to register first
+      // No account yet: they register first, then can be added to the team.
       return { error: 'User not found. Please ask them to register first.' };
     }
 

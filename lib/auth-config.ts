@@ -9,9 +9,8 @@ import { getSetting, SETTING_KEYS } from '@/lib/settings';
 /**
  * Authentication.
  *
- * Replaces Supabase Auth, whose project no longer exists. Identity now lives
- * in this database alongside everything else, so there is no external service
- * that can disappear and lock every client out.
+ * Identity lives in this database alongside everything else, so there is no
+ * external auth service that can disappear and lock every client out.
  *
  * Two ways in:
  *   - Google, for the one-click sign-in people expect.

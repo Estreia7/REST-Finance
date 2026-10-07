@@ -6,11 +6,15 @@ This project is a a app for the finance of restaurant owner's to have control in
 
 - Framework: Next.js 14 (App Router)
 - Language: TypeScript
-- Database: PostgreSQL hosted on Supabase
-- ORM: Prisma (connects to Supabase DB via connection string)
+- Database: PostgreSQL 16 on our own Hetzner VPS (database `rest_finance`)
+- ORM: Prisma 7 with the `@prisma/adapter-pg` driver adapter
 - Styling: Tailwind CSS
-- Auth: Supabase Auth
-- Deployment: Railway (via GitHub auto-deploy)
+- Auth: Auth.js (NextAuth v5), users and sessions in our own database
+- Deployment: GitHub Actions → SSH → the VPS (PM2 + nginx)
+
+There is no Supabase, Railway or Vercel in this project. They were used
+early on and are gone; do not reintroduce them, and treat any leftover
+mention as something to remove.
 
 # Self-Improvement Loop
 
@@ -36,25 +40,35 @@ This project is a a app for the finance of restaurant owner's to have control in
 
 # Infrastructure
 
-- Supabase → Everything data: PostgreSQL DB, Auth, Storage, Realtime
-- Railway → Only hosts the Next.js app, connected to GitHub
-- GitHub → Push to main triggers auto-deploy on Railway
+Everything runs on one Hetzner VPS (`bruno-dev-01`):
+
+- The Next.js app under PM2 as `rest-finance`, port 3008, behind nginx with
+  Let's Encrypt, at https://rest-finance.bruno-dev.xyz (Cloudflare in front).
+- PostgreSQL 16 on the same box: database `rest_finance`, owner role
+  `rest_finance`, listening on localhost only.
+- Uploaded files (logos, scanned documents) on disk under `storage/`.
+- GitHub → push to `main` runs CI, then the `Deploy to VPS` workflow.
 
 # Deployment Notes
 
-- Railway connected to GitHub repo (auto-deploy on push to main)
-- Environment variables set in Railway dashboard (not .env.local in prod)
-- Run `prisma migrate deploy` on Railway at deploy time (never `migrate dev`)
-- Prisma connects to Supabase DB via DATABASE_URL (use Supabase pooled connection string)
+- Push to `main` → `CI` (typecheck, tests, build) → `Deploy to VPS`, which
+  SSHes in and runs `deploy.sh`: git pull, `npm ci`, `prisma migrate deploy`,
+  build, `pm2 startOrReload`, then checks the site answers 200.
+- `deploy.yml` is the only deploy path. No other service deploys this repo.
+- Migrations: `prisma migrate deploy` in production, never `migrate dev`.
+  Never edit a migration that has already been applied.
+- Production environment variables live in `/var/www/rest-finance/.env` on
+  the VPS, not in any dashboard.
 
 # Environment Variables
 
-- Local dev: .env.local (never commit)
-- Production: set directly in Railway dashboard
-- NEXT_PUBLIC_SUPABASE_URL → Supabase project URL
-- NEXT_PUBLIC_SUPABASE_ANON_KEY → Supabase anon key
-- DATABASE_URL → Supabase pooled connection string (for Prisma)
-- DIRECT_URL → Supabase direct connection string (for Prisma migrations)
+- Local dev: `.env` / `.env.local` (never commit); template in `.env.example`
+- Production: `/var/www/rest-finance/.env` on the VPS
+- DATABASE_URL → Postgres connection string used by the app
+- DIRECT_URL → Postgres connection string used by migrations
+- AUTH_SECRET → signs session cookies
+- AUTH_URL → public origin for Auth.js callbacks (required behind nginx)
+- NEXT_PUBLIC_APP_URL → public origin for metadata and links
 
 ## Workflow Orchestration
 

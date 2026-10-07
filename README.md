@@ -12,9 +12,9 @@ Financial management for restaurants. Owners log the day's revenue and costs; th
 | Layer | Choice |
 |---|---|
 | Framework | Next.js 14 (App Router), React 18, TypeScript (`strict`) |
-| Database | PostgreSQL 16, accessed through Prisma 7 (`@prisma/adapter-pg`) |
+| Database | PostgreSQL 16 on the VPS, accessed through Prisma 7 (`@prisma/adapter-pg`) |
 | Styling | Tailwind CSS, fully CSS-variable driven (light + dark) |
-| Auth | Supabase Auth *(migrating to Auth.js, see Roadmap)* |
+| Auth | Auth.js (NextAuth v5): email and password, optional Google |
 | Payments | Stripe (implemented, dormant during the free beta) |
 | Hosting | Hetzner VPS, PM2 + nginx + Let's Encrypt |
 | CI/CD | GitHub Actions: verify, then deploy over SSH |
@@ -47,10 +47,11 @@ Runs on http://localhost:3000.
 |---|---|
 | `DATABASE_URL` | Postgres connection string (pooled) |
 | `DIRECT_URL` | Direct connection, used for migrations |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL (auth only) |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (auth only) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server-only. Admin user management. |
+| `AUTH_SECRET` | Signs session cookies. `openssl rand -base64 32` |
+| `AUTH_URL` | Public origin for Auth.js callbacks. Required behind nginx. |
 | `NEXT_PUBLIC_APP_URL` | Public origin, used for metadata and callbacks |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Optional. Google sign-in. |
+| `STORAGE_DIR` | Optional. Where uploads live; defaults to `./storage`. |
 | `STRIPE_SECRET_KEY` | Optional while billing is dormant |
 | `STRIPE_WEBHOOK_SECRET` | Required if Stripe is enabled |
 | `DOCUMENT_SCANNER_API_URL` | Optional. Enables invoice scanning. |
@@ -126,10 +127,8 @@ Creates the database and role with a generated password, clones the repo,
 builds, starts PM2, obtains a TLS certificate and installs the nginx vhost.
 Idempotent.
 
-`rest-finance.bruno-dev.xyz` currently shows AlumAI. DNS is correct: the
-domain simply has no vhost of its own, so nginx falls through to the default
-server block. This script creates it. If a vhost exists but points at another
-app, the script refuses to overwrite it and prints the switch command instead.
+If a vhost already exists but points at another app, the script refuses to
+overwrite it and prints the switch command instead.
 
 It also checks that port 3008 is free and that Postgres is not listening
 beyond localhost.
@@ -138,8 +137,6 @@ beyond localhost.
 
 ## Roadmap
 
-- Migrate auth from Supabase to Auth.js, adding Google sign-in
-- Move the database from Supabase to the VPS Postgres
 - Support tickets: clients report issues, resolved from the admin console
 - Compliance vault: insurance, HACCP and licence documents with expiry alerts
 - Per-employee wage tracking feeding prime cost

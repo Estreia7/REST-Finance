@@ -7,6 +7,8 @@ import {
   lineArithmeticHolds,
   impliedUnitPrice,
   findAliasCandidates,
+  packSizeOf,
+  inPurchaseUnits,
   type MatchCandidate,
 } from '@/lib/invoice-matching';
 
@@ -214,6 +216,40 @@ describe('one purchase feeding several ingredients', () => {
     expect(m.remembered?.[0].name).toBe('Carne Smash');
   });
 
+  it('offers the other ingredients that share a word, even once linked', () => {
+    // The owner's report: the line linked itself to "Carne Picada Novilho"
+    // and the two other meats had to be hunted for in a list of ninety.
+    const kitchen: MatchCandidate[] = [
+      ...KITCHEN,
+      { id: 'i6', name: 'Carne Picada Novilho', unit: 'kg' },
+      { id: 'i7', name: 'EXTRA CARNE', unit: 'kg' },
+    ];
+    const m = matchLine('Carne Picada Novilho', kitchen);
+    expect(m.certain?.name).toBe('Carne Picada Novilho');
+    expect(m.related.map((r) => r.name)).toEqual(
+      expect.arrayContaining(['Carne Smash', 'EXTRA CARNE', 'Carne de Porco']),
+    );
+    expect(m.related.map((r) => r.id)).not.toContain('i6');
+    expect(m.related.map((r) => r.name)).not.toContain('BACON');
+  });
+
+  it('offers related ingredients beside the remembered ones, never repeating them', () => {
+    const m = matchLine('Carne Picada Novilho', KITCHEN, ['i1']);
+    expect(m.related.map((r) => r.name)).toEqual(['Carne de Porco']);
+  });
+
+  it('carries the related ingredients into the decision', () => {
+    const [line] = reconcileInvoice(
+      [{ productName: 'Carne Picada Novilho', quantity: 8, unit: 'kg', unitPrice: 9.9, total: 79.2 }],
+      KITCHEN,
+      new Map([['carne picada novilho', ['i1']]]),
+    );
+    expect(line.decision.kind).toBe('linked');
+    if (line.decision.kind === 'linked') {
+      expect(line.decision.related.map((r) => r.name)).toEqual(['Carne de Porco']);
+    }
+  });
+
   it('falls back to guessing when every remembered ingredient is gone', () => {
     // Linking to nothing would be worse than asking again.
     const m = matchLine('Carne Picada Novilho', KITCHEN, ['gone', 'also-gone']);
@@ -322,5 +358,105 @@ describe('wholesale lines billed two different ways', () => {
     expect(lineArithmeticHolds({
       productName: 'KETCHUP 5,7KG HEINZ', quantity: 5.7, unit: 'kg', unitPrice: 16.99, total: 16.99,
     })).toBe(false);
+  });
+});
+
+describe('reading the pack size out of a product name', () => {
+  it('reads kilos and litres', () => {
+    expect(packSizeOf('TOPPING MORANGO 1KG CART D\'OR')).toEqual({ amount: 1, unit: 'kg' });
+    expect(packSizeOf('KETCHUP 5,7KG HEINZ')).toEqual({ amount: 5.7, unit: 'kg' });
+    expect(packSizeOf('AGUA 1.5L')).toEqual({ amount: 1.5, unit: 'L' });
+  });
+
+  it('converts grams and millilitres to what the kitchen buys in', () => {
+    expect(packSizeOf('MOLHO BBQ 500G')).toEqual({ amount: 0.5, unit: 'kg' });
+    expect(packSizeOf('AZEITE 750ML')).toEqual({ amount: 0.75, unit: 'L' });
+    expect(packSizeOf('COCA COLA 33CL')).toEqual({ amount: 0.33, unit: 'L' });
+    // "0.33CL" is a bottle written loosely — 0,33 litres, not 0,33
+    // centilitres. The notation is not reliable enough to act on, so it is
+    // left alone rather than guessed at.
+    expect(packSizeOf('AGUA 0.33CL')).toBeNull();
+  });
+
+  it('takes the last size, which is the one describing the package', () => {
+    // "CX 6" is how many tubs; the kilo is what one tub holds.
+    expect(packSizeOf('CART D\'OR 1KG CX 6')).toEqual({ amount: 1, unit: 'kg' });
+  });
+
+  it('ignores a number that is not a size', () => {
+    expect(packSizeOf('COSTELINHA/PIANOS PORCO')).toBeNull();
+    expect(packSizeOf('SMASHIE DUPLO C/QUEIJO')).toBeNull();
+    // Too small to be a pack: a strength, or part of a name.
+    expect(packSizeOf('MOLHO PIRI PIRI 10G')).toBeNull();
+  });
+});
+
+describe('restating a line in the unit the kitchen buys in', () => {
+  /**
+   * The owner's point, and the costing proves it: an ingredient stored in
+   * "un" cannot be used by a recipe that measures in grams — `unitFactor`
+   * returns null for g→un, so the dish cannot be costed at all.
+   */
+  it('turns one 1 kg tub into one kilo', () => {
+    const out = inPurchaseUnits({
+      productName: 'TOPPING MORANGO 1KG CART D\'OR',
+      quantity: 1, unit: 'un', unitPrice: 16.99, total: 16.99,
+    });
+    expect(out.quantity).toBe(1);
+    expect(out.unit).toBe('kg');
+    expect(out.unitPrice).toBeCloseTo(16.99, 2);
+  });
+
+  it('turns one 5,7 kg tub into 5,7 kilos at the price per kilo', () => {
+    // Same money, counted in what the kitchen measures.
+    const out = inPurchaseUnits({
+      productName: 'KETCHUP 5,7KG HEINZ',
+      quantity: 1, unit: 'un', unitPrice: 16.99, total: 16.99,
+    });
+    expect(out.quantity).toBeCloseTo(5.7, 3);
+    expect(out.unit).toBe('kg');
+    expect(out.unitPrice).toBeCloseTo(2.98, 2);
+  });
+
+  it('keeps the line total exactly', () => {
+    // The money is not being restated, only how it is counted.
+    const line = {
+      productName: 'KETCHUP 5,7KG', quantity: 1, unit: 'un', unitPrice: 16.99, total: 16.99,
+    };
+    const out = inPurchaseUnits(line);
+    expect(out.total).toBe(line.total);
+    expect(out.quantity * out.unitPrice).toBeCloseTo(line.total, 2);
+  });
+
+  it('multiplies several packages', () => {
+    const out = inPurchaseUnits({
+      productName: 'TOPPING CHOCOLATE 1KG', quantity: 6, unit: 'un', unitPrice: 6.36, total: 38.16,
+    });
+    expect(out.quantity).toBe(6);
+    expect(out.unit).toBe('kg');
+    expect(out.unitPrice).toBeCloseTo(6.36, 2);
+  });
+
+  it('leaves a line already billed by weight alone', () => {
+    // 3,84 kg of pork is a weight; nothing to restate.
+    const line = {
+      productName: 'COSTELINHA/PIANOS PORCO', quantity: 3.84, unit: 'kg', unitPrice: 5.49, total: 21.08,
+    };
+    expect(inPurchaseUnits(line)).toEqual(line);
+  });
+
+  it('leaves a line with no pack size alone', () => {
+    const line = {
+      productName: 'SACO PLASTICO', quantity: 10, unit: 'un', unitPrice: 0.2, total: 2,
+    };
+    expect(inPurchaseUnits(line)).toEqual(line);
+  });
+
+  it('refuses a fractional quantity, which is a weight read badly', () => {
+    // 2,5 "packages" of a 1 kg tub would invent goods. Left as it came.
+    const line = {
+      productName: 'TOPPING MORANGO 1KG', quantity: 2.5, unit: 'un', unitPrice: 16.99, total: 42.48,
+    };
+    expect(inPurchaseUnits(line)).toEqual(line);
   });
 });

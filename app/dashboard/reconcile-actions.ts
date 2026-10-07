@@ -8,6 +8,7 @@ import { guessPurchaseUnit } from '@/lib/catalogue-import';
 import {
   reconcileInvoice,
   lineArithmeticHolds,
+  inPurchaseUnits,
   impliedUnitPrice,
   type InvoiceLine,
   findAliasCandidates,
@@ -85,7 +86,13 @@ export async function previewReconciliation(input: {
       remembered.set(link.sourceName, list);
     }
 
-    const reconciled = reconcileInvoice(input.lines, ingredients, remembered);
+    // Restated in what the kitchen buys in before anything else looks at
+    // them. One 1 kg tub of topping stored as "1 un" is true and useless:
+    // a recipe measuring in grams cannot convert grams to units, so the
+    // dish cannot be costed at all.
+    const lines = input.lines.map(inPurchaseUnits);
+
+    const reconciled = reconcileInvoice(lines, ingredients, remembered);
 
     return {
       success: true,

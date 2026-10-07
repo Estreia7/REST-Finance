@@ -1,7 +1,7 @@
 name: Deploy to VPS
 
 # Deploys to rest-finance.bruno-dev.xyz on the Hetzner VPS (PM2 + nginx).
-# Replaces the previous Vercel and Railway integrations.
+# This is the only deploy path: nothing else should deploy this repository.
 on:
   workflow_run:
     workflows: [CI]

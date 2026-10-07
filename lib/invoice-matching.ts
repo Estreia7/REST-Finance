@@ -91,6 +91,15 @@ export interface LineMatch {
   remembered?: MatchCandidate[];
   /** Offered to the owner, best first. Empty when nothing is close. */
   suggestions: MatchCandidate[];
+  /**
+   * Other ingredients that share a word with the line, offered unticked.
+   *
+   * Computed even when the line is already linked, because one purchase
+   * often feeds several ingredients: the case of mince linked to "Carne
+   * Picada Novilho" is also the "Carne Smash" and the "EXTRA CARNE", and an
+   * owner should not have to hunt for those in a list of ninety.
+   */
+  related: MatchCandidate[];
   /** What the best candidate scored, for showing why it was suggested. */
   score: number;
 }
@@ -111,6 +120,9 @@ const WORTH_SHOWING = 0.34;
 /** Never offer more than this; past three it is a list, not a suggestion. */
 const MAX_SUGGESTIONS = 3;
 
+/** Related ingredients shown beside the line; the search box finds the rest. */
+const MAX_RELATED = 5;
+
 /**
  * What an invoice line probably is.
  *
@@ -124,6 +136,20 @@ export function matchLine(
   /** Ingredient ids already confirmed for this wording. */
   remembered?: string[] | null,
 ): LineMatch {
+  const scored = candidates
+    .map((candidate) => ({ candidate, score: similarity(productName, candidate.name) }))
+    .filter((s) => s.score >= WORTH_SHOWING)
+    .sort((a, b) => b.score - a.score || a.candidate.name.localeCompare(b.candidate.name));
+
+  /** Everything close that is not already offered another way. */
+  const relatedExcept = (shown: MatchCandidate[]) => {
+    const ids = new Set(shown.map((c) => c.id));
+    return scored
+      .map((s) => s.candidate)
+      .filter((c) => !ids.has(c.id))
+      .slice(0, MAX_RELATED);
+  };
+
   if (remembered?.length) {
     const known = remembered
       .map((id) => candidates.find((c) => c.id === id))
@@ -131,16 +157,11 @@ export function matchLine(
     // Only if at least one survives: ingredients deleted since must not
     // silently link a line to nothing.
     if (known.length > 0) {
-      return { certain: known[0], remembered: known, suggestions: [], score: 1 };
+      return { certain: known[0], remembered: known, suggestions: [], related: relatedExcept(known), score: 1 };
     }
   }
 
-  const scored = candidates
-    .map((candidate) => ({ candidate, score: similarity(productName, candidate.name) }))
-    .filter((s) => s.score >= WORTH_SHOWING)
-    .sort((a, b) => b.score - a.score || a.candidate.name.localeCompare(b.candidate.name));
-
-  if (scored.length === 0) return { certain: null, suggestions: [], score: 0 };
+  if (scored.length === 0) return { certain: null, suggestions: [], related: [], score: 0 };
 
   const best = scored[0];
 
@@ -148,14 +169,16 @@ export function matchLine(
   // the case where guessing is worst — the owner knows which, and we do not.
   const tied = scored.length > 1 && scored[1].score === best.score;
   if (best.score >= CERTAIN && !tied) {
-    return { certain: best.candidate, suggestions: [], score: best.score };
+    return {
+      certain: best.candidate,
+      suggestions: [],
+      related: relatedExcept([best.candidate]),
+      score: best.score,
+    };
   }
 
-  return {
-    certain: null,
-    suggestions: scored.slice(0, MAX_SUGGESTIONS).map((s) => s.candidate),
-    score: best.score,
-  };
+  const suggestions = scored.slice(0, MAX_SUGGESTIONS).map((s) => s.candidate);
+  return { certain: null, suggestions, related: relatedExcept(suggestions), score: best.score };
 }
 
 /** What the owner is asked to do with one line. */
@@ -168,9 +191,9 @@ export type LineDecision =
    * the extra portion sold on the side. They share a price per kilo,
    * being the same product bought once.
    */
-  | { kind: 'linked'; ingredients: MatchCandidate[] }
+  | { kind: 'linked'; ingredients: MatchCandidate[]; related: MatchCandidate[] }
   /** We have guesses; the owner picks one or rejects them. */
-  | { kind: 'ask'; suggestions: MatchCandidate[] }
+  | { kind: 'ask'; suggestions: MatchCandidate[]; related: MatchCandidate[] }
   /** Nothing resembles it. Offered as a new ingredient. */
   | { kind: 'new' };
 
@@ -211,9 +234,9 @@ export function reconcileInvoice(
       );
 
       const decision: LineDecision = match.certain
-        ? { kind: 'linked', ingredients: match.remembered ?? [match.certain] }
+        ? { kind: 'linked', ingredients: match.remembered ?? [match.certain], related: match.related }
         : match.suggestions.length > 0
-          ? { kind: 'ask', suggestions: match.suggestions }
+          ? { kind: 'ask', suggestions: match.suggestions, related: match.related }
           : { kind: 'new' };
 
       return {
@@ -322,4 +345,97 @@ export function findAliasCandidates(
   }
 
   return out.sort((a, b) => a.duplicate.name.localeCompare(b.duplicate.name));
+}
+
+/**
+ * The pack size written into a product description.
+ *
+ * Wholesale lines name what is in the box: "TOPPING MORANGO 1KG",
+ * "KETCHUP 5,7KG HEINZ", "AGUA 1.5L". A line billed by the package then says
+ * quantity 1, and storing that as one *unit* is true but useless — a recipe
+ * saying "50 g of topping" cannot convert grams to units, so the dish simply
+ * cannot be costed.
+ *
+ * Reading the size turns one package into the kilos or litres it holds, which
+ * is what the kitchen measures in and what the recipe needs.
+ *
+ * Returns null where there is no size, or where it reads as something other
+ * than a quantity — "AGUA 0.33CL" is a bottle size an owner buys by the
+ * crate, and "SMASHIE 2.0" is a product name.
+ */
+export interface PackSize {
+  /** How much, in the unit below. */
+  amount: number;
+  unit: 'kg' | 'L';
+}
+
+export function packSizeOf(description: string): PackSize | null {
+  // The last size wins: "CART D'OR 1KG CX 6" is six tubs of a kilo, and the
+  // kilo is the one that describes what a tub holds.
+  const matches = [
+    ...description.matchAll(/(\d+(?:[.,]\d+)?)\s*(kg|kgs|g|gr|l|lt|lts|ml|cl)\b/gi),
+  ];
+  if (matches.length === 0) return null;
+
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const [, rawAmount, rawUnit] = matches[i];
+    const amount = Number(rawAmount.replace(',', '.'));
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+
+    const unit = rawUnit.toLowerCase();
+
+    if (unit === 'kg' || unit === 'kgs') return { amount, unit: 'kg' };
+    if (unit === 'l' || unit === 'lt' || unit === 'lts') return { amount, unit: 'L' };
+
+    // Grams and millilitres are converted, since the kitchen buys in kilos
+    // and litres and a recipe converts from those.
+    if (unit === 'g' || unit === 'gr') {
+      // Below 50 g this is almost never a pack size — it is a strength, a
+      // percentage, or part of a name.
+      if (amount < 50) return null;
+      return { amount: amount / 1000, unit: 'kg' };
+    }
+    if (unit === 'ml') {
+      if (amount < 50) return null;
+      return { amount: amount / 1000, unit: 'L' };
+    }
+    if (unit === 'cl') {
+      if (amount < 5) return null;
+      return { amount: amount / 100, unit: 'L' };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * A line restated in the unit the kitchen buys in.
+ *
+ * One 1 kg tub at 16,99 becomes 1 kg at 16,99 the kilo; one 5,7 kg tub at
+ * 16,99 becomes 5,7 kg at 2,98 the kilo. The money is untouched — the line
+ * total is what it always was — and only how it is counted changes.
+ *
+ * Left alone when the line is already billed by weight, when there is no pack
+ * size to read, or when the quantity is not a whole number of packages: a
+ * line reading 3,84 of something is a weight already, whatever its name says.
+ */
+export function inPurchaseUnits(line: InvoiceLine): InvoiceLine {
+  const unit = (line.unit ?? '').trim().toLowerCase();
+  // Already weighed or measured.
+  if (unit === 'kg' || unit === 'l') return line;
+
+  const pack = packSizeOf(line.productName);
+  if (!pack) return line;
+
+  // Whole packages only. Anything else is a weight the reader labelled badly,
+  // and multiplying it by a pack size would invent goods.
+  if (!Number.isInteger(line.quantity) || line.quantity <= 0) return line;
+
+  const quantity = line.quantity * pack.amount;
+  return {
+    ...line,
+    quantity: Math.round(quantity * 1000) / 1000,
+    unit: pack.unit,
+    unitPrice: Math.round((line.total / quantity) * 10000) / 10000,
+  };
 }
