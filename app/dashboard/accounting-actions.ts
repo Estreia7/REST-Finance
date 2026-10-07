@@ -67,6 +67,15 @@ export async function getInvoiceLines(filters: {
 
     const where = {
       restaurantId: owner.restaurantId,
+      // A line whose cost entry was deleted is not paperwork the owner
+      // still has: deleting a cost used to leave its lines behind, so the
+      // books showed one invoice and Accounting showed two. Lines with no
+      // cost entry at all are kept — those came from somewhere else.
+      //
+      // Under AND, not OR: the search below adds its own OR, and two OR
+      // keys in one object means the second silently replaces the first —
+      // so a search would have brought the deleted lines back.
+      AND: [{ OR: [{ costEntryId: null }, { costEntry: { deletedAt: null } }] }],
       ...(filters.vendorId ? { vendorId: filters.vendorId } : {}),
       ...(filters.from || filters.to
         ? {
@@ -413,6 +422,9 @@ export async function getIngredientPriceHistory(ingredientId: string) {
     const rows = await prisma.invoiceItem.findMany({
       where: {
         restaurantId: owner.restaurantId,
+        // A price from an invoice the owner deleted is not a price they
+        // paid, and it would sit in the history as if it were.
+        AND: [{ OR: [{ costEntryId: null }, { costEntry: { deletedAt: null } }] }],
         OR: [
           { normalizedName: ingredient.normalizedName },
           ...(wordings.length

@@ -44,6 +44,12 @@ export const CHANGELOG: Release[] = [
     entries: [
       {
         kind: 'fix',
+        title: 'Apagar um custo apaga também a sua fatura',
+        detail:
+          'Apagar um custo deixava as linhas da fatura em Contabilidade, por isso via um custo no historial e duas faturas no arquivo. Já desaparecem as duas coisas, e as linhas que tinham ficado para trás foram removidas.',
+      },
+      {
+        kind: 'fix',
         title: 'Um fornecedor, não quatro',
         detail:
           'O mesmo talho aparecia quatro vezes, com nomes diferentes, porque cada leitura da fatura apanhava o nome de outra maneira. Agora reconhecemos o fornecedor pelo NIF, e em Contabilidade › Arrumar pode juntar os que já ficaram repetidos.',

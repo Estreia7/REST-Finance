@@ -722,10 +722,23 @@ export async function deleteCostEntry(id: string) {
     });
     if (!existing) return { success: false as const, error: 'Entry not found' };
 
-    await prisma.costEntry.update({
-      where: { id },
-      data: { deletedAt: new Date() },
-    });
+    // The invoice lines go with it. They are the same purchase seen in
+    // more detail, so a cost deleted and its lines left behind means the
+    // paperwork still shows an invoice the books no longer have — which is
+    // how one deleted cost left two lines in Accounting.
+    //
+    // Hard-deleted rather than marked: an invoice line carries no history
+    // of its own, and the cost entry it belonged to keeps the record that
+    // something was there.
+    await prisma.$transaction([
+      prisma.invoiceItem.deleteMany({
+        where: { costEntryId: id, restaurantId: owner.restaurantId },
+      }),
+      prisma.costEntry.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      }),
+    ]);
     return { success: true as const };
   } catch (error: unknown) {
     return { success: false as const, error: toClientError('Failed to delete entry', error, 'delete') };
