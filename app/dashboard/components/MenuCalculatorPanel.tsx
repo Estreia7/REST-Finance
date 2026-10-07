@@ -4,11 +4,12 @@ import { useState, useEffect, useCallback, useId, useMemo, useRef } from 'react'
 import { toast } from 'sonner';
 import {
   Loader2, Plus, Trash2, Pencil, X, Check, ChefHat, Carrot,
-  AlertTriangle, Receipt, Tag, Search, ListChecks, ChevronDown, ShoppingBag,
+  AlertTriangle, Receipt, Tag, Search, ListChecks, ShoppingBag, ArrowLeftRight,
 } from 'lucide-react';
 import {
   getMenu, saveIngredient, deleteIngredient,
   saveMenuItem, deleteMenuItem, setRecipeLine, removeRecipeLine, addIngredientToItems,
+  sellAsBought, stopSellingAsBought,
 } from '../menu-actions';
 import {
   VAT_RATES, PURCHASE_UNITS, RECIPE_UNITS, suggestedPrice, recipeUnitsFor,
@@ -480,6 +481,18 @@ export default function MenuCalculatorPanel() {
           ingredients={ingredients}
           onAdd={() => setAddingIngredient(true)}
           onEdit={setEditingIngredient}
+          onSell={(ingredient, priceGross, vatRate) =>
+            run(
+              () => sellAsBought({ ingredientId: ingredient.id, priceGross, vatRate }),
+              t('menuCalc.nowSold').replace('{name}', ingredient.name)
+            )
+          }
+          onStopSelling={(ingredient) =>
+            run(
+              () => stopSellingAsBought(ingredient.id),
+              t('menuCalc.nowIngredient').replace('{name}', ingredient.name)
+            )
+          }
         />
       )}
 
@@ -1291,11 +1304,13 @@ function EmptyMenu({
 }
 
 function IngredientList({
-  ingredients, onAdd, onEdit,
+  ingredients, onAdd, onEdit, onSell, onStopSelling,
 }: {
   ingredients: Ingredient[];
   onAdd: () => void;
   onEdit: (i: Ingredient) => void;
+  onSell: (ingredient: Ingredient, priceGross: number, vatRate: number) => Promise<boolean>;
+  onStopSelling: (ingredient: Ingredient) => Promise<boolean>;
 }) {
   const { t } = useLanguage();
   const [search, setSearch] = useState('');
@@ -1312,6 +1327,35 @@ function IngredientList({
   const shown = ingredients.filter((ing) => matchesSearch(search, ing.name));
   const asIngredients = shown.filter((ing) => ing.soldAsId === null);
   const asUnits = shown.filter((ing) => ing.soldAsId !== null);
+
+  // What is being dragged, and which column is under it. Held here rather
+  // than in each column so the two can light up as a pair -- the one you
+  // left and the one you are over.
+  const [dragging, setDragging] = useState<Ingredient | null>(null);
+  const [over, setOver] = useState<'ingredients' | 'units' | null>(null);
+  // The price a bought thing will be sold at, asked for on the drop.
+  const [pricing, setPricing] = useState<Ingredient | null>(null);
+
+  const drop = async (column: 'ingredients' | 'units') => {
+    const item = dragging;
+    setDragging(null);
+    setOver(null);
+    if (!item) return;
+
+    // Dropped back where it came from: nothing to do, and no dialog.
+    const wasUnit = item.soldAsId !== null;
+    if (wasUnit === (column === 'units')) return;
+
+    if (column === 'units') {
+      // Needs a selling price, which nothing in the data knows.
+      setPricing(item);
+      return;
+    }
+
+    // The losing direction, so it is said out loud first.
+    if (!confirm(t('menuCalc.confirmStopSelling').replace('{name}', item.name))) return;
+    await onStopSelling(item);
+  };
 
   return (
     <div className="card-glass p-4 sm:p-5">
@@ -1360,6 +1404,16 @@ function IngredientList({
             hint={t('menuCalc.groupIngredientsHint')}
             rows={asIngredients}
             onEdit={onEdit}
+            dragging={dragging}
+            isOver={over === 'ingredients'}
+            accepts={dragging !== null && dragging.soldAsId !== null}
+            onDragStart={setDragging}
+            onDragEnd={() => { setDragging(null); setOver(null); }}
+            onDragOver={() => setOver('ingredients')}
+            onDragLeave={() => setOver((c) => (c === 'ingredients' ? null : c))}
+            onDrop={() => drop('ingredients')}
+            onMove={(ing) => onStopSelling(ing)}
+            moveLabel={t('menuCalc.moveToIngredients')}
           />
           <ProductGroup
             icon={<ShoppingBag className="w-4 h-4 text-primary" aria-hidden="true" />}
@@ -1367,11 +1421,112 @@ function IngredientList({
             hint={t('menuCalc.groupUnitsHint')}
             rows={asUnits}
             onEdit={onEdit}
+            dragging={dragging}
+            isOver={over === 'units'}
+            accepts={dragging !== null && dragging.soldAsId === null}
+            onDragStart={setDragging}
+            onDragEnd={() => { setDragging(null); setOver(null); }}
+            onDragOver={() => setOver('units')}
+            onDragLeave={() => setOver((c) => (c === 'units' ? null : c))}
+            onDrop={() => drop('units')}
+            onMove={(ing) => { setPricing(ing); return Promise.resolve(true); }}
+            moveLabel={t('menuCalc.moveToUnits')}
           />
         </div>
       )}
 
+      {pricing && (
+        <SellAsBoughtDialog
+          ingredient={pricing}
+          onClose={() => setPricing(null)}
+          onSave={async (priceGross, vatRate) => {
+            const ok = await onSell(pricing, priceGross, vatRate);
+            if (ok) setPricing(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * What to charge for something the restaurant has only ever bought.
+ *
+ * Asked on the drop rather than guessed, because nothing in the data knows
+ * it: the till records what was sold, and this is a thing that was not. A
+ * product created at zero would sit on the Ementa reporting a margin of minus
+ * its own cost until somebody happened to look.
+ */
+function SellAsBoughtDialog({
+  ingredient, onClose, onSave,
+}: {
+  ingredient: Ingredient;
+  onClose: () => void;
+  onSave: (priceGross: number, vatRate: number) => void;
+}) {
+  const { t } = useLanguage();
+  const [price, setPrice] = useState('');
+  const [vatRate, setVatRate] = useState(13);
+
+  const priceValue = Number(price.replace(',', '.'));
+  const valid = Number.isFinite(priceValue) && priceValue > 0;
+
+  return (
+    <Dialog onClose={onClose} title={t('menuCalc.sellAsBoughtTitle')}>
+      <p className="text-sm text-foreground font-medium">{ingredient.name}</p>
+      <p className="text-xs text-muted-foreground mt-0.5">
+        {t('menuCalc.sellAsBoughtBody')}
+      </p>
+
+      <div className="grid grid-cols-2 gap-3 mt-4">
+        <label className="block">
+          <span className="text-xs text-muted-foreground block mb-1.5">
+            {t('menuCalc.menuPrice')}
+            <span className="block text-[10px] opacity-70">{t('menuCalc.incVat')}</span>
+          </span>
+          <input
+            type="text" inputMode="decimal" value={price} autoFocus
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="1,80" className="input-field !py-2"
+          />
+        </label>
+
+        <label className="block">
+          <span className="text-xs text-muted-foreground block mb-1.5">
+            {t('menuCalc.vat')}
+            <span className="block text-[10px] opacity-70">{t('menuCalc.vatHint')}</span>
+          </span>
+          <select
+            value={vatRate}
+            onChange={(e) => setVatRate(Number(e.target.value))}
+            className="input-field !py-2"
+          >
+            {VAT_RATES.map((v) => (
+              <option key={v.rate} value={v.rate}>{v.rate}%</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="mt-5 flex gap-2">
+        <button
+          type="button"
+          onClick={() => valid && onSave(priceValue, vatRate)}
+          disabled={!valid}
+          className="cta-button !py-2 !px-4 !text-sm disabled:opacity-50"
+        >
+          <Check className="w-4 h-4" aria-hidden="true" />
+          {t('menuCalc.sellAsBoughtConfirm')}
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="cta-button-secondary !py-2 !px-4 !text-sm"
+        >
+          {t('menuCalc.cancel')}
+        </button>
+      </div>
+    </Dialog>
   );
 }
 
@@ -1386,17 +1541,52 @@ function IngredientList({
  */
 function ProductGroup({
   icon, title, hint, rows, onEdit,
+  dragging, isOver, accepts, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop,
+  onMove, moveLabel,
 }: {
   icon: React.ReactNode;
   title: string;
   hint: string;
   rows: Ingredient[];
   onEdit: (i: Ingredient) => void;
+  /** The row being dragged anywhere on the page, or null. */
+  dragging: Ingredient | null;
+  isOver: boolean;
+  /** Whether what is being dragged could land here. */
+  accepts: boolean;
+  onDragStart: (i: Ingredient) => void;
+  onDragEnd: () => void;
+  onDragOver: () => void;
+  onDragLeave: () => void;
+  onDrop: () => void;
+  /** The same move as the drop, for anyone not using a mouse. */
+  onMove: (i: Ingredient) => Promise<boolean>;
+  moveLabel: string;
 }) {
   const { t, language } = useLanguage();
 
   return (
-    <section>
+    <section
+      onDragOver={(e) => {
+        // Without this the browser refuses the drop outright.
+        if (!accepts) return;
+        e.preventDefault();
+        onDragOver();
+      }}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => {
+        if (!accepts) return;
+        e.preventDefault();
+        onDrop();
+      }}
+      className={`rounded-xl transition-colors ${
+        isOver && accepts
+          ? 'bg-primary/5 outline-dashed outline-2 outline-offset-4 outline-primary/50'
+          : accepts
+            ? 'outline-dashed outline-2 outline-offset-4 outline-border-subtle'
+            : ''
+      }`}
+    >
       <div className="flex items-center gap-2">
         {icon}
         <h5 className="text-xs font-bold text-foreground uppercase tracking-wider">
@@ -1417,13 +1607,25 @@ function ProductGroup({
             const fromInvoice = ing.manualUnitCost === null && ing.invoiceUnitCost !== null;
             const cost = ing.manualUnitCost ?? ing.invoiceUnitCost;
             return (
-              <button
+              <div
                 key={ing.id}
+                draggable
+                onDragStart={(e) => {
+                  // Firefox will not start a drag without data set.
+                  e.dataTransfer.setData('text/plain', ing.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                  onDragStart(ing);
+                }}
+                onDragEnd={onDragEnd}
+                className={`min-h-[56px] px-1 py-3 flex items-center gap-2 group ${
+                  dragging?.id === ing.id ? 'opacity-40' : ''
+                } hover:bg-muted/50 transition-colors cursor-grab active:cursor-grabbing`}
+              >
+              <button
                 type="button"
                 onClick={() => onEdit(ing)}
-                className="w-full min-h-[56px] px-1 py-3 flex items-center gap-3 text-left
-                           hover:bg-muted/50 active:bg-muted transition-colors
-                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                className="min-w-0 flex-1 flex items-center gap-3 text-left py-1
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring rounded"
               >
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium text-foreground truncate">{ing.name}</span>
@@ -1456,6 +1658,24 @@ function ProductGroup({
                   {cost === null ? '—' : `${formatMoneyExact(cost)}/${ing.unit}`}
                 </span>
               </button>
+
+              {/* The same move the drag does, for a keyboard, a screen
+                  reader, or a phone where dragging between two stacked
+                  columns is a poor gesture. Shown on hover and whenever it
+                  has focus, so it is never only discoverable by mouse. */}
+              <button
+                type="button"
+                onClick={() => onMove(ing)}
+                aria-label={`${moveLabel}: ${ing.name}`}
+                title={moveLabel}
+                className="shrink-0 p-1.5 rounded-lg text-muted-foreground opacity-0
+                           group-hover:opacity-100 focus:opacity-100 hover:text-foreground
+                           hover:bg-muted transition-all focus-visible:outline-none
+                           focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+              </div>
             );
           })}
         </div>

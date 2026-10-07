@@ -49,6 +49,12 @@ export const CHANGELOG: Release[] = [
           'Uma Super Bock não é um ingrediente, é um produto: vende-se tal como se compra. Até agora ficava em Preços sem preço de venda, e quase um quarto da receita não tinha margem em sítio nenhum. Agora está na Ementa com o preço a que vende, o IVA certo — 23% no álcool, 13% no resto — e o custo da garrafa por baixo, a contar nas médias ao lado dos hambúrgueres.',
       },
       {
+        kind: 'new',
+        title: 'Arraste entre as duas colunas',
+        detail:
+          'Se um produto estiver do lado errado, arraste-o para o outro. Ao passar para unitários pergunta a que preço o vende, porque sem preço não há margem; ao passar para ingredientes avisa que sai da Ementa antes de o fazer. Quem não quiser arrastar tem o mesmo numa seta em cada linha.',
+      },
+      {
         kind: 'improvement',
         title: 'A aba Ingredientes passou a Produtos, em duas colunas',
         detail:

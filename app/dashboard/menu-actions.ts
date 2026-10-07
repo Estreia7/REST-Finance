@@ -288,6 +288,110 @@ export async function deleteIngredient(id: string) {
   return { success: true as const };
 }
 
+
+/**
+ * Starts selling a bought thing exactly as it is bought.
+ *
+ * The Products page shows ingredients and single items side by side, and the
+ * owner moves one across by dragging it. Moving it this way is not a label
+ * change: a single item is a thing on the menu with a price, so this creates
+ * that menu item and points it back at the purchase line it is the selling of.
+ *
+ * The price has to be asked for, which is why it is a parameter. Nothing in
+ * the data knows what a restaurant charges for a bottle it has only ever
+ * bought, and a product created at zero would sit on the Ementa showing a
+ * margin of minus its own cost until somebody noticed.
+ */
+export async function sellAsBought(input: {
+  ingredientId: string;
+  priceGross: number;
+  vatRate: number;
+}) {
+  const owner = await requireOwner();
+  if (isAuthError(owner)) return fail(owner.error);
+
+  const price = num(input.priceGross);
+  if (price === null || price < 0) return fail('menuCalc.errPriceInvalid');
+
+  const vat = num(input.vatRate);
+  if (vat === null || vat < 0 || vat > 100) return fail('menuCalc.errVatInvalid');
+
+  const ingredient = await prisma.ingredient.findFirst({
+    where: { id: input.ingredientId, restaurantId: owner.restaurantId, deletedAt: null },
+    select: {
+      id: true,
+      name: true,
+      soldAs: { where: { deletedAt: null }, select: { id: true }, take: 1 },
+    },
+  });
+  if (!ingredient) return fail('menuCalc.errIngredientNotFound');
+
+  // Already sold as itself. Dropping it where it already is is a no-op, not
+  // a reason to grow a second menu item with the same name.
+  if (ingredient.soldAs.length > 0) return { success: true as const };
+
+  // A name already on the board would give the owner two rows he cannot tell
+  // apart, which is the thing disambiguation exists to prevent on import.
+  const clash = await prisma.menuItem.findFirst({
+    where: {
+      restaurantId: owner.restaurantId,
+      deletedAt: null,
+      name: { equals: ingredient.name, mode: 'insensitive' },
+    },
+    select: { id: true },
+  });
+  if (clash) return fail('menuCalc.errNameOnMenu');
+
+  const count = await prisma.menuItem.count({
+    where: { restaurantId: owner.restaurantId, deletedAt: null },
+  });
+
+  await prisma.menuItem.create({
+    data: {
+      restaurant: { connect: { id: owner.restaurantId } },
+      name: ingredient.name,
+      priceGross: price,
+      vatRate: vat,
+      sortOrder: count,
+      costingMode: 'PURCHASE',
+      purchaseItem: { connect: { id: ingredient.id } },
+    },
+  });
+
+  return { success: true as const };
+}
+
+/**
+ * Stops selling something as itself, leaving the purchase line behind.
+ *
+ * The other direction of the same drag, and the one that loses something: the
+ * menu item carried the selling price, the VAT and the margin, and they go
+ * with it. What stays is the thing the restaurant buys -- with its cost, its
+ * price history and whatever invoice lines the owner has already answered for
+ * -- because that is what makes it an ingredient a recipe can use.
+ */
+export async function stopSellingAsBought(ingredientId: string) {
+  const owner = await requireOwner();
+  if (isAuthError(owner)) return fail(owner.error);
+
+  const ingredient = await prisma.ingredient.findFirst({
+    where: { id: ingredientId, restaurantId: owner.restaurantId, deletedAt: null },
+    select: {
+      id: true,
+      soldAs: { where: { deletedAt: null }, select: { id: true } },
+    },
+  });
+  if (!ingredient) return fail('menuCalc.errIngredientNotFound');
+  if (ingredient.soldAs.length === 0) return { success: true as const };
+
+  const now = new Date();
+  await prisma.menuItem.updateMany({
+    where: { id: { in: ingredient.soldAs.map((m) => m.id) } },
+    data: { deletedAt: now, active: false },
+  });
+
+  return { success: true as const };
+}
 // ── Menu items ─────────────────────────────────────────────────────────────
 
 export async function saveMenuItem(input: {
