@@ -929,6 +929,16 @@ export const translations = {
       errDishNotFound: 'Prato não encontrado.',
       errIngredientNotFound: 'Ingrediente não encontrado.',
     },
+    quality: {
+      // Shown before the scan runs, because a blurred page produces
+      // figures that look like an answer.
+      poorTitle: 'A fotografia pode não estar boa',
+      unusableTitle: 'Tire outra fotografia',
+      blurry: 'O texto está desfocado. Apoie o telemóvel e espere que a imagem fique nítida antes de disparar.',
+      dark: 'Está demasiado escuro para ler. Aproxime-se de uma luz ou acenda a lâmpada do telemóvel.',
+      flat: 'O papel e a tinta estão quase da mesma cor. Evite o brilho direto e sombras sobre o documento.',
+      scanAnyway: 'Digitalizar mesmo assim',
+    },
     reconcile: {
       // Linking a supplier wording to a kitchen ingredient, once.
       title: 'O que é cada linha',
@@ -965,6 +975,9 @@ export const translations = {
       saveFailed: 'Erro ao guardar',
       revenueSaved: 'Receita do dia registada!',
       costSaved: 'Custo registado!',
+      duplicateTitle: 'Esta fatura já está registada',
+      duplicateBody: 'A fatura {number} de {vendor}, de {date}, já foi lançada. Registá-la outra vez duplicava o custo e a mercadoria.',
+      duplicateDiscard: 'Está bem, descartar',
       reviewBeforeSaving: 'Dados extraídos — revise antes de guardar',
       date: 'Data',
       dineInRevenue: 'Receita Local',
@@ -3289,6 +3302,14 @@ export const translations = {
       errDishNotFound: 'Dish not found.',
       errIngredientNotFound: 'Ingredient not found.',
     },
+    quality: {
+      poorTitle: 'This photo may not be good enough',
+      unusableTitle: 'Please take another photo',
+      blurry: 'The text is out of focus. Rest your phone and wait for the picture to sharpen before taking it.',
+      dark: 'Too dark to read. Move towards a light or turn on your phone torch.',
+      flat: 'The paper and the ink are almost the same shade. Avoid direct glare and shadows on the document.',
+      scanAnyway: 'Scan anyway',
+    },
     reconcile: {
       title: 'What each line is',
       allKnown: 'We recognised everything on this invoice.',
@@ -3322,6 +3343,9 @@ export const translations = {
       saveFailed: 'Could not save',
       revenueSaved: 'Revenue for the day logged.',
       costSaved: 'Cost logged.',
+      duplicateTitle: 'This invoice is already recorded',
+      duplicateBody: 'Invoice {number} from {vendor}, dated {date}, has already been entered. Recording it again would double both the cost and the goods.',
+      duplicateDiscard: 'Alright, discard',
       reviewBeforeSaving: 'Data extracted — check it before saving',
       date: 'Date',
       dineInRevenue: 'Dine-in revenue',

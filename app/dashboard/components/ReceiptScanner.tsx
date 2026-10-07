@@ -2,11 +2,13 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Camera, Loader2, Check, X, RotateCcw, Receipt, FileText } from 'lucide-react';
+import { Camera, Loader2, Check, X, RotateCcw, Receipt, FileText , AlertTriangle } from 'lucide-react';
 import { createDailySummary, createCostEntry, getCategories } from '../actions';
 import { useLanguage } from '@/lib/language-context';
 import { commitReconciliation } from '../reconcile-actions';
 import InvoiceReconcile from './InvoiceReconcile';
+import { measureImage, type QualityCheck } from '@/lib/image-quality';
+import { findExistingInvoice } from '../reconcile-actions';
 import type { LineResolution } from '../reconcile-actions';
 import DocumentCamera from './DocumentCamera';
 import ScanPageEditor, { type ScannedPage } from './ScanPageEditor';
@@ -86,6 +88,23 @@ export default function ReceiptScanner({
   const scanType = allowTypeChange ? chosenType : defaultScanType;
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  /**
+   * What the photograph looks like to a reader.
+   *
+   * Measured here rather than after extraction, because a blurred invoice
+   * does not fail loudly: the model returns names that are nearly words
+   * and figures that are nearly right, and an owner saves a purchase that
+   * never happened. Asking for a retake now costs seconds; finding it
+   * later means finding it never.
+   */
+  const [quality, setQuality] = useState<QualityCheck | null>(null);
+  /** An invoice already recorded under this number, shown instead of saving. */
+  const [duplicate, setDuplicate] = useState<{
+    invoiceNumber: string;
+    vendorName: string;
+    date: string | null;
+    amount: number | null;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   /**
    * The invoice whose lines are being identified.
@@ -247,6 +266,24 @@ export default function ReceiptScanner({
   };
 
 
+  // Measured on arrival, whether the page came from the camera, the tray
+  // or a file the owner picked.
+  useEffect(() => {
+    if (!imagePreview) { setQuality(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const blob = await (await fetch(imagePreview)).blob();
+        const reading = await measureImage(blob);
+        if (!cancelled) setQuality(reading);
+      } catch {
+        // A measurement that cannot run must not block the scan.
+        if (!cancelled) setQuality(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [imagePreview]);
+
   const handleScan = async () => {
     if (!imagePreview) return;
     setScanning(true);
@@ -308,6 +345,20 @@ export default function ReceiptScanner({
         const matchedCat = cats.data
           ? (cats.data as any[]).find((c: any) => c.name === d.suggestedCategory)
           : null;
+
+        // Asked before anything is written. The guard inside the save
+        // runs after the cost entry exists, so a repeated invoice was
+        // refused its lines and kept its money — the worse half to
+        // duplicate, since it moves the P&L.
+        const existing = await findExistingInvoice({
+          vendorName: d.vendor,
+          invoiceNumber: d.invoiceNumber ?? null,
+        });
+        if ('data' in existing && existing.data) {
+          setDuplicate(existing.data);
+          setSaving(false);
+          return;
+        }
 
         const result = await createCostEntry({
           date: new Date(d.date),
@@ -376,6 +427,33 @@ export default function ReceiptScanner({
             ? t('scanner.titleDailyReport')
             : t('scanner.titleCostReceipt')}
       </h2>
+
+      {/* Already recorded. Shown rather than silently refused, because the
+          owner may be holding a second genuine invoice that the supplier
+          numbered badly — they can see what is on file and decide. */}
+      {duplicate && (
+        <div className="rounded-xl bg-warning/10 px-4 py-4 mb-4">
+          <p className="flex items-start gap-2 text-sm font-semibold text-warning">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+            {t('scanner.duplicateTitle')}
+          </p>
+          <p className="text-xs text-muted-foreground mt-2 ml-6">
+            {t('scanner.duplicateBody')
+              .replace('{number}', duplicate.invoiceNumber)
+              .replace('{vendor}', duplicate.vendorName)
+              .replace('{date}', duplicate.date ?? '—')}
+          </p>
+          <div className="flex flex-wrap gap-2 mt-4 ml-6">
+            <button
+              type="button"
+              onClick={() => { setDuplicate(null); resetState(); }}
+              className="cta-button !py-2 !px-4 !text-sm"
+            >
+              {t('scanner.duplicateDiscard')}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Identifying the lines. Everything else stands down: the invoice
           is saved, and this is the one thing left to do. */}
@@ -481,6 +559,29 @@ export default function ReceiptScanner({
           <div className="relative rounded-xl overflow-hidden border border-border">
             <img src={imagePreview} alt="Receipt" className="w-full max-h-[400px] object-contain bg-black/20" />
           </div>
+          {/* Said before the scan, not after: once the model has read a
+              blurred page it returns figures that look like an answer. */}
+          {quality && quality.verdict !== 'good' && (
+            <div
+              role="status"
+              className={`flex items-start gap-2 rounded-xl px-3.5 py-3 text-xs ${
+                quality.verdict === 'unusable'
+                  ? 'bg-danger/10 text-danger'
+                  : 'bg-warning/10 text-warning'
+              }`}
+            >
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-px" aria-hidden="true" />
+              <span>
+                <span className="font-semibold block">
+                  {quality.verdict === 'unusable'
+                    ? t('quality.unusableTitle')
+                    : t('quality.poorTitle')}
+                </span>
+                {t(`quality.${quality.reason ?? 'blurry'}`)}
+              </span>
+            </div>
+          )}
+
           <div className="flex gap-3">
             <button onClick={handleScan} disabled={scanning} className="cta-button flex-1 justify-center">
               {scanning

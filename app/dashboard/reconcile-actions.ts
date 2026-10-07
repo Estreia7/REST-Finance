@@ -385,3 +385,57 @@ export async function mergeIngredients(pairs: Array<{ duplicateId: string; origi
     return { error: toClientError('Failed to merge ingredients', error, 'write') };
   }
 }
+
+/**
+ * Whether this invoice is already recorded.
+ *
+ * Asked before anything is written, because the guard inside
+ * `commitReconciliation` runs after the cost entry exists — so a second scan
+ * of the same invoice was refused its lines and kept its money, which is the
+ * worse half to duplicate.
+ *
+ * Matched on the document number, which a Portuguese supplier may not reuse.
+ * Without one there is nothing reliable to match on and the scan goes
+ * through: refusing on a date and a total would reject the second of two
+ * genuine deliveries on the same day.
+ */
+export async function findExistingInvoice(input: {
+  vendorName: string;
+  invoiceNumber: string | null;
+}) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const number = input.invoiceNumber?.trim();
+    if (!number) return { success: true, data: null };
+
+    const vendor = await findVendor(owner.restaurantId, input.vendorName);
+    const existing = await prisma.invoiceItem.findFirst({
+      where: {
+        restaurantId: owner.restaurantId,
+        invoiceNumber: number,
+        ...(vendor ? { vendorId: vendor.id } : {}),
+      },
+      select: {
+        invoiceDate: true,
+        costEntry: { select: { id: true, amount: true } },
+        vendor: { select: { name: true } },
+      },
+    });
+
+    if (!existing) return { success: true, data: null };
+
+    return {
+      success: true,
+      data: {
+        invoiceNumber: number,
+        vendorName: existing.vendor?.name ?? input.vendorName,
+        date: existing.invoiceDate ? existing.invoiceDate.toISOString().slice(0, 10) : null,
+        amount: existing.costEntry ? Number(existing.costEntry.amount) : null,
+      },
+    };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to check for a duplicate', error, 'read') };
+  }
+}

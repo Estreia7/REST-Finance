@@ -43,6 +43,18 @@ export const CHANGELOG: Release[] = [
     date: '2026-10-06',
     entries: [
       {
+        kind: 'new',
+        title: 'Avisamos quando a fotografia não dá para ler',
+        detail:
+          'Antes de digitalizar, olhamos para a fotografia: se estiver desfocada ou demasiado escura, pedimos outra e dizemos porquê. Uma fatura tremida não dá erro — devolve nomes quase certos e valores quase certos, e isso é pior do que não devolver nada.',
+      },
+      {
+        kind: 'fix',
+        title: 'A mesma fatura já não se regista duas vezes',
+        detail:
+          'Se digitalizar uma fatura que já lançou, mostramos qual é — fornecedor, número e data — antes de gravar seja o que for. Antes o custo entrava à mesma e só as linhas eram recusadas.',
+      },
+      {
         kind: 'improvement',
         title: 'As quantidades das faturas de grossista',
         detail:
