@@ -19,6 +19,7 @@ import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
 import CatalogueImport from './CatalogueImport';
 import MenuGraph from './MenuGraph';
+import ListSearch, { matchesSearch } from './ListSearch';
 import InfoHint from '@/app/components/InfoHint';
 
 /**
@@ -1130,6 +1131,11 @@ function IngredientList({
   onEdit: (i: Ingredient) => void;
 }) {
   const { t } = useLanguage();
+  const [search, setSearch] = useState('');
+
+  // Ninety-odd rows on a real account, so finding one by scrolling is a
+  // worse version of a job the browser does in a keystroke.
+  const shown = ingredients.filter((ing) => matchesSearch(search, ing.name));
   return (
     <div className="card-glass p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3 mb-4">
@@ -1149,13 +1155,21 @@ function IngredientList({
         </button>
       </div>
 
+      <ListSearch
+        value={search}
+        onChange={setSearch}
+        placeholder={t('menuCalc.searchIngredients')}
+        count={ingredients.length}
+        matches={shown.length}
+      />
+
       {ingredients.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
           {t('menuCalc.noIngredients')}
         </p>
       ) : (
         <div className="-mx-4 sm:-mx-5 divide-y divide-border-subtle border-y border-border-subtle">
-          {ingredients.map((ing) => {
+          {shown.map((ing) => {
             const fromInvoice = ing.manualUnitCost === null && ing.invoiceUnitCost !== null;
             const cost = ing.manualUnitCost ?? ing.invoiceUnitCost;
             return (

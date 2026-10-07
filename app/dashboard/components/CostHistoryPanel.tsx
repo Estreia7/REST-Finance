@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Pencil, Trash2, Loader2, X, Check, Calendar, Filter, Download, Repeat } from 'lucide-react';
 import { getCostHistory, updateCostEntry, deleteCostEntry, getCategories } from '../actions';
 import { useLanguage } from '@/lib/language-context';
+import ListSearch, { matchesSearch } from './ListSearch';
 import { downloadFile, exportFilename } from '@/lib/download-file';
 
 interface CostEntry {
@@ -38,6 +39,11 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [filterType, setFilterType] = useState<'' | 'COGS' | 'OPEX'>('');
+  const [search, setSearch] = useState('');
+
+  // Matched across description and category: an owner looking for a cost
+  // remembers what it was for, not which category it was filed under.
+  const shown = entries.filter((e) => matchesSearch(search, e.description, e.categoryName));
 
   const now = new Date();
   const [dateFrom, setDateFrom] = useState(
@@ -197,6 +203,16 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
             {t('costHistory.empty')}
           </div>
         ) : (
+          <>
+          {/* A date range can return a year of entries; finding one by
+              scrolling is not finding it. */}
+          <ListSearch
+            value={search}
+            onChange={setSearch}
+            placeholder={t('costHistory.searchPlaceholder')}
+            count={entries.length}
+            matches={shown.length}
+          />
           <div className="overflow-x-auto -mx-6 px-6">
             <table className="w-full text-sm">
               <thead>
@@ -210,7 +226,7 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
                 </tr>
               </thead>
               <tbody>
-                {entries.map(entry => (
+                {shown.map(entry => (
                   <tr key={entry.id} className="border-b border-border-subtle hover:bg-muted transition-colors">
                     {editingId === entry.id ? (
                       <>
@@ -284,6 +300,7 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
               </tfoot>
             </table>
           </div>
+          </>
         )}
       </div>
     </div>

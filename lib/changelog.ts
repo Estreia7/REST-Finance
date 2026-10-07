@@ -43,6 +43,12 @@ export const CHANGELOG: Release[] = [
     date: '2026-10-06',
     entries: [
       {
+        kind: 'improvement',
+        title: 'Procurar nas listas longas',
+        detail:
+          'A lista de ingredientes passou dos noventa e o historial de custos pode ter um ano inteiro. Ambos têm agora uma caixa de procura — escreve "bacon" e aparece o que interessa. Ignora acentos, por isso "pao" encontra "PÃO".',
+      },
+      {
         kind: 'new',
         title: 'Avisamos quando a fotografia não dá para ler',
         detail:

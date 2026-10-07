@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Loader2, ClipboardList, RefreshCw } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
+import ListSearch, { matchesSearch } from '@/app/dashboard/components/ListSearch';
 import { getAuditLogs } from '../actions';
 
 interface LogEntry {
@@ -17,6 +18,13 @@ interface LogEntry {
 export default function ActivityLogPanel() {
   const { t, language } = useLanguage();
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [search, setSearch] = useState('');
+
+  // Across actor, restaurant and action, since any of the three is what
+  // someone arrives knowing.
+  const shown = logs.filter((log) =>
+    matchesSearch(search, log.actor?.name, log.actor?.email, log.restaurant?.name, actionLabel(log.action)),
+  );
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -63,6 +71,16 @@ export default function ActivityLogPanel() {
         </button>
       </div>
 
+      {/* A hundred rows, every one a different person doing a different
+          thing. Finding what one restaurant did means searching for it. */}
+      <ListSearch
+        value={search}
+        onChange={setSearch}
+        placeholder={t('admin.activity.searchPlaceholder')}
+        count={logs.length}
+        matches={shown.length}
+      />
+
       {logs.length === 0 ? (
         <div className="text-center py-16">
           <ClipboardList className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" aria-hidden="true" />
@@ -80,7 +98,7 @@ export default function ActivityLogPanel() {
               </tr>
             </thead>
             <tbody>
-              {logs.map(log => (
+              {shown.map(log => (
                 <tr key={log.id} className="border-b border-border-subtle hover:bg-muted">
                   <td className="py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">{fmtDate(log.createdAt)}</td>
                   <td className="py-2 px-4 text-xs text-foreground">{log.actor?.name || log.actor?.email || '—'}</td>
