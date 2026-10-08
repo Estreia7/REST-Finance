@@ -35,13 +35,19 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.08.1';
+export const CHANGELOG_VERSION = '2026.10.08.2';
 
 export const CHANGELOG: Release[] = [
   {
-    version: '2026.10.08.1',
+    version: '2026.10.08.2',
     date: '2026-10-08',
     entries: [
+      {
+        kind: 'fix',
+        title: 'Quando uma fotografia não se lê, a app diz porquê',
+        detail:
+          'Ao digitalizar uma fatura ou um fecho de caixa, os avisos de erro passam a aparecer na língua da sua conta e, quando o documento não pode ser lido, dizem o que fazer: tirar outra fotografia só com o papel, ou introduzir os valores à mão.',
+      },
       {
         kind: 'new',
         title: 'Cada linha da fatura vai para a sua categoria',

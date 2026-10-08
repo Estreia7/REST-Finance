@@ -6,6 +6,7 @@ import { readInvoiceQr, applyQrTruth } from '@/lib/pt-invoice-qr';
 import { saveImage } from '@/lib/uploads';
 import { scanRequestSchema, formatZodError } from '@/lib/validations';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { ExtractionError } from '@/lib/scanners/claude-scanner';
 
 const SCAN_RATE_LIMIT = 20; // max scans per hour
 const SCAN_WINDOW_MS = 60 * 60 * 1000; // 1 hour
@@ -15,7 +16,8 @@ export async function POST(request: NextRequest) {
     // Check scanner availability
     if (!(await isScannerAvailable())) {
       return NextResponse.json(
-        { error: 'Scanner de documentos indisponível. Contacte o suporte.' },
+        // Keys, not sentences: the component translates them.
+        { error: 'scanner.unavailable' },
         { status: 503 }
       );
     }
@@ -35,7 +37,7 @@ export async function POST(request: NextRequest) {
     // Rate limiting
     if (!checkRateLimit(`scan:${authResult.userId}`, SCAN_RATE_LIMIT, SCAN_WINDOW_MS)) {
       return NextResponse.json(
-        { error: 'Limite de scans atingido. Tente novamente mais tarde.' },
+        { error: 'scanner.rateLimited' },
         { status: 429 }
       );
     }
@@ -66,6 +68,8 @@ export async function POST(request: NextRequest) {
     // Extract data using the document scanner adapter
     const rawData = await scanDocument(imageBase64, mediaType, scanType, {
       categories: categories.map((c) => ({ name: c.name, type: c.type as 'COGS' | 'OPEX' })),
+      // So the administrator can see which restaurant this reading was for.
+      usage: { restaurantId: membership.restaurantId, userId: authResult.userId },
     });
 
     // A Portuguese certified invoice carries a QR code holding the date,
@@ -148,12 +152,14 @@ export async function POST(request: NextRequest) {
       vendorId: result.vendorId,
       isMock: !process.env.DOCUMENT_SCANNER_API_URL,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    // Declined by the model's safety checks, or an answer cut short: the
+    // page itself is the problem, and the owner can do something about it.
+    if (error instanceof ExtractionError) {
+      return NextResponse.json({ error: 'scanner.refused' }, { status: 422 });
+    }
     console.error('Scan error:', error);
-    return NextResponse.json(
-      { error: 'Falha ao processar documento' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'scanner.scanFailed' }, { status: 500 });
   }
 }
 

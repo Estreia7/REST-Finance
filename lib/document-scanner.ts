@@ -72,8 +72,12 @@ export async function scanDocument(
   imageBase64: string,
   mediaType: MediaType,
   scanType: ScanType,
-  /** The restaurant's cost categories, so each line can be placed in one. */
-  options: { categories?: ScanCategory[] } = {},
+  options: {
+    /** The restaurant's cost categories, so each line can be placed in one. */
+    categories?: ScanCategory[];
+    /** Who asked, so the call is logged against them in the usage console. */
+    usage?: { restaurantId: string; userId: string };
+  } = {},
 ): Promise<ScanResult> {
   const apiUrl = process.env.DOCUMENT_SCANNER_API_URL;
 
@@ -86,9 +90,32 @@ export async function scanDocument(
   // console, so it is read from the settings table rather than the env.
   const apiKey = await readScannerKey();
   if (apiKey) {
-    const { claudeScan } = await import('@/lib/scanners/claude-scanner');
-    const { result } = await claudeScan(imageBase64, mediaType, scanType, apiKey, options);
-    return result;
+    const { claudeScan, ExtractionError, SCANNER_MODEL } = await import('@/lib/scanners/claude-scanner');
+    const { recordAiUsage } = await import('@/lib/ai-usage-server');
+    const who = {
+      restaurantId: options.usage?.restaurantId ?? null,
+      userId: options.usage?.userId ?? null,
+      source: 'scan' as const,
+      scanType,
+      model: SCANNER_MODEL,
+    };
+
+    try {
+      const { result, telemetry } = await claudeScan(imageBase64, mediaType, scanType, apiKey, options);
+      await recordAiUsage({ ...who, telemetry, succeeded: true, stopReason: 'tool_use' });
+      return result;
+    } catch (err) {
+      // Logged and then rethrown: a failed call was usually still billed,
+      // and the caller still has to tell the owner it did not work.
+      await recordAiUsage({
+        ...who,
+        telemetry: err instanceof ExtractionError ? err.telemetry : undefined,
+        succeeded: false,
+        stopReason: err instanceof ExtractionError ? err.stopReason : null,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
   }
 
   if (process.env.NODE_ENV === 'development') {

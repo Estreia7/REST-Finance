@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Camera, Loader2, Check, X, RotateCcw, Receipt, FileText , AlertTriangle } from 'lucide-react';
 import { createDailySummary, createCostEntry, getCategories } from '../actions';
 import { useLanguage } from '@/lib/language-context';
+import { translateError } from '@/lib/error-messages';
 import { commitReconciliation } from '../reconcile-actions';
 import InvoiceReconcile from './InvoiceReconcile';
 import { measureImage, type QualityCheck } from '@/lib/image-quality';
@@ -80,7 +81,7 @@ export default function ReceiptScanner({
   autoStart = false,
   onAutoStarted,
 }: ReceiptScannerProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   // Where the tab decides the type, it is the type — not just the starting
   // one. React keeps a mounted component's state across a prop change, so
   // without this a scanner reused between Receita and Custos would carry the
@@ -334,7 +335,8 @@ export default function ReceiptScanner({
         setEditData(result.data);
         toast.success(t('scanner.extracted'));
       } else {
-        toast.error(result.error || t('scanner.scanFailed'));
+        // The route answers with a key (`scanner.refused`…), resolved here.
+        toast.error(result.error ? translateError(language, result.error) : t('scanner.scanFailed'));
       }
     } catch {
       toast.error(t('scanner.scanFailed'));

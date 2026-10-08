@@ -116,6 +116,7 @@ model Restaurant {
   posProductSales   PosProductSale[]
   invoiceItemLinks  InvoiceItemLink[]
   lineMemories      InvoiceLineMemory[]
+  aiUsage           AiUsage[]
 
   @@map("restaurants")
 }
@@ -175,6 +176,7 @@ model User {
   supportTickets        SupportTicket[]  @relation("SupportRequester")
   supportReplies        SupportTicket[]  @relation("SupportResponder")
   extractionTests       ExtractionTest[]
+  aiUsage               AiUsage[]
 
   @@map("users")
 }
@@ -1064,6 +1066,55 @@ model ExtractionTest {
   @@index([createdAt])
   @@index([scanType, createdAt])
   @@map("extraction_tests")
+}
+
+/// One call to an AI model, and what it cost.
+///
+/// Written for every call, the owner's scans and the administrator's bench
+/// alike, successful or not: a declined or failed request is still billed,
+/// and a log that only counted the good ones would hide exactly the documents
+/// that cost money for nothing.
+///
+/// The cost is stored as it was at the time, not recomputed from today's price
+/// list, because prices change — the move from Haiku 4.5 to 5.5 cut them by a
+/// factor of ten, and last month's bill did not change with it.
+///
+/// Kept when the restaurant or the user is deleted (both set to null), since
+/// the money was spent either way.
+model AiUsage {
+  id String @id @default(uuid())
+
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
+  /// Null for the administrator's bench, which belongs to no restaurant.
+  restaurantId String?     @map("restaurant_id")
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId       String?     @map("user_id")
+
+  /// Where the call came from: "scan" (an owner's document) or "bench" (the
+  /// extraction lab). Free text, so a new feature does not need a migration.
+  source   String
+  scanType ScanType? @map("scan_type")
+
+  /// The model id as sent, e.g. "claude-haiku-5-5".
+  model         String
+  promptVersion String? @map("prompt_version")
+
+  inputTokens  Int     @default(0) @map("input_tokens")
+  outputTokens Int     @default(0) @map("output_tokens")
+  costUsd      Decimal @default(0) @map("cost_usd") @db.Decimal(12, 6)
+  durationMs   Int?    @map("duration_ms")
+
+  succeeded  Boolean
+  /// The model's stop reason when it gave one: "refusal", "max_tokens"…
+  stopReason String? @map("stop_reason")
+  error      String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// Read by period, and by restaurant within a period.
+  @@index([createdAt])
+  @@index([restaurantId, createdAt])
+  @@map("ai_usage")
 }
 
 /// A day's revenue in one menu category, as the till grouped it.

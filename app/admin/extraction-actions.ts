@@ -7,7 +7,9 @@ import { toClientError } from '@/lib/errors';
 import { saveImage, resolveStoredPath, IMAGE_MIME } from '@/lib/uploads';
 import { getSetting, setSetting, deleteSetting, SETTING_KEYS } from '@/lib/settings';
 import { maskSecret } from '@/lib/crypto';
-import { claudeScan, SCANNER_MODEL, PROMPT_VERSION, estimateCostUsd } from '@/lib/scanners/claude-scanner';
+import { claudeScan, SCANNER_MODEL, PROMPT_VERSION, ExtractionError } from '@/lib/scanners/claude-scanner';
+import { costUsd } from '@/lib/ai-models';
+import { recordAiUsage } from '@/lib/ai-usage-server';
 import { checkExtraction } from '@/lib/pt-validation';
 import { readInvoiceQr, compareWithQr, applyQrTruth } from '@/lib/pt-invoice-qr';
 import type { MediaType, ScanType } from '@/lib/document-scanner';
@@ -141,6 +143,12 @@ export async function runExtractionTest(formData: FormData) {
         scanType,
         apiKey,
       );
+      // The bench spends real money too, so it is in the usage console —
+      // under no restaurant, so it never inflates a client's figures.
+      await recordAiUsage({
+        restaurantId: null, userId: admin.userId, source: 'bench', scanType,
+        model: SCANNER_MODEL, telemetry, succeeded: true, stopReason: 'tool_use',
+      });
 
       const data = result as unknown as Record<string, unknown>;
       // Compared before the QR is applied, so the log still shows what the
@@ -176,6 +184,14 @@ export async function runExtractionTest(formData: FormData) {
 
       return { success: true, data: { id: updated.id } };
     } catch (err: unknown) {
+      await recordAiUsage({
+        restaurantId: null, userId: admin.userId, source: 'bench', scanType,
+        model: SCANNER_MODEL,
+        telemetry: err instanceof ExtractionError ? err.telemetry : undefined,
+        succeeded: false,
+        stopReason: err instanceof ExtractionError ? err.stopReason : null,
+        error: err instanceof Error ? err.message : String(err),
+      });
       // A failed run is still a result: it says this document defeats the
       // reader, which is exactly what the bench is for.
       await prisma.extractionTest.update({
@@ -235,7 +251,8 @@ export async function getExtractionTests(scanType?: ScanType) {
         ...r,
         costUsd:
           r.inputTokens !== null && r.outputTokens !== null
-            ? estimateCostUsd(r.inputTokens, r.outputTokens)
+            // At the price of the model that answered, not today's model.
+            ? costUsd(r.model, r.inputTokens, r.outputTokens)
             : null,
       })),
     };
@@ -349,7 +366,7 @@ export async function getExtractionSummary() {
 
     const rows = await prisma.extractionTest.findMany({
       select: {
-        scanType: true, accuracy: true, status: true,
+        scanType: true, accuracy: true, status: true, model: true,
         inputTokens: true, outputTokens: true, durationMs: true,
       },
     });
@@ -370,7 +387,7 @@ export async function getExtractionSummary() {
           ? Math.round(timed.reduce((s, r) => s + (r.durationMs ?? 0), 0) / timed.length)
           : null,
         totalCostUsd: subset.reduce(
-          (s, r) => s + estimateCostUsd(r.inputTokens ?? 0, r.outputTokens ?? 0),
+          (s, r) => s + costUsd(r.model, r.inputTokens ?? 0, r.outputTokens ?? 0),
           0,
         ),
       };

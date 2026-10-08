@@ -17,7 +17,7 @@ import {
   Building2, TrendingUp, TrendingDown, CreditCard,
   Search, ChevronRight, Activity, DollarSign,
   BarChart2, ArrowUpRight, ArrowDownRight, Shield,
-  ClipboardList, Settings, Presentation, LifeBuoy, FlaskConical,
+  ClipboardList, Settings, Presentation, LifeBuoy, FlaskConical, Cpu,
 } from 'lucide-react';
 import UserManagementPanel from './components/UserManagementPanel';
 import RestaurantDetailPanel from './components/RestaurantDetailPanel';
@@ -27,6 +27,7 @@ import ActivityLogPanel from './components/ActivityLogPanel';
 import PresentationPanel from './components/PresentationPanel';
 import SupportQueuePanel from './components/SupportQueuePanel';
 import ExtractionLabPanel from './components/ExtractionLabPanel';
+import AiUsagePanel from './components/AiUsagePanel';
 import AdminMobileBottomNav from './components/MobileBottomNav';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -37,7 +38,7 @@ import Logo from '@/app/components/Logo';
 import { formatMoney } from '@/lib/format';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-type Tab = 'dashboard' | 'clientes' | 'users' | 'activity' | 'suporte' | 'apresentacao' | 'extracao' | 'settings';
+type Tab = 'dashboard' | 'clientes' | 'users' | 'activity' | 'suporte' | 'apresentacao' | 'extracao' | 'ia' | 'settings';
 
 /**
  * Chart axis labels, per language. Module scope cannot call `t()`, and twelve
@@ -248,6 +249,7 @@ export default function AdminPage() {
     { id: 'suporte',      icon: LifeBuoy,        labelKey: 'admin.nav.support', badge: openTickets },
     { id: 'apresentacao', icon: Presentation,    labelKey: 'admin.nav.presentation' },
     { id: 'extracao',     icon: FlaskConical,    labelKey: 'admin.nav.extraction' },
+    { id: 'ia',           icon: Cpu,             labelKey: 'admin.nav.aiUsage' },
     { id: 'settings',     icon: Settings,        labelKey: 'admin.nav.settings' },
   ];
 
@@ -380,6 +382,7 @@ export default function AdminPage() {
                 suporte: t('admin.heading.support'),
                 apresentacao: t('admin.heading.presentation'),
                 extracao: t('admin.heading.extraction'),
+                ia: t('admin.heading.aiUsage'),
                 settings: t('admin.heading.settings'),
               }[activeTab]}
             </h1>
@@ -392,6 +395,7 @@ export default function AdminPage() {
                 suporte: t('admin.heading.supportSub'),
                 apresentacao: t('admin.heading.presentationSub'),
                 extracao: t('admin.heading.extractionSub'),
+                ia: t('admin.heading.aiUsageSub'),
                 settings: t('admin.heading.settingsSub'),
               }[activeTab]}
             </p>
@@ -734,6 +738,11 @@ export default function AdminPage() {
           {activeTab === 'apresentacao' && <PresentationPanel />}
 
           {activeTab === 'extracao' && <ExtractionLabPanel />}
+
+          {/* A restaurant in the ranking opens its page under Clientes. */}
+          {activeTab === 'ia' && (
+            <AiUsagePanel onOpenRestaurant={(id) => { setSelectedRestaurantId(id); setActiveTab('clientes'); }} />
+          )}
 
           {activeTab === 'settings' && (
             <div className="space-y-6">

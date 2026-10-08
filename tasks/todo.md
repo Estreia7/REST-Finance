@@ -1,3 +1,50 @@
+# Haiku 5.5 + consola de uso de IA
+
+## Situação hoje (2026-10-08)
+- O leitor de faturas corre em `claude-haiku-4-5` ($1 / $5 por MTok).
+  Saiu o `claude-haiku-5-5` ($0,10 / $0,50 até 100k tokens), ~30% mais
+  tokens pelo mesmo texto → ~87% mais barato por leitura.
+- Os scans reais dos donos deitam fora a telemetria (tokens, modelo, duração).
+  Só a bancada do admin a guarda. Não sabemos quem gasta quanto.
+- `estimateCostUsd` usa um preço fixo: os testes antigos em 4.5 seriam
+  mostrados ao preço do 5.5 depois da troca.
+- A rota `/api/scan` devolve frases em português para o toast (regra 4).
+
+## Plano
+- [x] `lib/ai-models.ts`: tabela de preços por modelo (com o escalão >100k do
+      Haiku 5.5) e `costUsd(model, input, output)`. Testes.
+- [x] Scanner: `claude-haiku-5-5`, `max_tokens` 8192, `PROMPT_VERSION` novo,
+      recusa (`stop_reason: refusal`) como erro próprio com telemetria.
+- [x] Tabela `AiUsage` (`ai_usage`): uma linha por chamada ao modelo —
+      restaurante, utilizador, origem (scan/bancada), tipo, modelo, tokens,
+      custo gravado no momento, duração, sucesso, stop reason. Migração.
+- [x] Gravar uso em todos os scans reais (sucesso e falha) e na bancada.
+      Gravar nunca pode partir o scan.
+- [x] Bancada: custo por run calculado com o modelo de cada run.
+- [x] `/api/scan`: erros como chaves, recusa com mensagem própria.
+- [x] Separador novo no admin, "Uso de IA": período, KPIs (custo, chamadas,
+      tokens, falhas, custo médio), custo por dia, por modelo, ranking de
+      donos (com os seus restaurantes) e de restaurantes, tabela de preços.
+- [x] Traduções pt + en, testes de paridade e de strings, typecheck, build.
+- [x] QA visual desktop + telemóvel.
+
+## Revisão (2026-10-08)
+- 826 testes passam (12 novos em `tests/ai-usage.test.ts`), typecheck e
+  `next build` limpos.
+- Migração verificada num Postgres local (PGlite): esquema anterior + a
+  migração nova = esquema novo, `migrate diff` sem diferenças.
+- QA visual com dados de teste, desktop pt e telemóvel en, sem erros na
+  consola. Corrigido no QA: eixo do gráfico cortado, preços com 4 casas,
+  projeção que escondia a descida de preço (agora usa os últimos 7 dias).
+- Não testado: uma chamada real ao `claude-haiku-5-5` (não há chave local).
+  Falta correr a bancada com faturas reais para comparar a precisão.
+- O histórico do consumo só começa com este deploy: os scans antigos não
+  guardaram tokens.
+- Tour: sem passo novo (só admin). Apresentação: sem alteração.
+  Changelog: uma correção (mensagens de erro do scan na língua do dono).
+
+---
+
 # Categorias por linha de fatura + "cérebro" por restaurante
 
 ## Situação hoje (2026-10-07)

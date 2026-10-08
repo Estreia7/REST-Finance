@@ -3,7 +3,7 @@
 import { LayoutDashboard, Building2, Users, ClipboardList } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 
-type Tab = 'dashboard' | 'clientes' | 'users' | 'activity' | 'suporte' | 'apresentacao' | 'extracao' | 'settings';
+type Tab = 'dashboard' | 'clientes' | 'users' | 'activity' | 'suporte' | 'apresentacao' | 'extracao' | 'ia' | 'settings';
 
 /**
  * Module scope cannot call `t()`, so each item carries the key and the label is

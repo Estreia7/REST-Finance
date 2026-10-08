@@ -17,26 +17,53 @@ import type { ScanResult, MediaType, ScanType, CostReceiptResult, DailyReportRes
  * ExtractionLabPanel.tsx`.
  */
 
-/** The model this runs on. Held here so the bench can report what answered. */
-export const SCANNER_MODEL = 'claude-haiku-4-5';
+/**
+ * The model this runs on. Held here so the bench and the usage log can report
+ * what answered; its price lives in `lib/ai-models.ts`.
+ *
+ * Haiku 5.5 rather than 4.5: a tenth of the price per token, for about 30%
+ * more tokens on the same page. The tool call is still forced, so it answers
+ * without a thinking pass, as 4.5 did, and the bill is not padded with one.
+ */
+export const SCANNER_MODEL = 'claude-haiku-5-5';
 
 /**
- * Bumped whenever the prompt or the schema below changes.
+ * Bumped whenever the prompt, the schema or the model below changes.
  *
  * Logged with every bench run, so a jump in accuracy can be attributed to a
  * prompt change rather than guessed at. Date-stamped rather than numbered:
  * the question asked later is always "what were we sending in September?".
  */
-export const PROMPT_VERSION = '2026-10-08.1';
+export const PROMPT_VERSION = '2026-10-08.2';
 
-/** Rough per-token prices, for showing what a run cost. USD per 1M tokens. */
-const PRICE_PER_MTOK = { input: 1.0, output: 5.0 } as const;
+/**
+ * Room for the answer. A long cash-and-carry invoice runs to forty lines, and
+ * Haiku 5.5 counts the same text as more tokens than 4.5 did: 4096 was enough
+ * before and would now cut the longest invoices off mid-line. The ceiling is
+ * not what is billed — only what is written.
+ */
+const MAX_OUTPUT_TOKENS = 8192;
 
-export function estimateCostUsd(inputTokens: number, outputTokens: number): number {
-  return (
-    (inputTokens / 1_000_000) * PRICE_PER_MTOK.input +
-    (outputTokens / 1_000_000) * PRICE_PER_MTOK.output
-  );
+/**
+ * A call that reached the model but brought back no reading.
+ *
+ * Carries what the call cost, because it was still billed: a declined or
+ * cut-off request spends tokens like any other, and a usage log that only
+ * counted successes would under-report exactly the documents that go wrong.
+ */
+export class ExtractionError extends Error {
+  constructor(
+    /** `refusal` when the model's safety checks declined the page. */
+    readonly stopReason: string | null,
+    readonly telemetry: ScanTelemetry,
+  ) {
+    super(`Model did not return an extraction (stop_reason: ${stopReason}).`);
+    this.name = 'ExtractionError';
+  }
+
+  get refused(): boolean {
+    return this.stopReason === 'refusal';
+  }
 }
 
 /**
@@ -249,7 +276,7 @@ export async function claudeScan(
   const started = Date.now();
   const response = await client.messages.create({
     model: SCANNER_MODEL,
-    max_tokens: 4096,
+    max_tokens: MAX_OUTPUT_TOKENS,
     system: SYSTEM_PROMPT,
     tools: [
       {
@@ -276,14 +303,22 @@ export async function claudeScan(
       },
     ],
   });
-  const durationMs = Date.now() - started;
+  const telemetry: ScanTelemetry = {
+    model: SCANNER_MODEL,
+    promptVersion: PROMPT_VERSION,
+    inputTokens: response.usage.input_tokens,
+    outputTokens: response.usage.output_tokens,
+    durationMs: Date.now() - started,
+  };
 
   const call = response.content.find((b) => b.type === 'tool_use');
-  if (!call || call.type !== 'tool_use') {
-    // Forced tool use makes this close to impossible, but a refusal or a
-    // max_tokens cut-off can still land here, and a silent empty result
-    // would look like an extraction failure rather than a stopped one.
-    throw new Error(`Model did not return an extraction (stop_reason: ${response.stop_reason}).`);
+  // A max_tokens cut-off can leave a tool call whose arguments never closed,
+  // so a stopped answer is not trusted even when a block is there.
+  if (!call || call.type !== 'tool_use' || response.stop_reason === 'max_tokens') {
+    // Forced tool use makes this rare, but Haiku 5.5 runs safety checks that
+    // can decline a page, and a silent empty result would look like an
+    // extraction failure rather than a stopped one.
+    throw new ExtractionError(response.stop_reason, telemetry);
   }
 
   const input = call.input as Record<string, unknown>;
@@ -292,14 +327,5 @@ export async function claudeScan(
     ? ({ type: 'cost_receipt', ...input } as unknown as CostReceiptResult)
     : ({ type: 'daily_report', ...input } as unknown as DailyReportResult);
 
-  return {
-    result,
-    telemetry: {
-      model: SCANNER_MODEL,
-      promptVersion: PROMPT_VERSION,
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-      durationMs,
-    },
-  };
+  return { result, telemetry };
 }
