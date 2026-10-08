@@ -3,9 +3,9 @@
 import { useLanguage } from '@/lib/language-context';
 import { Wordmark } from '@/app/components/Logo';
 import RestaurantSwitcher from './RestaurantSwitcher';
-import { LayoutDashboard, TrendingUp, DollarSign, Users, CreditCard, Settings, LogOut, X, BarChart3, ShieldCheck, CalendarDays, Landmark, FileText } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, DollarSign, Users, CreditCard, Settings, LogOut, X, BarChart3, ShieldCheck, CalendarDays, Landmark, FileText, UtensilsCrossed } from 'lucide-react';
 
-type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
 interface SidebarProps {
   activeTab:    Tab;
@@ -24,6 +24,8 @@ const NAV_MAIN = [
   { id: 'revenue'   as Tab, icon: TrendingUp,      tKey: 'nav.revenue' },
   { id: 'costs'     as Tab, icon: DollarSign,      tKey: 'nav.costs' },
   { id: 'analytics' as Tab, icon: BarChart3,       tKey: 'nav.analytics' },
+  // The menu, its products and their prices: what is sold, not the books.
+  { id: 'fnb'       as Tab, icon: UtensilsCrossed, tKey: 'nav.fnb' },
   // Beside Costs, because that is where its records come from.
   { id: 'accounting' as Tab, icon: FileText,       tKey: 'nav.accounting' },
   { id: 'compliance' as Tab, icon: ShieldCheck,    tKey: 'nav.compliance' },

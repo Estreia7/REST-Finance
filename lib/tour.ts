@@ -48,13 +48,9 @@ export const TOUR_STEPS: TourStep[] = [
     bodyKey: 'tour.dashboard.body',
     placement: 'right',
   },
-  {
-    anchor: 'nav-revenue',
-    tab: 'dashboard',
-    titleKey: 'tour.revenue.title',
-    bodyKey: 'tour.revenue.body',
-    placement: 'right',
-  },
+  // No separate "Revenue" step: the daily-entry step below takes the owner
+  // to that tab itself and now says the till report can be photographed, so
+  // pointing at the menu item first was the same step twice.
   {
     // The one habit the rest of the app depends on, so it is shown where it
     // actually lives rather than described from the dashboard.
@@ -76,6 +72,15 @@ export const TOUR_STEPS: TourStep[] = [
     tab: 'revenue',
     titleKey: 'tour.analytics.title',
     bodyKey: 'tour.analytics.body',
+    placement: 'right',
+  },
+  {
+    // The menu, its costing and the suppliers' prices: where an owner goes
+    // to find out what each dish earns.
+    anchor: 'nav-fnb',
+    tab: 'revenue',
+    titleKey: 'tour.fnb.title',
+    bodyKey: 'tour.fnb.body',
     placement: 'right',
   },
   {

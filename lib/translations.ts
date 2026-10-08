@@ -580,8 +580,8 @@ export const translations = {
       costs: 'Custos',
     },
     products: {
-      tab: 'Produtos',
-      title: 'Produtos',
+      tab: 'Vendas por produto',
+      title: 'Vendas por produto',
       subtitle: 'O que sai da cozinha, item a item, a partir dos ficheiros que importou do POS.',
       empty: 'Ainda não importou vendas por produto.',
       emptyHint: 'Importe o relatório de vendas por produto do seu POS e os produtos aparecem aqui.',
@@ -741,6 +741,7 @@ export const translations = {
       revenue: 'Receita',
       costs: 'Custos',
       analytics: 'Análises',
+      fnb: 'Comidas e Bebidas',
       accounting: 'Contabilidade',
       compliance: 'Conformidade',
       schedule: 'Horários',
@@ -1353,6 +1354,7 @@ export const translations = {
       tabRevenue: 'Receita',
       tabCosts: 'Custos',
       tabAnalytics: 'Análises',
+      tabFnb: 'Comidas e Bebidas',
       tabAccounting: 'Contabilidade',
       tabCompliance: 'Conformidade',
       tabSchedule: 'Horários',
@@ -2115,13 +2117,9 @@ export const translations = {
         title: 'O seu painel',
         body: 'Aqui vê a receita, os custos e a margem do mês, sempre atualizados.',
       },
-      revenue: {
-        title: 'Receita',
-        body: 'É aqui que lança o que faturou. Também pode fotografar o fecho do dia.',
-      },
       quickEntry: {
         title: 'O registo do dia',
-        body: 'Quatro campos, no fim do serviço. É este hábito que faz o resto funcionar.',
+        body: 'Quatro campos no fim do serviço, ou uma fotografia do fecho do dia. É este hábito que faz o resto funcionar.',
       },
       costs: {
         title: 'Custos',
@@ -2129,7 +2127,11 @@ export const translations = {
       },
       analytics: {
         title: 'Análises',
-        body: 'Food cost, Prime Cost, margem por prato e a demonstração de resultados.',
+        body: 'Food cost, Prime Cost, comparações entre meses e a demonstração de resultados.',
+      },
+      fnb: {
+        title: 'Comidas e Bebidas',
+        body: 'Monte a receita de cada prato e veja quanto deixa. Os preços dos ingredientes vêm das suas faturas.',
       },
       schedule: {
         title: 'Horários',
@@ -3246,8 +3248,8 @@ export const translations = {
       costs: 'Costs',
     },
     products: {
-      tab: 'Products',
-      title: 'Products',
+      tab: 'Product sales',
+      title: 'Product sales',
       subtitle: 'What leaves the kitchen, item by item, from the POS files you imported.',
       empty: 'You have not imported product sales yet.',
       emptyHint: 'Import your POS sales-by-product report and your products appear here.',
@@ -3403,6 +3405,7 @@ export const translations = {
       revenue: 'Revenue',
       costs: 'Costs',
       analytics: 'Analytics',
+      fnb: 'Food & Beverage',
       accounting: 'Accounting',
       compliance: 'Compliance',
       schedule: 'Schedule',
@@ -4006,6 +4009,7 @@ export const translations = {
       tabRevenue: 'Revenue',
       tabCosts: 'Costs',
       tabAnalytics: 'Analytics',
+      tabFnb: 'Food & Beverage',
       tabAccounting: 'Accounting',
       tabCompliance: 'Compliance',
       tabSchedule: 'Schedule',
@@ -4764,13 +4768,9 @@ export const translations = {
         title: 'Your dashboard',
         body: 'Revenue, costs and margin for the month, always up to date.',
       },
-      revenue: {
-        title: 'Revenue',
-        body: 'This is where the day takings go. You can also photograph the till report.',
-      },
       quickEntry: {
         title: 'The daily entry',
-        body: 'Four fields at the end of service. This habit is what makes the rest work.',
+        body: 'Four fields at the end of service, or a photo of the till report. This habit is what makes the rest work.',
       },
       costs: {
         title: 'Costs',
@@ -4778,7 +4778,11 @@ export const translations = {
       },
       analytics: {
         title: 'Analysis',
-        body: 'Food cost, Prime Cost, margin per dish and your profit and loss.',
+        body: 'Food cost, Prime Cost, month-on-month comparisons and your profit and loss.',
+      },
+      fnb: {
+        title: 'Food & Beverage',
+        body: 'Build the recipe for each dish and see what it earns. Ingredient prices come from your invoices.',
       },
       schedule: {
         title: 'Schedule',

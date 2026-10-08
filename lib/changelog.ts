@@ -35,13 +35,25 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.08.3';
+export const CHANGELOG_VERSION = '2026.10.08.4';
 
 export const CHANGELOG: Release[] = [
   {
-    version: '2026.10.08.3',
+    version: '2026.10.08.4',
     date: '2026-10-08',
     entries: [
+      {
+        kind: 'improvement',
+        title: 'A Ementa, as vendas por produto e os Preços têm agora o seu lugar: Comidas e Bebidas',
+        detail:
+          'Estavam dentro de Análises, misturados com o P&L e os relatórios. Passaram para uma entrada própria no menu, Comidas e Bebidas — tudo o que diz respeito ao que vende e ao que lhe custa. Em Análises ficam os números do negócio. O separador que se chamava Produtos chama-se agora Vendas por produto, para não se confundir com a lista de produtos da Ementa.',
+      },
+      {
+        kind: 'improvement',
+        title: 'A Ementa mostra mais pratos de uma vez no computador',
+        detail:
+          'Cada prato é agora um cartão, dois ou três lado a lado conforme o ecrã, em vez de uma linha a ocupar a largura toda. Faz tudo o que fazia: editar a receita, mudar quantidades, responder se a cozinha o faz. No telemóvel fica como estava.',
+      },
       {
         kind: 'fix',
         title: 'O preço por quilo das compras ao saco está certo',

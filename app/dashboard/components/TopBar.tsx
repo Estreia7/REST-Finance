@@ -6,7 +6,7 @@ import { useLanguage } from '@/lib/language-context';
 import WhatsNew from './WhatsNew';
 import RestaurantLogo from './RestaurantLogo';
 
-type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
 /** Which dictionary entry names each tab in the breadcrumb. */
 const TAB_LABEL_KEYS: Record<Tab, string> = {
@@ -14,6 +14,7 @@ const TAB_LABEL_KEYS: Record<Tab, string> = {
   revenue:    'topBar.tabRevenue',
   costs:      'topBar.tabCosts',
   analytics:  'topBar.tabAnalytics',
+  fnb:        'topBar.tabFnb',
   accounting: 'topBar.tabAccounting',
   compliance: 'topBar.tabCompliance',
   schedule:   'topBar.tabSchedule',

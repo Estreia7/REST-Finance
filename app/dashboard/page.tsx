@@ -63,7 +63,7 @@ import TrialBanner      from '@/app/components/TrialBanner';
 // ─── Types ─────────────────────────────────────────────────────────────────
 type CostType = 'COGS' | 'OPEX';
 type CostTypeOrEmpty = CostType | '';
-type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
 interface Category {
   id: string;
@@ -180,7 +180,13 @@ function DashboardPageInner() {
   const [autoStartCamera, setAutoStartCamera] = useState(false);
   const [revenueSubView, setRevenueSubView] = useState<'entry' | 'history' | 'scan' | 'import'>('entry');
   const [costSubView, setCostSubView] = useState<'entry' | 'history' | 'scan'>('entry');
-  const [analyticsSubView, setAnalyticsSubView] = useState<'pnl' | 'compare' | 'tickets' | 'products' | 'menu' | 'goals' | 'report' | 'prices'>('pnl');
+  const [analyticsSubView, setAnalyticsSubView] = useState<'pnl' | 'compare' | 'tickets' | 'goals' | 'report'>('pnl');
+  /**
+   * Food & Beverage: what the kitchen and the bar sell and what it costs them.
+   * Split out of Analytics, which is about the business's numbers; these are
+   * about the menu, and were three tabs out of eight there.
+   */
+  const [fnbSubView, setFnbSubView] = useState<'menu' | 'products' | 'prices'>('menu');
   const [settingsSubView, setSettingsSubView] = useState<'account' | 'support'>('account');
 
   // ── Load all data ────────────────────────────────────────────────────────
@@ -302,7 +308,7 @@ function DashboardPageInner() {
   // ── Handle URL params (e.g. ?tab=billing from Stripe redirect) ───────────
   useEffect(() => {
     const tab = searchParams.get('tab') as Tab | null;
-    if (tab && ['dashboard','revenue','costs','analytics','compliance','schedule','estado','users','billing','settings'].includes(tab)) {
+    if (tab && ['dashboard','revenue','costs','analytics','fnb','compliance','schedule','estado','users','billing','settings'].includes(tab)) {
       setActiveTab(tab);
     }
     const upgrade = searchParams.get('upgrade');
@@ -739,21 +745,33 @@ function DashboardPageInner() {
                   { value: "pnl", label: 'P&L' },
                   { value: "compare", label: t('nav.comparison') },
                   { value: "tickets", label: t('nav.tickets') },
-                  { value: "products", label: t('products.tab') },
-                  { value: "menu", label: t('nav.menuCalc') },
                   { value: "goals", label: t('nav.goals') },
                   { value: "report", label: t('nav.report') },
-                  { value: "prices", label: t('nav.prices') },
                 ]}
               />
               {analyticsSubView === 'pnl' && <PnLPanel />}
               {analyticsSubView === 'compare' && <ComparativePanel />}
               {analyticsSubView === 'tickets' && <TicketAnalysisPanel />}
-              {analyticsSubView === 'products' && <ProductsPanel />}
-              {analyticsSubView === 'menu' && <MenuCalculatorPanel />}
               {analyticsSubView === 'goals' && <GoalsPanel restaurant={restaurant} stats={stats} onUpdate={loadData} />}
               {analyticsSubView === 'report' && <MonthlyReportPanel />}
-              {analyticsSubView === 'prices' && <PriceTrackingPanel />}
+            </>
+          )}
+
+          {activeTab === 'fnb' && (
+            <>
+              <SubTabs
+                label={t('nav.fnb')}
+                active={fnbSubView}
+                onChange={setFnbSubView}
+                tabs={[
+                  { value: "menu", label: t('nav.menuCalc') },
+                  { value: "products", label: t('products.tab') },
+                  { value: "prices", label: t('nav.prices') },
+                ]}
+              />
+              {fnbSubView === 'menu' && <MenuCalculatorPanel />}
+              {fnbSubView === 'products' && <ProductsPanel />}
+              {fnbSubView === 'prices' && <PriceTrackingPanel />}
             </>
           )}
 

@@ -408,6 +408,10 @@ export default function MenuCalculatorPanel() {
                         </button>
                       )}
                     </div>
+                    {/* Cards side by side where there is room: a dish is a few
+                        lines of recipe, and a full-width row each left most of a
+                        desktop screen empty. One column on a phone, as before. */}
+                    <div className="grid gap-3 xl:grid-cols-2 min-[1800px]:grid-cols-3">
                     {group.items.map((item) => (
                       <DishCard
                         key={item.id}
@@ -449,6 +453,7 @@ export default function MenuCalculatorPanel() {
                         }
                       />
                     ))}
+                    </div>
                   </section>
                 );
               })
@@ -663,7 +668,7 @@ function DishCard({
 
   return (
     <article
-      className={`card-glass p-4 ${isSelected ? 'ring-2 ring-primary/70 border-primary/40' : ''}`}
+      className={`card-glass p-4 flex flex-col ${isSelected ? 'ring-2 ring-primary/70 border-primary/40' : ''}`}
     >
       <div className="flex flex-wrap items-start gap-x-3 gap-y-3">
         {selecting && (
@@ -688,9 +693,10 @@ function DishCard({
           </div>
         </div>
 
-        {/* Full width under the name on a phone; beside it from there up. */}
+        {/* Under the name, as a strip of its own: in a card half a screen
+            wide, three figures beside the name would leave it no room. */}
         {costed && (
-          <div className="order-last basis-full grid grid-cols-3 gap-3 sm:order-none sm:basis-auto sm:gap-6 sm:text-right">
+          <div className="order-last basis-full grid grid-cols-3 gap-3 rounded-lg bg-muted/50 px-3 py-2">
             <Figure label={t('menuCalc.dishCost')} value={formatMoneyExact(c.foodCost)} />
             <Figure
               label={t('menuCalc.grossMargin')}
@@ -801,6 +807,9 @@ function DishCard({
         <p className="mt-3 text-xs text-muted-foreground">{t('menuCalc.noRecipeYet')}</p>
       )}
 
+      {/* Pinned to the bottom, so the cards in one row line up their
+          "add an ingredient" boxes however long each recipe is. */}
+      <div className="mt-auto">
       {!resale && (
         <div className="mt-2">
           <AddLine
@@ -836,6 +845,7 @@ function DishCard({
           <strong className="text-foreground">{formatMoneyExact(suggested)}</strong>.
         </p>
       )}
+      </div>
     </article>
   );
 }
