@@ -98,6 +98,7 @@ export async function scanDocument(
   if (apiKey) {
     const { claudeScan, ExtractionError, SCANNER_MODEL } = await import('@/lib/scanners/claude-scanner');
     const { recordAiUsage } = await import('@/lib/ai-usage-server');
+    const { subjectOf } = await import('@/lib/ai-usage');
     const who = {
       restaurantId: options.usage?.restaurantId ?? null,
       userId: options.usage?.userId ?? null,
@@ -108,7 +109,7 @@ export async function scanDocument(
 
     try {
       const { result, telemetry } = await claudeScan(imageBase64, mediaType, scanType, apiKey, options);
-      await recordAiUsage({ ...who, telemetry, succeeded: true, stopReason: 'tool_use' });
+      await recordAiUsage({ ...who, telemetry, subject: subjectOf(result), succeeded: true, stopReason: 'tool_use' });
       return result;
     } catch (err) {
       // Logged and then rethrown: a failed call was usually still billed,

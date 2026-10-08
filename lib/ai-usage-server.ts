@@ -2,6 +2,7 @@ import { prisma } from './prisma';
 import { costUsd } from './ai-models';
 import type { ScanType } from './document-scanner';
 import type { ScanTelemetry } from './scanners/claude-scanner';
+import type { UsageSubject } from './ai-usage';
 
 export interface AiUsageEntry {
   restaurantId: string | null;
@@ -11,6 +12,8 @@ export interface AiUsageEntry {
   scanType: ScanType;
   /** What the call reported. Absent when it failed before reaching the model. */
   telemetry?: ScanTelemetry;
+  /** What the call read, so the console can name the document. */
+  subject?: UsageSubject | null;
   /** The model asked, for a call that failed before any telemetry came back. */
   model: string;
   succeeded: boolean;
@@ -42,6 +45,7 @@ export async function recordAiUsage(entry: AiUsageEntry): Promise<void> {
         scanType: entry.scanType,
         model,
         promptVersion: t?.promptVersion ?? null,
+        subject: entry.subject ?? undefined,
         inputTokens,
         outputTokens,
         // Priced now, at today's list, and kept: the next price change must

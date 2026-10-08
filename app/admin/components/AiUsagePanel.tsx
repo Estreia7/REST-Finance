@@ -1,17 +1,36 @@
 'use client';
 
 import { Fragment, useCallback, useEffect, useState } from 'react';
-import { Loader2, RefreshCw, Cpu, ChevronRight, ArrowUpRight, AlertTriangle } from 'lucide-react';
+import { Loader2, RefreshCw, Cpu, ChevronRight, ArrowUpRight, AlertTriangle, FileText, Receipt, FlaskConical } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
+import { formatMoney } from '@/lib/format';
 import ListSearch, { matchesSearch } from '@/app/dashboard/components/ListSearch';
-import { USAGE_PERIODS, type UsagePeriod, type UsageSummary } from '@/lib/ai-usage';
-import type { ModelPrice } from '@/lib/ai-models';
+import { USAGE_PERIODS, type UsagePeriod, type UsageSummary, type UsageSubject } from '@/lib/ai-usage';
+import { modelLabel, type ModelPrice } from '@/lib/ai-models';
 import { getAiUsage } from '../usage-actions';
+
+/** One call, as the console lists it. */
+interface UsageCall {
+  id: string;
+  createdAt: Date;
+  source: string;
+  scanType: 'COST_RECEIPT' | 'DAILY_REPORT' | null;
+  model: string;
+  tokens: number;
+  costUsd: number;
+  durationMs: number | null;
+  succeeded: boolean;
+  stopReason: string | null;
+  subject: UsageSubject | null;
+  user: { name: string | null; email: string } | null;
+  restaurant: { id: string; name: string } | null;
+}
 
 interface UsageData {
   summary: UsageSummary;
+  recent: UsageCall[];
   currentModel: string;
   prices: Array<ModelPrice & { model: string }>;
   firstLoggedAt: Date | null;
@@ -198,7 +217,9 @@ export default function AiUsagePanel({ onOpenRestaurant }: { onOpenRestaurant: (
           value={int(totals.failed)}
           caption={totals.failed === 0
             ? t('admin.aiUsage.failedNone')
-            : t('admin.aiUsage.failedCaption').replace('{n}', int(totals.refused))}
+            : totals.refused === 1
+              ? t('admin.aiUsage.failedCaptionOne')
+              : t('admin.aiUsage.failedCaption').replace('{n}', int(totals.refused))}
           lamp={totals.failed > 0}
         />
         <Figure
@@ -314,6 +335,42 @@ export default function AiUsagePanel({ onOpenRestaurant }: { onOpenRestaurant: (
           </ul>
         </section>
       </div>
+
+      {/* ── Each call: who, where, what was read ─────────────────────────── */}
+      <section className="card-glass p-5">
+        <h2 className="text-base font-bold text-foreground">{t('admin.aiUsage.callsTitle')}</h2>
+        <p className="text-xs text-muted-foreground mt-0.5 mb-4">{t('admin.aiUsage.callsSubtitle')}</p>
+        {data.recent.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">{t('admin.aiUsage.callsEmpty')}</p>
+        ) : (
+          <div className="-mx-5 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border-subtle text-xs text-muted-foreground">
+                  <th scope="col" className="text-left font-medium py-2 pl-5 pr-2 hidden sm:table-cell">{t('admin.aiUsage.colWhen')}</th>
+                  <th scope="col" className="text-left font-medium py-2 px-2">{t('admin.aiUsage.colWho')}</th>
+                  <th scope="col" className="text-left font-medium py-2 pl-2 pr-5 sm:pr-2">{t('admin.aiUsage.colWhat')}</th>
+                  <th scope="col" className="text-right font-medium py-2 pl-2 pr-5 hidden sm:table-cell">{t('admin.aiUsage.colCost')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.recent.map((call) => (
+                  <CallRow
+                    key={call.id}
+                    call={call}
+                    when={new Date(call.createdAt).toLocaleString(locale, {
+                      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+                    })}
+                    usd={usd}
+                    int={int}
+                    onOpenRestaurant={onOpenRestaurant}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       {/* ── Who spends it: owners ────────────────────────────────────────── */}
       <section className="card-glass p-5">
@@ -476,6 +533,101 @@ export default function AiUsagePanel({ onOpenRestaurant }: { onOpenRestaurant: (
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * One call: when, who asked and for which restaurant, the document it read,
+ * and what it cost. A call from before documents were recorded still shows
+ * its type and its person, and says plainly that the rest was not kept.
+ */
+function CallRow({
+  call, when, usd, int, onOpenRestaurant,
+}: {
+  call: UsageCall;
+  when: string;
+  usd: (v: number) => string;
+  int: (v: number) => string;
+  onOpenRestaurant: (id: string) => void;
+}) {
+  const { t, language } = useLanguage();
+  const bench = call.source === 'bench';
+  const isDaily = call.subject?.kind === 'daily' || (!call.subject && call.scanType === 'DAILY_REPORT');
+  const Icon = bench ? FlaskConical : isDaily ? Receipt : FileText;
+  const kind = isDaily ? t('admin.aiUsage.kindDaily') : t('admin.aiUsage.kindInvoice');
+
+  const shortDate = (iso: string | null) =>
+    iso ? new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString(language === 'pt' ? 'pt-PT' : 'en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }) : null;
+
+  // What the document was, in the order an owner would name it.
+  const details: string[] = [];
+  const s = call.subject;
+  if (s?.kind === 'invoice') {
+    if (s.vendor) details.push(s.vendor);
+    if (s.invoiceNumber) details.push(s.invoiceNumber);
+    const d = shortDate(s.date);
+    if (d) details.push(d);
+    if (s.lines > 0) details.push(t('admin.aiUsage.linesCount').replace('{n}', int(s.lines)));
+    if (s.total !== null) details.push(formatMoney(s.total, { decimals: 2 }));
+  } else if (s?.kind === 'daily') {
+    const d = shortDate(s.date);
+    if (d) details.push(t('admin.aiUsage.dayOf').replace('{date}', d));
+    if (s.total !== null) details.push(formatMoney(s.total, { decimals: 2 }));
+  }
+
+  const result = call.succeeded
+    ? { label: t('admin.aiUsage.resultOk'), tone: 'text-success', lamp: 'bg-lamp-success' }
+    : call.stopReason === 'refusal'
+      ? { label: t('admin.aiUsage.resultRefused'), tone: 'text-warning', lamp: 'bg-lamp-warning' }
+      : call.stopReason === 'max_tokens'
+        ? { label: t('admin.aiUsage.resultCut'), tone: 'text-warning', lamp: 'bg-lamp-warning' }
+        : { label: t('admin.aiUsage.resultFailed'), tone: 'text-danger', lamp: 'bg-lamp-danger' };
+
+  return (
+    <tr className="border-b border-border-subtle align-top hover:bg-muted/60">
+      <td className="py-2.5 pl-5 pr-2 text-xs text-muted-foreground tabular-nums whitespace-nowrap hidden sm:table-cell">{when}</td>
+      <td className="py-2.5 px-2">
+        <span className="block font-semibold text-foreground [overflow-wrap:anywhere]">
+          {call.user ? call.user.name || call.user.email : t('admin.aiUsage.unknownUser')}
+        </span>
+        {bench ? (
+          <span className="block text-xs text-muted-foreground">{t('admin.aiUsage.bench')}</span>
+        ) : call.restaurant ? (
+          <button
+            onClick={() => onOpenRestaurant(call.restaurant!.id)}
+            aria-label={t('admin.aiUsage.openRestaurant').replace('{name}', call.restaurant.name)}
+            className="inline-flex items-center gap-1 text-left text-xs text-muted-foreground hover:text-primary-ink rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {call.restaurant.name}
+            <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+          </button>
+        ) : (
+          <span className="block text-xs text-muted-foreground">{t('admin.aiUsage.noRestaurant')}</span>
+        )}
+        <span className="block text-[11px] text-muted-foreground tabular-nums sm:hidden">{when}</span>
+      </td>
+      <td className="py-2.5 pl-2 pr-5 sm:pr-2">
+        <span className="flex flex-wrap items-center gap-x-1.5 text-foreground">
+          <Icon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          {kind}
+          <span className={`inline-flex items-center gap-1 text-[11px] ${result.tone}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${result.lamp}`} aria-hidden="true" />
+            {result.label}
+          </span>
+        </span>
+        <span className="block text-xs text-muted-foreground [overflow-wrap:anywhere]">
+          {details.length > 0 ? details.join(' · ') : call.succeeded ? t('admin.aiUsage.noDetails') : null}
+        </span>
+        {/* On a phone the cost column is gone; the figure comes here. */}
+        <span className="block text-xs font-semibold text-foreground tabular-nums mt-0.5 sm:hidden">{usd(call.costUsd)}</span>
+      </td>
+      <td className="py-2.5 pl-2 pr-5 text-right hidden sm:table-cell">
+        <span className="block tabular-nums font-semibold text-foreground">{usd(call.costUsd)}</span>
+        <span className="block text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
+          {modelLabel(call.model)} · {t('admin.aiUsage.tokensShort').replace('{n}', int(call.tokens))}
+        </span>
+      </td>
+    </tr>
   );
 }
 

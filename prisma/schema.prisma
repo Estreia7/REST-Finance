@@ -1144,6 +1144,11 @@ model AiUsage {
   model         String
   promptVersion String? @map("prompt_version")
 
+  /// What was read, in a few fields — supplier, document number, date,
+  /// total, line count — so the console can say which document a call was.
+  /// Null for a call that read nothing, and for calls logged before this.
+  subject Json?
+
   inputTokens  Int     @default(0) @map("input_tokens")
   outputTokens Int     @default(0) @map("output_tokens")
   costUsd      Decimal @default(0) @map("cost_usd") @db.Decimal(12, 6)

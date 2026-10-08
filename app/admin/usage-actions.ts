@@ -5,7 +5,10 @@ import { prisma } from '@/lib/prisma';
 import { toClientError } from '@/lib/errors';
 import { MODEL_PRICES } from '@/lib/ai-models';
 import { SCANNER_MODEL } from '@/lib/scanners/claude-scanner';
-import { periodStart, summariseUsage, USAGE_PERIODS, type UsagePeriod } from '@/lib/ai-usage';
+import { periodStart, summariseUsage, USAGE_PERIODS, type UsagePeriod, type UsageSubject } from '@/lib/ai-usage';
+
+/** How many individual calls the console lists. */
+const RECENT_CALLS = 50;
 
 /**
  * What the AI costs, on which model, and who is spending it.
@@ -48,6 +51,37 @@ export async function getAiUsage(period: UsagePeriod) {
         })
       : [];
 
+    // Each call on its own, newest first: who asked, for which restaurant,
+    // what was read and what it cost. The totals above say how much; this
+    // says what for.
+    const recentRows = await prisma.aiUsage.findMany({
+      where: from ? { createdAt: { gte: from } } : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: RECENT_CALLS,
+      select: {
+        id: true, createdAt: true, source: true, scanType: true, model: true,
+        inputTokens: true, outputTokens: true, costUsd: true, durationMs: true,
+        succeeded: true, stopReason: true, subject: true,
+        user: { select: { name: true, email: true } },
+        restaurant: { select: { id: true, name: true } },
+      },
+    });
+    const recent = recentRows.map((r) => ({
+      id: r.id,
+      createdAt: r.createdAt,
+      source: r.source,
+      scanType: r.scanType,
+      model: r.model,
+      tokens: r.inputTokens + r.outputTokens,
+      costUsd: Number(r.costUsd),
+      durationMs: r.durationMs,
+      succeeded: r.succeeded,
+      stopReason: r.stopReason,
+      subject: (r.subject ?? null) as UsageSubject | null,
+      user: r.user,
+      restaurant: r.restaurant,
+    }));
+
     const summary = summariseUsage(
       rows.map((r) => ({ ...r, costUsd: Number(r.costUsd) })),
       restaurants.map((r) => ({ id: r.id, name: r.name, owners: r.memberships.map((m) => m.user) })),
@@ -58,6 +92,7 @@ export async function getAiUsage(period: UsagePeriod) {
       success: true,
       data: {
         summary,
+        recent,
         currentModel: SCANNER_MODEL,
         // The price list as the console should show it: the model in use
         // first, then whatever older rows still name.

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { costUsd, modelLabel, isPriced } from '@/lib/ai-models';
-import { summariseUsage, dayKey, periodStart, type UsageRow, type RestaurantInfo } from '@/lib/ai-usage';
+import { summariseUsage, dayKey, periodStart, subjectOf, type UsageRow, type RestaurantInfo } from '@/lib/ai-usage';
 
 describe('costUsd', () => {
   it('prices Haiku 5.5 at a tenth of Haiku 4.5', () => {
@@ -129,5 +129,32 @@ describe('dayKey', () => {
 describe('periodStart', () => {
   it('has no start for all time', () => {
     expect(periodStart('all')).toBeNull();
+  });
+});
+
+describe('subjectOf', () => {
+  it('names an invoice by its supplier, number, date, lines and total', () => {
+    expect(subjectOf({
+      type: 'cost_receipt', date: '2026-10-08', vendor: ' Makro Portugal ', invoiceNumber: 'FT 2026/1234',
+      items: [
+        { product: 'A', quantity: 1, unitPrice: 1, total: 1 },
+        { product: 'B', quantity: 1, unitPrice: 1, total: 1 },
+      ],
+      grandTotal: 101.8, suggestedType: 'COGS', suggestedCategory: 'Comida',
+    })).toEqual({ kind: 'invoice', vendor: 'Makro Portugal', invoiceNumber: 'FT 2026/1234', date: '2026-10-08', total: 101.8, lines: 2 });
+  });
+
+  it('names a till report by its day and takings', () => {
+    expect(subjectOf({
+      type: 'daily_report', date: '2026-10-08', dineInRevenue: 1245.8, takeawayRevenue: 387.5, dineInTickets: 62, takeawayTickets: 23,
+    })).toEqual({ kind: 'daily', date: '2026-10-08', total: 1633.3 });
+  });
+
+  it('keeps a missing number as missing rather than empty', () => {
+    const s = subjectOf({
+      type: 'cost_receipt', date: '', vendor: '', invoiceNumber: '  ', items: [], grandTotal: 5,
+      suggestedType: 'OPEX', suggestedCategory: 'x',
+    });
+    expect(s).toMatchObject({ vendor: null, invoiceNumber: null, date: null, lines: 0 });
   });
 });

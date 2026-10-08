@@ -10,6 +10,7 @@ import { maskSecret } from '@/lib/crypto';
 import { claudeScan, SCANNER_MODEL, PROMPT_VERSION, ExtractionError } from '@/lib/scanners/claude-scanner';
 import { costUsd } from '@/lib/ai-models';
 import { recordAiUsage } from '@/lib/ai-usage-server';
+import { subjectOf } from '@/lib/ai-usage';
 import { checkExtraction } from '@/lib/pt-validation';
 import { readInvoiceQr, compareWithQr, applyQrTruth } from '@/lib/pt-invoice-qr';
 import type { MediaType, ScanType } from '@/lib/document-scanner';
@@ -147,7 +148,7 @@ export async function runExtractionTest(formData: FormData) {
       // under no restaurant, so it never inflates a client's figures.
       await recordAiUsage({
         restaurantId: null, userId: admin.userId, source: 'bench', scanType,
-        model: SCANNER_MODEL, telemetry, succeeded: true, stopReason: 'tool_use',
+        model: SCANNER_MODEL, telemetry, subject: subjectOf(result), succeeded: true, stopReason: 'tool_use',
       });
 
       const data = result as unknown as Record<string, unknown>;

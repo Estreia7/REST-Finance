@@ -1,4 +1,29 @@
 import { modelLabel, isPriced } from '@/lib/ai-models';
+import type { ScanResult } from '@/lib/document-scanner';
+
+/**
+ * What a call read, in a few fields: enough to recognise the document in the
+ * console ("Makro, FT 2026/1234, 101,80 €, 5 lines") without storing the
+ * reading twice. The full reading lives with the scan.
+ */
+export type UsageSubject =
+  | { kind: 'invoice'; vendor: string | null; invoiceNumber: string | null; date: string | null; total: number | null; lines: number }
+  | { kind: 'daily'; date: string | null; total: number | null };
+
+export function subjectOf(result: ScanResult): UsageSubject {
+  if (result.type === 'cost_receipt') {
+    return {
+      kind: 'invoice',
+      vendor: result.vendor?.trim() || null,
+      invoiceNumber: result.invoiceNumber?.trim() || null,
+      date: result.date || null,
+      total: Number.isFinite(result.grandTotal) ? result.grandTotal : null,
+      lines: result.items?.length ?? 0,
+    };
+  }
+  const total = (result.dineInRevenue ?? 0) + (result.takeawayRevenue ?? 0);
+  return { kind: 'daily', date: result.date || null, total: Number.isFinite(total) ? total : null };
+}
 
 /**
  * Turning the AI usage log into the console's answers: what it cost, on which
