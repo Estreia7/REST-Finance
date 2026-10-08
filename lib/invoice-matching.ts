@@ -203,6 +203,12 @@ export interface InvoiceLine {
   unit?: string;
   unitPrice: number;
   total: number;
+  /**
+   * What one package holds, as the reader understood the description:
+   * "BATATA DOCE 2,5K" is a bag of 2,5 kg. Optional, because a reader that
+   * did not say is not a reader that said "no package".
+   */
+  packSize?: PackSize | null;
 }
 
 export interface ReconciledLine extends InvoiceLine {
@@ -369,43 +375,79 @@ export interface PackSize {
   unit: 'kg' | 'L';
 }
 
+/**
+ * Every way a size is written on a Portuguese wholesale line. A bare "K" is
+ * the one that slipped through: "BATATA DOCE 2,5K" is a 2,5 kg bag, and
+ * without it the bag's price was stored as the price of a kilo.
+ */
+const SIZE_UNIT = 'kgs|kgr|kg|kilos|kilo|k|grs|gr|g|ltr|lts|lt|l|ml|cl';
+
+/** One size, converted to kilos or litres; null where it is not a pack size. */
+function sizeOf(rawAmount: string, rawUnit: string): PackSize | null {
+  const amount = Number(rawAmount.replace(',', '.'));
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  const unit = rawUnit.toLowerCase();
+
+  if (['kg', 'kgs', 'kgr', 'k', 'kilo', 'kilos'].includes(unit)) return { amount, unit: 'kg' };
+  if (['l', 'lt', 'lts', 'ltr'].includes(unit)) return { amount, unit: 'L' };
+
+  // Grams and millilitres are converted, since the kitchen buys in kilos
+  // and litres and a recipe converts from those.
+  if (unit === 'g' || unit === 'gr' || unit === 'grs') {
+    // Below 50 g this is almost never a pack size — it is a strength, a
+    // percentage, or part of a name.
+    if (amount < 50) return null;
+    return { amount: amount / 1000, unit: 'kg' };
+  }
+  if (unit === 'ml') {
+    if (amount < 50) return null;
+    return { amount: amount / 1000, unit: 'L' };
+  }
+  if (unit === 'cl') {
+    if (amount < 5) return null;
+    return { amount: amount / 100, unit: 'L' };
+  }
+  return null;
+}
+
 export function packSizeOf(description: string): PackSize | null {
-  // The last size wins: "CART D'OR 1KG CX 6" is six tubs of a kilo, and the
-  // kilo is the one that describes what a tub holds.
-  const matches = [
-    ...description.matchAll(/(\d+(?:[.,]\d+)?)\s*(kg|kgs|g|gr|l|lt|lts|ml|cl)\b/gi),
+  // A multipack states its own contents: "SUPER BOCK 6X33CL" is one pack of
+  // six bottles, 1,98 L, and that is what one line of it bought.
+  const multi = [
+    ...description.matchAll(
+      new RegExp(`(\\d+)\\s*[x×]\\s*(\\d+(?:[.,]\\d+)?)\\s*(${SIZE_UNIT})\\b`, 'gi'),
+    ),
   ];
-  if (matches.length === 0) return null;
-
-  for (let i = matches.length - 1; i >= 0; i--) {
-    const [, rawAmount, rawUnit] = matches[i];
-    const amount = Number(rawAmount.replace(',', '.'));
-    if (!Number.isFinite(amount) || amount <= 0) continue;
-
-    const unit = rawUnit.toLowerCase();
-
-    if (unit === 'kg' || unit === 'kgs') return { amount, unit: 'kg' };
-    if (unit === 'l' || unit === 'lt' || unit === 'lts') return { amount, unit: 'L' };
-
-    // Grams and millilitres are converted, since the kitchen buys in kilos
-    // and litres and a recipe converts from those.
-    if (unit === 'g' || unit === 'gr') {
-      // Below 50 g this is almost never a pack size — it is a strength, a
-      // percentage, or part of a name.
-      if (amount < 50) return null;
-      return { amount: amount / 1000, unit: 'kg' };
-    }
-    if (unit === 'ml') {
-      if (amount < 50) return null;
-      return { amount: amount / 1000, unit: 'L' };
-    }
-    if (unit === 'cl') {
-      if (amount < 5) return null;
-      return { amount: amount / 100, unit: 'L' };
+  for (let i = multi.length - 1; i >= 0; i--) {
+    const [, rawCount, rawAmount, rawUnit] = multi[i];
+    const count = Number(rawCount);
+    const each = sizeOf(rawAmount, rawUnit);
+    if (each && Number.isInteger(count) && count > 0) {
+      return { amount: round3(count * each.amount), unit: each.unit };
     }
   }
 
+  // The last size wins: "CART D'OR 1KG CX 6" is six tubs of a kilo, and the
+  // kilo is the one that describes what a tub holds.
+  const matches = [
+    ...description.matchAll(new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(${SIZE_UNIT})\\b`, 'gi')),
+  ];
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const [, rawAmount, rawUnit] = matches[i];
+    // The last size decides, as it always has: one too small to be a pack —
+    // a strength, part of a name — means the line has no pack size.
+    const size = sizeOf(rawAmount, rawUnit);
+    if (size) return size;
+    if (Number(rawAmount.replace(',', '.')) > 0) return null;
+  }
+
   return null;
+}
+
+/** Two readings of a pack size that agree, to within rounding. */
+export function samePack(a: PackSize | null | undefined, b: PackSize | null | undefined): boolean {
+  return !!a && !!b && a.unit === b.unit && Math.abs(a.amount - b.amount) < 0.0005;
 }
 
 /**
@@ -443,15 +485,61 @@ export interface PackConversion {
   /** The same purchase in what the kitchen measures. */
   asWeight: InvoiceLine;
   pack: PackSize;
+  /** Where the pack size came from, so the owner can be told. */
+  origin: PackOrigin;
 }
 
-export function packConversion(line: InvoiceLine): PackConversion | null {
+/**
+ * Where a pack size was learned: the owner's own answer for this wording,
+ * the reader, or the description alone.
+ */
+export type PackOrigin = 'memory' | 'reader' | 'description';
+
+/**
+ * What the restaurant remembers about how a wording is counted: the size of
+ * its package, or that the owner wants it counted in packages.
+ */
+export type RememberedPack = PackSize | 'packages';
+
+/**
+ * A memory row's pack answer, or null where it holds none.
+ *
+ * Stored as an amount and a unit, with "un" meaning "count it in packages":
+ * one column pair, so a wording either has an answer or does not.
+ */
+export function rememberedPack(row: {
+  packAmount: { toString(): string } | number | null;
+  packUnit: string | null;
+}): RememberedPack | null {
+  if (row.packUnit === 'un') return 'packages';
+  if (row.packUnit !== 'kg' && row.packUnit !== 'L') return null;
+  const amount = Number(row.packAmount?.toString());
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  return { amount, unit: row.packUnit };
+}
+
+/** The columns a pack answer is stored in. */
+export function packColumns(pack: RememberedPack): { packAmount: number | null; packUnit: string } {
+  return pack === 'packages'
+    ? { packAmount: null, packUnit: 'un' }
+    : { packAmount: pack.amount, packUnit: pack.unit };
+}
+
+export function packConversion(
+  line: InvoiceLine,
+  remembered?: RememberedPack | null,
+): PackConversion | null {
   const unit = (line.unit ?? '').trim().toLowerCase();
   // Already weighed or measured: nothing to restate, nothing to ask.
   if (unit === 'kg' || unit === 'l') return null;
+  // The owner said this one is counted by the package. Asked once.
+  if (remembered === 'packages') return null;
 
-  const pack = packSizeOf(line.productName);
+  const described = packSizeOf(line.productName);
+  const read = line.packSize ?? null;
+  const pack = remembered ?? read ?? described;
   if (!pack) return null;
+  const origin: PackOrigin = remembered ? 'memory' : read ? 'reader' : 'description';
 
   // Whole packages only. A fractional quantity is a weight the reader
   // labelled badly, and multiplying it by a pack size would invent goods.
@@ -465,12 +553,21 @@ export function packConversion(line: InvoiceLine): PackConversion | null {
     unitPrice: Math.round((line.total / quantity) * 10000) / 10000,
   };
 
+  // Settled without asking only where it is safe: the owner already
+  // answered for this wording; the reader and the description agree on the
+  // size, two independent readings of the same print; or the package is one
+  // kilo, where a unit *is* a kilo however it is counted.
+  const settled =
+    origin === 'memory' ||
+    pack.amount === 1 ||
+    (origin === 'reader' && samePack(read, described));
+
   return {
-    // A one-kilo tub is one kilo however it is counted.
-    certain: pack.amount === 1 ? asWeight : null,
+    certain: settled ? asWeight : null,
     asPackages: line,
     asWeight,
     pack,
+    origin,
   };
 }
 

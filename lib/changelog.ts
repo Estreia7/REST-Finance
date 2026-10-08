@@ -35,13 +35,25 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.08.2';
+export const CHANGELOG_VERSION = '2026.10.08.3';
 
 export const CHANGELOG: Release[] = [
   {
-    version: '2026.10.08.2',
+    version: '2026.10.08.3',
     date: '2026-10-08',
     entries: [
+      {
+        kind: 'fix',
+        title: 'O preço por quilo das compras ao saco está certo',
+        detail:
+          'Uma linha como «BATATA DOCE 2,5K» é um saco de 2,5 kg, mas a app lia o preço do saco como o preço de um quilo — e os pratos com esse ingrediente pareciam mais caros do que são. Agora o tamanho da embalagem é lido da descrição e o custo por quilo sai certo. Os custos que já tinha são corrigidos sozinhos da próxima vez que abrir a Ementa.',
+      },
+      {
+        kind: 'improvement',
+        title: 'A app lembra-se do tamanho das embalagens',
+        detail:
+          'Quando confirma uma fatura, o tamanho de cada embalagem fica sabido para essa descrição. Na fatura seguinte a linha já vem contada por quilo ou por litro, sem perguntar, com uma nota a dizer porquê — e um toque em «Contar em embalagens» desfaz.',
+      },
       {
         kind: 'fix',
         title: 'Quando uma fotografia não se lê, a app diz porquê',

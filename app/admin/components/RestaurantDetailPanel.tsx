@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Loader2, ArrowLeft, Calendar, Pencil, Trash2, Check, X, Users, DollarSign, TrendingUp } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
+import RestaurantBrainPanel from './RestaurantBrainPanel';
 import { getRestaurantDetail, getRestaurantRevenue, getRestaurantCosts, adminUpdateEntry, adminDeleteEntry, updateClient } from '../actions';
 
 interface RestaurantDetailPanelProps {
@@ -16,7 +17,7 @@ export default function RestaurantDetailPanel({ restaurantId, onBack }: Restaura
   const { t, language } = useLanguage();
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'overview' | 'revenue' | 'costs'>('overview');
+  const [tab, setTab] = useState<'overview' | 'revenue' | 'costs' | 'brain'>('overview');
   const [entries, setEntries] = useState<any[]>([]);
   const [entriesLoading, setEntriesLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -60,7 +61,7 @@ export default function RestaurantDetailPanel({ restaurantId, onBack }: Restaura
   }, [restaurantId, tab, dateFrom, dateTo]);
 
   useEffect(() => {
-    if (tab !== 'overview') loadEntries();
+    if (tab === 'revenue' || tab === 'costs') loadEntries();
   }, [tab, loadEntries]);
 
   const handleSaveDetail = async () => {
@@ -122,16 +123,21 @@ export default function RestaurantDetailPanel({ restaurantId, onBack }: Restaura
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit border border-border-subtle">
         {/* Renamed from `t` so it no longer shadows the translation function. */}
-        {(['overview', 'revenue', 'costs'] as const).map(tabKey => (
+        {(['overview', 'revenue', 'costs', 'brain'] as const).map(tabKey => (
           <button key={tabKey} onClick={() => setTab(tabKey)} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${tab === tabKey ? 'gradient-bg text-white shadow-glow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
             {tabKey === 'overview'
               ? t('admin.detail.tabOverview')
               : tabKey === 'revenue'
                 ? t('admin.detail.tabRevenue')
-                : t('admin.detail.tabCosts')}
+                : tabKey === 'costs'
+                  ? t('admin.detail.tabCosts')
+                  : t('admin.detail.tabBrain')}
           </button>
         ))}
       </div>
+
+      {/* How well this restaurant's invoices are being read, and what it has learned. */}
+      {tab === 'brain' && <RestaurantBrainPanel restaurantId={restaurantId} />}
 
       {tab === 'overview' && (
         <div className="space-y-4">

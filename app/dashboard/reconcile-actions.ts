@@ -10,7 +10,10 @@ import {
   lineArithmeticHolds,
   packConversion,
   impliedUnitPrice,
+  rememberedPack,
   type InvoiceLine,
+  type PackOrigin,
+  type RememberedPack,
   findAliasCandidates,
   type ReconciledLine,
 } from '@/lib/invoice-matching';
@@ -22,6 +25,8 @@ import {
 } from '@/lib/invoice-categories';
 import { rebalanceInvoice } from '@/lib/invoice-split-server';
 import { rememberLine } from '@/lib/invoice-memory-server';
+import { repriceIngredients } from '@/lib/ingredient-costs-server';
+import { diffReading, type FixedBy, type Reading } from '@/lib/scan-corrections';
 
 /**
  * Turning a scanned invoice into facts the rest of the app can use.
@@ -47,14 +52,23 @@ export interface ReconcilePreview {
     /** What the unit price would be if the total and quantity are right. */
     impliedUnitPrice: number | null;
     /**
-     * Set when the line could be read two ways and only the owner knows
-     * which: so many packages, or the weight they hold. Null when there is
-     * nothing to decide.
+     * Set when the line is billed by a package whose size is known: so many
+     * packages, or the weight they hold. Null when there is nothing to
+     * restate.
      */
     packChoice: {
       packAmount: number;
-      packUnit: string;
+      packUnit: 'kg' | 'L';
       asWeight: InvoiceLine;
+      /** Where the size came from: the owner before, the reader, the label. */
+      origin: PackOrigin;
+      /**
+       * Settled without asking — the owner answered before, or the reader and
+       * the label agree. Shown as a note the owner can undo, not a question.
+       */
+      settled: boolean;
+      /** The reading to start from when the owner is asked. */
+      suggested: 'packages' | 'weight';
     } | null;
     /**
      * The cost category this line most likely is, and how that was decided.
@@ -105,7 +119,10 @@ export async function previewReconciliation(input: {
       // nearly-the-same match looks across all of them.
       prisma.invoiceLineMemory.findMany({
         where: { restaurantId: owner.restaurantId },
-        select: { sourceName: true, vendorId: true, categoryId: true, notIngredient: true, confirmations: true },
+        select: {
+          sourceName: true, vendorId: true, categoryId: true, notIngredient: true, confirmations: true,
+          packAmount: true, packUnit: true,
+        },
       }),
     ]);
     const categories: CostCategory[] = categoryRows.map((c) => ({
@@ -142,17 +159,27 @@ export async function previewReconciliation(input: {
       remembered.set(link.sourceName, list);
     }
 
-    // Restated in what the kitchen buys in. A 1 kg tub stored as "1 un"
-    // is true and useless: a recipe measuring in grams cannot convert
-    // grams to units, so the dish cannot be costed at all.
-    //
-    // Only the certain ones are applied here. Where a package is some
-    // other size, both readings are arithmetically sound and the owner
-    // is asked rather than guessed at.
-    const conversions = input.lines.map((line) => packConversion(line));
-    const lines = input.lines.map((line, i) => conversions[i]?.certain ?? line);
+    // What the owner said each wording's package holds, preferring this
+    // supplier's answer: "2,5K" from one wholesaler is a 2,5 kg bag, and
+    // the next invoice carrying it is priced per kilo without asking.
+    const packFor = (productName: string): RememberedPack | null => {
+      const key = lineKey(productName);
+      const rows = memories.filter((m) => m.sourceName === key && m.packUnit);
+      const row = rows.find((m) => m.vendorId === (vendor?.id ?? null)) ?? rows[0];
+      return row ? rememberedPack(row) : null;
+    };
 
-    const reconciled = reconcileInvoice(lines, ingredients, remembered);
+    // Restated in what the kitchen buys in. A bag stored as "1 un" is true
+    // and useless: a recipe measuring in grams cannot convert grams to
+    // units, and an ingredient priced per kilo takes the bag's price as a
+    // kilo's. Settled ones are applied by the screen without asking; the
+    // rest are asked, because both readings are arithmetically sound.
+    const conversions = new Map(
+      input.lines.map((line) => [line.productName, packConversion(line, packFor(line.productName))]),
+    );
+    const units = new Map(ingredients.map((i) => [i.id, i.unit]));
+
+    const reconciled = reconcileInvoice(input.lines, ingredients, remembered);
 
     return {
       success: true,
@@ -162,9 +189,17 @@ export async function previewReconciliation(input: {
         lines: reconciled.map((line) => {
           // Matched back by name, since reconcileInvoice reorders by
           // what each line cost.
-          const conversion = conversions.find(
-            (c, i) => c && !c.certain && input.lines[i].productName === line.productName,
-          );
+          const conversion = conversions.get(line.productName) ?? null;
+          // Asked with the reading the kitchen needs already picked: weight
+          // when the line feeds an ingredient measured that way, packages
+          // when it feeds one counted in units or nothing known yet.
+          const linkedUnits = line.decision.kind === 'linked'
+            ? line.decision.ingredients.map((i) => units.get(i.id))
+            : [];
+          const suggested: 'packages' | 'weight' =
+            conversion && linkedUnits.length > 0 && linkedUnits.every((u) => u === conversion.pack.unit)
+              ? 'weight'
+              : 'packages';
           const guess = guessLineCategory(line.productName, {
             vendorId: vendor?.id ?? null,
             memories,
@@ -175,12 +210,14 @@ export async function previewReconciliation(input: {
             ...line,
             suspect: !lineArithmeticHolds(line),
             impliedUnitPrice: impliedUnitPrice(line),
-            // Null unless the owner has a choice to make.
             packChoice: conversion
               ? {
                   packAmount: conversion.pack.amount,
                   packUnit: conversion.pack.unit,
                   asWeight: conversion.asWeight,
+                  origin: conversion.origin,
+                  settled: conversion.certain !== null,
+                  suggested,
                 }
               : null,
             category: { id: guess.categoryId, origin: guess.origin },
@@ -222,6 +259,13 @@ export interface LineResolution {
    * it, or a suggestion was accepted as it stood.
    */
   categorySource?: 'OWNER' | 'MEMORY' | 'SUGGESTED';
+  /**
+   * How the line's package was counted, where it had a known size: the
+   * weight it holds, or packages. Remembered, so it is asked once.
+   */
+  pack?: RememberedPack;
+  /** Who settled the package: the owner, the memory, or agreeing labels. */
+  packDecidedBy?: FixedBy;
 }
 
 /**
@@ -238,6 +282,11 @@ export async function commitReconciliation(input: {
   invoiceDate: string;
   invoiceNumber: string | null;
   lines: LineResolution[];
+  /**
+   * The stored reading this invoice came from. Linked to the lines, and
+   * compared with what was saved so the reader's mistakes are on record.
+   */
+  scanId?: string | null;
 }) {
   try {
     const owner = await requireOwner();
@@ -248,17 +297,26 @@ export async function commitReconciliation(input: {
     // entry.
     const costEntry = await prisma.costEntry.findFirst({
       where: { id: input.costEntryId, restaurantId: owner.restaurantId, deletedAt: null },
-      select: { id: true, categoryId: true },
+      select: { id: true, categoryId: true, amount: true, type: true },
     });
     if (!costEntry) return { error: 'reconcile.noCostEntry' };
+
+    // This restaurant's own scan only; a forged id is simply not linked.
+    const scan = input.scanId
+      ? await prisma.receiptScan.findFirst({
+          where: { id: input.scanId, restaurantId: owner.restaurantId },
+          select: { id: true, extractedData: true },
+        })
+      : null;
 
     // Only this restaurant's categories, and only ones still in use: a forged
     // or stale id leaves the line with the invoice's category instead.
     const categoryRows = await prisma.category.findMany({
       where: { restaurantId: owner.restaurantId, isActive: true, type: { in: ['COGS', 'OPEX'] } },
-      select: { id: true, type: true },
+      select: { id: true, type: true, name: true },
     });
     const categoryType = new Map(categoryRows.map((c) => [c.id, c.type]));
+    const categoryName = new Map(categoryRows.map((c) => [c.id, c.name]));
     const categoryOf = (line: LineResolution) =>
       line.categoryId && categoryType.has(line.categoryId) ? line.categoryId : null;
     // A running cost — cleaning, gas, a repair — is never a kitchen
@@ -287,6 +345,8 @@ export async function commitReconciliation(input: {
 
     let linked = 0;
     let created = 0;
+    // Every ingredient this invoice prices, new ones included.
+    const touched = new Set<string>();
 
     for (const line of input.lines) {
       if (line.skip || isRunningCost(line)) continue;
@@ -338,6 +398,7 @@ export async function commitReconciliation(input: {
           },
           update: { ingredientId },
         });
+        touched.add(ingredientId);
         linked++;
       }
     }
@@ -369,6 +430,7 @@ export async function commitReconciliation(input: {
               totalPrice: line.total,
               invoiceDate,
               invoiceNumber: input.invoiceNumber,
+              receiptScanId: scan?.id ?? null,
               // Nobody said: it stays with the invoice's category, and is
               // marked so that nothing is learned from it.
               categoryId: chosen ?? costEntry.categoryId,
@@ -397,13 +459,57 @@ export async function commitReconciliation(input: {
         productName: line.productName,
         categoryId: categoryOf(line),
         notIngredient: !!line.skip || isRunningCost(line),
+        pack: line.pack,
       })),
     );
 
     // The ingredients this invoice touched now have a newer price than the
     // one they were costed at, so the cached figure is refreshed rather than
-    // left to drift until someone opens the menu.
-    await refreshIngredientCosts(owner.restaurantId, input.lines);
+    // left to drift until someone opens the menu — in each one's own unit.
+    await repriceIngredients(owner.restaurantId, { ingredientIds: [...touched] });
+
+    // What the reader got wrong, against what the owner confirmed. A
+    // failure here costs the owner nothing: the invoice is already saved.
+    if (scan) {
+      try {
+        const corrections = diffReading((scan.extractedData ?? {}) as Reading, {
+          vendor: input.vendorName,
+          date: input.invoiceDate,
+          total: Number(costEntry.amount),
+          type: costEntry.type,
+          lines: input.lines.map((line) => {
+            const chosen = categoryOf(line);
+            return {
+              productName: line.productName,
+              categoryName: chosen ? categoryName.get(chosen) ?? null : null,
+              categorySource: line.categorySource,
+              pack: line.pack,
+              packDecidedBy: line.packDecidedBy,
+            };
+          }),
+        });
+        await prisma.$transaction([
+          prisma.receiptScan.update({
+            where: { id: scan.id },
+            data: { linkedEntryId: costEntry.id, reviewedAt: new Date() },
+          }),
+          prisma.scanCorrection.createMany({
+            data: corrections.map((c) => ({
+              restaurantId: owner.restaurantId,
+              receiptScanId: scan.id,
+              vendorId: vendor.id,
+              productName: c.productName,
+              field: c.field,
+              readValue: c.readValue,
+              savedValue: c.savedValue,
+              fixedBy: c.fixedBy,
+            })),
+          }),
+        ]);
+      } catch (err) {
+        console.error('Failed to record scan corrections:', err);
+      }
+    }
 
     return {
       success: true,
@@ -495,7 +601,12 @@ async function findVendor(restaurantId: string, name: string, taxId?: string | n
 async function rememberLines(
   restaurantId: string,
   vendorId: string,
-  lines: Array<{ productName: string; categoryId: string | null; notIngredient: boolean }>,
+  lines: Array<{
+    productName: string;
+    categoryId: string | null;
+    notIngredient: boolean;
+    pack?: RememberedPack;
+  }>,
 ): Promise<number> {
   let learned = 0;
   const seen = new Set<string>();
@@ -504,39 +615,12 @@ async function rememberLines(
     // The same wording twice on one invoice is one answer, not two.
     if (!sourceName || seen.has(sourceName)) continue;
     seen.add(sourceName);
-    if (!line.categoryId && !line.notIngredient) continue;
+    if (!line.categoryId && !line.notIngredient && !line.pack) continue;
 
-    await rememberLine(restaurantId, vendorId, sourceName, line.categoryId, line.notIngredient);
+    await rememberLine(restaurantId, vendorId, sourceName, line.categoryId, line.notIngredient, line.pack);
     learned++;
   }
   return learned;
-}
-
-/**
- * Points each touched ingredient at its newest invoice price.
- *
- * `invoiceUnitCost` is a cache, and a cache nobody refreshes is a stale
- * number presented as a current one. Only ingredients with no manual cost are
- * updated: a figure the owner pinned by hand is their decision, not ours to
- * overwrite because a supplier sent a different price.
- */
-async function refreshIngredientCosts(restaurantId: string, lines: LineResolution[]) {
-  const touched = [...new Set(lines.flatMap((l) => l.ingredientIds ?? []))];
-  if (touched.length === 0) return;
-
-  const ingredients = await prisma.ingredient.findMany({
-    where: { id: { in: touched }, restaurantId, manualUnitCost: null },
-    select: { id: true },
-  });
-
-  for (const ingredient of ingredients) {
-    const line = lines.find((l) => l.ingredientIds?.includes(ingredient.id));
-    if (!line || line.unitPrice <= 0) continue;
-    await prisma.ingredient.update({
-      where: { id: ingredient.id },
-      data: { invoiceUnitCost: line.unitPrice, invoiceCostAt: new Date() },
-    });
-  }
 }
 
 /**

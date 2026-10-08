@@ -32,6 +32,12 @@ export interface ScanItem {
    * past answers is consulted first.
    */
   category?: string;
+  /**
+   * What one billed unit holds, read from the description: "BATATA DOCE
+   * 2,5K" is 2,5 kg. Lets a bag's price become a price per kilo.
+   */
+  packAmount?: number;
+  packUnit?: 'kg' | 'L';
 }
 
 /** A cost category the reader may choose from. */

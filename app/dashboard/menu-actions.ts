@@ -1,5 +1,6 @@
 'use server';
 
+import { repriceIngredients } from '@/lib/ingredient-costs-server';
 import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { normalizeProductName } from '@/lib/price-tracking';
@@ -31,46 +32,9 @@ const num = (value: unknown): number | null => {
  * the affected dishes move on their own.
  */
 async function refreshInvoiceCosts(restaurantId: string) {
-  const ingredients = await prisma.ingredient.findMany({
-    where: { restaurantId, deletedAt: null },
-    select: { id: true, normalizedName: true, invoiceCostAt: true },
-  });
-  if (ingredients.length === 0) return;
-
-  const latest = await prisma.invoiceItem.findMany({
-    where: {
-      restaurantId,
-      normalizedName: { in: ingredients.map((i) => i.normalizedName) },
-    },
-    orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }],
-    select: { normalizedName: true, unitPrice: true, invoiceDate: true, createdAt: true },
-  });
-
-  // First hit per name wins: the query is already ordered newest first.
-  const newest = new Map<string, { price: number; at: Date }>();
-  for (const item of latest) {
-    if (newest.has(item.normalizedName)) continue;
-    newest.set(item.normalizedName, {
-      price: Number(item.unitPrice),
-      at: item.invoiceDate ?? item.createdAt,
-    });
-  }
-
-  const updates = ingredients
-    .map((ing) => {
-      const hit = newest.get(ing.normalizedName);
-      if (!hit) return null;
-      // Skip the write when nothing moved, so opening the menu is not a
-      // write storm on a restaurant with a long ingredient list.
-      if (ing.invoiceCostAt && ing.invoiceCostAt.getTime() === hit.at.getTime()) return null;
-      return prisma.ingredient.update({
-        where: { id: ing.id },
-        data: { invoiceUnitCost: hit.price, invoiceCostAt: hit.at },
-      });
-    })
-    .filter(Boolean);
-
-  if (updates.length > 0) await prisma.$transaction(updates as never[]);
+  // Also follows the wordings the owner linked, and states each price in the
+  // ingredient's own unit — a bag is never a kilo.
+  await repriceIngredients(restaurantId);
 }
 
 // ── Reading ────────────────────────────────────────────────────────────────

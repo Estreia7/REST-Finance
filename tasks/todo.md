@@ -1,3 +1,58 @@
+# Embalagens na fatura + "cérebro" visível no admin
+
+## Situação hoje (2026-10-08)
+- "BATATA DOCE 2,5K" não é reconhecido como embalagem de 2,5 kg: o
+  `packSizeOf` (`lib/invoice-matching.ts:376`) só aceita `kg|g|l|ml|cl`, não
+  `K` sozinho. Sem embalagem não há pergunta, a linha fica "1 un × preço do
+  saco" e o `refreshIngredientCosts` grava o preço do saco como preço por kg
+  do ingrediente → receitas 2,5× mais caras. O total está certo.
+- O prompt do leitor manda explicitamente NÃO dividir pelo tamanho da
+  embalagem, e o leitor não devolve o tamanho.
+- Mesmo quando a embalagem é lida ("5,7KG"), a pergunta abre em "embalagens"
+  e a resposta do dono não fica memorizada: volta a ser perguntada.
+- 4 sítios copiam `unitPrice` para `Ingredient.invoiceUnitCost` sem comparar
+  unidades (`reconcile-actions.ts:523`, `menu-actions.ts:33`,
+  `accounting-actions.ts:654` e `:984`).
+- A leitura original (`ReceiptScan.extractedData`) não está ligada às linhas
+  gravadas: `receiptScanId` e `linkedEntryId` nunca são escritos. Não dá para
+  comparar "o que foi lido" com "o que ficou".
+
+## Plano
+1. [x] Leitor: campo novo por linha `packAmount/packUnit` = o que uma
+       embalagem contém, lido da descrição. Quantidade e preço continuam como
+       faturados. Mesma chamada.
+2. [x] `packSizeOf` aceita `K`, `KGR`, `LTR` e multipacks `NxM`.
+3. [x] Cérebro aprende embalagens (`InvoiceLineMemory.packAmount/packUnit`).
+4. [x] Converte sozinha quando é seguro (memória, ou leitor + descrição de
+       acordo, ou embalagem de 1 kg) — com nota e "Contar em embalagens".
+       Senão pergunta, aberta em "por kg" se o ingrediente é medido em kg/L.
+       Uma pergunta deixada no valor por defeito não é memorizada.
+5. [x] `lib/ingredient-costs*.ts`: uma função, os 4 sítios usam-na.
+6. [x] `scanId` ligado às linhas (`receiptScanId`) e ao custo (`linkedEntryId`).
+7. [x] `ScanCorrection`: fornecedor, data, total, tipo, categoria, embalagem,
+       preço unitário — com quem corrigiu (dono / memória / verificação).
+       (Ingrediente e "não é ingrediente" ficam de fora: o leitor não os dá.)
+8. [x] Admin › Clientes › restaurante › "Cérebro", com "Recalcular custos".
+9. [x] Traduções, changelog (fix + improvement), testes, build, QA.
+       Apresentação: sem alteração (é uma correção, não uma capacidade nova).
+10. [ ] Dados do Daniel: já não precisa de acesso meu — o custo corrige-se
+       sozinho quando ele abrir a Ementa, ou pelo botão "Recalcular custos"
+       no Cérebro do restaurante. A linha da fatura (1 un × 6,25) está certa
+       como faturada e fica.
+
+## Revisão (2026-10-08, embalagens + cérebro)
+- 848 testes passam (22 novos em `tests/pack-sizes.test.ts`), typecheck e
+  build limpos, detetor de design sem achados.
+- Migração verificada em PGlite: esquema anterior + migração = esquema novo.
+- QA local com o caso do Daniel recriado: o Cérebro mostrou "Batata doce
+  6,25 €/kg → devia ser 2,50 €/kg"; "Recalcular custos" corrigiu-o. No ecrã
+  do dono a batata doce veio convertida (5 kg × 2,50 €) e na segunda fatura
+  "Já sabíamos que cada embalagem tem 2,5 kg". Encontrado e corrigido no QA:
+  respostas por defeito estavam a ser memorizadas.
+- Não testado: uma leitura real com o Haiku 5.5 a devolver `packAmount`.
+
+---
+
 # Haiku 5.5 + consola de uso de IA
 
 ## Situação hoje (2026-10-08)

@@ -203,13 +203,17 @@ export default function InvoiceReconcile({ vendorName, vendorTaxId = null, lines
    */
   const [choices, setChoices] = useState<Record<string, string[]>>({});
   /**
-   * Per line, whether its quantity means packages or the weight they hold.
-   *
-   * Defaults to packages — what the invoice literally printed. A default
-   * that restated the line would be deciding the question while appearing
-   * to ask it.
+   * Per line, whether its quantity means packages or the weight they hold —
+   * only once the owner has said. Until then the line follows its default:
+   * the weight where the size settled itself (the owner answered before, or
+   * the reader and the label agree), otherwise whichever reading the
+   * ingredient it feeds is measured in.
    */
   const [packChoices, setPackChoices] = useState<Record<string, 'packages' | 'weight'>>({});
+  const packDefault = (line: ReconcilePreview['lines'][number]): 'packages' | 'weight' =>
+    !line.packChoice ? 'packages' : line.packChoice.settled ? 'weight' : line.packChoice.suggested;
+  const packChoiceOf = (line: ReconcilePreview['lines'][number]) =>
+    packChoices[line.productName] ?? packDefault(line);
   /**
    * Per line, its cost category and whether the owner chose it.
    *
@@ -316,13 +320,27 @@ export default function InvoiceReconcile({ vendorName, vendorTaxId = null, lines
         // out: the total and the quantity are the figures least likely to be
         // misread, so they are what an ingredient cost should come from.
         // The owner's answer wins over the printed figures.
-        const useWeight =
-          line.packChoice && packChoices[line.productName] === 'weight';
-        const measured = useWeight ? line.packChoice!.asWeight : line;
+        const pack = line.packChoice;
+        const useWeight = !!pack && packChoiceOf(line) === 'weight';
+        const measured = useWeight ? pack!.asWeight : line;
 
-        const unitPrice = line.suspect && line.impliedUnitPrice
-          ? line.impliedUnitPrice
-          : measured.unitPrice;
+        // Counted by weight, the price per kilo is already worked out from
+        // the total; the package price would be a bag's price per kilo.
+        const unitPrice = useWeight
+          ? measured.unitPrice
+          : line.suspect && line.impliedUnitPrice ? line.impliedUnitPrice : measured.unitPrice;
+
+        // Remembered only once it is an answer: the owner picked a reading,
+        // or the size settled itself and was left alone. A question left on
+        // its default is not an answer, and remembering it would stop the
+        // question ever being asked again. Who decided is kept with it.
+        const answered = packChoices[line.productName] !== undefined;
+        const packAnswer: Pick<LineResolution, 'pack' | 'packDecidedBy'> = pack && (answered || pack.settled)
+          ? {
+              pack: useWeight ? { amount: pack.packAmount, unit: pack.packUnit } : 'packages',
+              packDecidedBy: answered ? 'owner' : pack.origin === 'memory' ? 'memory' : 'check',
+            }
+          : {};
 
         const category = categoryChoices[line.productName] ?? { id: null, owner: false };
         const categorySource: LineResolution['categorySource'] = !category.id
@@ -338,6 +356,7 @@ export default function InvoiceReconcile({ vendorName, vendorTaxId = null, lines
           total: line.total,
           categoryId: category.id,
           categorySource,
+          ...packAnswer,
           ...(choice.includes('__skip') || isRunningCost(line.productName)
             ? { skip: true }
             : choice.filter((c) => c !== '__new').length > 0
@@ -346,6 +365,7 @@ export default function InvoiceReconcile({ vendorName, vendorTaxId = null, lines
         } satisfies LineResolution;
       }),
     );
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- packChoiceOf reads packChoices, listed
   }, [preview, choices, packChoices, categoryChoices, isRunningCost, onResolved]);
 
   if (loading) {
@@ -458,14 +478,48 @@ export default function InvoiceReconcile({ vendorName, vendorTaxId = null, lines
                   owner knows which. Asked rather than guessed, because
                   guessing wrong puts a wrong cost per kilo on every dish
                   that uses it. */}
-              {line.packChoice && (
+              {line.packChoice && line.packChoice.settled && (() => {
+                const pack = line.packChoice;
+                const byWeight = packChoiceOf(line) === 'weight';
+                const size = `${pack.packAmount.toLocaleString('pt-PT')} ${pack.packUnit}`;
+                const shown = byWeight ? pack.asWeight : line;
+                return (
+                  <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-success/10 px-2.5 py-2 text-[11px]">
+                    <Brain className="w-3 h-3 shrink-0 text-success" aria-hidden="true" />
+                    <span className="text-foreground">
+                      {byWeight
+                        ? t(pack.origin === 'memory' ? 'reconcile.packFromMemory' : 'reconcile.packFromLabel')
+                            .replace('{size}', size)
+                            .replace('{unit}', pack.packUnit)
+                        : t('reconcile.packCountedAsPackages')}
+                      {' '}
+                      <span className="font-semibold tabular-nums">
+                        {shown.quantity.toLocaleString('pt-PT')} {shown.unit} × {formatMoney(shown.unitPrice, { decimals: 2 })}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPackChoices((c) => ({ ...c, [line.productName]: byWeight ? 'packages' : 'weight' }))
+                      }
+                      className="ml-auto text-primary-ink underline underline-offset-2 hover:no-underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {byWeight
+                        ? t('reconcile.packCountPackages')
+                        : t('reconcile.packCountWeight').replace('{unit}', pack.packUnit)}
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {line.packChoice && !line.packChoice.settled && (
                 <div className="mb-2 rounded-lg bg-muted/60 p-2.5">
                   <p className="text-[11px] text-muted-foreground mb-2">
                     {t('reconcile.packQuestion')}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {(['packages', 'weight'] as const).map((choice) => {
-                      const picked = (packChoices[line.productName] ?? 'packages') === choice;
+                      const picked = packChoiceOf(line) === choice;
                       const shown =
                         choice === 'weight' ? line.packChoice!.asWeight : line;
                       return (

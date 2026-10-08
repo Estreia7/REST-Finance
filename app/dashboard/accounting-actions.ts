@@ -1,5 +1,6 @@
 'use server';
 
+import { repriceIngredients } from '@/lib/ingredient-costs-server';
 import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { toClientError } from '@/lib/errors';
@@ -611,12 +612,13 @@ export async function deleteInvoice(invoiceNumber: string) {
 
     const lines = await prisma.invoiceItem.findMany({
       where: { restaurantId: owner.restaurantId, invoiceNumber: number },
-      select: { id: true, costEntryId: true, normalizedName: true },
+      select: { id: true, costEntryId: true, normalizedName: true, productName: true },
     });
     if (lines.length === 0) return { error: 'accounting.invoiceNotFound' };
 
     const costEntryIds = [...new Set(lines.map((l) => l.costEntryId).filter(Boolean))] as string[];
     const names = [...new Set(lines.map((l) => l.normalizedName))];
+    const wordings = [...new Set(lines.map((l) => l.productName.trim().toLowerCase()))];
 
     await prisma.$transaction(async (tx) => {
       await tx.invoiceItem.deleteMany({
@@ -634,7 +636,10 @@ export async function deleteInvoice(invoiceNumber: string) {
     // Repriced after the deletion, from whatever invoice is now the newest.
     // An ingredient left holding a price from a deleted document would be a
     // margin computed on a purchase that did not happen.
-    const repriced = await repriceIngredients(owner.restaurantId, names);
+    const repriced = await repriceIngredients(owner.restaurantId, {
+      touching: { normalizedNames: names, sourceNames: wordings },
+      clearWhenNone: true,
+    });
 
     return {
       success: true,
@@ -643,51 +648,6 @@ export async function deleteInvoice(invoiceNumber: string) {
   } catch (error: unknown) {
     return { error: toClientError('Failed to delete the invoice', error, 'delete') };
   }
-}
-
-/**
- * Points ingredients at their newest surviving invoice price.
- *
- * Only those taking their cost from invoices: a price the owner pinned by
- * hand is their decision and not ours to move.
- */
-async function repriceIngredients(restaurantId: string, normalizedNames: string[]): Promise<number> {
-  if (normalizedNames.length === 0) return 0;
-
-  const ingredients = await prisma.ingredient.findMany({
-    where: {
-      restaurantId,
-      deletedAt: null,
-      manualUnitCost: null,
-      normalizedName: { in: normalizedNames },
-    },
-    select: { id: true, normalizedName: true },
-  });
-
-  let changed = 0;
-  for (const ingredient of ingredients) {
-    const newest = await prisma.invoiceItem.findFirst({
-      where: {
-        restaurantId,
-        normalizedName: ingredient.normalizedName,
-        costEntry: { deletedAt: null },
-      },
-      select: { unitPrice: true, invoiceDate: true },
-      orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }],
-    });
-
-    await prisma.ingredient.update({
-      where: { id: ingredient.id },
-      data: newest
-        ? { invoiceUnitCost: newest.unitPrice, invoiceCostAt: newest.invoiceDate }
-        // Nothing left to price it from: cleared rather than left showing a
-        // figure from a document that no longer exists.
-        : { invoiceUnitCost: null, invoiceCostAt: null },
-    });
-    changed++;
-  }
-
-  return changed;
 }
 
 /** One invoice, as a document rather than as its lines. */
@@ -981,29 +941,15 @@ export async function linkInvoiceSource(input: {
     // Price it now, from the newest invoice carrying that wording. Waiting
     // for the next scan would leave the owner looking at the link he just
     // made beside the empty price it was supposed to fill.
-    const latest = await prisma.invoiceItem.findFirst({
-      where: {
-        restaurantId: owner.restaurantId,
-        productName: { equals: sourceName, mode: 'insensitive' },
-        ...(vendorId ? { vendorId } : {}),
-      },
-      orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }],
-      select: { unitPrice: true, invoiceDate: true, createdAt: true },
+    await repriceIngredients(owner.restaurantId, { ingredientIds: [ingredient.id] });
+    const priced = await prisma.ingredient.findUnique({
+      where: { id: ingredient.id },
+      select: { invoiceUnitCost: true },
     });
-
-    if (latest) {
-      await prisma.ingredient.update({
-        where: { id: ingredient.id },
-        data: {
-          invoiceUnitCost: latest.unitPrice,
-          invoiceCostAt: latest.invoiceDate ?? latest.createdAt,
-        },
-      });
-    }
 
     return {
       success: true,
-      data: { priced: latest ? Number(latest.unitPrice) : null },
+      data: { priced: priced?.invoiceUnitCost != null ? Number(priced.invoiceUnitCost) : null },
     };
   } catch (error: unknown) {
     return { error: toClientError('Failed to link the invoice line', error, 'write') };

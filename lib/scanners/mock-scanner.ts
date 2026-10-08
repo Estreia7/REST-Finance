@@ -12,8 +12,10 @@ const MOCK_COST_RECEIPTS: ScanResult[] = [
       { product: 'Farinha T65 25kg', quantity: 1, unit: 'un', unitPrice: 12.80, total: 12.80 },
       { product: 'Tomate Pelado 2.5kg', quantity: 4, unit: 'un', unitPrice: 3.20, total: 12.80 },
       { product: 'Mozzarella Fresca 1kg', quantity: 3, unit: 'kg', unitPrice: 8.90, total: 26.70 },
+      // A bag whose size the reader read off the label: settled without asking.
+      { product: 'BATATA DOCE 2,5K', quantity: 2, unit: 'un', unitPrice: 6.25, total: 12.50, packAmount: 2.5, packUnit: 'kg' },
     ],
-    grandTotal: 89.30,
+    grandTotal: 101.80,
     suggestedType: 'COGS',
     suggestedCategory: 'Comida',
   },

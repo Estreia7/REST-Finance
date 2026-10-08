@@ -117,6 +117,7 @@ model Restaurant {
   invoiceItemLinks  InvoiceItemLink[]
   lineMemories      InvoiceLineMemory[]
   aiUsage           AiUsage[]
+  scanCorrections   ScanCorrection[]
 
   @@map("restaurants")
 }
@@ -478,9 +479,52 @@ model ReceiptScan {
   linkedEntryId String?    @map("linked_entry_id")
   createdAt     DateTime   @default(now()) @map("created_at")
 
+  /// When the owner finished saying what the lines are. Null for a reading
+  /// that was never confirmed, which is itself worth knowing.
+  reviewedAt DateTime? @map("reviewed_at")
+
   invoiceItems InvoiceItem[]
+  corrections  ScanCorrection[]
 
   @@map("receipt_scans")
+}
+
+/// One thing the reader got wrong on an invoice, and what it became.
+///
+/// Written when the owner confirms an invoice, by comparing what the reader
+/// returned with what was saved. A line whose category the restaurant's
+/// memory corrected counts as much as one the owner corrected: both are the
+/// reader being wrong, and both are what the next prompt change is measured
+/// against. Nothing here is consulted while reading — the memory already
+/// holds the right answers — it is the record of how often they were needed.
+model ScanCorrection {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  /// Kept if the scan is removed, set to null: the mistake still happened.
+  receiptScan   ReceiptScan? @relation(fields: [receiptScanId], references: [id], onDelete: SetNull)
+  receiptScanId String?      @map("receipt_scan_id")
+  vendor        Vendor?      @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  vendorId      String?      @map("vendor_id")
+
+  /// The line's wording as printed, or null for a field of the invoice
+  /// itself (supplier, date, total).
+  productName String? @map("product_name")
+
+  /// What was wrong: vendor, date, total, type, category, pack, unitPrice.
+  /// Free text, so a new check does not need a migration.
+  field      String
+  readValue  String? @map("read_value")
+  savedValue String? @map("saved_value")
+  /// Who put it right: owner, memory (the restaurant already knew), or
+  /// check (the arithmetic of the line).
+  fixedBy    String  @map("fixed_by")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([restaurantId, createdAt])
+  @@map("scan_corrections")
 }
 
 /// Insurance policies, licences and certificates, with their expiry dates.
@@ -540,6 +584,7 @@ model Vendor {
   invoiceItems InvoiceItem[]
   itemLinks    InvoiceItemLink[]
   lineMemories InvoiceLineMemory[]
+  corrections  ScanCorrection[]
 
   @@unique([restaurantId, name])
   @@map("vendors")
@@ -1313,6 +1358,13 @@ model InvoiceLineMemory {
   /// The owner said this line is not one of the kitchen's ingredients: the
   /// deposit on a crate, a delivery fee, a bottle of bleach.
   notIngredient Boolean @default(false) @map("not_ingredient")
+
+  /// What one package of this wording holds, as the owner answered it:
+  /// "BATATA DOCE 2,5K" is 2,5 kg, so the next invoice is priced per kilo
+  /// without asking. `packUnit` "un" means the owner wants it counted in
+  /// packages; null means never answered.
+  packAmount Decimal? @map("pack_amount") @db.Decimal(10, 3)
+  packUnit   String?  @map("pack_unit")
 
   /// How many times this answer was given or accepted. Reset to one when
   /// the owner changes it: a corrected answer starts again from scratch.

@@ -28,7 +28,11 @@ interface CostReceiptData {
       database — it is how an invoice is found again. */
   invoiceNumber?: string;
   /** `category` is the reader's guess, from the restaurant's own list. */
-  items: Array<{ product: string; quantity: number; unit?: string; unitPrice: number; total: number; category?: string }>;
+  items: Array<{
+    product: string; quantity: number; unit?: string; unitPrice: number; total: number; category?: string;
+    /** What one billed unit holds, as the reader read the description. */
+    packAmount?: number; packUnit?: 'kg' | 'L';
+  }>;
   grandTotal: number;
   suggestedType: 'COGS' | 'OPEX';
   suggestedCategory: string;
@@ -117,6 +121,8 @@ export default function ReceiptScanner({
   const [reconciling, setReconciling] = useState<{
     costEntryId: string;
     data: CostReceiptData;
+    /** The reading this invoice came from, so what was read can be compared with what was saved. */
+    scanId: string | null;
   } | null>(null);
   /**
    * The lines handed to the reconcile screen, built once per invoice.
@@ -133,10 +139,15 @@ export default function ReceiptScanner({
         unitPrice: item.unitPrice,
         total: item.total,
         category: item.category,
+        packSize: item.packAmount && item.packUnit
+          ? { amount: item.packAmount, unit: item.packUnit }
+          : null,
       })) ?? [],
     [reconciling],
   );
   const [extracted, setExtracted] = useState<ExtractionResult | null>(null);
+  /** The stored reading behind `extracted`, kept to the end of the review. */
+  const [scanId, setScanId] = useState<string | null>(null);
   const [editData, setEditData] = useState<ExtractionResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -332,6 +343,7 @@ export default function ReceiptScanner({
       const result = await res.json();
       if (result.success) {
         setExtracted(result.data);
+        setScanId(typeof result.scanId === 'string' ? result.scanId : null);
         setEditData(result.data);
         toast.success(t('scanner.extracted'));
       } else {
@@ -405,7 +417,7 @@ export default function ReceiptScanner({
           // ingredient beside it.
           if (entryId && d.items.length > 0) {
             toast.success(t('scanner.costSaved'));
-            setReconciling({ costEntryId: entryId, data: d });
+            setReconciling({ costEntryId: entryId, data: d, scanId });
             onSaved?.();
             setSaving(false);
             return;
@@ -432,6 +444,7 @@ export default function ReceiptScanner({
    */
   const resetState = () => {
     setExtracted(null);
+    setScanId(null);
     setEditData(null);
     if (fileRef.current) fileRef.current.value = '';
 
@@ -501,6 +514,7 @@ export default function ReceiptScanner({
               vendorTaxId: reconciling.data.vendorTaxId ?? null,
               invoiceDate: reconciling.data.date,
               invoiceNumber: reconciling.data.invoiceNumber ?? null,
+              scanId: reconciling.scanId,
               lines,
             });
             setSaving(false);
