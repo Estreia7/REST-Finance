@@ -18,6 +18,7 @@ import { calculateKpis, toPercent, safeDivide, percentChange } from '@/lib/kpi';
 type CostType = 'COGS' | 'OPEX';
 type CategoryType = 'REVENUE' | 'COGS' | 'OPEX';
 import { toClientError } from '@/lib/errors';
+import { buildYearComparison, cumulativeSales } from '@/lib/comparative';
 import { endDateFor } from '@/lib/recurring-costs';
 import { bookDueRecurringCosts } from '@/lib/recurring-costs-server';
 import { invoiceEntryIds } from '@/lib/invoice-split-server';
@@ -876,39 +877,42 @@ export async function getComparativeData() {
     const member = await requireMember();
     if (isAuthError(member)) return { error: member.error };
 
-    const now = new Date();
-    const months = [];
+    // Today as the restaurant lives it: a figure entered at 00:30 in Lisbon
+    // belongs to the new day, whatever the server's clock says.
+    const [y, m, d] = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date()).split('-').map(Number);
+    const today = new Date(Date.UTC(y, m - 1, d));
 
-    for (let i = 5; i >= 0; i--) {
-      const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+    // Every year of takings, for the accumulated-sales lines; costs only as
+    // far back as the comparison with last year reaches.
+    const [summaries, costRows] = await Promise.all([
+      prisma.dailySummary.findMany({
+        where: { restaurantId: member.restaurantId, deletedAt: null },
+        select: { date: true, revenueTotal: true },
+      }),
+      prisma.costEntry.findMany({
+        where: {
+          restaurantId: member.restaurantId,
+          deletedAt: null,
+          date: { gte: new Date(Date.UTC(y - 1, 0, 1)) },
+        },
+        select: { date: true, amount: true },
+      }),
+    ]);
+    const revenue = summaries.map((s) => ({ date: s.date, amount: Number(s.revenueTotal) }));
+    const costs = costRows.map((c) => ({ date: c.date, amount: Number(c.amount) }));
 
-      const [rev, costs] = await Promise.all([
-        prisma.dailySummary.aggregate({
-          where: { restaurantId: member.restaurantId, deletedAt: null, date: { gte: start, lte: end } },
-          _sum: { revenueTotal: true },
-        }),
-        prisma.costEntry.aggregate({
-          where: { restaurantId: member.restaurantId, deletedAt: null, date: { gte: start, lte: end } },
-          _sum: { amount: true },
-        }),
-      ]);
-
-      const revenue = Number(rev._sum.revenueTotal || 0);
-      const totalCosts = Number(costs._sum.amount || 0);
-
-      // The month goes out as figures, not as a formatted string: only the
-      // client knows the account's language, and this is read in both.
-      months.push({
-        year: start.getFullYear(),
-        month: start.getMonth(),
-        revenue,
-        costs: totalCosts,
-        profit: revenue - totalCosts,
-      });
-    }
-
-    return { success: true, data: months };
+    // Figures, not formatted strings: only the client knows the account's
+    // language, and this is read in both.
+    return {
+      success: true,
+      data: {
+        today: today.toISOString().slice(0, 10),
+        comparison: buildYearComparison(revenue, costs, today),
+        cumulative: cumulativeSales(revenue, today),
+      },
+    };
   } catch (error: unknown) {
     return { error: toClientError('Failed to fetch comparative data', error, 'read') };
   }

@@ -7,16 +7,58 @@ import { getComparativeData } from '../actions';
 import { useChartTheme, tooltipProps } from '@/lib/chart-theme';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
+import { percentChange } from '@/lib/kpi';
+import type { MonthFigures, YearComparison, CumulativeSales } from '@/lib/comparative';
+import CumulativeSalesChart from './CumulativeSalesChart';
 import InfoHint from '@/app/components/InfoHint';
 
-interface MonthData {
-  /** Four-digit year. */
-  year: number;
-  /** Zero-based, as `Date.getMonth()` returns it. */
-  month: number;
-  revenue: number;
-  costs: number;
-  profit: number;
+type MonthData = MonthFigures;
+
+/** A month's margin, as a percentage of its takings; null with no takings. */
+function marginOf(revenue: number, profit: number): number | null {
+  return revenue > 0 ? (profit / revenue) * 100 : null;
+}
+
+/**
+ * How a figure moved against the same month last year.
+ *
+ * Whether up is good depends on the figure: more revenue and more profit are,
+ * more costs are not, so the colour follows the meaning rather than the sign.
+ * A base of zero has no percentage — "up 100%" from nothing says nothing —
+ * and shows as a dash.
+ */
+function YearChange({
+  current, previous, upIsGood = true, points = false, locale, previousLabel,
+}: {
+  current: number | null;
+  previous: number | null;
+  upIsGood?: boolean;
+  /** Margin moves in percentage points, not in percent of itself. */
+  points?: boolean;
+  locale: string;
+  /** Last year's figure, written out, shown beside the change. */
+  previousLabel?: string;
+}) {
+  if (current === null || previous === null) return <span className="block text-[11px] text-muted-foreground">—</span>;
+  const delta = points ? current - previous : previous === 0 ? null : percentChange(current, previous) * 100;
+  if (delta === null) {
+    return <span className="block text-[11px] text-muted-foreground">{previousLabel ?? '—'}</span>;
+  }
+  const flat = Math.abs(delta) < 0.05;
+  const up = delta > 0;
+  const good = flat ? null : up === upIsGood;
+  const tone = good === null ? 'text-muted-foreground' : good ? 'text-green-400' : 'text-red-400';
+  const Icon = up ? TrendingUp : TrendingDown;
+  const value = Math.abs(delta).toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return (
+    <span className="block text-[11px] tabular-nums whitespace-nowrap">
+      <span className={`inline-flex items-center gap-0.5 font-semibold ${tone}`}>
+        {!flat && <Icon className="w-3 h-3" aria-hidden="true" />}
+        {flat ? '' : up ? '+' : '−'}{value}{points ? ' pp' : '%'}
+      </span>
+      {previousLabel && <span className="text-muted-foreground"> · {previousLabel}</span>}
+    </span>
+  );
 }
 
 /**
@@ -42,6 +84,63 @@ function monthLabel(m: MonthData, locale: string, style: 'short' | 'long'): stri
   // Six ticks share the width of a phone, so the chart takes the short year.
   const year = style === 'short' ? `'${String(m.year).slice(-2)}` : m.year;
   return `${titled} ${year}`;
+}
+
+/**
+ * The month alone, abbreviated, for a chart that shows one year: the year is
+ * in the title, and twelve ticks have no room to repeat it.
+ */
+function shortMonth(m: MonthData, locale: string): string {
+  const name = new Date(m.year, m.month, 1).toLocaleDateString(locale, { month: 'short' });
+  return name.charAt(0).toUpperCase() + name.slice(1).replace(/.$/, '');
+}
+
+/**
+ * A headline change against the same period last year.
+ *
+ * The period is written under the figure, because "+12%" means nothing until
+ * it says against what — and while the month runs, against what is the same
+ * days of last year's month, not all of it.
+ */
+function TrendCard({
+  label, term, change, now, then, period,
+}: {
+  label: string;
+  term: 'revenueVsPrev' | 'profitVsPrev';
+  change: number | null;
+  now: string;
+  then: string | null;
+  period: string;
+}) {
+  const { t, language } = useLanguage();
+  const locale = language === 'pt' ? 'pt-PT' : 'en-GB';
+  const up = (change ?? 0) >= 0;
+  return (
+    <div className="card-glass p-4">
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+        {label}<InfoHint term={term} />
+      </div>
+      <div className="flex items-center gap-2">
+        {change === null ? (
+          <span className="text-xl font-bold text-muted-foreground">—</span>
+        ) : (
+          <>
+            <span className={`text-xl font-bold tabular-nums ${up ? 'text-green-400' : 'text-red-400'}`}>
+              {up ? '+' : '−'}{Math.abs(change).toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+            </span>
+            {up ? <TrendingUp className="w-4 h-4 text-green-400" aria-hidden="true" /> : <TrendingDown className="w-4 h-4 text-red-400" aria-hidden="true" />}
+          </>
+        )}
+      </div>
+      <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{period}</p>
+      {then !== null && (
+        <p className="text-[11px] tabular-nums text-muted-foreground">
+          <span className="text-foreground font-medium">{now}</span>{' '}
+          {t('comparative.vsLastYear').replace('{month}', then)}
+        </p>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -101,12 +200,16 @@ export default function ComparativePanel() {
   const COLORS = [chart.primary, chart.info];
   const { t, language } = useLanguage();
   const locale = language === 'pt' ? 'pt-PT' : 'en-GB';
-  const [data, setData] = useState<MonthData[]>([]);
+  const [comparison, setComparison] = useState<YearComparison | null>(null);
+  const [cumulative, setCumulative] = useState<CumulativeSales | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     getComparativeData().then(r => {
-      if (r.success && r.data) setData(r.data as MonthData[]);
+      if (r.success && r.data) {
+        setComparison(r.data.comparison as YearComparison);
+        setCumulative(r.data.cumulative as CumulativeSales);
+      }
       setLoading(false);
     });
   }, []);
@@ -116,14 +219,33 @@ export default function ComparativePanel() {
   if (loading) {
     return <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   }
+  if (!comparison) return null;
 
-  // Trends
-  const current = data[data.length - 1];
-  const previous = data[data.length - 2];
-  const revChange = previous?.revenue ? ((current.revenue - previous.revenue) / previous.revenue * 100) : 0;
-  const profitChange = previous?.profit ? ((current.profit - previous.profit) / Math.abs(previous.profit) * 100) : 0;
+  // The whole year on the chart; the table stops at this month, since rows
+  // for months still to come would be columns of zeros.
+  const data = comparison.months;
+  const current = comparison.current;
+  const tableMonths = data.filter(m => m.month <= current.month);
 
-  const chartData = data.map(m => ({ ...m, label: monthLabel(m, locale, 'short') }));
+  // The month in progress against the same days a year ago — the period is
+  // said under the figure, so "+12%" is never read as a whole month's change.
+  const lastMonthName = monthLabel({ ...current, year: current.year - 1 }, locale, 'long');
+  const period = !current.lastYear
+    ? t('comparative.noLastYearPeriod').replace('{month}', lastMonthName)
+    : current.throughDay
+      ? t('comparative.periodRunning')
+          .replace('{month}', monthLabel(current, locale, 'long'))
+          .replace('{day}', String(current.throughDay))
+          .replace('{year}', String(current.year - 1))
+      : t('comparative.periodFull')
+          .replace('{month}', monthLabel(current, locale, 'long'))
+          .replace('{lastMonth}', lastMonthName);
+  const revChange = current.lastYear && current.lastYear.revenue !== 0
+    ? percentChange(current.revenue, current.lastYear.revenue) * 100 : null;
+  const profitChange = current.lastYear && current.lastYear.profit !== 0
+    ? percentChange(current.profit, current.lastYear.profit) * 100 : null;
+
+  const chartData = data.map(m => ({ ...m, label: shortMonth(m, locale) }));
 
   // Revenue is always the tallest series and profit the only one that can go
   // negative, so those two bracket the chart.
@@ -136,41 +258,35 @@ export default function ComparativePanel() {
     <div className="space-y-4">
       {/* Trend cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <div className="card-glass p-4">
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-            {t('comparative.revenueVsPrev')}<InfoHint term="revenueVsPrev" />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className={`text-xl font-bold ${revChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {revChange >= 0 ? '+' : ''}{revChange.toFixed(1)}%
-            </span>
-            {revChange >= 0 ? <TrendingUp className="w-4 h-4 text-green-400" /> : <TrendingDown className="w-4 h-4 text-red-400" />}
-          </div>
-        </div>
-        <div className="card-glass p-4">
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-            {t('comparative.profitVsPrev')}<InfoHint term="profitVsPrev" />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className={`text-xl font-bold ${profitChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {profitChange >= 0 ? '+' : ''}{profitChange.toFixed(1)}%
-            </span>
-            {profitChange >= 0 ? <TrendingUp className="w-4 h-4 text-green-400" /> : <TrendingDown className="w-4 h-4 text-red-400" />}
-          </div>
-        </div>
+        <TrendCard
+          label={t('comparative.revenueVsLastYear')}
+          term="revenueVsPrev"
+          change={revChange}
+          now={fmt(current.revenue)}
+          then={current.lastYear ? fmt(current.lastYear.revenue) : null}
+          period={period}
+        />
+        <TrendCard
+          label={t('comparative.profitVsLastYear')}
+          term="profitVsPrev"
+          change={profitChange}
+          now={fmt(current.profit)}
+          then={current.lastYear ? fmt(current.lastYear.profit) : null}
+          period={period}
+        />
         <div className="card-glass p-4 col-span-2 md:col-span-1">
           <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
             {t('comparative.monthlyAvg')}<InfoHint term="monthlyAvg" />
           </div>
           <div className="text-xl font-bold text-foreground">
-            {fmt(data.reduce((s, d) => s + d.revenue, 0) / Math.max(data.length, 1))}
+            {fmt(comparison.averageSixMonths)}
           </div>
         </div>
       </div>
 
       {/* Chart */}
       <div className="card-glass p-6">
-        <h3 className="text-lg font-bold text-foreground mb-1">{t('charts.titleMonthlyComparison')}</h3>
+        <h3 className="text-lg font-bold text-foreground mb-1">{t('charts.titleMonthlyComparison').replace('{year}', String(comparison.year))}</h3>
         <p className="text-xs text-muted-foreground mb-5">{t('charts.subMonthlyComparison')}</p>
         <div className="h-[280px] sm:h-[320px]">
           <ResponsiveContainer width="100%" height="100%">
@@ -183,14 +299,15 @@ export default function ComparativePanel() {
             <BarChart
               data={chartData}
               margin={{ top: 4, right: 4, bottom: 0, left: -12 }}
-              barGap={3}
-              barCategoryGap="22%"
-              maxBarSize={22}
+              barGap={2}
+              barCategoryGap="18%"
+              maxBarSize={16}
             >
               <CartesianGrid strokeDasharray="2 4" stroke={chart.grid} vertical={false} />
               <XAxis
                 dataKey="label"
-                tick={{ fill: chart.axis, fontSize: 11 }}
+                interval={0}
+                tick={{ fill: chart.axis, fontSize: 10 }}
                 tickLine={false}
                 axisLine={{ stroke: chart.grid }}
                 tickMargin={8}
@@ -218,6 +335,9 @@ export default function ComparativePanel() {
         </div>
       </div>
 
+      {/* Sales accumulated through the year, other years added from the legend. */}
+      {cumulative && <CumulativeSalesChart data={cumulative} />}
+
       {/* Monthly table */}
       <div className="card-glass p-6">
         <h3 className="text-sm font-bold text-foreground mb-1">{t('charts.titleMonthlyDetail')}</h3>
@@ -242,17 +362,42 @@ export default function ComparativePanel() {
               </tr>
             </thead>
             <tbody>
-              {data.map((m, i) => (
-                <tr key={i} className="border-b border-border-subtle">
-                  <td className="py-2 text-foreground font-medium whitespace-nowrap">
-                    {monthLabel(m, locale, 'long')}
-                  </td>
-                  <td className="py-2 text-right text-muted-foreground">{fmt(m.revenue)}</td>
-                  <td className="py-2 text-right text-red-400">{fmt(m.costs)}</td>
-                  <td className={`py-2 text-right font-semibold ${m.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmt(m.profit)}</td>
-                  <td className="py-2 text-right text-muted-foreground">{m.revenue > 0 ? (m.profit / m.revenue * 100).toFixed(1) : '0.0'}%</td>
-                </tr>
-              ))}
+              {tableMonths.map((m, i) => {
+                const ly = m.lastYear;
+                const margin = marginOf(m.revenue, m.profit);
+                const lastMargin = ly ? marginOf(ly.revenue, ly.profit) : null;
+                const lastMonth = monthLabel({ ...m, year: m.year - 1 }, locale, 'long');
+                return (
+                  <tr key={i} className="border-b border-border-subtle align-top">
+                    <td className="py-2.5 pr-3 text-foreground font-medium whitespace-nowrap">
+                      {monthLabel(m, locale, 'long')}
+                      <span className="block text-[11px] font-normal text-muted-foreground">
+                        {ly
+                          ? m.throughDay
+                            ? t('comparative.vsLastYearToDay').replace('{month}', lastMonth).replace('{day}', String(m.throughDay))
+                            : t('comparative.vsLastYear').replace('{month}', lastMonth)
+                          : t('comparative.noLastYear').replace('{year}', String(m.year - 1))}
+                      </span>
+                    </td>
+                    <td className="py-2.5 pl-3 text-right tabular-nums text-muted-foreground">
+                      {fmt(m.revenue)}
+                      {ly && <YearChange current={m.revenue} previous={ly.revenue} locale={locale} previousLabel={fmt(ly.revenue)} />}
+                    </td>
+                    <td className="py-2.5 pl-3 text-right tabular-nums text-red-400">
+                      {fmt(m.costs)}
+                      {ly && <YearChange current={m.costs} previous={ly.costs} upIsGood={false} locale={locale} previousLabel={fmt(ly.costs)} />}
+                    </td>
+                    <td className={`py-2.5 pl-3 text-right tabular-nums font-semibold ${m.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {fmt(m.profit)}
+                      {ly && <YearChange current={m.profit} previous={ly.profit} locale={locale} previousLabel={fmt(ly.profit)} />}
+                    </td>
+                    <td className="py-2.5 pl-3 text-right tabular-nums text-muted-foreground">
+                      {margin === null ? '—' : `${margin.toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
+                      {ly && <YearChange current={margin} previous={lastMargin} points locale={locale} />}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

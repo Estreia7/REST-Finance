@@ -35,9 +35,33 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.08.4';
+export const CHANGELOG_VERSION = '2026.10.09.1';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.09.1',
+    date: '2026-10-09',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Vendas acumuladas, ano contra ano',
+        detail:
+          'Em Análises › Comparação há um gráfico novo: o que vendeu desde 1 de janeiro até hoje, numa linha. Por baixo, na legenda, carregue num ano anterior para o pôr por cima e ver logo se vai à frente ou atrás. Em cima diz quanto leva vendido e a diferença face ao ano passado na mesma data.',
+      },
+      {
+        kind: 'improvement',
+        title: 'A comparação passa a ser com o ano passado, e mostra o ano inteiro',
+        detail:
+          'Os dois primeiros números da Comparação já não olham para o mês anterior, mas para o mesmo mês do ano passado — e, enquanto o mês decorre, para os mesmos dias, para não parecer que o mês caiu só por ainda não ter acabado. O gráfico mensal mostra agora de janeiro a dezembro.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Cada mês comparado com o mesmo mês do ano passado',
+        detail:
+          'Em Análises › Comparação, o detalhe mensal mostra agora, por baixo de cada número, quanto subiu ou desceu face ao mesmo mês do ano anterior e qual era o valor nessa altura. A verde o que melhorou, a vermelho o que piorou — nos custos, subir conta como piorar. A margem mostra a diferença em pontos percentuais. Os meses sem dados do ano anterior dizem-no em vez de inventar uma percentagem.',
+      },
+    ],
+  },
   {
     version: '2026.10.08.4',
     date: '2026-10-08',

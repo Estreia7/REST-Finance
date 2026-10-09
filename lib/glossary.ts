@@ -184,14 +184,14 @@ const pt: Record<GlossaryKey, GlossaryEntry> = {
       'A média das vendas dos últimos meses. Serve para ver se o mês atual está acima ou abaixo do habitual.',
   },
   revenueVsPrev: {
-    term: 'Receita vs Mês Anterior',
+    term: 'Receita vs Ano Passado',
     plain:
-      'Se vendeu mais ou menos do que no mês passado, em percentagem. +10% quer dizer que vendeu mais um décimo.',
+      'Se este mês está a vender mais ou menos do que o mesmo mês do ano passado, em percentagem. Enquanto o mês decorre, compara os mesmos dias: de 1 até hoje, cá e lá. +10% quer dizer que vendeu mais um décimo.',
   },
   profitVsPrev: {
-    term: 'Lucro vs Mês Anterior',
+    term: 'Lucro vs Ano Passado',
     plain:
-      'Se sobrou mais ou menos dinheiro do que no mês passado. Pode vender mais e lucrar menos, se as despesas subirem mais depressa.',
+      'Se está a sobrar mais ou menos dinheiro do que no mesmo mês do ano passado, nos mesmos dias. Pode vender mais e lucrar menos, se as despesas subirem mais depressa.',
   },
 
   avgTicket: {
@@ -381,14 +381,14 @@ const en: Record<GlossaryKey, GlossaryEntry> = {
       'Average sales over the last few months. Use it to see whether this month is running above or below normal.',
   },
   revenueVsPrev: {
-    term: 'Revenue vs Last Month',
+    term: 'Revenue vs Last Year',
     plain:
-      'Whether you sold more or less than last month, as a percentage. +10% means you sold a tenth more.',
+      'Whether this month is selling more or less than the same month last year, as a percentage. While the month runs, it compares the same days: the 1st to today, then and now. +10% means you sold a tenth more.',
   },
   profitVsPrev: {
-    term: 'Profit vs Last Month',
+    term: 'Profit vs Last Year',
     plain:
-      'Whether more or less money was left than last month. You can sell more and earn less, if expenses climb faster.',
+      'Whether more or less money is being left than in the same month last year, over the same days. You can sell more and earn less, if expenses climb faster.',
   },
 
   avgTicket: {
