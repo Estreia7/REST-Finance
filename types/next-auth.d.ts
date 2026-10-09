@@ -11,5 +11,17 @@ declare module 'next-auth' {
       email?: string | null;
       image?: string | null;
     };
+    /**
+     * Set when an administrator is signed in as this user for support
+     * (lib/impersonation.ts): who they really are, and when it ends.
+     */
+    impersonation?: { adminId: string; expiresAt: number } | null;
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    impersonatedBy?: string;
+    impersonationExpires?: number;
   }
 }

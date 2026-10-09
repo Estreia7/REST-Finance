@@ -20,6 +20,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
   }
 
+  // An administrator signed in for support skipping the walkthrough must not
+  // mark it as seen for the client, who has not seen it.
+  if (session.impersonation) return NextResponse.json({ ok: true, saved: false });
+
   // `replay: true` puts the account back to never-seen, which is what the
   // demo account's "run it again" button uses.
   let replay = false;

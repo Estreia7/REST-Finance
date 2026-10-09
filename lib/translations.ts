@@ -236,6 +236,20 @@ export const translations = {
         confirmations: '{n}× confirmado',
         showingFirst: 'A mostrar as primeiras {n}. Procure para encontrar as outras.',
       },
+      // Support access: signing in as a client to see what they see
+      impersonate: {
+        button: 'Entrar como este utilizador',
+        buttonShort: 'Entrar como',
+        confirm: 'Entrar na conta de {name}?',
+        confirmHint: 'Sai da sua sessão de admin durante até 60 minutos. Fica registado na Atividade.',
+        confirmYes: 'Entrar',
+        cancel: 'Cancelar',
+        working: 'A entrar…',
+        notAllowed: 'Não é possível entrar nesta conta.',
+        notFound: 'Utilizador não encontrado.',
+        noRestaurant: 'Esta conta não tem nenhum restaurante para ver.',
+        notActive: 'Não está dentro de nenhuma conta de cliente.',
+      },
       // The AI usage console: what the reader costs, on which model, and who spends it
       aiUsage: {
         periodLabel: 'Período',
@@ -500,6 +514,8 @@ export const translations = {
       // here; anything unknown falls through to the raw string, so a new action
       // is never silently hidden from the log.
       auditAction: {
+        admin_impersonate_start: 'Entrou na conta do cliente (suporte)',
+        admin_impersonate_stop: 'Saiu da conta do cliente (suporte)',
         admin_ingredients_reprice: 'Custos dos ingredientes recalculados',
         admin_user_delete: 'Conta de utilizador eliminada',
         admin_user_password_change: 'Palavra-passe alterada',
@@ -965,6 +981,7 @@ export const translations = {
     // Server-returned error keys. Server actions cannot call t(), so they
     // return one of these keys and the component translates it on display.
     errors: {
+      impersonating: 'Isto pertence à pessoa, não ao restaurante, e não se altera em modo de suporte.',
       read: 'Não foi possível carregar os dados. Tente novamente.',
       write: 'Não foi possível guardar as alterações. Tente novamente.',
       delete: 'Não foi possível eliminar. Tente novamente.',
@@ -2114,6 +2131,13 @@ export const translations = {
     tickets: {
       noData: 'Sem dados de tickets para este período.',
     },
+    // Shown while an administrator is signed in as this account for support
+    impersonation: {
+      banner: 'A ver a conta de {name} como administrador',
+      until: 'termina às {time}',
+      back: 'Voltar ao admin',
+      backing: 'A voltar…',
+    },
     tour: {
       aria: 'Visita guiada',
       next: 'Seguinte',
@@ -2921,6 +2945,20 @@ export const translations = {
         confirmations: 'confirmed {n}×',
         showingFirst: 'Showing the first {n}. Search to find the others.',
       },
+      // Support access: signing in as a client to see what they see
+      impersonate: {
+        button: 'Sign in as this user',
+        buttonShort: 'Sign in as',
+        confirm: "Sign in to {name}'s account?",
+        confirmHint: 'Leaves your admin session for up to 60 minutes. Recorded in Activity.',
+        confirmYes: 'Sign in',
+        cancel: 'Cancel',
+        working: 'Signing in…',
+        notAllowed: 'This account cannot be signed into.',
+        notFound: 'User not found.',
+        noRestaurant: 'This account has no restaurant to look at.',
+        notActive: "You are not inside a client's account.",
+      },
       // The AI usage console: what the reader costs, on which model, and who spends it
       aiUsage: {
         periodLabel: 'Period',
@@ -3185,6 +3223,8 @@ export const translations = {
       // here; anything unknown falls through to the raw string, so a new action
       // is never silently hidden from the log.
       auditAction: {
+        admin_impersonate_start: 'Signed in to the client account (support)',
+        admin_impersonate_stop: 'Left the client account (support)',
         admin_ingredients_reprice: 'Ingredient costs recomputed',
         admin_user_delete: 'User account deleted',
         admin_user_password_change: 'Password changed',
@@ -3643,6 +3683,7 @@ export const translations = {
     // Server-returned error keys. Server actions cannot call t(), so they
     // return one of these keys and the component translates it on display.
     errors: {
+      impersonating: "This belongs to the person, not the restaurant, and cannot be changed in support mode.",
       read: 'Could not load your data. Please try again.',
       write: 'Could not save your changes. Please try again.',
       delete: 'Could not delete that. Please try again.',
@@ -4778,6 +4819,13 @@ export const translations = {
     },
     tickets: {
       noData: 'No ticket data for this period.',
+    },
+    // Shown while an administrator is signed in as this account for support
+    impersonation: {
+      banner: "Viewing {name}'s account as an administrator",
+      until: 'ends at {time}',
+      back: 'Back to admin',
+      backing: 'Going back…',
     },
     tour: {
       aria: 'Guided tour',

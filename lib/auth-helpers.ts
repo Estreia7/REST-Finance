@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth-config';
 import { readActiveRestaurantCookie, resolveActiveRestaurant } from '@/lib/active-restaurant';
+import { IMPERSONATION_REFUSED } from '@/lib/impersonation';
 
 /**
  * Authorisation helpers.
@@ -15,6 +16,12 @@ import { readActiveRestaurantCookie, resolveActiveRestaurant } from '@/lib/activ
 interface AuthResult {
   userId: string;
   email: string;
+  /**
+   * The administrator behind this session when it is support access
+   * (lib/impersonation.ts), or null. Settings that belong to the person are
+   * refused while it is set — see refuseWhileImpersonating.
+   */
+  impersonatedBy: string | null;
 }
 
 interface OwnerResult extends AuthResult {
@@ -36,7 +43,20 @@ export async function requireAuth(): Promise<AuthResult | AuthError> {
     return { error: 'Sessão expirada. Por favor, faça login novamente.', requiresAuth: true };
   }
 
-  return { userId: session.user.id, email: session.user.email ?? '' };
+  return {
+    userId: session.user.id,
+    email: session.user.email ?? '',
+    impersonatedBy: session.impersonation?.adminId ?? null,
+  };
+}
+
+/**
+ * Refuses what belongs to the person rather than the restaurant — password,
+ * name, picture, billing — while an administrator is signed in as them.
+ * Returns the error to send back, or null to carry on.
+ */
+export function refuseWhileImpersonating(result: { impersonatedBy: string | null }): { success: false; error: string } | null {
+  return result.impersonatedBy ? { success: false, error: IMPERSONATION_REFUSED } : null;
 }
 
 export async function requireOwner(): Promise<OwnerResult | AuthError> {
@@ -61,6 +81,7 @@ export async function requireOwner(): Promise<OwnerResult | AuthError> {
   return {
     userId: authResult.userId,
     email: authResult.email,
+    impersonatedBy: authResult.impersonatedBy,
     restaurantId: membership.restaurantId,
     membershipId: membership.id,
   };
@@ -84,6 +105,7 @@ export async function requireMember(): Promise<MemberResult | AuthError> {
   return {
     userId: authResult.userId,
     email: authResult.email,
+    impersonatedBy: authResult.impersonatedBy,
     restaurantId: membership.restaurantId,
     role: membership.role as 'OWNER' | 'STAFF',
   };

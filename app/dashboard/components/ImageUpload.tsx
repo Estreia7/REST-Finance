@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Camera, Loader2, Trash2, Building2, User } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
+import { translateError } from '@/lib/error-messages';
 
 /**
  * Picks and uploads a logo or profile picture.
@@ -42,7 +43,7 @@ export default function ImageUpload({
    */
   onChanged?: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -80,7 +81,7 @@ export default function ImageUpload({
 
       if (result.error) {
         setPreview(null);
-        toast.error(result.error);
+        toast.error(translateError(language, result.error));
         return;
       }
 
@@ -97,7 +98,7 @@ export default function ImageUpload({
     setBusy(false);
 
     if (result.error) {
-      toast.error(result.error);
+      toast.error(translateError(language, result.error));
       return;
     }
     setPreview(null);

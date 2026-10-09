@@ -52,7 +52,7 @@ export default function SettingsPanel({
     setSavingProfile(true);
     const result = await updateUserProfile(name);
     if (result.success) { toast.success(t('settings.profileUpdated')); onUpdate?.(); }
-    else toast.error(result.error || t('settings.updateFailed'));
+    else toast.error(result.error ? translateError(language, result.error) : t('settings.updateFailed'));
     setSavingProfile(false);
   };
 
@@ -64,7 +64,7 @@ export default function SettingsPanel({
     if (result.success) {
       toast.success(t('settings.passwordChanged'));
       setCurrentPw(''); setNewPw(''); setConfirmPw('');
-    } else toast.error(result.error || t('settings.passwordChangeFailed'));
+    } else toast.error(result.error ? translateError(language, result.error) : t('settings.passwordChangeFailed'));
     setSavingPw(false);
   };
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe, STRIPE_PRICES } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
-import { requireAuth, isAuthError } from '@/lib/auth-helpers';
+import { requireAuth, isAuthError, refuseWhileImpersonating } from '@/lib/auth-helpers';
 
 export async function POST(req: NextRequest) {
   if (!stripe) {
@@ -13,6 +13,9 @@ export async function POST(req: NextRequest) {
   if (isAuthError(authResult)) {
     return NextResponse.json({ error: authResult.error }, { status: 401 });
   }
+  // Paying, or cancelling, is the client's decision, never support's.
+  const refused = refuseWhileImpersonating(authResult);
+  if (refused) return NextResponse.json(refused, { status: 403 });
 
   const { priceId, restaurantId } = await req.json();
 

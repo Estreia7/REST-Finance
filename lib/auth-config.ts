@@ -5,6 +5,8 @@ import Google from 'next-auth/providers/google';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { getSetting, SETTING_KEYS } from '@/lib/settings';
+import { IMPERSONATION_MINUTES, impersonationExpired } from '@/lib/impersonation';
+import { redeemTicket, isPlatformAdmin } from '@/lib/impersonation-server';
 
 /**
  * Authentication.
@@ -99,6 +101,40 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
           return { id: user.id, email: user.email, name: user.name, image: user.image };
         },
       }),
+
+      // Support access (lib/impersonation.ts). Takes nothing but a one-use
+      // ticket written a moment earlier by an administrator's server action,
+      // and checks again here that the administrator still is one. The same
+      // path takes them back to their own account.
+      Credentials({
+        id: 'impersonation',
+        name: 'impersonation',
+        credentials: { ticket: { label: 'Ticket', type: 'text' } },
+        async authorize(raw) {
+          const ticket = typeof raw?.ticket === 'string' ? raw.ticket : '';
+          const redeemed = await redeemTicket(ticket);
+          if (!redeemed) return null;
+          if (!(await isPlatformAdmin(redeemed.adminId))) return null;
+
+          const user = await prisma.user.findUnique({
+            where: { id: redeemed.targetUserId },
+            select: { id: true, email: true, name: true, image: true },
+          });
+          if (!user) return null;
+
+          // Going back to their own account is a plain sign-in.
+          if (user.id === redeemed.adminId) {
+            return { id: user.id, email: user.email, name: user.name, image: user.image };
+          }
+          // Never into another administrator's account.
+          if (await isPlatformAdmin(user.id)) return null;
+
+          return {
+            id: user.id, email: user.email, name: user.name, image: user.image,
+            impersonatedBy: redeemed.adminId,
+          };
+        },
+      }),
     ],
 
     callbacks: {
@@ -124,7 +160,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
       // With a JWT strategy the adapter does not populate `user`, so the id is
       // carried on the token instead.
       async jwt({ token, user }) {
-        if (user?.id) token.sub = user.id;
+        if (user?.id) {
+          token.sub = user.id;
+          // A fresh sign-in decides whether this is a support session; any
+          // marker from a previous one goes.
+          const by = (user as { impersonatedBy?: string }).impersonatedBy;
+          if (by) {
+            token.impersonatedBy = by;
+            token.impersonationExpires = Date.now() + IMPERSONATION_MINUTES * 60_000;
+          } else {
+            delete token.impersonatedBy;
+            delete token.impersonationExpires;
+          }
+        }
+        // A support session ends on its own: past its hour the token is
+        // dropped, and the next request finds no one signed in.
+        if (token.impersonatedBy && impersonationExpired(token.impersonationExpires)) return null;
         return token;
       },
 
@@ -132,6 +183,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
         if (!session.user || !token.sub) return session;
 
         session.user.id = token.sub;
+        session.impersonation = token.impersonatedBy
+          ? { adminId: token.impersonatedBy, expiresAt: token.impersonationExpires ?? 0 }
+          : null;
 
         // Read the role on each session fetch rather than baking it into the
         // token: a revoked admin loses the flag immediately, and the UI needs

@@ -6,6 +6,7 @@ import { Loader2, ArrowLeft, Calendar, Pencil, Trash2, Check, X, Users, DollarSi
 import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
 import RestaurantBrainPanel from './RestaurantBrainPanel';
+import ImpersonateButton from './ImpersonateButton';
 import { getRestaurantDetail, getRestaurantRevenue, getRestaurantCosts, adminUpdateEntry, adminDeleteEntry, updateClient } from '../actions';
 
 interface RestaurantDetailPanelProps {
@@ -202,6 +203,9 @@ export default function RestaurantDetailPanel({ restaurantId, onBack }: Restaura
                     <div className="text-[10px] text-muted-foreground">{m.user.email}</div>
                   </div>
                   <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded">{m.role}</span>
+                  {m.role !== 'PLATFORM_ADMIN' && (
+                    <ImpersonateButton userId={m.user.id} name={m.user.name || m.user.email} />
+                  )}
                 </div>
               ))}
             </div>

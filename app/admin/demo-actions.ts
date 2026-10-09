@@ -11,9 +11,9 @@ import { DEMO_EMAIL } from '@/lib/demo';
  *
  * Deliberately hard-wired to one address. It takes no parameters, so there is
  * no way to point it at a paying client: an administrator cannot use this to
- * read a real customer's financials. Support access to a real account, if it
- * is ever needed, should be a separate feature with consent and an audit
- * trail, not a widening of this one.
+ * read a real customer's financials. Support access to a real account is a
+ * separate feature with its own audit trail (lib/impersonation.ts), not a
+ * widening of this one.
  */
 
 const DEMO_PASSWORD = 'demo-restaurant-2026';

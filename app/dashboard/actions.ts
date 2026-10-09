@@ -10,7 +10,7 @@ import {
   changePasswordSchema,
   formatZodError,
 } from '@/lib/validations';
-import { requireAuth, requireOwner, requireMember, isAuthError } from '@/lib/auth-helpers';
+import { requireAuth, requireOwner, requireMember, isAuthError, refuseWhileImpersonating } from '@/lib/auth-helpers';
 import { isDemoAccount } from '@/lib/demo';
 import { findMunicipality } from '@/lib/derrama';
 import { calculateKpis, toPercent, safeDivide, percentChange } from '@/lib/kpi';
@@ -985,6 +985,9 @@ export async function updateUserProfile(name: string) {
   try {
     const owner = await requireOwner();
     if (isAuthError(owner)) return { error: owner.error };
+    // The person's own name, not the restaurant's: not for support access.
+    const refused = refuseWhileImpersonating(owner);
+    if (refused) return refused;
 
     await prisma.user.update({ where: { id: owner.userId }, data: { name } });
 
@@ -1001,6 +1004,8 @@ export async function changePassword(currentPassword: string, newPassword: strin
 
     const authResult = await requireAuth();
     if (isAuthError(authResult)) return { error: authResult.error, requiresAuth: true };
+    const refused = refuseWhileImpersonating(authResult);
+    if (refused) return refused;
 
     const user = await prisma.user.findUnique({
       where: { id: authResult.userId },
@@ -1612,7 +1617,10 @@ export async function getTourState() {
     return {
       success: true,
       data: {
-        shouldRun: user?.tourVersion == null,
+        // Not for an administrator signed in for support: the tour is the
+        // client's, would stand over every screen, and skipping it there must
+        // not count as the client having seen it (app/api/tour refuses that).
+        shouldRun: user?.tourVersion == null && !auth.impersonatedBy,
         // The demo account is the one place the tour can be replayed on
         // demand, so it can be shown to a prospective client at any time.
         canReplay: isDemoAccount(user?.email),

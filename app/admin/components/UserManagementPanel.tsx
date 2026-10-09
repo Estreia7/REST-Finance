@@ -7,6 +7,7 @@ import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
 import { getAllUsers, updateUser, sendPasswordReset, changeUserPassword, deleteAccount } from '../actions';
 import { MIN_PASSWORD_LENGTH } from '@/lib/validations';
+import ImpersonateButton from './ImpersonateButton';
 
 interface UserData {
   id: string;
@@ -156,6 +157,11 @@ export default function UserManagementPanel() {
                         </div>
                       ) : (
                         <div className="flex items-center gap-1 justify-end">
+                          {/* Support access: see the dashboard as this person does. Not
+                              for administrators, whose console is not a restaurant. */}
+                          {role !== 'PLATFORM_ADMIN' && u.memberships.length > 0 && (
+                            <ImpersonateButton userId={u.id} name={u.name || u.email} compact />
+                          )}
                           <button onClick={() => { setEditingId(u.id); setEditName(u.name || ''); }} title={t('admin.userList.editName')} aria-label={t('admin.userList.editName')} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                             <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>

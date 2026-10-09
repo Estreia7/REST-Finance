@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
-import { requireAuth, requireOwner, isAuthError } from '@/lib/auth-helpers';
+import { requireAuth, requireOwner, isAuthError, refuseWhileImpersonating } from '@/lib/auth-helpers';
 import { saveImage, deleteStoredImage } from '@/lib/uploads';
 import { toClientError } from '@/lib/errors';
 
@@ -74,6 +74,9 @@ export async function uploadProfilePicture(formData: FormData) {
   try {
     const auth = await requireAuth();
     if (isAuthError(auth)) return { error: auth.error };
+    // The person's own picture: not for support access.
+    const refused = refuseWhileImpersonating(auth);
+    if (refused) return refused;
 
     const file = formData.get('file');
     if (!(file instanceof File)) return { error: 'Nenhum ficheiro recebido.' };
@@ -108,6 +111,9 @@ export async function removeProfilePicture() {
   try {
     const auth = await requireAuth();
     if (isAuthError(auth)) return { error: auth.error };
+    // The person's own picture: not for support access.
+    const refused = refuseWhileImpersonating(auth);
+    if (refused) return refused;
 
     const current = await prisma.user.findUnique({
       where: { id: auth.userId },

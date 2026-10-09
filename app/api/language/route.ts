@@ -32,7 +32,9 @@ export async function POST(request: NextRequest) {
   }
 
   const session = await auth();
-  if (session?.user?.id) {
+  // An administrator signed in for support switches the language for this
+  // browser only; the client's saved choice is theirs.
+  if (session?.user?.id && !session.impersonation) {
     try {
       await prisma.user.update({
         where: { id: session.user.id },
@@ -45,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const response = NextResponse.json({ ok: true, saved: Boolean(session?.user?.id) });
+  const response = NextResponse.json({ ok: true, saved: Boolean(session?.user?.id && !session.impersonation) });
   response.cookies.set(LANGUAGE_COOKIE, language, {
     path: '/',
     maxAge: COOKIE_MAX_AGE,
