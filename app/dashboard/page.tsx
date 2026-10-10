@@ -47,6 +47,9 @@ import MonthlyStackChart from './components/MonthlyStackChart';
 import RestaurantLogo   from './components/RestaurantLogo';
 import RecurringCostsPanel from './components/RecurringCostsPanel';
 import QuickEntryPanel  from './components/QuickEntryPanel';
+import { emptyPaymentDraft, paymentFromDraft, type PaymentDraft } from './components/PaymentFields';
+import PayablesCard from './components/PayablesCard';
+import type { PayablesFilter } from './payment-actions';
 import QuickAddSheet, { type QuickAddKind, type QuickAddMethod } from './components/QuickAddSheet';
 import StaffPanel       from './components/StaffPanel';
 import TeamTab          from './components/TeamTab';
@@ -131,6 +134,8 @@ function DashboardPageInner() {
   const [monthProgress, setMonthProgress] = useState<MonthProgress | null>(null);
   /** An invoice number to open Accounting on, set when arriving from a price. */
   const [accountingSearch, setAccountingSearch] = useState('');
+  /** Where Accounting opens: Payments, with a filter, from the dashboard card. */
+  const [accountingOpen, setAccountingOpen] = useState<{ view: 'payments'; filter: PayablesFilter } | null>(null);
   // Each chart keeps its own year: comparing this year's sales with last
   // year's costs is a question an owner asks, and moving one chart should
   // not move the others.
@@ -162,10 +167,13 @@ function DashboardPageInner() {
     // A fixed monthly cost: off by default, the day follows the date, and an
     // empty number of months runs until stopped.
     recurring: false, dayOfMonth: '', months: '',
+    // Who it is from, its number, and whether it is paid: asked every time.
+    vendorName: '', invoiceNumber: '', payment: emptyPaymentDraft(),
   });
   const [costForm, setCostForm] = useState<{
     date: string; type: CostTypeOrEmpty; categoryId: string; amount: string; description: string;
     recurring: boolean; dayOfMonth: string; months: string;
+    vendorName: string; invoiceNumber: string; payment: PaymentDraft;
   }>(emptyCostForm);
   const [staffEmail, setStaffEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -373,8 +381,17 @@ function DashboardPageInner() {
 
   const handleSubmitCost = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Asked, never assumed: the form does not go without an answer.
+    const payment = paymentFromDraft(costForm.payment);
+    if ('error' in payment) {
+      toast.error(t(payment.error));
+      return;
+    }
     setIsSubmitting(true);
     const result = await createCostEntry({
+      vendorName:    costForm.vendorName.trim() || null,
+      invoiceNumber: costForm.invoiceNumber.trim() || null,
+      payment,
       date:        new Date(costForm.date),
       type:        costForm.type as CostType,
       categoryId:  costForm.categoryId || undefined,
@@ -555,6 +572,12 @@ function DashboardPageInner() {
               )}
 
               <KPICards stats={stats} advancedStats={advancedStats} last7DaysData={last7DaysData} monthProgress={monthProgress} />
+
+              {/* What is owed to suppliers, always in view, mobile included. */}
+              <PayablesCard
+                refreshKey={dataVersion}
+                onOpen={(filter) => { setAccountingOpen({ view: 'payments', filter }); handleTabChange('accounting'); }}
+              />
 
               {/* Charts — collapsible on mobile */}
               {/* Revenue against costs, then where the money came from and
@@ -798,6 +821,8 @@ function DashboardPageInner() {
             <AccountingPanel
               initialSearch={accountingSearch}
               onSearchConsumed={() => setAccountingSearch('')}
+              initialOpen={accountingOpen}
+              onOpenConsumed={() => setAccountingOpen(null)}
             />
           )}
 

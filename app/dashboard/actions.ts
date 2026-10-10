@@ -22,6 +22,9 @@ import { buildYearComparison, cumulativeSales } from '@/lib/comparative';
 import { endDateFor } from '@/lib/recurring-costs';
 import { bookDueRecurringCosts } from '@/lib/recurring-costs-server';
 import { invoiceEntryIds } from '@/lib/invoice-split-server';
+import { paymentColumns, type PaymentInput } from '@/lib/payments';
+import { dayKey } from '@/lib/ai-usage';
+import { ensureVendor } from '@/lib/vendors-server';
 import { foldMonthlySeries, UNCATEGORISED_SERIES } from '@/lib/monthly-series';
 
 export async function getRestaurant() {
@@ -211,10 +214,20 @@ export async function createCostEntry(data: {
    * entry being created is the first month; `months` null runs until stopped.
    */
   recurring?: { dayOfMonth: number; months: number | null };
+  /**
+   * Who it is from, by name: matched to a supplier on file (by NIF first,
+   * when one is given), created when new. Empty for rent, wages, a bill.
+   */
+  vendorName?: string | null;
+  vendorTaxId?: string | null;
+  /** The supplier's document number, when the invoice is in hand. */
+  invoiceNumber?: string | null;
+  /** Whether it is already paid, and how. Omitted, it is still to pay. */
+  payment?: PaymentInput;
 }) {
   try {
     // Validate input
-    const { recurring, ...entry } = data;
+    const { recurring, vendorName, vendorTaxId, invoiceNumber, payment, ...entry } = data;
     const parsed = costEntrySchema.safeParse(entry);
     if (!parsed.success) {
       return { success: false as const, error: formatZodError(parsed.error) };
@@ -236,6 +249,23 @@ export async function createCostEntry(data: {
 
     const v = parsed.data;
 
+    const dateKey = v.date.toISOString().slice(0, 10);
+    const paid = paymentColumns(payment, dateKey, dayKey(new Date()));
+    if ('error' in paid) return { success: false as const, error: paid.error };
+
+    const number = invoiceNumber?.trim().slice(0, 100) || null;
+    const vendor = vendorName?.trim()
+      ? await ensureVendor(owner.restaurantId, vendorName.trim().slice(0, 200), vendorTaxId)
+      : null;
+    // Payment sits on the cost itself; a split invoice's parts leave it empty.
+    const payable = {
+      vendorId: vendor?.id ?? null,
+      invoiceNumber: number,
+      paymentMethod: paid.paymentMethod,
+      paidAt: paid.paidKey ? new Date(`${paid.paidKey}T00:00:00Z`) : null,
+      dueDate: paid.dueKey ? new Date(`${paid.dueKey}T00:00:00Z`) : null,
+    };
+
     if (!recurring) {
       const costEntry = await prisma.costEntry.create({
         data: {
@@ -246,6 +276,7 @@ export async function createCostEntry(data: {
           amount: v.amount,
           description: v.description,
           createdById: owner.userId,
+          ...payable,
         },
       });
       return { success: true, data: costEntry };
@@ -275,6 +306,10 @@ export async function createCostEntry(data: {
           // A one-month "repeat" is over as soon as it is booked.
           active: endKey !== startKey,
           createdById: owner.userId,
+          // Every month after this one is paid the way this one was, to the
+          // same supplier.
+          paymentMethod: payment?.paid ? paid.paymentMethod : null,
+          vendorId: vendor?.id ?? null,
         },
       });
       return tx.costEntry.create({
@@ -287,6 +322,7 @@ export async function createCostEntry(data: {
           description: v.description,
           createdById: owner.userId,
           recurringCostId: template.id,
+          ...payable,
         },
       });
     });
@@ -664,6 +700,12 @@ export async function getCostHistory(dateFrom: Date, dateTo: Date, type?: CostTy
       // The document this was read off, when it was scanned rather than
       // typed. What turns a figure in a list into one that can be checked.
       invoiceNumber: e.invoiceItems[0]?.invoiceNumber ?? null,
+      // A number typed by hand, with no photograph behind it.
+      reference: e.invoiceItems.length === 0 ? e.invoiceNumber : null,
+      // Entered without its invoice, which can still be added. Only on the
+      // original: the parts of a split invoice already have one.
+      canAttach: e.splitFromId === null && e.invoiceItems.length === 0 && !e.invoiceNumber,
+      hasVendor: e.vendorId !== null,
     }));
 
     return { success: true, data };

@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import {
   ShoeboxFigure, FlowFigure, BeforeAfterFigure, PrimeCostFigure, WaterfallFigure,
-  DishFigure, RevenueVsCostFigure, RotaFigure, TaxFigure, ComplianceFigure,
+  DishFigure, RevenueVsCostFigure, RotaFigure, TaxFigure, ComplianceFigure, PaymentsFigure,
 } from './figures';
 
 /**
@@ -196,6 +196,24 @@ export const SLIDES: Slide[] = [
         title={t('presentation.taxSvgTitle')}
         setAside={t('presentation.taxSetAside')}
         due={t('presentation.taxDue')}
+      />
+    ),
+    seconds: BASE,
+  },
+  {
+    id: 'payments',
+    eyebrowKey: 'presentation.capabilitiesLabel',
+    titleKey: 'presentation.paymentsTitle',
+    leadKey: 'presentation.paymentsBody',
+    figure: (t) => (
+      <PaymentsFigure
+        title={t('presentation.paymentsSvgTitle')}
+        late={t('presentation.paymentsLate')}
+        week={t('presentation.paymentsWeek')}
+        fortnight={t('presentation.paymentsFortnight')}
+        month={t('presentation.paymentsMonth')}
+        later={t('presentation.paymentsLater')}
+        paid={t('presentation.paymentsPaid')}
       />
     ),
     seconds: BASE,

@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Repeat, Pencil, Check, X, Loader2, CircleStop } from 'lucide-react';
-import { listRecurringCosts, updateRecurringCostAmount, stopRecurringCost } from '../recurring-cost-actions';
+import { listRecurringCosts, updateRecurringCostAmount, stopRecurringCost, setRecurringCostPayment } from '../recurring-cost-actions';
+import { PAYMENT_METHODS, type PaymentMethodKey } from '@/lib/payments';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
 
@@ -28,6 +29,8 @@ interface RecurringCost {
   startDate: string;
   endDate: string | null;
   nextDate: string | null;
+  /** How each month is paid; null leaves every month to be marked. */
+  paymentMethod: PaymentMethodKey | null;
 }
 
 export default function RecurringCostsPanel({
@@ -89,6 +92,18 @@ export default function RecurringCostsPanel({
     toast.success(t('recurring.stopped'));
     load();
     onChanged?.();
+  };
+
+  const savePayment = async (id: string, value: string) => {
+    setBusyId(id);
+    const r = await setRecurringCostPayment(id, value ? (value as PaymentMethodKey) : null);
+    setBusyId(null);
+    if (!r.success) {
+      toast.error(t(r.error));
+      return;
+    }
+    toast.success(t('payments.recurringSaved'));
+    load();
   };
 
   const monthlyTotal = items.reduce((s, i) => s + i.amount, 0);
@@ -182,6 +197,22 @@ export default function RecurringCostsPanel({
                     </div>
                   )}
                 </div>
+                {/* How the coming months are paid: booked paid that way on
+                    their date, or left to be marked one by one. */}
+                <label className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <span>{t('payments.recurringPayment')}</span>
+                  <select
+                    value={item.paymentMethod ?? ''}
+                    disabled={busy}
+                    onChange={(e) => savePayment(item.id, e.target.value)}
+                    className="input-field !py-1 !px-2 !text-xs !w-auto"
+                  >
+                    <option value="">{t('payments.recurringToPay')}</option>
+                    {PAYMENT_METHODS.map((m) => (
+                      <option key={m} value={m}>{t(`payments.method_${m}`)}</option>
+                    ))}
+                  </select>
+                </label>
                 {editing && <p className="mt-1.5 text-[11px] text-muted-foreground">{t('recurring.amountHint')}</p>}
                 {confirmStopId === item.id && <p className="mt-1.5 text-[11px] text-muted-foreground">{t('recurring.stopHint')}</p>}
               </li>

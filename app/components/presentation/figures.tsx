@@ -646,3 +646,85 @@ export function ComplianceFigure({
   );
 }
 
+
+// ─── Figure 11: what is owed, by when ────────────────────────────────────────
+
+/**
+ * The payments card, drawn. One bar of everything still to pay, filling from
+ * the left in order of urgency — late first, in red, then the weeks ahead
+ * fading — and three suppliers beneath it: one late, one due soon, and one
+ * that is marked paid as you watch. No amounts and no names: the shape of
+ * the screen, not anyone's figures.
+ */
+export function PaymentsFigure({
+  title, late, week, fortnight, month, later, paid,
+}: FigureProps & { late: string; week: string; fortnight: string; month: string; later: string; paid: string }) {
+  const segments = [
+    { w: 52, fill: 'hsl(var(--lamp-danger))', opacity: 1, label: late },
+    { w: 66, fill: 'hsl(var(--primary))', opacity: 1, label: week },
+    { w: 58, fill: 'hsl(var(--primary))', opacity: 0.6, label: fortnight },
+    { w: 56, fill: 'hsl(var(--primary))', opacity: 0.35, label: month },
+    { w: 48, fill: 'hsl(var(--muted-foreground))', opacity: 0.25, label: later },
+  ];
+  let x = 10;
+  const placed = segments.map((s) => {
+    const at0 = x;
+    x += s.w;
+    return { ...s, x: at0 };
+  });
+  const rows = [
+    { lamp: 'hsl(var(--lamp-danger))', name: 92 },
+    { lamp: 'hsl(var(--primary))', name: 70 },
+    { lamp: 'hsl(var(--lamp-success))', name: 82 },
+  ];
+
+  return (
+    <WhenVisible>
+    <svg viewBox="0 0 300 124" className="w-full h-auto" role="img" aria-labelledby="pres-payments-title">
+      <title id="pres-payments-title">{title}</title>
+
+      {/* The bar fills one group at a time, most urgent first. */}
+      <rect x={10} y={12} width={280} height={14} rx={7} fill="hsl(var(--muted))" />
+      {placed.map((s, i) => (
+        <g key={i}>
+          <rect
+            className="pres-fill-x" style={{ ...at(i * 260), ...from('left center') }}
+            x={s.x} y={12} width={s.w} height={14}
+            rx={i === 0 || i === placed.length - 1 ? 7 : 0}
+            fill={s.fill} opacity={s.opacity}
+          />
+          <text
+            className="pres-fade" style={at(200 + i * 260)}
+            x={s.x + 2} y={40} fontSize="8" fontWeight={i === 0 ? 700 : 500}
+            fill={i === 0 ? 'hsl(var(--lamp-danger))' : 'hsl(var(--muted-foreground))'}
+          >
+            {s.label}
+          </text>
+        </g>
+      ))}
+
+      {/* Three suppliers. The last is paid while you watch. */}
+      {rows.map((row, i) => {
+        const y = 56 + i * 22;
+        const start = 1400 + i * 200;
+        return (
+          <g key={i} className="pres-pop" style={at(start)}>
+            <line x1={10} x2={290} y1={y + 16} y2={y + 16} stroke={RULE} strokeWidth={0.75} />
+            <circle cx={16} cy={y + 6} r={4} fill={i === 2 ? 'hsl(var(--muted-foreground))' : row.lamp} opacity={i === 2 ? 0.35 : 1} />
+            <rect x={28} y={y + 2} width={row.name} height={7} rx={3.5} fill="hsl(var(--muted-foreground))" opacity={0.3} />
+            <rect x={232} y={y + 2} width={46} height={7} rx={3.5} fill="hsl(var(--foreground))" opacity={0.55} />
+          </g>
+        );
+      })}
+      {/* Marked paid: the lamp turns green and the verdict is read off. */}
+      <g className="pres-lamp" style={{ ...at(2500), ...from('center') }}>
+        <circle cx={16} cy={56 + 2 * 22 + 6} r={4} fill="hsl(var(--lamp-success))" />
+      </g>
+      <text className="pres-pop" style={at(2650)} x={180} y={56 + 2 * 22 + 9} fontSize="8.5" fontWeight={700} fill="hsl(var(--lamp-success))">
+        ✓ {paid}
+      </text>
+      <circle className="pres-ping" style={from('center')} cx={16} cy={62} r={4} fill="none" stroke="hsl(var(--lamp-danger))" strokeWidth={1.5} opacity={0} />
+    </svg>
+    </WhenVisible>
+  );
+}

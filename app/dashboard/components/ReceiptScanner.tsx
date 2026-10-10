@@ -16,6 +16,9 @@ import ScanPageEditor, { type ScannedPage } from './ScanPageEditor';
 import ScanTray, { type ScannedDocument, newDocumentId } from './ScanTray';
 import SourcePickerSheet, { type PhotoSource } from './SourcePickerSheet';
 import { loadFrameFromFile } from '@/lib/detect-in-file';
+import PaymentFields, { emptyPaymentDraft, paymentFromDraft, type PaymentDraft } from './PaymentFields';
+import { attachScannedInvoice, getPaymentVendors } from '../payment-actions';
+import { formatMoney } from '@/lib/format';
 
 type ScanType = 'COST_RECEIPT' | 'DAILY_REPORT';
 
@@ -76,6 +79,17 @@ interface ReceiptScannerProps {
   autoStart?: boolean;
   /** Cleared once the camera has been opened, so it does not reopen. */
   onAutoStarted?: () => void;
+  /**
+   * A cost entered before its invoice arrived. The invoice is attached to it
+   * rather than booked as a second cost, and `onSaved` waits for the end.
+   */
+  attachTo?: AttachTarget | null;
+}
+
+export interface AttachTarget {
+  costEntryId: string;
+  amount: number;
+  description: string | null;
 }
 
 export default function ReceiptScanner({
@@ -84,6 +98,7 @@ export default function ReceiptScanner({
   allowTypeChange = false,
   autoStart = false,
   onAutoStarted,
+  attachTo = null,
 }: ReceiptScannerProps) {
   const { t, language } = useLanguage();
   // Where the tab decides the type, it is the type — not just the starting
@@ -110,7 +125,14 @@ export default function ReceiptScanner({
     vendorName: string;
     date: string | null;
     amount: number | null;
+    /** A cost typed by hand with this number, which the invoice can join. */
+    attachable: { costEntryId: string; description: string | null } | null;
   } | null>(null);
+  /** The cost this invoice is being attached to, if any. */
+  const [attachTarget, setAttachTarget] = useState<AttachTarget | null>(attachTo);
+  /** "Is it paid?" — asked for every new invoice, not for one being attached. */
+  const [payment, setPayment] = useState<PaymentDraft>(emptyPaymentDraft);
+  const [vendors, setVendors] = useState<Array<{ name: string; termsDays: number | null }>>([]);
   const [saving, setSaving] = useState(false);
   /**
    * The invoice whose lines are being identified.
@@ -150,6 +172,14 @@ export default function ReceiptScanner({
   const [scanId, setScanId] = useState<string | null>(null);
   const [editData, setEditData] = useState<ExtractionResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const reviewingCost = editData?.type === 'cost_receipt';
+  useEffect(() => {
+    if (!reviewingCost || vendors.length > 0) return;
+    getPaymentVendors().then((r) => {
+      if ('data' in r && r.data) setVendors(r.data);
+    });
+  }, [reviewingCost, vendors.length]);
 
   // ── Capture flow ────────────────────────────────────────────────────────
   // The scanner walks camera -> page editor -> tray, and the tray decides
@@ -357,8 +387,16 @@ export default function ReceiptScanner({
     setScanning(false);
   };
 
-  const handleConfirmSave = async () => {
+  const handleConfirmSave = async (targetOverride?: AttachTarget) => {
     if (!editData) return;
+    const target = targetOverride ?? attachTarget;
+    // Asked, never assumed — except when attaching, where the cost already
+    // has its answer.
+    const answer = paymentFromDraft(payment);
+    if (editData.type === 'cost_receipt' && !target && 'error' in answer) {
+      toast.error(t(answer.error));
+      return;
+    }
     setSaving(true);
 
     try {
@@ -394,19 +432,36 @@ export default function ReceiptScanner({
           vendorName: d.vendor,
           invoiceNumber: d.invoiceNumber ?? null,
         });
-        if ('data' in existing && existing.data) {
-          setDuplicate(existing.data);
+        // A number typed on a cost is that cost's own invoice: attaching it
+        // there is the point, not a duplicate.
+        const found = 'data' in existing ? existing.data : null;
+        const joiningTyped = !!found?.attachable && found.attachable.costEntryId === target?.costEntryId;
+        if (found && !joiningTyped) {
+          setDuplicate(found);
           setSaving(false);
           return;
         }
 
-        const result = await createCostEntry({
-          date: new Date(d.date),
-          type: d.suggestedType,
-          categoryId: matchedCat?.id,
-          amount: d.grandTotal,
-          description: `${d.vendor} - ${d.items.map(i => i.product).join(', ')}`,
-        });
+        const result = target
+          ? await attachScannedInvoice({
+              costEntryId: target.costEntryId,
+              date: d.date,
+              amount: d.grandTotal,
+              vendorName: d.vendor,
+              vendorTaxId: d.vendorTaxId ?? null,
+              invoiceNumber: d.invoiceNumber ?? null,
+            })
+          : await createCostEntry({
+              date: new Date(d.date),
+              type: d.suggestedType,
+              categoryId: matchedCat?.id,
+              amount: d.grandTotal,
+              description: `${d.vendor} - ${d.items.map(i => i.product).join(', ')}`,
+              vendorName: d.vendor,
+              vendorTaxId: d.vendorTaxId ?? null,
+              invoiceNumber: d.invoiceNumber ?? null,
+              payment: 'error' in answer ? undefined : answer,
+            });
         if (result.success) {
           const entryId = (result as { data?: { id?: string } }).data?.id;
 
@@ -416,18 +471,19 @@ export default function ReceiptScanner({
           // that prices their Carne Smash and one that invents a second
           // ingredient beside it.
           if (entryId && d.items.length > 0) {
-            toast.success(t('scanner.costSaved'));
+            toast.success(target ? t('payments.attached') : t('scanner.costSaved'));
             setReconciling({ costEntryId: entryId, data: d, scanId });
-            onSaved?.();
+            // Attaching, the caller waits for the lines: it closes on onSaved.
+            if (!target) onSaved?.();
             setSaving(false);
             return;
           }
 
-          toast.success(t('scanner.costSaved'));
+          toast.success(target ? t('payments.attached') : t('scanner.costSaved'));
           resetState();
           onSaved?.();
         } else {
-          toast.error(result.error || t('scanner.saveFailed'));
+          toast.error(result.error ? t(result.error) : t('scanner.saveFailed'));
         }
       }
     } catch {
@@ -446,6 +502,7 @@ export default function ReceiptScanner({
     setExtracted(null);
     setScanId(null);
     setEditData(null);
+    setPayment(emptyPaymentDraft());
     if (fileRef.current) fileRef.current.value = '';
 
     if (queue.length > 0) {
@@ -462,7 +519,9 @@ export default function ReceiptScanner({
       {/* With the selector gone, the heading is what says which document
           this screen expects. */}
       <h2 className="text-xl font-bold text-foreground mb-6">
-        {allowTypeChange
+        {attachTarget
+          ? t('payments.attachTitle')
+          : allowTypeChange
           ? t('scanner.title')
           : scanType === 'DAILY_REPORT'
             ? t('scanner.titleDailyReport')
@@ -476,15 +535,39 @@ export default function ReceiptScanner({
         <div className="rounded-xl bg-warning/10 px-4 py-4 mb-4">
           <p className="flex items-start gap-2 text-sm font-semibold text-warning">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
-            {t('scanner.duplicateTitle')}
+            {duplicate.attachable ? t('payments.duplicateTypedTitle') : t('scanner.duplicateTitle')}
           </p>
           <p className="text-xs text-muted-foreground mt-2 ml-6">
-            {t('scanner.duplicateBody')
-              .replace('{number}', duplicate.invoiceNumber)
-              .replace('{vendor}', duplicate.vendorName)
-              .replace('{date}', duplicate.date ?? '—')}
+            {duplicate.attachable
+              ? t('payments.duplicateTypedBody')
+                  .replace('{vendor}', duplicate.vendorName)
+                  .replace('{date}', duplicate.date ?? '—')
+                  .replace('{amount}', duplicate.amount !== null ? formatMoney(duplicate.amount, { decimals: 2 }) : '—')
+              : t('scanner.duplicateBody')
+                  .replace('{number}', duplicate.invoiceNumber)
+                  .replace('{vendor}', duplicate.vendorName)
+                  .replace('{date}', duplicate.date ?? '—')}
           </p>
           <div className="flex flex-wrap gap-2 mt-4 ml-6">
+            {duplicate.attachable && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  const joined = {
+                    costEntryId: duplicate.attachable!.costEntryId,
+                    amount: duplicate.amount ?? 0,
+                    description: duplicate.attachable!.description,
+                  };
+                  setDuplicate(null);
+                  setAttachTarget(joined);
+                  handleConfirmSave(joined);
+                }}
+                className="cta-button !py-2 !px-4 !text-sm"
+              >
+                {t('payments.duplicateAttach')}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => { setDuplicate(null); resetState(); }}
@@ -531,6 +614,8 @@ export default function ReceiptScanner({
                 .replace('{linked}', String(linked)),
             );
             setReconciling(null);
+            // An invoice joined to a cost typed by hand is done with that cost.
+            if (attachTarget && !attachTo) setAttachTarget(null);
             resetState();
             onSaved?.();
           }}
@@ -714,12 +799,41 @@ export default function ReceiptScanner({
                     <input type="number" step="0.01" value={(editData as CostReceiptData).grandTotal} onChange={e => setEditData({ ...editData, grandTotal: parseFloat(e.target.value) || 0 } as any)} className="input-field !py-1.5 !text-xs" />
                   </div>
                 </div>
+
+                {attachTarget ? (
+                  <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground space-y-1">
+                    <p className="text-foreground font-medium [overflow-wrap:anywhere]">
+                      {t('payments.attachingTo').replace(
+                        '{what}',
+                        `${attachTarget.description || '—'} · ${formatMoney(attachTarget.amount, { decimals: 2 })}`,
+                      )}
+                    </p>
+                    {Math.abs((editData as CostReceiptData).grandTotal - attachTarget.amount) >= 0.01 && (
+                      <p>
+                        {t('payments.attachAmountChanges')
+                          .replace('{old}', formatMoney(attachTarget.amount, { decimals: 2 }))
+                          .replace('{new}', formatMoney((editData as CostReceiptData).grandTotal, { decimals: 2 }))}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <PaymentFields
+                    value={payment}
+                    onChange={setPayment}
+                    dateKey={(editData as CostReceiptData).date}
+                    vendorName={(editData as CostReceiptData).vendor}
+                    vendorTermsDays={
+                      vendors.find((v) => v.name.toLowerCase() === (editData as CostReceiptData).vendor.trim().toLowerCase())?.termsDays ?? null
+                    }
+                    idPrefix="scan-pay"
+                  />
+                )}
               </div>
             )}
           </div>
 
           <div className="flex gap-3">
-            <button onClick={handleConfirmSave} disabled={saving} className="cta-button flex-1 justify-center">
+            <button onClick={() => handleConfirmSave()} disabled={saving} className="cta-button flex-1 justify-center">
               {saving
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('scanner.saving')}</>
                 : <><Check className="w-4 h-4" /> {t('scanner.confirmAndSave')}</>

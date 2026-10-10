@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { bookDueRecurringCosts } from '@/lib/recurring-costs-server';
 import { nextOccurrence } from '@/lib/recurring-costs';
+import { PAYMENT_METHODS, type PaymentMethodKey } from '@/lib/payments';
 
 /**
  * Fixed monthly costs: rent, internet, a 12-month contract.
@@ -63,6 +64,7 @@ export async function listRecurringCosts() {
         startDate: schedule.startDate,
         endDate: schedule.endDate,
         nextDate: nextOccurrence(schedule),
+        paymentMethod: r.paymentMethod,
       };
     })
     .sort((a, b) => (a.nextDate ?? '9999').localeCompare(b.nextDate ?? '9999'));
@@ -105,5 +107,23 @@ export async function stopRecurringCost(id: string) {
     where: { id },
     data: { active: false, endDate: existing.lastGeneratedDate ?? existing.startDate },
   });
+  return { success: true as const };
+}
+
+/**
+ * How the coming months are paid: by direct debit, by transfer, or each one
+ * left to be marked when it is. The months already booked keep the answer
+ * they were booked with; they are marked one by one in Payments.
+ */
+export async function setRecurringCostPayment(id: string, method: PaymentMethodKey | null) {
+  const owner = await requireOwner();
+  if (isAuthError(owner)) return fail(owner.error);
+  if (method !== null && !PAYMENT_METHODS.includes(method)) return fail('payments.invalidMethod');
+
+  const { count } = await prisma.recurringCost.updateMany({
+    where: { id, restaurantId: owner.restaurantId, active: true },
+    data: { paymentMethod: method },
+  });
+  if (count === 0) return fail('recurring.notFound');
   return { success: true as const };
 }

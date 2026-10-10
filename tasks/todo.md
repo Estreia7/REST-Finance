@@ -319,3 +319,71 @@ do Makro mal categorizada iria ensinar mal.
 - Templates de turno: as actions existem (saveTemplate/deleteTemplate) mas
   ainda não há ecrã para os gerir; por agora usam-se os três por omissão
   (Manhã/Tarde/Noite). É o passo seguinte natural.
+
+---
+
+# Pagamentos: o que está pago, o que está por pagar, e quando vence (2026-10-10)
+
+Decisões do dono: débito direto fica programado até ao vencimento e passa a
+pago sozinho nesse dia; os custos já lançados ficam **por pagar** (por rever);
+fornecedor sem prazo = 30 dias; o custo fixo diz como é pago e cada mês herda.
+
+## Plano
+- [x] Schema + migração: `PaymentMethod`; `Vendor.paymentTermsDays`;
+      `CostEntry.invoiceNumber/paymentMethod/paidAt/dueDate`;
+      `RecurringCost.paymentMethod`. Backfill do nº de fatura a partir das linhas.
+      Verificar em PGlite.
+- [x] `lib/payments.ts` (puro, testado): vencimento efetivo, estado
+      (paga/programada/por pagar/em atraso), escalões de dias, resumo.
+- [x] Ações: lista por fornecedor, resumo do dashboard, marcar paga(s),
+      desfazer, alterar vencimento, prazo do fornecedor, associar fatura
+      (nº escrito ou fotografada).
+- [x] Lançar custo: fornecedor, nº fatura, "Já paga / Por pagar", método,
+      vencimento. Igual no scanner. Custo fixo guarda o método.
+- [x] Associar fatura mais tarde: no Histórico de custos e nos Pagamentos;
+      um scan com nº já escrito num custo oferece associar-se a ele.
+- [x] Contabilidade › Pagamentos: agrupado por fornecedor, filtro rápido
+      (por pagar / em atraso / pagas / todas), seleção em massa.
+- [x] Dashboard: cartão sempre visível — em atraso (nº e valor) e escalões.
+- [x] pt/en, changelog, apresentação, testes, QA visual.
+- Tour: **sem passo novo** — é um sub-separador e o cartão do dashboard
+  aponta para lá sozinho.
+
+## Review
+
+### Decisões
+- **O pagamento vive no custo original**, nunca nas partes de uma fatura
+  dividida por categoria: é um documento, paga-se uma vez. O valor a pagar é
+  o original mais as partes.
+- **Vencimento guardado só quando é do dono.** Sem data própria, é a data do
+  custo + prazo do fornecedor (30 por omissão), calculado na leitura: mudar
+  o prazo de um fornecedor move logo todas as faturas em aberto dele.
+- **Custo sem fornecedor vence na própria data** (renda, ordenados, uma conta
+  escrita à mão). Não há prazo a somar. Pressuposto meu — fácil de mudar em
+  `dueDateFor` (lib/payments.ts).
+- **Débito direto não é guardado como pago**: fica com método DIRECT_DEBIT e
+  sem data de pagamento, e passa a pago quando chega o vencimento. Sem
+  agendador, sem estado que fique para trás.
+- **Custos antigos ficam por pagar**, como escolhido. Para a revisão: filtro
+  Em atraso, selecionar todas, marcar de uma vez.
+- **Custo fixo guarda método e fornecedor**; cada mês gerado herda os dois.
+  Os custos fixos já existentes escolhem o método na lista de custos fixos.
+- **Juntar fatura**: fotografar substitui data, total e fornecedor pelos da
+  fatura e mantém o estado do pagamento; escrever só o número também serve.
+  Um scan com um número já escrito num custo propõe juntar-se a ele.
+- Tour: sem passo novo (sub-separador; o cartão do dashboard leva lá).
+- Apresentação: nova capacidade com desenho próprio, no painel e no deck.
+
+### Verificação
+- tsc limpo, build limpo, 887 testes (23 novos em tests/payments.test.ts).
+- Migração verificada em PGlite a partir do schema anterior: sem diferenças.
+  Backfill do nº de fatura testado com linhas reais.
+- Fluxo real no browser: formulário recusa sem resposta; paga a dinheiro,
+  por pagar e débito direto guardados certos; custo fixo de agosto lançou
+  setembro e outubro com o mesmo fornecedor e débito direto; marcar 2 como
+  pagas; mudar prazo moveu os vencimentos.
+- Screenshots desktop e telemóvel, pt e en.
+
+### Por verificar
+- O passo de pagamento no scanner e o juntar fatura por fotografia não foram
+  corridos ponta a ponta: precisam de uma leitura real pela IA.

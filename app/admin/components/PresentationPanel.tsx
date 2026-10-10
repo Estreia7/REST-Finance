@@ -3,7 +3,7 @@
 import { useLanguage } from '@/lib/language-context';
 import {
   ShoeboxFigure, FlowFigure, BeforeAfterFigure, PrimeCostFigure, WaterfallFigure,
-  DishFigure, RevenueVsCostFigure, RotaFigure, TaxFigure, ComplianceFigure,
+  DishFigure, RevenueVsCostFigure, RotaFigure, TaxFigure, ComplianceFigure, PaymentsFigure,
 } from '@/app/components/presentation/figures';
 import ShareDeckCard from '@/app/components/presentation/ShareDeckCard';
 import WhenVisible from '@/app/components/presentation/WhenVisible';
@@ -313,10 +313,31 @@ export default function PresentationPanel() {
             }
           />
 
-          {/* Compliance spans the row: the list is wide and reads badly boxed */}
+          {/* Payments spans the row: its drawing is one long bar. */}
           <div className="md:col-span-2" style={{ '--i': 6 } as React.CSSProperties}>
             <Capability
               index={6}
+              question={t('presentation.paymentsQuestion')}
+              title={t('presentation.paymentsTitle')}
+              body={t('presentation.paymentsBody')}
+              figure={
+                <PaymentsFigure
+                  title={t('presentation.paymentsSvgTitle')}
+                  late={t('presentation.paymentsLate')}
+                  week={t('presentation.paymentsWeek')}
+                  fortnight={t('presentation.paymentsFortnight')}
+                  month={t('presentation.paymentsMonth')}
+                  later={t('presentation.paymentsLater')}
+                  paid={t('presentation.paymentsPaid')}
+                />
+              }
+            />
+          </div>
+
+          {/* Compliance spans the row: the list is wide and reads badly boxed */}
+          <div className="md:col-span-2" style={{ '--i': 7 } as React.CSSProperties}>
+            <Capability
+              index={7}
             question={t('presentation.complianceQuestion')}
               title={t('presentation.complianceTitle')}
               body={t('presentation.complianceBody')}

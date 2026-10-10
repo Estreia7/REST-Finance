@@ -1,5 +1,6 @@
 'use server';
 
+import { ensureVendor, findVendor } from '@/lib/vendors-server';
 import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { toClientError } from '@/lib/errors';
@@ -409,9 +410,14 @@ export async function commitReconciliation(input: {
     // there to carry its part of the total.
     const toWrite = input.lines;
     await prisma.$transaction(async (tx) => {
+      // The document number goes on the cost too: it is what says this
+      // cost has its invoice, and what payments are matched on.
       await tx.costEntry.update({
         where: { id: costEntry.id },
-        data: { vendorId: vendor.id },
+        data: {
+          vendorId: vendor.id,
+          ...(input.invoiceNumber?.trim() ? { invoiceNumber: input.invoiceNumber.trim() } : {}),
+        },
       });
 
       if (toWrite.length > 0) {
@@ -518,77 +524,6 @@ export async function commitReconciliation(input: {
   } catch (error: unknown) {
     return { error: toClientError('Failed to save the invoice lines', error, 'write') };
   }
-}
-
-/**
- * The supplier, found by tax number first and by name only after.
- *
- * A NIF is one company; a name is however the reader happened to read the
- * letterhead that day. Matching on the name alone produced four suppliers
- * for one butcher — "Profunda Origem", "PROFUNDA ORIGEM", "PROFUNDA ORIGEM
- * - Profunda D'Origem-Comércio Carnes, Lda" — each with its own price
- * history, so no price comparison between them was possible and the same
- * invoice could be entered once under each.
- *
- * The longer name wins when a NIF turns up again, because a reading that
- * got the full registered name is the better reading.
- */
-async function ensureVendor(restaurantId: string, name: string, taxId?: string | null) {
-  const trimmed = name.trim() || 'Fornecedor';
-  const nif = taxId?.replace(/\D/g, '') || null;
-
-  if (nif) {
-    const byTax = await prisma.vendor.findFirst({
-      where: { restaurantId, taxId: nif },
-      select: { id: true, name: true },
-    });
-    if (byTax) {
-      if (trimmed.length > byTax.name.length) {
-        await prisma.vendor.update({ where: { id: byTax.id }, data: { name: trimmed } });
-      }
-      return { id: byTax.id };
-    }
-  }
-
-  const byName = await prisma.vendor.findFirst({
-    where: { restaurantId, name: { equals: trimmed, mode: 'insensitive' } },
-    select: { id: true, taxId: true },
-  });
-  if (byName) {
-    // A NIF learned later is worth keeping: it is what the next invoice
-    // will be matched on.
-    if (nif && !byName.taxId) {
-      await prisma.vendor.update({ where: { id: byName.id }, data: { taxId: nif } });
-    }
-    return { id: byName.id };
-  }
-
-  return prisma.vendor.create({
-    data: { restaurantId, name: trimmed, taxId: nif },
-    select: { id: true },
-  });
-}
-
-/**
- * The supplier, if already known — by tax number first, as `ensureVendor`
- * does. Looking it up by name alone missed every answer remembered for this
- * supplier whenever the reader spelled the letterhead differently.
- */
-async function findVendor(restaurantId: string, name: string, taxId?: string | null) {
-  const nif = taxId?.replace(/\D/g, '') || null;
-  if (nif) {
-    const byTax = await prisma.vendor.findFirst({
-      where: { restaurantId, taxId: nif },
-      select: { id: true },
-    });
-    if (byTax) return byTax;
-  }
-  const trimmed = name.trim();
-  if (!trimmed) return null;
-  return prisma.vendor.findFirst({
-    where: { restaurantId, name: { equals: trimmed, mode: 'insensitive' } },
-    select: { id: true },
-  });
 }
 
 /**
@@ -739,7 +674,32 @@ export async function findExistingInvoice(input: {
       },
     });
 
-    if (!existing) return { success: true, data: null };
+    if (!existing) {
+      // Not scanned before, but perhaps typed: a cost entered by hand with
+      // this document number is this invoice arriving on paper. Offered to
+      // be attached to it rather than booked a second time.
+      const typed = await prisma.costEntry.findFirst({
+        where: {
+          restaurantId: owner.restaurantId,
+          deletedAt: null,
+          splitFromId: null,
+          invoiceNumber: number,
+          invoiceItems: { none: {} },
+        },
+        select: { id: true, amount: true, date: true, description: true, vendor: { select: { name: true } } },
+      });
+      if (!typed) return { success: true, data: null };
+      return {
+        success: true,
+        data: {
+          invoiceNumber: number,
+          vendorName: typed.vendor?.name ?? input.vendorName,
+          date: typed.date.toISOString().slice(0, 10),
+          amount: Number(typed.amount),
+          attachable: { costEntryId: typed.id, description: typed.description },
+        },
+      };
+    }
 
     // An invoice shared out between categories is several costs; the owner
     // recognises the document by its total, not by one category's share.
@@ -765,6 +725,7 @@ export async function findExistingInvoice(input: {
         vendorName: existing.vendor?.name ?? input.vendorName,
         date: existing.invoiceDate ? existing.invoiceDate.toISOString().slice(0, 10) : null,
         amount,
+        attachable: null,
       },
     };
   } catch (error: unknown) {

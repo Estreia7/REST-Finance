@@ -397,6 +397,12 @@ export async function mergeVendors(input: { keepId: string; mergeIds: string[] }
         where: { restaurantId: owner.restaurantId, vendorId: { in: mergeIds } },
         data: { vendorId: input.keepId },
       });
+      // Fixed costs follow too, or next month's rent would book to a
+      // supplier that no longer exists.
+      await tx.recurringCost.updateMany({
+        where: { restaurantId: owner.restaurantId, vendorId: { in: mergeIds } },
+        data: { vendorId: input.keepId },
+      });
 
       // A remembered link belongs to a supplier's wording. Moved rather than
       // dropped, or the owner would be asked again about products they have

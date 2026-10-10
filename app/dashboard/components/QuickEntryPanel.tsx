@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Save, Loader2, Plus, X, Repeat } from 'lucide-react';
 import { toast } from 'sonner';
 import { createCategory } from '../category-actions';
 import { useLanguage } from '@/lib/language-context';
 import { endDateFor } from '@/lib/recurring-costs';
 import { formatMoney } from '@/lib/format';
+import PaymentFields, { type PaymentDraft } from './PaymentFields';
+import { getPaymentVendors } from '../payment-actions';
 
 type CostType = 'COGS' | 'OPEX';
 type CostTypeOrEmpty = CostType | '';
@@ -38,6 +40,11 @@ interface CostForm {
   dayOfMonth: string;
   /** How many months, counting this one. Empty runs until stopped. */
   months: string;
+  /** Who it is from, as typed. Empty for rent, wages, a bill. */
+  vendorName: string;
+  /** The supplier's document number, when the invoice is in hand. */
+  invoiceNumber: string;
+  payment: PaymentDraft;
 }
 
 interface QuickEntryPanelProps {
@@ -62,6 +69,18 @@ export default function QuickEntryPanel({
 }: QuickEntryPanelProps) {
   const { t, language } = useLanguage();
   const filteredCategories = (categories ?? []).filter(c => c.type === costForm.type);
+
+  // The suppliers on file: offered as the name is typed, and their terms set
+  // when the cost falls due.
+  const [vendors, setVendors] = useState<Array<{ id: string; name: string; termsDays: number | null }>>([]);
+  useEffect(() => {
+    if (activeTab !== 'costs') return;
+    getPaymentVendors().then((r) => {
+      if ('data' in r && r.data) setVendors(r.data);
+    });
+  }, [activeTab]);
+  const typedVendor = costForm.vendorName.trim().toLowerCase();
+  const knownVendor = typedVendor ? vendors.find((v) => v.name.toLowerCase() === typedVendor) ?? null : null;
 
   // Adding a category without leaving the entry form: a cost that does not
   // fit an existing category otherwise means abandoning what was typed.
@@ -211,6 +230,37 @@ export default function QuickEntryPanel({
             />
           </div>
 
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="cost-vendor" className="text-xs font-medium text-muted-foreground block mb-2">{t('payments.vendor')}</label>
+              <input
+                id="cost-vendor"
+                list="cost-vendor-list"
+                value={costForm.vendorName}
+                onChange={e => onCostChange({ ...costForm, vendorName: e.target.value })}
+                placeholder={t('payments.vendorPlaceholder')}
+                autoComplete="off"
+                maxLength={200}
+                className={inputClass}
+              />
+              <datalist id="cost-vendor-list">
+                {vendors.map(v => <option key={v.id} value={v.name} />)}
+              </datalist>
+            </div>
+            <div>
+              <label htmlFor="cost-invoice" className="text-xs font-medium text-muted-foreground block mb-2">{t('payments.invoiceNumber')}</label>
+              <input
+                id="cost-invoice"
+                value={costForm.invoiceNumber}
+                onChange={e => onCostChange({ ...costForm, invoiceNumber: e.target.value })}
+                placeholder={t('payments.invoiceNumberPlaceholder')}
+                autoComplete="off"
+                maxLength={100}
+                className={inputClass}
+              />
+            </div>
+          </div>
+
           <div>
             <label className="text-xs font-medium text-muted-foreground block mb-2">{t('owner.costForm.costType')}</label>
             <select
@@ -309,6 +359,16 @@ export default function QuickEntryPanel({
               rows={3}
             />
           </div>
+
+          <PaymentFields
+            value={costForm.payment}
+            onChange={(payment) => onCostChange({ ...costForm, payment })}
+            dateKey={costForm.date}
+            vendorName={costForm.vendorName}
+            vendorTermsDays={knownVendor?.termsDays ?? null}
+            recurring={costForm.recurring}
+            idPrefix="cost-pay"
+          />
 
           <RecurringFields costForm={costForm} onCostChange={onCostChange} language={language} />
 

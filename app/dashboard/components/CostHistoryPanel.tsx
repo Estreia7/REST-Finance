@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Loader2, X, Check, Calendar, Filter, Download, Repeat, Eye } from 'lucide-react';
+import { Pencil, Trash2, Loader2, X, Check, Calendar, Filter, Download, Repeat, Eye, Paperclip } from 'lucide-react';
 import { getCostHistory, updateCostEntry, deleteCostEntry, getCategories } from '../actions';
 import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
 import ListSearch, { matchesSearch } from './ListSearch';
 import InvoicePreview from './InvoicePreview';
+import AttachInvoiceDialog from './AttachInvoiceDialog';
 import { downloadFile, exportFilename } from '@/lib/download-file';
 
 interface CostEntry {
@@ -23,6 +24,11 @@ interface CostEntry {
   recurring?: boolean;
   /** The scanned document behind it, when there is one. */
   invoiceNumber?: string | null;
+  /** A document number typed by hand, with no photograph. */
+  reference?: string | null;
+  /** Entered without its invoice, which can still be added. */
+  canAttach?: boolean;
+  hasVendor?: boolean;
 }
 
 interface Category {
@@ -42,6 +48,8 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
   const [deletingId, setDeletingId] = useState<string | null>(null);
   // The invoice on screen, opened from the eye on a scanned row.
   const [previewing, setPreviewing] = useState<string | null>(null);
+  // The cost whose invoice is being added.
+  const [attaching, setAttaching] = useState<CostEntry | null>(null);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [filterType, setFilterType] = useState<'' | 'COGS' | 'OPEX'>('');
@@ -285,7 +293,10 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
                           </span>
                         </td>
                         <td className="py-3 text-muted-foreground hidden sm:table-cell">{entry.categoryName}</td>
-                        <td className="py-3 text-muted-foreground text-xs hidden md:table-cell truncate max-w-[200px]">{entry.description || '—'}</td>
+                        <td className="py-3 text-muted-foreground text-xs hidden md:table-cell truncate max-w-[200px]">
+                          {entry.description || '—'}
+                          {entry.reference && <span className="block opacity-70">{entry.reference}</span>}
+                        </td>
                         <td className="py-3 text-right font-semibold text-foreground">{fmt(entry.amount)}</td>
                         <td className="py-3 text-right">
                           <div className="flex gap-1 justify-end">
@@ -300,6 +311,16 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
                                 className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                               >
                                 <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {entry.canAttach && (
+                              <button
+                                onClick={() => setAttaching(entry)}
+                                aria-label={t('payments.attachInvoice')}
+                                title={t('payments.attachInvoice')}
+                                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                <Paperclip className="w-3.5 h-3.5" />
                               </button>
                             )}
                             <button onClick={() => handleEdit(entry)} aria-label={t('costHistory.action.edit')} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
@@ -335,6 +356,15 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
           invoiceNumber={previewing}
           onClose={() => setPreviewing(null)}
           onDeleted={loadEntries}
+        />
+      )}
+
+      {attaching && (
+        <AttachInvoiceDialog
+          target={{ costEntryId: attaching.id, amount: attaching.amount, description: attaching.description }}
+          hasVendor={!!attaching.hasVendor}
+          onClose={() => setAttaching(null)}
+          onAttached={() => { setAttaching(null); loadEntries(); onDataChange?.(); }}
         />
       )}
     </div>

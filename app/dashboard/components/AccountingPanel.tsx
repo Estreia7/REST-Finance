@@ -21,6 +21,8 @@ import { formatMoney } from '@/lib/format';
 import SubTabs from './SubTabs';
 import ListSearch from './ListSearch';
 import InvoicePreview from './InvoicePreview';
+import PaymentsPanel from './PaymentsPanel';
+import type { PayablesFilter } from '../payment-actions';
 
 /**
  * The paperwork, in one place.
@@ -35,7 +37,7 @@ import InvoicePreview from './InvoicePreview';
  * that quietly stop the costing from being true.
  */
 
-type View = 'invoices' | 'lines' | 'vendors' | 'tidy';
+type View = 'invoices' | 'payments' | 'lines' | 'vendors' | 'tidy';
 
 /**
  * @param initialSearch an invoice number to open on, when the owner
@@ -45,12 +47,26 @@ type View = 'invoices' | 'lines' | 'vendors' | 'tidy';
 export default function AccountingPanel({
   initialSearch = '',
   onSearchConsumed,
+  initialOpen = null,
+  onOpenConsumed,
 }: {
   initialSearch?: string;
   onSearchConsumed?: () => void;
+  /** Opens on Payments with a filter, when arriving from the dashboard card. */
+  initialOpen?: { view: 'payments'; filter: PayablesFilter } | null;
+  onOpenConsumed?: () => void;
 } = {}) {
   const { t } = useLanguage();
-  const [view, setView] = useState<View>('invoices');
+  const [view, setView] = useState<View>(initialOpen?.view ?? 'invoices');
+  const [paymentsFilter, setPaymentsFilter] = useState<PayablesFilter>(initialOpen?.filter ?? 'open');
+
+  // Consumed once, like the search: coming back to the tab later starts fresh.
+  useEffect(() => {
+    if (!initialOpen) return;
+    setView(initialOpen.view);
+    setPaymentsFilter(initialOpen.filter);
+    onOpenConsumed?.();
+  }, [initialOpen, onOpenConsumed]);
 
   return (
     <div className="space-y-4">
@@ -60,6 +76,7 @@ export default function AccountingPanel({
         onChange={setView}
         tabs={[
           { value: 'invoices', label: t('accounting.tabInvoices') },
+          { value: 'payments', label: t('accounting.tabPayments') },
           { value: 'lines', label: t('accounting.tabLines') },
           { value: 'vendors', label: t('accounting.tabVendors') },
           { value: 'tidy', label: t('accounting.tabTidy') },
@@ -67,6 +84,7 @@ export default function AccountingPanel({
       />
 
       {view === 'invoices' && <InvoiceList />}
+      {view === 'payments' && <PaymentsPanel initialFilter={paymentsFilter} />}
       {view === 'lines' && <Invoices initialSearch={initialSearch} onSearchConsumed={onSearchConsumed} />}
       {view === 'vendors' && <Vendors />}
       {view === 'tidy' && <Tidy />}

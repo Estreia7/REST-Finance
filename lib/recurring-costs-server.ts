@@ -57,6 +57,13 @@ export async function bookDueRecurringCosts(restaurantId: string, now: Date = ne
           description: t.description,
           createdById: t.createdById,
           recurringCostId: t.id,
+          // Paid the way the fixed cost says, on its own date. A direct
+          // debit is left to pay itself on that date; none, it waits.
+          paymentMethod: t.paymentMethod,
+          vendorId: t.vendorId,
+          paidAt: t.paymentMethod && t.paymentMethod !== 'DIRECT_DEBIT'
+            ? new Date(`${date}T00:00:00Z`)
+            : null,
         })),
         skipDuplicates: true,
       }),

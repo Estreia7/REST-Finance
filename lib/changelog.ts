@@ -35,9 +35,45 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.09.1';
+export const CHANGELOG_VERSION = '2026.10.10.1';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.10.1',
+    date: '2026-10-10',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Pagamentos: o que já pagou, o que falta pagar e quando vence',
+        detail:
+          'Em Contabilidade › Pagamentos vê, fornecedor a fornecedor, as faturas por pagar e as pagas, com um filtro rápido para mostrar só as que faltam ou só as que estão em atraso. Marca uma ou várias como pagas de uma vez, a dinheiro, multibanco, transferência ou débito direto. Os custos lançados antes disto ficaram por pagar: selecione os que já pagou e marque-os todos juntos.',
+      },
+      {
+        kind: 'new',
+        title: 'No painel, sempre: quantas faturas estão em atraso e o que vem aí',
+        detail:
+          'Logo abaixo dos números do mês, um cartão diz quantas faturas estão em atraso e quanto somam, e divide o resto pelo tempo que falta para pagar: próximos 7 dias, 8 a 15, 16 a 30 e mais de 30. Os débitos diretos contam como dinheiro a sair, mas nunca como atraso.',
+      },
+      {
+        kind: 'new',
+        title: 'Cada fornecedor com o seu prazo de pagamento',
+        detail:
+          'Em Contabilidade › Pagamentos, carregue no prazo ao lado do nome do fornecedor para dizer quantos dias lhe dá. Sem prazo definido conta 30 dias, o prazo legal. Mudar o prazo muda o vencimento de todas as faturas desse fornecedor ainda por pagar.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Ao lançar um custo ou fotografar uma fatura, a app pergunta se já está paga',
+        detail:
+          'Responde «Já paga» e diz como, ou «Por pagar» e vê quando vence. Ao lançar à mão pode também dizer o fornecedor e o número da fatura. Nos custos fixos, a resposta vale para todos os meses: uma renda em débito direto fica paga sozinha no dia.',
+      },
+      {
+        kind: 'new',
+        title: 'A fatura de um custo lançado antes dela pode juntar-se depois',
+        detail:
+          'Um custo sem fatura mostra «Sem fatura · Juntar fatura» nos Pagamentos e um clipe no Histórico de custos. Fotografe a fatura e ela fica nesse custo, com as linhas e os preços, em vez de entrar duas vezes. Se fotografar uma fatura cujo número já escreveu num custo, a app propõe juntá-la a esse custo.',
+      },
+    ],
+  },
   {
     version: '2026.10.09.1',
     date: '2026-10-09',

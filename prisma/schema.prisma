@@ -30,6 +30,18 @@ enum CostType {
   OPEX
 }
 
+/// How a cost was, or will be, paid.
+///
+/// DIRECT_DEBIT is a promise rather than a payment: the money leaves on the
+/// due date by itself. Until then it counts as money about to go out, never
+/// as overdue, and from that day it counts as paid without anyone saying so.
+enum PaymentMethod {
+  CASH
+  MULTIBANCO
+  TRANSFER
+  DIRECT_DEBIT
+}
+
 /// Documents a restaurant has to keep current. Ordered roughly by how often
 /// they are asked for in an inspection.
 /// How often a document has to be renewed, so the next expiry can be
@@ -344,6 +356,22 @@ model CostEntry {
   recurringCost   RecurringCost? @relation(fields: [recurringCostId], references: [id])
   recurringCostId String?        @map("recurring_cost_id")
 
+  /// The supplier's document number, when there is one. Typed with the cost,
+  /// read off a scan, or added later when the paper turns up. A cost with
+  /// none is one still waiting for its invoice.
+  invoiceNumber String? @map("invoice_number")
+
+  /// Payment, on the original entry only: an invoice split by category is
+  /// still one document and is paid once. Parts leave these empty.
+  ///
+  /// Null paidAt is unpaid, unless the method is a direct debit, which pays
+  /// itself on the due date. dueDate is the owner's own date; when null it
+  /// is the cost's date plus the supplier's terms, so changing a supplier's
+  /// terms moves every invoice still open with them.
+  paymentMethod PaymentMethod? @map("payment_method")
+  paidAt        DateTime?      @map("paid_at") @db.Date
+  dueDate       DateTime?      @map("due_date") @db.Date
+
   invoiceItems InvoiceItem[]
   receiptScans ReceiptScan[]
 
@@ -363,6 +391,7 @@ model CostEntry {
   @@index([restaurantId, date])
   @@index([restaurantId, type, date])
   @@index([splitFromId])
+  @@index([restaurantId, paidAt])
   @@map("cost_entries")
 }
 
@@ -393,6 +422,15 @@ model RecurringCost {
   endDate           DateTime? @map("end_date") @db.Date
   lastGeneratedDate DateTime? @map("last_generated_date") @db.Date
   active            Boolean   @default(true)
+
+  /// How each month is paid. Null books every month as still to pay; any
+  /// other books it paid that way on its own date (a direct debit, on the
+  /// day it leaves the account).
+  paymentMethod PaymentMethod? @map("payment_method")
+  /// Who it is paid to, so every month sits with that supplier and falls due
+  /// on that supplier's terms.
+  vendor        Vendor?        @relation(fields: [vendorId], references: [id])
+  vendorId      String?        @map("vendor_id")
 
   createdBy   User     @relation("RecurringCostCreatedBy", fields: [createdById], references: [id])
   createdById String   @map("created_by")
@@ -577,14 +615,18 @@ model Vendor {
   taxId    String? @map("tax_id") // NIF
   isActive Boolean @default(true) @map("is_active")
 
+  /// Days this supplier gives to pay. Null is the legal default of 30.
+  paymentTermsDays Int? @map("payment_terms_days")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  costEntries  CostEntry[]
-  invoiceItems InvoiceItem[]
-  itemLinks    InvoiceItemLink[]
-  lineMemories InvoiceLineMemory[]
-  corrections  ScanCorrection[]
+  costEntries    CostEntry[]
+  recurringCosts RecurringCost[]
+  invoiceItems   InvoiceItem[]
+  itemLinks      InvoiceItemLink[]
+  lineMemories   InvoiceLineMemory[]
+  corrections    ScanCorrection[]
 
   @@unique([restaurantId, name])
   @@map("vendors")
