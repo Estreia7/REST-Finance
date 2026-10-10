@@ -1,3 +1,37 @@
+# Apresentação: movimento que explica, texto que pergunta
+
+## Situação hoje (2026-10-09)
+- A apresentação do admin e o deck de TV partilham dez figuras SVG estáticas
+  (`app/components/presentation/figures.tsx`). Só a secção de abertura tem
+  um fade de entrada.
+- O site público já tem um sistema de animação por entrada em cena
+  (`.is-visible` + classes `rf-*` em `globals.css`, `WhenVisible` em
+  `app/components/landing/Illustrations.tsx`). As figuras da apresentação
+  não o usam.
+- O texto é bom mas descritivo: diz o que a figura mostra, não a pergunta
+  que a figura responde.
+
+## Plano
+- [x] `WhenVisible` partilhado em `app/components/presentation/`. (O landing
+      mantém a sua cópia: não valia a pena alargar o âmbito.)
+- [x] Cada figura anima uma vez a sua mecânica. Classes `pres-*` em
+      `globals.css`, inertes sob `prefers-reduced-motion` (verificado: zero
+      elementos escondidos ou a animar com movimento reduzido).
+- [x] Deck de TV: confirmado, cada ecrã remonta e a figura anima de novo.
+- [x] Painel: secções entram ao chegar ao ecrã; cartões em escada (`--i`).
+- [x] Texto: sete perguntas por cima dos títulos, explicações mais diretas,
+      pt + en. Títulos mantidos.
+- [x] Testes, build, QA visual (admin 1440 + tablet 820, deck /pt 1920).
+- [x] Sem números novos, sem claims novos: só o modo de dizer.
+
+## Revisão (2026-10-10)
+- Nada de bibliotecas: CSS + IntersectionObserver, como o site já fazia.
+- O que vi a mexer no browser: ponteiro a rodar e a parar em "Atenção",
+  ingredientes a entrar antes da margem, cascata coluna a coluna.
+- Não revisto: o deck em televisão real (só no Chromium a 1920×1080).
+
+---
+
 # Embalagens na fatura + "cérebro" visível no admin
 
 ## Situação hoje (2026-10-08)

@@ -1,5 +1,7 @@
 'use client';
 
+import WhenVisible from './WhenVisible';
+
 /**
  * The drawings that carry the sales argument.
  *
@@ -26,7 +28,20 @@
  * not data: a waterfall here has fixed proportions chosen to read well at a
  * glance, and a charting runtime would only get in the way. They paint with
  * hsl(var(--token)) and currentColor so dark mode needs no second version.
+ *
+ * Third, each figure moves once, and the movement is the mechanic: the dial's
+ * needle swings to where it settles, the waterfall falls a column at a time,
+ * the ingredient costs push in from the left and the margin is what is left.
+ * The classes are `pres-*` in globals.css, played by WhenVisible when the
+ * figure scrolls into view, and inert under prefers-reduced-motion. The
+ * delays are written inline, in order, so reading the JSX top to bottom is
+ * reading the animation.
  */
+
+/** A per-element start time, written where the element is drawn. */
+const at = (ms: number) => ({ animationDelay: `${ms}ms` });
+/** Scale transforms run from this point of the element, not the SVG origin. */
+const from = (origin: string) => ({ transformOrigin: origin, transformBox: 'fill-box' as const });
 
 
 // ─── Shared SVG helpers ───────────────────────────────────────────────────────
@@ -50,6 +65,7 @@ export const RULE = 'hsl(var(--border))';
  */
 export function ShoeboxFigure({ title }: FigureProps) {
   return (
+    <WhenVisible>
     <svg viewBox="0 0 320 150" className="w-full h-auto" role="img" aria-labelledby="pres-shoebox-title">
       <title id="pres-shoebox-title">{title}</title>
 
@@ -60,7 +76,8 @@ export function ShoeboxFigure({ title }: FigureProps) {
         { x: 22, y: 50, r: -4 },
         { x: 30, y: 38, r: 8 },
       ].map((s, i) => (
-        <g key={i} transform={`rotate(${s.r} ${s.x + 32} ${s.y + 20})`}>
+        // Each invoice drops onto the pile after the one before it.
+        <g key={i} className="pres-fall" style={at(i * 160)} transform={`rotate(${s.r} ${s.x + 32} ${s.y + 20})`}>
           <rect
             x={s.x} y={s.y} width={64} height={40} rx={3}
             fill="hsl(var(--card))" stroke={RULE} strokeWidth={1.5}
@@ -89,6 +106,7 @@ export function ShoeboxFigure({ title }: FigureProps) {
       />
 
       {/* Spreadsheet, mostly empty and out of date */}
+      <g className="pres-fade" style={at(500)}>
       <rect x="182" y="24" width="128" height="104" rx={6} fill="hsl(var(--card))" stroke={RULE} strokeWidth={1.5} />
       <rect x="182" y="24" width="128" height="16" rx={6} fill="hsl(var(--muted))" />
       <rect x="182" y="34" width="128" height="6" fill="hsl(var(--muted))" />
@@ -107,12 +125,15 @@ export function ShoeboxFigure({ title }: FigureProps) {
         { x: 254, y: 68, w: 12 },
         { x: 190, y: 84, w: 13 },
       ].map((c, i) => (
-        <rect key={i} x={c.x} y={c.y} width={c.w} height={5} rx={2.5} fill="hsl(var(--muted-foreground))" opacity={0.45} />
+        <rect key={i} className="pres-pop" style={at(700 + i * 90)} x={c.x} y={c.y} width={c.w} height={5} rx={2.5} fill="hsl(var(--muted-foreground))" opacity={0.45} />
       ))}
-      {/* Two cells in error — the formula nobody maintains any more */}
-      <rect x="286" y="100" width="16" height="5" rx={2.5} fill="hsl(var(--lamp-danger))" opacity={0.6} />
-      <rect x="222" y="116" width="14" height="5" rx={2.5} fill="hsl(var(--lamp-danger))" opacity={0.6} />
+      </g>
+      {/* Two cells in error — the formula nobody maintains any more. Last,
+          because they are the point. */}
+      <rect className="pres-lamp" style={{ ...at(1350), ...from('center') }} x="286" y="100" width="16" height="5" rx={2.5} fill="hsl(var(--lamp-danger))" opacity={0.6} />
+      <rect className="pres-lamp" style={{ ...at(1500), ...from('center') }} x="222" y="116" width="14" height="5" rx={2.5} fill="hsl(var(--lamp-danger))" opacity={0.6} />
     </svg>
+    </WhenVisible>
   );
 }
 
@@ -121,10 +142,12 @@ export function ShoeboxFigure({ title }: FigureProps) {
 /** The capture flow, as three stations with the movement drawn between them. */
 export function FlowFigure({ title }: FigureProps) {
   return (
+    <WhenVisible>
     <svg viewBox="0 0 360 120" className="w-full h-auto" role="img" aria-labelledby="pres-flow-title">
       <title id="pres-flow-title">{title}</title>
 
       {/* 1 — a phone photographing a receipt */}
+      <g className="pres-pop" style={at(0)}>
       <rect x="14" y="18" width="52" height="84" rx={8} fill="hsl(var(--card))" stroke={RULE} strokeWidth={1.5} />
       <rect x="21" y="27" width="38" height="60" rx={3} fill="hsl(var(--muted))" />
       {/* the receipt inside the viewfinder */}
@@ -133,38 +156,42 @@ export function FlowFigure({ title }: FigureProps) {
         <line key={y} x1="32" y1={y} x2={y === 66 ? 44 : 48} y2={y} stroke="hsl(var(--muted-foreground))" strokeWidth={1.2} strokeLinecap="round" opacity={0.5} />
       ))}
       <circle cx="40" cy="94" r={4} fill="hsl(var(--primary))" />
+      </g>
 
-      <path d="M74 60 h24" stroke="hsl(var(--primary))" strokeWidth={2} strokeLinecap="round" />
-      <path d="M94 55 l6 5 -6 5" fill="none" stroke="hsl(var(--primary))" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      {/* The movement between stations is drawn, not just placed */}
+      <path className="pres-draw" style={at(350)} d="M74 60 h24" stroke="hsl(var(--primary))" strokeWidth={2} strokeLinecap="round" />
+      <path className="pres-pop" style={at(650)} d="M94 55 l6 5 -6 5" fill="none" stroke="hsl(var(--primary))" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
 
       {/* 2 — the lines lifted off it, each with a value */}
-      <rect x="110" y="22" width="108" height="76" rx={6} fill="hsl(var(--card))" stroke={RULE} strokeWidth={1.5} />
+      <rect className="pres-pop" style={at(750)} x="110" y="22" width="108" height="76" rx={6} fill="hsl(var(--card))" stroke={RULE} strokeWidth={1.5} />
       {[34, 52, 70].map((y, i) => (
+        // The reading comes out a line at a time, the value just after the name.
         <g key={y}>
-          <rect x="118" y={y} width={[44, 54, 38][i]} height={6} rx={3} fill="hsl(var(--muted-foreground))" opacity={0.45} />
-          <rect x="182" y={y} width={28} height={6} rx={3} fill="hsl(var(--primary))" opacity={0.75} />
+          <rect className="pres-pop" style={at(950 + i * 180)} x="118" y={y} width={[44, 54, 38][i]} height={6} rx={3} fill="hsl(var(--muted-foreground))" opacity={0.45} />
+          <rect className="pres-fill-x" style={{ ...at(1040 + i * 180), ...from('left') }} x="182" y={y} width={28} height={6} rx={3} fill="hsl(var(--primary))" opacity={0.75} />
         </g>
       ))}
       {/* a tick: the owner confirms rather than types */}
-      <path d="M118 86 l5 5 9 -11" fill="none" stroke="hsl(var(--lamp-success))" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
-      <rect x="140" y="86" width="46" height="6" rx={3} fill="hsl(var(--muted-foreground))" opacity={0.3} />
+      <path className="pres-draw" style={at(1550)} d="M118 86 l5 5 9 -11" fill="none" stroke="hsl(var(--lamp-success))" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+      <rect className="pres-pop" style={at(1600)} x="140" y="86" width="46" height="6" rx={3} fill="hsl(var(--muted-foreground))" opacity={0.3} />
 
-      <path d="M226 60 h24" stroke="hsl(var(--primary))" strokeWidth={2} strokeLinecap="round" />
-      <path d="M246 55 l6 5 -6 5" fill="none" stroke="hsl(var(--primary))" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <path className="pres-draw" style={at(1800)} d="M226 60 h24" stroke="hsl(var(--primary))" strokeWidth={2} strokeLinecap="round" />
+      <path className="pres-pop" style={at(2100)} d="M246 55 l6 5 -6 5" fill="none" stroke="hsl(var(--primary))" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
 
       {/* 3 — the cost, now a line on a chart that keeps moving */}
-      <rect x="262" y="22" width="84" height="76" rx={6} fill="hsl(var(--card))" stroke={RULE} strokeWidth={1.5} />
-      <line x1="272" y1="84" x2="338" y2="84" stroke={RULE} strokeWidth={1.5} />
+      <rect className="pres-pop" style={at(2200)} x="262" y="22" width="84" height="76" rx={6} fill="hsl(var(--card))" stroke={RULE} strokeWidth={1.5} />
+      <line className="pres-fade" style={at(2300)} x1="272" y1="84" x2="338" y2="84" stroke={RULE} strokeWidth={1.5} />
       {[
         { x: 274, h: 18 },
         { x: 287, h: 28 },
         { x: 300, h: 24 },
         { x: 313, h: 38 },
         { x: 326, h: 46 },
-      ].map((b) => (
-        <rect key={b.x} x={b.x} y={84 - b.h} width={9} height={b.h} rx={2} fill="hsl(var(--primary))" opacity={0.85} />
+      ].map((b, i) => (
+        <rect key={b.x} className="pres-fill-up" style={{ ...at(2400 + i * 110), ...from('bottom') }} x={b.x} y={84 - b.h} width={9} height={b.h} rx={2} fill="hsl(var(--primary))" opacity={0.85} />
       ))}
     </svg>
+    </WhenVisible>
   );
 }
 
@@ -173,6 +200,7 @@ export function FlowFigure({ title }: FigureProps) {
 /** Scattered, overlapping fragments on the left; one ordered panel on the right. */
 export function BeforeAfterFigure({ title }: FigureProps) {
   return (
+    <WhenVisible>
     <svg viewBox="0 0 340 130" className="w-full h-auto" role="img" aria-labelledby="pres-beforeafter-title">
       <title id="pres-beforeafter-title">{title}</title>
 
@@ -185,7 +213,7 @@ export function BeforeAfterFigure({ title }: FigureProps) {
         { x: 14, y: 86, w: 40, h: 24, r: 4 },
         { x: 62, y: 88, w: 46, h: 22, r: -10 },
       ].map((s, i) => (
-        <g key={i} transform={`rotate(${s.r} ${s.x + s.w / 2} ${s.y + s.h / 2})`}>
+        <g key={i} className="pres-pop" style={at(i * 110)} transform={`rotate(${s.r} ${s.x + s.w / 2} ${s.y + s.h / 2})`}>
           <rect x={s.x} y={s.y} width={s.w} height={s.h} rx={3} fill="hsl(var(--card))" stroke={RULE} strokeWidth={1.3} />
           <line x1={s.x + 5} y1={s.y + 9} x2={s.x + s.w - 8} y2={s.y + 9} stroke="hsl(var(--muted-foreground))" strokeWidth={1.3} strokeLinecap="round" opacity={0.4} />
           <line x1={s.x + 5} y1={s.y + 16} x2={s.x + s.w - 14} y2={s.y + 16} stroke="hsl(var(--muted-foreground))" strokeWidth={1.3} strokeLinecap="round" opacity={0.4} />
@@ -193,18 +221,20 @@ export function BeforeAfterFigure({ title }: FigureProps) {
       ))}
 
       {/* The transition */}
-      <path d="M136 65 h34" stroke="hsl(var(--primary))" strokeWidth={2.5} strokeLinecap="round" />
-      <path d="M164 58 l8 7 -8 7" fill="none" stroke="hsl(var(--primary))" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+      <path className="pres-draw" style={at(750)} d="M136 65 h34" stroke="hsl(var(--primary))" strokeWidth={2.5} strokeLinecap="round" />
+      <path className="pres-pop" style={at(1050)} d="M164 58 l8 7 -8 7" fill="none" stroke="hsl(var(--primary))" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
 
       {/* After — one panel, on a grid, with a headline figure and a trend */}
+      <g className="pres-pop" style={at(1150)}>
       <rect x="190" y="16" width="138" height="98" rx={8} fill="hsl(var(--card))" stroke="hsl(var(--primary))" strokeWidth={1.8} />
       <rect x="190" y="16" width="138" height="18" rx={8} fill="hsl(var(--primary))" opacity={0.12} />
       <rect x="190" y="28" width="138" height="6" fill="hsl(var(--primary))" opacity={0.12} />
       <rect x="198" y="22" width="34" height="6" rx={3} fill="hsl(var(--primary))" opacity={0.8} />
+      </g>
 
       {/* Three aligned stat tiles */}
-      {[198, 244, 290].map((x) => (
-        <g key={x}>
+      {[198, 244, 290].map((x, i) => (
+        <g key={x} className="pres-pop" style={at(1400 + i * 120)}>
           <rect x={x} y={42} width={30} height={22} rx={4} fill="hsl(var(--muted))" />
           <rect x={x + 5} y={47} width={14} height={5} rx={2.5} fill="hsl(var(--foreground))" opacity={0.7} />
           <rect x={x + 5} y={55} width={20} height={4} rx={2} fill="hsl(var(--muted-foreground))" opacity={0.5} />
@@ -212,13 +242,15 @@ export function BeforeAfterFigure({ title }: FigureProps) {
       ))}
 
       {/* A trend line that actually goes somewhere */}
+      <line className="pres-fade" style={at(1700)} x1="198" y1="108" x2="320" y2="108" stroke={RULE} strokeWidth={1.2} />
       <polyline
+        className="pres-draw" style={at(1800)}
         points="198,102 218,94 238,97 258,86 278,80 298,84 318,72"
         fill="none" stroke="hsl(var(--primary))" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"
       />
-      <circle cx="318" cy="72" r={3.5} fill="hsl(var(--primary))" />
-      <line x1="198" y1="108" x2="320" y2="108" stroke={RULE} strokeWidth={1.2} />
+      <circle className="pres-lamp" style={{ ...at(2750), ...from('center') }} cx="318" cy="72" r={3.5} fill="hsl(var(--primary))" />
     </svg>
+    </WhenVisible>
   );
 }
 
@@ -249,24 +281,33 @@ export function PrimeCostFigure({
   const [nx, ny] = pt(84, r - 20);
 
   return (
+    <WhenVisible>
     <svg viewBox="0 0 220 138" className="w-full h-auto" role="img" aria-labelledby="pres-prime-title">
       <title id="pres-prime-title">{title}</title>
 
-      <path d={arc(0, 70)} fill="none" stroke="hsl(var(--lamp-success))" strokeWidth={16} strokeLinecap="round" opacity={0.85} />
-      <path d={arc(74, 116)} fill="none" stroke="hsl(var(--lamp-warning))" strokeWidth={16} strokeLinecap="round" opacity={0.85} />
-      <path d={arc(120, 180)} fill="none" stroke="hsl(var(--lamp-danger))" strokeWidth={16} strokeLinecap="round" opacity={0.85} />
-
-      {/* Needle */}
-      <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="hsl(var(--foreground))" strokeWidth={3} strokeLinecap="round" />
-      <circle cx={cx} cy={cy} r={6} fill="hsl(var(--card))" stroke="hsl(var(--foreground))" strokeWidth={2.5} />
+      {/* The bands draw in from healthy to critical, in the order the needle
+          will cross them. */}
+      <path className="pres-draw" style={at(0)} d={arc(0, 70)} fill="none" stroke="hsl(var(--lamp-success))" strokeWidth={16} strokeLinecap="round" opacity={0.85} />
+      <path className="pres-draw" style={at(300)} d={arc(74, 116)} fill="none" stroke="hsl(var(--lamp-warning))" strokeWidth={16} strokeLinecap="round" opacity={0.85} />
+      <path className="pres-draw" style={at(550)} d={arc(120, 180)} fill="none" stroke="hsl(var(--lamp-danger))" strokeWidth={16} strokeLinecap="round" opacity={0.85} />
 
       {/* Band labels, placed outside their own arcs */}
-      <text x="16" y="118" fontSize="9" fontWeight={600} fill="hsl(var(--lamp-success))">{healthy}</text>
-      <text x="110" y="14" fontSize="9" fontWeight={600} fill="hsl(var(--lamp-warning))" textAnchor="middle">{watch}</text>
-      <text x="204" y="118" fontSize="9" fontWeight={600} fill="hsl(var(--lamp-danger))" textAnchor="end">{high}</text>
+      <text className="pres-pop" style={at(400)} x="16" y="118" fontSize="9" fontWeight={600} fill="hsl(var(--lamp-success))">{healthy}</text>
+      <text className="pres-pop" style={at(700)} x="110" y="14" fontSize="9" fontWeight={600} fill="hsl(var(--lamp-warning))" textAnchor="middle">{watch}</text>
+      <text className="pres-pop" style={at(950)} x="204" y="118" fontSize="9" fontWeight={600} fill="hsl(var(--lamp-danger))" textAnchor="end">{high}</text>
 
-      <text x="110" y="132" fontSize="8.5" fill="hsl(var(--muted-foreground))" textAnchor="middle">{caption}</text>
+      {/* Needle: swings up from the healthy end and settles in the watch
+          band — the moment the owner asks "and where am I?". Rotated about
+          its pivot, which is the dial's centre. */}
+      <line
+        className="pres-needle" style={{ ...at(1000), transformOrigin: `${cx}px ${cy}px` }}
+        x1={cx} y1={cy} x2={nx} y2={ny} stroke="hsl(var(--foreground))" strokeWidth={3} strokeLinecap="round"
+      />
+      <circle cx={cx} cy={cy} r={6} fill="hsl(var(--card))" stroke="hsl(var(--foreground))" strokeWidth={2.5} />
+
+      <text className="pres-fade" style={at(1600)} x="110" y="132" fontSize="8.5" fill="hsl(var(--muted-foreground))" textAnchor="middle">{caption}</text>
     </svg>
+    </WhenVisible>
   );
 }
 
@@ -302,30 +343,42 @@ export function WaterfallFigure({
   cols.push({ x: 8 + 4 * 58, y: base - running * scale, h: running * scale, fill: 'hsl(var(--primary))', label: profit });
 
   return (
+    <WhenVisible>
     <svg viewBox="0 0 300 124" className="w-full h-auto" role="img" aria-labelledby="pres-waterfall-title">
       <title id="pres-waterfall-title">{title}</title>
 
       <line x1="4" y1={base} x2="296" y2={base} stroke={RULE} strokeWidth={1.5} />
 
-      {cols.map((c, i) => (
+      {cols.map((c, i) => {
+        // Revenue rises from the baseline; each cost drops from where the
+        // last one ended; profit rises last, from the baseline, as what is left.
+        const step = 420;
+        const grows = i === 0 || i === cols.length - 1 ? 'bottom' : 'top';
+        return (
         <g key={c.label}>
-          <rect x={c.x} y={c.y} width={44} height={Math.max(c.h, 3)} rx={3} fill={c.fill} opacity={i === 0 || i === cols.length - 1 ? 0.95 : 0.8} />
+          <rect
+            className="pres-fill-up" style={{ ...at(i * step), ...from(grows) }}
+            x={c.x} y={c.y} width={44} height={Math.max(c.h, 3)} rx={3} fill={c.fill} opacity={i === 0 || i === cols.length - 1 ? 0.95 : 0.8}
+          />
           {/* Connector to the next column, so the eye follows the drop */}
           {i < cols.length - 1 && (
             <line
+              className="pres-draw" style={at(i * step + 380)}
               x1={c.x + 44} y1={i === 0 ? c.y : c.y + c.h}
               x2={c.x + 58} y2={i === 0 ? c.y : c.y + c.h}
               stroke={RULE} strokeWidth={1.5} strokeDasharray="3 3"
             />
           )}
-          <text x={c.x + 22} y={base + 14} fontSize="8" fill="hsl(var(--muted-foreground))" textAnchor="middle">{c.label}</text>
+          <text className="pres-fade" style={at(i * step + 200)} x={c.x + 22} y={base + 14} fontSize="8" fill="hsl(var(--muted-foreground))" textAnchor="middle">{c.label}</text>
         </g>
-      ))}
+        );
+      })}
 
       {/* The remaining sliver is easy to miss, so it is called out */}
-      <line x1={cols[4].x + 22} y1={cols[4].y - 6} x2={cols[4].x + 22} y2={cols[4].y - 22} stroke="hsl(var(--primary))" strokeWidth={1.5} />
-      <circle cx={cols[4].x + 22} cy={cols[4].y - 25} r={3} fill="hsl(var(--primary))" />
+      <line className="pres-draw" style={at(2250)} x1={cols[4].x + 22} y1={cols[4].y - 6} x2={cols[4].x + 22} y2={cols[4].y - 22} stroke="hsl(var(--primary))" strokeWidth={1.5} />
+      <circle className="pres-lamp" style={{ ...at(2500), ...from('center') }} cx={cols[4].x + 22} cy={cols[4].y - 25} r={3} fill="hsl(var(--primary))" />
     </svg>
+    </WhenVisible>
   );
 }
 
@@ -348,44 +401,56 @@ export function DishFigure({
   let x = 12;
 
   return (
+    <WhenVisible>
     <svg viewBox="0 0 300 132" className="w-full h-auto" role="img" aria-labelledby="pres-dish-title">
       <title id="pres-dish-title">{title}</title>
 
-      <text x="12" y="16" fontSize="9" fontWeight={600} fill="hsl(var(--muted-foreground))">{price}</text>
+      <text className="pres-pop" style={at(0)} x="12" y="16" fontSize="9" fontWeight={600} fill="hsl(var(--muted-foreground))">{price}</text>
 
       {/* The full menu price as an outline the costs must fit inside */}
-      <rect x="12" y="26" width="276" height="28" rx={4} fill="hsl(var(--muted))" stroke={RULE} strokeWidth={1.3} />
+      <rect className="pres-fill-x" style={{ ...at(100), ...from('left') }} x="12" y="26" width="276" height="28" rx={4} fill="hsl(var(--muted))" stroke={RULE} strokeWidth={1.3} />
 
-      {parts.map((p) => {
-        const rect = <rect key={p.label} x={x} y={26} width={p.w} height={28} fill={p.fill} opacity={0.85} />;
+      {parts.map((p, i) => {
+        // Each ingredient pushes in from the left, eating into the price.
+        const rect = (
+          <rect
+            key={p.label} className="pres-fill-x" style={{ ...at(700 + i * 380), ...from('left') }}
+            x={x} y={26} width={p.w} height={28} fill={p.fill} opacity={0.85}
+          />
+        );
         x += p.w;
         return rect;
       })}
-      {/* Margin: what the outline still has room for once the costs are in */}
-      <rect x={x} y={26} width={288 - x} height={28} fill="hsl(var(--primary))" opacity={0.9} />
+      {/* Margin: what the outline still has room for once the costs are in.
+          It arrives last, because it is the answer. */}
+      <rect className="pres-fill-x" style={{ ...at(1900), ...from('right') }} x={x} y={26} width={288 - x} height={28} fill="hsl(var(--primary))" opacity={0.9} />
       {/* Rounded ends, drawn over the flat segment edges */}
       <rect x="12" y="26" width="276" height="28" rx={4} fill="none" stroke={RULE} strokeWidth={1.3} />
 
       {/* Legend, wrapped onto two rows so it survives a narrow column */}
       {parts.map((p, i) => (
-        <g key={p.label}>
+        <g key={p.label} className="pres-pop" style={at(800 + i * 380)}>
           <rect x={12 + i * 92} y={68} width={9} height={9} rx={2} fill={p.fill} opacity={0.85} />
           <text x={26 + i * 92} y={76} fontSize="8" fill="hsl(var(--muted-foreground))">{p.label}</text>
         </g>
       ))}
-      <g>
+      <g className="pres-pop" style={at(1700)}>
         <rect x="12" y="88" width={9} height={9} rx={2} fill="hsl(var(--pnl-cogs))" opacity={0.35} />
         <text x="26" y="96" fontSize="8" fill="hsl(var(--muted-foreground))">{cost}</text>
+      </g>
+      <g className="pres-pop" style={at(2300)}>
         <rect x="150" y="88" width={9} height={9} rx={2} fill="hsl(var(--primary))" opacity={0.9} />
         <text x="164" y="96" fontSize="8" fontWeight={600} fill="hsl(var(--primary))">{margin}</text>
       </g>
 
       {/* Bracket under the margin, tying the legend back to the bar */}
       <path
+        className="pres-draw" style={at(2350)}
         d={`M${x} 60 v4 h${288 - x} v-4`}
         fill="none" stroke="hsl(var(--primary))" strokeWidth={1.4} strokeLinecap="round"
       />
     </svg>
+    </WhenVisible>
   );
 }
 
@@ -407,6 +472,7 @@ export function RevenueVsCostFigure({
   ];
 
   return (
+    <WhenVisible>
     <svg viewBox="0 0 300 120" className="w-full h-auto" role="img" aria-labelledby="pres-revcost-title">
       <title id="pres-revcost-title">{title}</title>
 
@@ -417,21 +483,24 @@ export function RevenueVsCostFigure({
 
       {months.map((m, i) => {
         const x = 22 + i * 45;
+        // Month by month, sales first then costs — so the gap closing in the
+        // later months is watched happening rather than noticed afterwards.
         return (
           <g key={i}>
-            <rect x={x} y={base - m.s} width={15} height={m.s} rx={2.5} fill="hsl(var(--pnl-revenue))" opacity={0.9} />
-            <rect x={x + 18} y={base - m.c} width={15} height={m.c} rx={2.5} fill="hsl(var(--pnl-cogs))" opacity={0.8} />
+            <rect className="pres-fill-up" style={{ ...at(i * 260), ...from('bottom') }} x={x} y={base - m.s} width={15} height={m.s} rx={2.5} fill="hsl(var(--pnl-revenue))" opacity={0.9} />
+            <rect className="pres-fill-up" style={{ ...at(i * 260 + 130), ...from('bottom') }} x={x + 18} y={base - m.c} width={15} height={m.c} rx={2.5} fill="hsl(var(--pnl-cogs))" opacity={0.8} />
           </g>
         );
       })}
 
-      <g>
+      <g className="pres-fade" style={at(200)}>
         <rect x="10" y="104" width={9} height={9} rx={2} fill="hsl(var(--pnl-revenue))" opacity={0.9} />
         <text x="24" y="112" fontSize="8.5" fill="hsl(var(--muted-foreground))">{sales}</text>
         <rect x="118" y="104" width={9} height={9} rx={2} fill="hsl(var(--pnl-cogs))" opacity={0.8} />
         <text x="132" y="112" fontSize="8.5" fill="hsl(var(--muted-foreground))">{costs}</text>
       </g>
     </svg>
+    </WhenVisible>
   );
 }
 
@@ -451,29 +520,38 @@ export function RotaFigure({ title, costLabel }: FigureProps & { costLabel: stri
   ];
 
   return (
+    <WhenVisible>
     <svg viewBox="0 0 300 122" className="w-full h-auto" role="img" aria-labelledby="pres-rota-title">
       <title id="pres-rota-title">{title}</title>
 
       {/* Day columns */}
       {Array.from({ length: 7 }, (_, d) => (
         <rect
-          key={d} x={10 + d * 41} y={14} width={34} height={76} rx={4}
+          key={d} className="pres-fade" style={at(d * 60)}
+          x={10 + d * 41} y={14} width={34} height={76} rx={4}
           fill="hsl(var(--muted))" opacity={0.55}
         />
       ))}
 
       {shifts.map((s, i) => (
+        // Shifts drop into the week one at a time, as they would be placed.
         <rect
-          key={i} x={13 + s.d * 41} y={s.y} width={28} height={s.h} rx={3}
+          key={i} className="pres-fall" style={at(500 + i * 120)}
+          x={13 + s.d * 41} y={s.y} width={28} height={s.h} rx={3}
           fill="hsl(var(--pnl-labour))" opacity={0.85}
         />
       ))}
 
-      {/* The running cost, drawn as a bar that fills as the week is built */}
-      <text x="10" y="106" fontSize="8.5" fill="hsl(var(--muted-foreground))">{costLabel}</text>
-      <rect x="10" y="110" width="280" height="7" rx={3.5} fill="hsl(var(--muted))" />
-      <rect x="10" y="110" width="196" height="7" rx={3.5} fill="hsl(var(--primary))" />
+      {/* The running cost, drawn as a bar that fills as the week is built —
+          timed to finish with the last shift, since that is what it counts. */}
+      <text className="pres-fade" style={at(500)} x="10" y="106" fontSize="8.5" fill="hsl(var(--muted-foreground))">{costLabel}</text>
+      <rect className="pres-fade" style={at(500)} x="10" y="110" width="280" height="7" rx={3.5} fill="hsl(var(--muted))" />
+      <rect
+        className="pres-fill-x" style={{ ...at(600), ...from('left'), animationDuration: '1500ms' }}
+        x="10" y="110" width="196" height="7" rx={3.5} fill="hsl(var(--primary))"
+      />
     </svg>
+    </WhenVisible>
   );
 }
 
@@ -486,10 +564,12 @@ export function TaxFigure({
   const cells = Array.from({ length: 28 }, (_, i) => i);
 
   return (
+    <WhenVisible>
     <svg viewBox="0 0 300 128" className="w-full h-auto" role="img" aria-labelledby="pres-tax-title">
       <title id="pres-tax-title">{title}</title>
 
-      {/* Calendar grid — 7 x 4, the day cells shading in as the month runs */}
+      {/* Calendar grid — 7 x 4, the day cells shading in as the month runs.
+          Each day arrives in turn, so the month is watched passing. */}
       {cells.map((i) => {
         const col = i % 7;
         const row = Math.floor(i / 7);
@@ -497,7 +577,7 @@ export function TaxFigure({
         const filled = i < 22;
         return (
           <rect
-            key={i}
+            key={i} className="pres-pop" style={at(i * 55)}
             x={10 + col * 26} y={16 + row * 20} width={21} height={15} rx={3}
             fill={filled ? 'hsl(var(--primary))' : 'hsl(var(--muted))'}
             opacity={filled ? 0.15 + (i / 28) * 0.55 : 0.5}
@@ -505,18 +585,24 @@ export function TaxFigure({
         );
       })}
 
-      {/* The deadline, on the last cell of the grid */}
-      <rect x={10 + 6 * 26} y={16 + 3 * 20} width={21} height={15} rx={3} fill="none" stroke="hsl(var(--lamp-danger))" strokeWidth={2} />
-      <text x={10 + 6 * 26 + 10.5} y={16 + 3 * 20 + 11} fontSize="8" fontWeight={700} fill="hsl(var(--lamp-danger))" textAnchor="middle">!</text>
-
       {/* The amount accumulating, as a step line rising into the deadline */}
+      <text className="pres-fade" style={at(300)} x="10" y="112" fontSize="8.5" fill="hsl(var(--muted-foreground))">{setAside}</text>
       <polyline
+        className="pres-draw" style={at(400)}
         points="204,112 222,108 240,100 258,90 276,76 288,68"
         fill="none" stroke="hsl(var(--primary))" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"
       />
-      <text x="10" y="112" fontSize="8.5" fill="hsl(var(--muted-foreground))">{setAside}</text>
-      <text x="10" y="124" fontSize="8.5" fontWeight={600} fill="hsl(var(--lamp-danger))">{due}</text>
+
+      {/* The deadline, on the last cell of the grid: the last thing to appear,
+          and the one thing that pulses — it is still owed. */}
+      <g className="pres-lamp" style={{ ...at(1600), ...from('center') }}>
+        <rect x={10 + 6 * 26} y={16 + 3 * 20} width={21} height={15} rx={3} fill="none" stroke="hsl(var(--lamp-danger))" strokeWidth={2} />
+        <text x={10 + 6 * 26 + 10.5} y={16 + 3 * 20 + 11} fontSize="8" fontWeight={700} fill="hsl(var(--lamp-danger))" textAnchor="middle">!</text>
+      </g>
+      <rect className="pres-ping" style={from('center')} x={10 + 6 * 26} y={16 + 3 * 20} width={21} height={15} rx={3} fill="none" stroke="hsl(var(--lamp-danger))" strokeWidth={1.5} opacity={0} />
+      <text className="pres-pop" style={at(1700)} x="10" y="124" fontSize="8.5" fontWeight={600} fill="hsl(var(--lamp-danger))">{due}</text>
     </svg>
+    </WhenVisible>
   );
 }
 
@@ -534,25 +620,29 @@ export function ComplianceFigure({
   ];
 
   return (
+    <WhenVisible>
     <svg viewBox="0 0 300 122" className="w-full h-auto" role="img" aria-labelledby="pres-compliance-title">
       <title id="pres-compliance-title">{title}</title>
 
       {items.slice(0, 4).map((label, i) => {
         const y = 8 + i * 28;
         const lamp = lamps[i];
+        // The row appears, then its lamp lights and its verdict is read off.
+        const row = i * 300;
         return (
           <g key={label}>
-            <rect x="8" y={y} width="284" height="24" rx={5} fill="hsl(var(--muted))" opacity={0.45} />
+            <rect className="pres-pop" style={at(row)} x="8" y={y} width="284" height="24" rx={5} fill="hsl(var(--muted))" opacity={0.45} />
+            <text className="pres-pop" style={at(row + 80)} x="40" y={y + 16} fontSize="9" fill="hsl(var(--foreground))">{label}</text>
             {/* The lamp gets a ring as well as a fill: colour alone is not a
                 status for someone who cannot tell green from amber. */}
-            <circle cx="24" cy={y + 12} r={6} fill={lamp.colour} opacity={0.2} />
-            <circle cx="24" cy={y + 12} r={3.5} fill={lamp.colour} />
-            <text x="40" y={y + 16} fontSize="9" fill="hsl(var(--foreground))">{label}</text>
-            <text x="284" y={y + 16} fontSize="8" fontWeight={600} fill={lamp.colour} textAnchor="end">{lamp.status}</text>
+            <circle className="pres-lamp" style={{ ...at(row + 260), ...from('center') }} cx="24" cy={y + 12} r={6} fill={lamp.colour} opacity={0.2} />
+            <circle className="pres-lamp" style={{ ...at(row + 260), ...from('center') }} cx="24" cy={y + 12} r={3.5} fill={lamp.colour} />
+            <text className="pres-pop" style={at(row + 340)} x="284" y={y + 16} fontSize="8" fontWeight={600} fill={lamp.colour} textAnchor="end">{lamp.status}</text>
           </g>
         );
       })}
     </svg>
+    </WhenVisible>
   );
 }
 

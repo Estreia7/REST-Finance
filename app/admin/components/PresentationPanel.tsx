@@ -6,6 +6,7 @@ import {
   DishFigure, RevenueVsCostFigure, RotaFigure, TaxFigure, ComplianceFigure,
 } from '@/app/components/presentation/figures';
 import ShareDeckCard from '@/app/components/presentation/ShareDeckCard';
+import WhenVisible from '@/app/components/presentation/WhenVisible';
 
 /**
  * The sales deck, shown on a laptop or tablet while sitting across from a
@@ -14,8 +15,22 @@ import ShareDeckCard from '@/app/components/presentation/ShareDeckCard';
  * The drawings live in `app/components/presentation/figures.tsx` because the
  * unattended television deck at /pt and /en shows the same ones. What stays
  * here is the scrollable arrangement a person presents from by hand.
+ *
+ * Motion is kept to arrival: a section rises into place as it is scrolled to,
+ * the cards inside it follow one after another, and each drawing plays its
+ * mechanic once (see figures.tsx). It is paced to the person presenting, who
+ * scrolls when they are ready to talk about the next thing — so nothing moves
+ * until they get there, and nothing moves twice.
  */
 
+/** A section that rises into view when it is reached. */
+function Section({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <WhenVisible className={`pres-section ${className}`} threshold={0.15}>
+      {children}
+    </WhenVisible>
+  );
+}
 
 function SectionHeader({ label, title, lead }: { label: string; title: string; lead?: string }) {
   return (
@@ -29,9 +44,9 @@ function SectionHeader({ label, title, lead }: { label: string; title: string; l
   );
 }
 
-function ProblemCard({ title, body }: { title: string; body: string }) {
+function ProblemCard({ index, title, body }: { index: number; title: string; body: string }) {
   return (
-    <div className="card-glass p-5 space-y-2">
+    <div className="card-glass p-5 space-y-2" style={{ '--i': index } as React.CSSProperties}>
       <h3 className="font-semibold text-foreground text-sm">{title}</h3>
       <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
     </div>
@@ -45,14 +60,21 @@ function ProblemCard({ title, body }: { title: string; body: string }) {
  * meets the accessible title before the prose repeats it.
  */
 function Capability({
-  title, body, figure,
+  index, question, title, body, figure,
 }: {
+  /** Position in the grid, so the cards arrive one after another. */
+  index: number;
+  /** The owner's own question, which the drawing answers. Read first. */
+  question: string;
   title: string;
   body: string;
   figure: React.ReactNode;
 }) {
   return (
-    <article className="card-glass p-5 sm:p-6 flex flex-col gap-4">
+    <article className="card-glass p-5 sm:p-6 flex flex-col gap-4 h-full" style={{ '--i': index } as React.CSSProperties}>
+      <p className="font-display text-base sm:text-lg font-bold leading-snug text-primary-ink text-balance">
+        “{question}”
+      </p>
       <div className="rounded-lg bg-surface border border-border-subtle p-3 sm:p-4">
         {figure}
       </div>
@@ -139,7 +161,7 @@ export default function PresentationPanel() {
       </section>
 
       {/* ── 1. The problem ────────────────────────────────────────────────── */}
-      <section className="space-y-7">
+      <Section className="space-y-7">
         <SectionHeader
           label={t('presentation.problemLabel')}
           title={t('presentation.problemTitle')}
@@ -151,17 +173,17 @@ export default function PresentationPanel() {
             <ShoeboxFigure title={t('presentation.problemSvgTitle')} />
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-4">
-            <ProblemCard title={t('presentation.problemOneTitle')} body={t('presentation.problemOneBody')} />
-            <ProblemCard title={t('presentation.problemTwoTitle')} body={t('presentation.problemTwoBody')} />
-            <ProblemCard title={t('presentation.problemThreeTitle')} body={t('presentation.problemThreeBody')} />
-            <ProblemCard title={t('presentation.problemFourTitle')} body={t('presentation.problemFourBody')} />
+          <div className="grid sm:grid-cols-2 gap-4 pres-stagger">
+            <ProblemCard index={0} title={t('presentation.problemOneTitle')} body={t('presentation.problemOneBody')} />
+            <ProblemCard index={1} title={t('presentation.problemTwoTitle')} body={t('presentation.problemTwoBody')} />
+            <ProblemCard index={2} title={t('presentation.problemThreeTitle')} body={t('presentation.problemThreeBody')} />
+            <ProblemCard index={3} title={t('presentation.problemFourTitle')} body={t('presentation.problemFourBody')} />
           </div>
         </div>
-      </section>
+      </Section>
 
       {/* ── 2. What the app does ──────────────────────────────────────────── */}
-      <section className="space-y-7">
+      <Section className="space-y-7">
         <SectionHeader
           label={t('presentation.solutionLabel')}
           title={t('presentation.solutionTitle')}
@@ -177,7 +199,8 @@ export default function PresentationPanel() {
               { n: 2, title: t('presentation.flowStepTwoTitle'), body: t('presentation.flowStepTwoBody') },
               { n: 3, title: t('presentation.flowStepThreeTitle'), body: t('presentation.flowStepThreeBody') },
             ].map((step) => (
-              <li key={step.n} className="space-y-1.5">
+              // Each step lands after the drawing has reached its station.
+              <li key={step.n} className="space-y-1.5 pres-rise" style={{ animationDelay: `${600 + step.n * 700}ms` }}>
                 <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 text-primary-ink text-xs font-bold tabular-nums">
                   {step.n}
                 </span>
@@ -187,18 +210,20 @@ export default function PresentationPanel() {
             ))}
           </ol>
         </div>
-      </section>
+      </Section>
 
       {/* ── 3. Capabilities ───────────────────────────────────────────────── */}
-      <section className="space-y-7">
+      <Section className="space-y-7">
         <SectionHeader
           label={t('presentation.capabilitiesLabel')}
           title={t('presentation.capabilitiesTitle')}
           lead={t('presentation.capabilitiesLead')}
         />
 
-        <div className="grid md:grid-cols-2 gap-5">
+        <div className="grid md:grid-cols-2 gap-5 pres-stagger">
           <Capability
+            index={0}
+            question={t('presentation.primeQuestion')}
             title={t('presentation.primeTitle')}
             body={t('presentation.primeBody')}
             figure={
@@ -213,6 +238,8 @@ export default function PresentationPanel() {
           />
 
           <Capability
+            index={1}
+            question={t('presentation.marginQuestion')}
             title={t('presentation.marginTitle')}
             body={t('presentation.marginBody')}
             figure={
@@ -228,6 +255,8 @@ export default function PresentationPanel() {
           />
 
           <Capability
+            index={2}
+            question={t('presentation.dishQuestion')}
             title={t('presentation.dishTitle')}
             body={t('presentation.dishBody')}
             figure={
@@ -244,6 +273,8 @@ export default function PresentationPanel() {
           />
 
           <Capability
+            index={3}
+            question={t('presentation.revenueQuestion')}
             title={t('presentation.revenueTitle')}
             body={t('presentation.revenueBody')}
             figure={
@@ -256,6 +287,8 @@ export default function PresentationPanel() {
           />
 
           <Capability
+            index={4}
+            question={t('presentation.staffQuestion')}
             title={t('presentation.staffTitle')}
             body={t('presentation.staffBody')}
             figure={
@@ -267,6 +300,8 @@ export default function PresentationPanel() {
           />
 
           <Capability
+            index={5}
+            question={t('presentation.taxQuestion')}
             title={t('presentation.taxTitle')}
             body={t('presentation.taxBody')}
             figure={
@@ -279,8 +314,10 @@ export default function PresentationPanel() {
           />
 
           {/* Compliance spans the row: the list is wide and reads badly boxed */}
-          <div className="md:col-span-2">
+          <div className="md:col-span-2" style={{ '--i': 6 } as React.CSSProperties}>
             <Capability
+              index={6}
+            question={t('presentation.complianceQuestion')}
               title={t('presentation.complianceTitle')}
               body={t('presentation.complianceBody')}
               figure={
@@ -300,17 +337,17 @@ export default function PresentationPanel() {
             />
           </div>
         </div>
-      </section>
+      </Section>
 
       {/* ── 4. Day to day ─────────────────────────────────────────────────── */}
-      <section className="space-y-7">
+      <Section className="space-y-7">
         <SectionHeader
           label={t('presentation.dayLabel')}
           title={t('presentation.dayTitle')}
           lead={t('presentation.dayLead')}
         />
 
-        <ol className="grid sm:grid-cols-2 gap-5">
+        <ol className="grid sm:grid-cols-2 gap-5 pres-stagger">
           {[
             { n: '01', title: t('presentation.dayOneTitle'), body: t('presentation.dayOneBody') },
             { n: '02', title: t('presentation.dayTwoTitle'), body: t('presentation.dayTwoBody') },
@@ -318,8 +355,8 @@ export default function PresentationPanel() {
             { n: '04', title: t('presentation.dayFourTitle'), body: t('presentation.dayFourBody') },
             { n: '05', title: t('presentation.dayFiveTitle'), body: t('presentation.dayFiveBody') },
             { n: '06', title: t('presentation.daySixTitle'), body: t('presentation.daySixBody') },
-          ].map((item) => (
-            <li key={item.n} className="card-glass p-5 sm:p-6 flex gap-4">
+          ].map((item, i) => (
+            <li key={item.n} className="card-glass p-5 sm:p-6 flex gap-4" style={{ '--i': i } as React.CSSProperties}>
               <span className="font-display text-2xl font-black tabular-nums text-primary/30 leading-none shrink-0">
                 {item.n}
               </span>
@@ -330,27 +367,27 @@ export default function PresentationPanel() {
             </li>
           ))}
         </ol>
-      </section>
+      </Section>
 
       {/* ── 5. The lines to remember ──────────────────────────────────────── */}
       {/* Deliberately the last thing before the close. Everything above is the
           argument; this is the part the owner should still be able to repeat
           to a partner that evening, so it is short, numbered and unhedged. */}
-      <section className="space-y-7">
+      <Section className="space-y-7">
         <SectionHeader
           label={t('presentation.takeawayLabel')}
           title={t('presentation.takeawayTitle')}
           lead={t('presentation.takeawayLead')}
         />
 
-        <div className="grid sm:grid-cols-2 gap-5">
+        <div className="grid sm:grid-cols-2 gap-5 pres-stagger">
           {[
             { title: t('presentation.takeawayOneTitle'), body: t('presentation.takeawayOneBody') },
             { title: t('presentation.takeawayTwoTitle'), body: t('presentation.takeawayTwoBody') },
             { title: t('presentation.takeawayThreeTitle'), body: t('presentation.takeawayThreeBody') },
             { title: t('presentation.takeawayFourTitle'), body: t('presentation.takeawayFourBody') },
-          ].map((item) => (
-            <article key={item.title} className="card-glass p-5 sm:p-6 flex gap-3.5">
+          ].map((item, i) => (
+            <article key={item.title} className="card-glass p-5 sm:p-6 flex gap-3.5" style={{ '--i': i } as React.CSSProperties}>
               <TickMark />
               <div className="space-y-1.5 min-w-0">
                 <h3 className="font-semibold text-foreground">{item.title}</h3>
@@ -359,10 +396,10 @@ export default function PresentationPanel() {
             </article>
           ))}
         </div>
-      </section>
+      </Section>
 
       {/* ── Close ─────────────────────────────────────────────────────────── */}
-      <section>
+      <Section>
         <div className="card-glass p-6 sm:p-10 border-primary/30">
           <div className="grid lg:grid-cols-2 gap-8 items-center">
             <div className="space-y-4">
@@ -384,7 +421,7 @@ export default function PresentationPanel() {
             />
           </div>
         </div>
-      </section>
+      </Section>
     </div>
   );
 }

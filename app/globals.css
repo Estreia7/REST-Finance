@@ -805,3 +805,111 @@ details > summary::-webkit-details-marker {
     stroke-dashoffset: 0 !important;
   }
 }
+
+/* ─────────────────────────────────────────
+   PRESENTATION FIGURES
+
+   The sales deck's drawings explain a mechanic — a needle settling in the
+   watch band, revenue falling step by step to profit, ingredient costs
+   squeezing a margin — and each plays that mechanic once as it comes into
+   view (WhenVisible in app/components/presentation). Nothing loops; a loop
+   would pull the eye away from the person presenting.
+
+   Every element starts hidden only when the browser will animate it, and
+   all of these rules are inert under prefers-reduced-motion, where the
+   figures render complete and still.
+───────────────────────────────────────────*/
+
+@media (prefers-reduced-motion: no-preference) {
+  .pres-pop,
+  .pres-rise,
+  .pres-fall,
+  .pres-fill-x,
+  .pres-fill-up,
+  .pres-draw,
+  .pres-lamp,
+  .pres-fade {
+    opacity: 0;
+  }
+  .pres-fill-x { transform: scaleX(0); }
+  .pres-fill-up { transform: scaleY(0); }
+  .pres-draw {
+    stroke-dasharray: 400;
+    stroke-dashoffset: 400;
+    opacity: 1;
+  }
+  /* The needle starts at the healthy end and swings to where it settles. */
+  .pres-needle {
+    transform: rotate(-84deg);
+  }
+
+  .is-visible .pres-pop   { animation: pres-pop 520ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .is-visible .pres-rise  { animation: pres-rise 560ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .is-visible .pres-fall  { animation: pres-fall 560ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .is-visible .pres-fill-x  { animation: pres-fill-x 700ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .is-visible .pres-fill-up { animation: pres-fill-up 620ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .is-visible .pres-draw  { animation: pres-draw 1100ms cubic-bezier(0.65, 0, 0.35, 1) both; }
+  .is-visible .pres-lamp  { animation: pres-lamp 420ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .is-visible .pres-fade  { animation: pres-fade 600ms ease-out both; }
+  .is-visible .pres-needle {
+    animation: pres-needle 1400ms cubic-bezier(0.22, 1.2, 0.36, 1) both;
+  }
+  /* The one deliberate repeat: the deadline flag, something still owed. */
+  .is-visible .pres-ping { animation: pres-ping 2.4s ease-out 1.6s 2; }
+}
+
+@keyframes pres-pop {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes pres-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes pres-fall {
+  from { opacity: 0; transform: translateY(-14px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes pres-fill-x {
+  from { opacity: 1; transform: scaleX(0); }
+  to   { opacity: 1; transform: scaleX(1); }
+}
+@keyframes pres-fill-up {
+  from { opacity: 1; transform: scaleY(0); }
+  to   { opacity: 1; transform: scaleY(1); }
+}
+@keyframes pres-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes pres-lamp {
+  0%   { opacity: 0; transform: scale(0.4); }
+  60%  { opacity: 1; transform: scale(1.25); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes pres-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes pres-needle {
+  from { transform: rotate(-84deg); }
+  to   { transform: none; }
+}
+@keyframes pres-ping {
+  0%   { transform: scale(1);   opacity: .7; }
+  70%  { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* Sections of the admin presentation enter as they are reached. */
+@media (prefers-reduced-motion: no-preference) {
+  .pres-section { opacity: 0; transform: translateY(18px); }
+  .pres-section.is-visible {
+    animation: pres-rise 640ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  /* Cards inside a section arrive one after another, left to right. */
+  .is-visible .pres-stagger > * {
+    animation: pres-rise 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: calc(var(--i, 0) * 90ms + 120ms);
+  }
+  .pres-stagger > * { opacity: 0; }
+}

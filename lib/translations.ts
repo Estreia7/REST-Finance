@@ -2190,7 +2190,7 @@ export const translations = {
       // Opening
       heroEyebrow: 'REST Finance',
       heroTitle: 'O teu restaurante, em números que fazem sentido',
-      heroLead: 'Serves todos os dias sem saber ao certo o que sobra. O REST Finance transforma faturas, vendas e horários naquilo que interessa: quanto ganhaste, quanto gastaste e onde está a fugir dinheiro.',
+      heroLead: 'Serves todos os dias e, ao fim do mês, não sabes ao certo o que sobrou. O REST Finance pega nas faturas, nas vendas e nos horários e devolve as três respostas que interessam: quanto entrou, quanto saiu, e por onde está a fugir.',
       heroPointOne: 'Custos e vendas no mesmo sítio',
       heroPointTwo: 'Margem por prato, não por palpite',
       heroPointThree: 'Impostos previstos antes de chegarem',
@@ -2198,7 +2198,7 @@ export const translations = {
       // Section 1: the problem
       problemLabel: 'O problema',
       problemTitle: 'O dinheiro não desaparece de repente. Vai pingando.',
-      problemLead: 'A casa está cheia, a caixa fecha bem, e no fim do mês a conta não bate certo. Normalmente não é uma coisa grande. São muitas pequenas.',
+      problemLead: 'A sala cheia, a caixa a fechar bem — e no fim do mês a conta não bate. Raramente é uma coisa grande. São muitas pequenas, todas a pingar ao mesmo tempo.',
       problemOneTitle: 'Faturas numa caixa de sapatos',
       problemOneBody: 'Chegam todos os dias e ficam empilhadas. Quando alguém as soma, já passaram três meses e o preço do fornecedor mudou duas vezes.',
       problemTwoTitle: 'Preços de prato feitos de cabeça',
@@ -2212,7 +2212,7 @@ export const translations = {
       // Section 2: what the app does
       solutionLabel: 'A solução',
       solutionTitle: 'Um sítio só, atualizado todos os dias',
-      solutionLead: 'Registas as vendas do dia e fotografas as faturas. O resto — custos, margens, impostos, mão de obra — acontece sozinho e está lá quando abres o painel.',
+      solutionLead: 'Registas as vendas do dia e fotografas as faturas. É tudo o que te pedimos. Custos, margens, impostos e mão de obra calculam-se sozinhos e estão à espera quando abres o painel.',
       flowSvgTitle: 'Da fatura em papel ao custo registado no painel, em três passos',
       flowStepOneTitle: 'Fotografas a fatura',
       flowStepOneBody: 'Com o telemóvel, à chegada da mercadoria.',
@@ -2229,18 +2229,22 @@ export const translations = {
       // Section 3: capabilities
       capabilitiesLabel: 'O que vais ver',
       capabilitiesTitle: 'As contas que decidem o mês',
-      capabilitiesLead: 'Cada número aqui responde a uma pergunta que já fizeste a ti próprio.',
+      capabilitiesLead: 'Cada quadro abaixo responde a uma pergunta que já fizeste a ti próprio — normalmente tarde de mais. Aqui a resposta chega a tempo.',
 
+      // The question each capability answers, read above its title. Written
+      // as the owner would ask it — that is the moment the drawing is for.
+      primeQuestion: 'Como vai o mês, antes de o mês acabar?',
       primeTitle: 'Prime Cost sob controlo',
-      primeBody: 'Mercadoria mais pessoal. É a conta que diz se o mês corre bem antes de o mês acabar. Vês o teu, ao lado do que é saudável em Portugal.',
+      primeBody: 'Mercadoria mais pessoal, em percentagem do que vendes. Um número só, e diz-te a meio do mês se vais acabar bem ou mal. Vês o teu ao lado do que é saudável num restaurante português.',
       primeSvgTitle: 'Mostrador de Prime Cost com as zonas saudável, atenção e crítico',
       primeGaugeHealthy: 'Saudável',
       primeGaugeWatch: 'Atenção',
       primeGaugeHigh: 'Crítico',
       primeGaugeCaption: 'Mercadoria + pessoal, em percentagem das vendas',
 
+      marginQuestion: 'Vendi tanto — para onde foi o dinheiro?',
       marginTitle: 'Onde a receita se transforma em lucro',
-      marginBody: 'Das vendas ao que fica na conta, passo a passo. Vês exatamente qual a despesa que come mais e onde mexer primeiro.',
+      marginBody: 'Das vendas ao que fica na conta, uma despesa de cada vez. Vês qual é a que come mais, e por isso sabes onde mexer primeiro.',
       marginSvgTitle: 'Cascata da receita até ao lucro, com cada custo a ser retirado',
       marginRevenue: 'Vendas',
       marginGoods: 'Mercadoria',
@@ -2248,8 +2252,9 @@ export const translations = {
       marginFixed: 'Custos fixos',
       marginProfit: 'Lucro',
 
+      dishQuestion: 'O prato que mais vendo é o que mais me deixa?',
       dishTitle: 'Margem de cada prato',
-      dishBody: 'Ingrediente a ingrediente, com os preços que estão nas tuas faturas. Descobres que o prato que mais sai é o que menos deixa.',
+      dishBody: 'Ingrediente a ingrediente, aos preços que estão nas tuas faturas de hoje, não nos da abertura. Quase sempre há uma surpresa — e é melhor que sejas tu a descobri-la.',
       dishSvgTitle: 'Composição do custo de um prato face ao preço de venda',
       dishPrice: 'Preço na ementa',
       dishCost: 'Custo dos ingredientes',
@@ -2258,25 +2263,29 @@ export const translations = {
       dishIngredientTwo: 'Acompanhamento',
       dishIngredientThree: 'Molho e tempero',
 
+      revenueQuestion: 'As vendas sobem — e os custos?',
       revenueTitle: 'Vendas contra custos, mês a mês',
-      revenueBody: 'Duas barras lado a lado. Quando a distância entre elas encolhe, sabes logo, e não três meses depois.',
+      revenueBody: 'Duas barras por mês, lado a lado. Quando a distância entre elas encolhe, sabes nessa semana — não três meses depois, quando já não há nada a fazer.',
       revenueSvgTitle: 'Barras de vendas e custos comparadas mês a mês',
       revenueLegendSales: 'Vendas',
       revenueLegendCosts: 'Custos',
 
+      staffQuestion: 'Quanto me custa esta semana de equipa?',
       staffTitle: 'Horários e custo de pessoal',
-      staffBody: 'Fazes a escala da semana e vês o custo a somar enquanto a montas. Marcas as férias de cada um, sabes quantos dias lhe restam, contados como manda a lei, e imprimes o mapa de férias que tem de estar afixado. Sem surpresas no fecho do mês.',
+      staffBody: 'Montas a escala e o custo soma-se à tua frente, turno a turno. Férias contadas como manda a lei, mapa pronto para afixar, e zero surpresas com a maior despesa da casa.',
       staffSvgTitle: 'Tira semanal de horário com turnos e o custo acumulado',
       staffCostLabel: 'Custo da semana',
 
+      taxQuestion: 'Quanto devo pôr de lado para o IVA?',
       taxTitle: 'IVA e IRC antes de chegarem',
-      taxBody: 'A estimativa acompanha o mês. Com as vendas importadas do sistema de caixa, o IVA das vendas é o que a caixa cobrou, não um palpite. Sabes quanto pôr de lado enquanto ainda dá para pôr de lado.',
+      taxBody: 'A estimativa cresce com o mês, dia a dia. Com as vendas importadas da caixa, o IVA é o que a caixa cobrou, não um palpite. Sabes quanto reservar enquanto ainda dá para reservar.',
       taxSvgTitle: 'Calendário com a estimativa de imposto a crescer até à data de pagamento',
       taxSetAside: 'A reservar',
       taxDue: 'Data de pagamento',
 
+      complianceQuestion: 'Está tudo em dia se entrar uma inspeção?',
       complianceTitle: 'Documentos sempre em dia',
-      complianceBody: 'HACCP, seguros, contratos. Uma luz verde, amarela ou vermelha por documento, e aviso antes de expirar — não depois.',
+      complianceBody: 'HACCP, seguros, contratos, extintores. Uma luz por documento — verde, amarela ou vermelha — e aviso antes de expirar, não depois.',
       complianceSvgTitle: 'Lista de documentos obrigatórios com luzes de estado',
       complianceItemOne: 'Plano HACCP',
       complianceItemTwo: 'Seguro de atividade',
@@ -2289,7 +2298,7 @@ export const translations = {
       // Section 4: what changes day to day
       dayLabel: 'O dia a dia',
       dayTitle: 'O que muda para ti',
-      dayLead: 'Não é mais trabalho. É o mesmo trabalho, com resposta no fim.',
+      dayLead: 'Não é mais trabalho. É o mesmo trabalho de sempre, só que no fim há uma resposta.',
       dayOneTitle: 'Cinco minutos ao fechar',
       dayOneBody: 'Lanças as vendas do dia e fotografas as faturas que chegaram. Acabou.',
       dayTwoTitle: 'Decides com números, não com sensações',
@@ -2308,7 +2317,7 @@ export const translations = {
       // is worth more than a paragraph they half remember.
       takeawayLabel: 'Para levar',
       takeawayTitle: 'Se ficares só com quatro coisas',
-      takeawayLead: 'São estas as que mudam o mês.',
+      takeawayLead: 'Se te lembrares só disto na viagem para casa, chega.',
       takeawayOneTitle: 'Cinco minutos por dia',
       takeawayOneBody: 'É todo o trabalho que te pedimos. O resto acontece sozinho.',
       takeawayTwoTitle: 'Prime Cost é o número',
@@ -2320,7 +2329,7 @@ export const translations = {
 
       // Close
       closeTitle: 'Feito para quem tem o restaurante aberto',
-      closeBody: 'Em português, com as regras portuguesas, e sem precisar de perceber de contabilidade para o usar.',
+      closeBody: 'Em português, com as regras portuguesas, para quem tem o restaurante aberto — não para quem percebe de contabilidade.',
       closePointOne: 'IVA e IRC portugueses, já configurados',
       closePointTwo: 'Funciona no telemóvel, no balcão',
       closePointThree: 'Vários restaurantes na mesma conta',
@@ -4879,7 +4888,7 @@ export const translations = {
       // Opening
       heroEyebrow: 'REST Finance',
       heroTitle: 'Your restaurant, in numbers that make sense',
-      heroLead: 'You serve every day without knowing exactly what is left over. REST Finance turns invoices, sales and rotas into what matters: what you earned, what you spent, and where the money is leaking.',
+      heroLead: 'You serve every day and, at the end of the month, you are not quite sure what was left. REST Finance takes your invoices, sales and rotas and hands back the three answers that matter: what came in, what went out, and where it is leaking.',
       heroPointOne: 'Costs and sales in one place',
       heroPointTwo: 'Margin per dish, not per guess',
       heroPointThree: 'Tax forecast before it lands',
@@ -4887,7 +4896,7 @@ export const translations = {
       // Section 1: the problem
       problemLabel: 'The problem',
       problemTitle: 'Money does not vanish all at once. It drips.',
-      problemLead: 'The room is full, the till closes well, and at the end of the month the numbers still do not add up. It is rarely one big thing. It is many small ones.',
+      problemLead: 'The room is full, the till closes well — and at month end the numbers still do not add up. It is rarely one big thing. It is many small ones, all dripping at once.',
       problemOneTitle: 'Invoices in a shoebox',
       problemOneBody: 'They arrive every day and pile up. By the time someone adds them, three months have passed and the supplier has raised prices twice.',
       problemTwoTitle: 'Dish prices set from memory',
@@ -4901,7 +4910,7 @@ export const translations = {
       // Section 2: what the app does
       solutionLabel: 'The answer',
       solutionTitle: 'One place, up to date every day',
-      solutionLead: 'You log the day’s sales and photograph the invoices. Everything else — costs, margins, tax, labour — happens on its own and is waiting when you open the dashboard.',
+      solutionLead: "You log the day's sales and photograph the invoices. That is all we ask. Costs, margins, tax and labour work themselves out and are waiting when you open the dashboard.",
       flowSvgTitle: 'From a paper invoice to a tracked cost, in three steps',
       flowStepOneTitle: 'Photograph the invoice',
       flowStepOneBody: 'On your phone, as the delivery arrives.',
@@ -4918,18 +4927,22 @@ export const translations = {
       // Section 3: capabilities
       capabilitiesLabel: 'What you will see',
       capabilitiesTitle: 'The numbers that decide the month',
-      capabilitiesLead: 'Every figure here answers a question you have already asked yourself.',
+      capabilitiesLead: 'Every panel below answers a question you have already asked yourself — usually too late. Here the answer arrives in time.',
 
+      // The question each capability answers, read above its title. Written
+      // as the owner would ask it — that is the moment the drawing is for.
+      primeQuestion: 'How is the month going, before the month is over?',
       primeTitle: 'Prime Cost under control',
-      primeBody: 'Goods plus labour. It is the number that tells you how the month is going before the month is over. You see yours, next to what is healthy in Portugal.',
+      primeBody: 'Goods plus labour, as a share of what you sell. One number, and halfway through the month it tells you whether you will end well or badly. You see yours next to what is healthy for a Portuguese restaurant.',
       primeSvgTitle: 'Prime Cost dial showing the healthy, watch and critical bands',
       primeGaugeHealthy: 'Healthy',
       primeGaugeWatch: 'Watch',
       primeGaugeHigh: 'Critical',
       primeGaugeCaption: 'Goods + labour, as a share of sales',
 
+      marginQuestion: 'I sold so much — where did the money go?',
       marginTitle: 'Where revenue turns into profit',
-      marginBody: 'From sales to what stays in the bank, step by step. You see exactly which cost eats the most and where to move first.',
+      marginBody: 'From sales to what stays in the bank, one cost at a time. You see which one eats the most, so you know where to move first.',
       marginSvgTitle: 'Waterfall from revenue to profit, with each cost taken out in turn',
       marginRevenue: 'Sales',
       marginGoods: 'Goods',
@@ -4937,8 +4950,9 @@ export const translations = {
       marginFixed: 'Fixed costs',
       marginProfit: 'Profit',
 
+      dishQuestion: 'Is my best seller the one that earns me the most?',
       dishTitle: 'The margin on every dish',
-      dishBody: 'Ingredient by ingredient, at the prices on your own invoices. You find out the best seller is the one leaving you the least.',
+      dishBody: "Ingredient by ingredient, at the prices on today's invoices, not opening day's. There is nearly always a surprise — better that you are the one to find it.",
       dishSvgTitle: 'Breakdown of a dish cost against its menu price',
       dishPrice: 'Menu price',
       dishCost: 'Ingredient cost',
@@ -4947,25 +4961,29 @@ export const translations = {
       dishIngredientTwo: 'Side',
       dishIngredientThree: 'Sauce and seasoning',
 
+      revenueQuestion: 'Sales are up — and costs?',
       revenueTitle: 'Sales against costs, month by month',
-      revenueBody: 'Two bars side by side. When the gap between them narrows, you know straight away, not three months later.',
+      revenueBody: 'Two bars a month, side by side. When the gap between them narrows you know that week — not three months later, when there is nothing left to do about it.',
       revenueSvgTitle: 'Sales and cost bars compared month by month',
       revenueLegendSales: 'Sales',
       revenueLegendCosts: 'Costs',
 
+      staffQuestion: "What is this week's team costing me?",
       staffTitle: 'Rotas and labour cost',
-      staffBody: 'You build the week’s rota and watch the cost add up as you build it. You book everyone’s holidays, know how many days each has left, counted the way the law counts them, and print the holiday map the law says must be posted. No surprises at month end.',
+      staffBody: 'You build the rota and the cost adds up in front of you, shift by shift. Holidays counted the way the law counts them, the map ready to post, and no surprises from the biggest expense in the house.',
       staffSvgTitle: 'Weekly rota strip with shifts and the running cost',
       staffCostLabel: 'Cost for the week',
 
+      taxQuestion: 'How much should I set aside for VAT?',
       taxTitle: 'VAT and corporate tax, before they land',
-      taxBody: 'The estimate follows the month. With sales imported from your till, the VAT on sales is what the till charged, not a guess. You know how much to set aside while there is still something to set aside.',
+      taxBody: 'The estimate grows with the month, day by day. With sales imported from the till, the VAT is what the till charged, not a guess. You know how much to set aside while there is still something to set aside.',
       taxSvgTitle: 'Calendar with the tax estimate growing towards the payment date',
       taxSetAside: 'To set aside',
       taxDue: 'Payment date',
 
+      complianceQuestion: 'If an inspector walked in, is everything in order?',
       complianceTitle: 'Documents always in order',
-      complianceBody: 'Food safety, insurance, contracts. A green, amber or red light per document, and a warning before it expires, not after.',
+      complianceBody: 'Food safety, insurance, contracts, extinguishers. One light per document — green, amber or red — and a warning before it expires, not after.',
       complianceSvgTitle: 'List of required documents with status lights',
       complianceItemOne: 'Food safety plan',
       complianceItemTwo: 'Business insurance',
@@ -4978,7 +4996,7 @@ export const translations = {
       // Section 4: what changes day to day
       dayLabel: 'Day to day',
       dayTitle: 'What changes for you',
-      dayLead: 'It is not more work. It is the same work, with an answer at the end of it.',
+      dayLead: 'It is not more work. It is the same work as always, except that at the end there is an answer.',
       dayOneTitle: 'Five minutes at close',
       dayOneBody: 'You enter the day’s sales and photograph the invoices that came in. Done.',
       dayTwoTitle: 'You decide with numbers, not with feelings',
@@ -4997,7 +5015,7 @@ export const translations = {
       // is worth more than a paragraph they half remember.
       takeawayLabel: 'Worth remembering',
       takeawayTitle: 'If you keep only four things',
-      takeawayLead: 'These are the ones that change the month.',
+      takeawayLead: 'If you remember only this on the drive home, that is enough.',
       takeawayOneTitle: 'Five minutes a day',
       takeawayOneBody: 'That is all the work we ask of you. The rest happens on its own.',
       takeawayTwoTitle: 'Prime Cost is the number',
@@ -5009,7 +5027,7 @@ export const translations = {
 
       // Close
       closeTitle: 'Built for people who run an open restaurant',
-      closeBody: 'In your language, under Portuguese rules, and without needing to understand accounting to use it.',
+      closeBody: 'In Portuguese, under Portuguese rules, for people who run an open restaurant — not for people who understand accounting.',
       closePointOne: 'Portuguese VAT and corporate tax, already set up',
       closePointTwo: 'Works on your phone, behind the counter',
       closePointThree: 'Several restaurants on one account',
