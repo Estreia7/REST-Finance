@@ -7,6 +7,7 @@ import { toClientError } from '@/lib/errors';
 import { lineKey, type CostCategory } from '@/lib/invoice-categories';
 import { rebalanceInvoice } from '@/lib/invoice-split-server';
 import { rememberLine } from '@/lib/invoice-memory-server';
+import { mergeVendorsTx } from '@/lib/vendors-server';
 
 /**
  * The paperwork side of the business.
@@ -388,70 +389,11 @@ export async function mergeVendors(input: { keepId: string; mergeIds: string[] }
     const mergeIds = input.mergeIds.filter((id) => id !== input.keepId);
     if (!mergeIds.length) return { error: 'accounting.noVendorsToMerge' };
 
-    const moved = await prisma.$transaction(async (tx) => {
-      const items = await tx.invoiceItem.updateMany({
-        where: { restaurantId: owner.restaurantId, vendorId: { in: mergeIds } },
-        data: { vendorId: input.keepId },
-      });
-      const costs = await tx.costEntry.updateMany({
-        where: { restaurantId: owner.restaurantId, vendorId: { in: mergeIds } },
-        data: { vendorId: input.keepId },
-      });
-      // Fixed costs follow too, or next month's rent would book to a
-      // supplier that no longer exists.
-      await tx.recurringCost.updateMany({
-        where: { restaurantId: owner.restaurantId, vendorId: { in: mergeIds } },
-        data: { vendorId: input.keepId },
-      });
-
-      // A remembered link belongs to a supplier's wording. Moved rather than
-      // dropped, or the owner would be asked again about products they have
-      // already identified. Conflicts are deleted: the kept supplier already
-      // has that answer.
-      const links = await tx.invoiceItemLink.findMany({
-        where: { restaurantId: owner.restaurantId, vendorId: { in: mergeIds } },
-        select: { id: true, sourceName: true, ingredientId: true },
-      });
-      for (const link of links) {
-        const clash = await tx.invoiceItemLink.findFirst({
-          where: {
-            restaurantId: owner.restaurantId,
-            vendorId: input.keepId,
-            sourceName: link.sourceName,
-            ingredientId: link.ingredientId,
-          },
-          select: { id: true },
-        });
-        if (clash) await tx.invoiceItemLink.delete({ where: { id: link.id } });
-        else await tx.invoiceItemLink.update({ where: { id: link.id }, data: { vendorId: input.keepId } });
-      }
-
-      // The same for what each wording's category was: deleting the
-      // supplier would take those answers with it. Where both suppliers
-      // remember the same wording, the surer answer stays.
-      const memories = await tx.invoiceLineMemory.findMany({
-        where: { restaurantId: owner.restaurantId, vendorId: { in: mergeIds } },
-        select: { id: true, sourceName: true, confirmations: true },
-      });
-      for (const memory of memories) {
-        const clash = await tx.invoiceLineMemory.findFirst({
-          where: { restaurantId: owner.restaurantId, vendorId: input.keepId, sourceName: memory.sourceName },
-          select: { id: true, confirmations: true },
-        });
-        if (clash && clash.confirmations >= memory.confirmations) {
-          await tx.invoiceLineMemory.delete({ where: { id: memory.id } });
-          continue;
-        }
-        if (clash) await tx.invoiceLineMemory.delete({ where: { id: clash.id } });
-        await tx.invoiceLineMemory.update({ where: { id: memory.id }, data: { vendorId: input.keepId } });
-      }
-
-      await tx.vendor.deleteMany({
-        where: { id: { in: mergeIds }, restaurantId: owner.restaurantId },
-      });
-
-      return { items: items.count, costs: costs.count };
-    });
+    // Everything that names a supplier moves to the one kept; see
+    // mergeVendorsTx for what that is and why each part goes.
+    const moved = await prisma.$transaction((tx) =>
+      mergeVendorsTx(tx, { restaurantId: owner.restaurantId, keepId: input.keepId, mergeIds }),
+    );
 
     return {
       success: true,

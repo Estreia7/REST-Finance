@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useDeferredValue } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Search, FileText, Link2, Check, AlertTriangle, Eye, Trash2 } from 'lucide-react';
+import { Loader2, Search, FileText, Link2, Check, AlertTriangle, Eye, Trash2, Building2, Pencil } from 'lucide-react';
 import {
   getInvoiceLines,
   getInvoices,
@@ -22,6 +22,7 @@ import SubTabs from './SubTabs';
 import ListSearch from './ListSearch';
 import InvoicePreview from './InvoicePreview';
 import PaymentsPanel from './PaymentsPanel';
+import VendorFixDialog from './VendorFixDialog';
 import type { PayablesFilter } from '../payment-actions';
 
 /**
@@ -349,6 +350,7 @@ function Invoices({ initialSearch = '', onSearchConsumed }: {
           invoiceNumber={previewing}
           onClose={() => setPreviewing(null)}
           onDeleted={load}
+          onChanged={load}
         />
       )}
 
@@ -366,13 +368,16 @@ function Vendors() {
   const { t } = useLanguage();
   const [data, setData] = useState<AccountingSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  /** The supplier whose name or NIF is being corrected. */
+  const [fixing, setFixing] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     getInvoiceLines().then((result) => {
       setLoading(false);
       if ('data' in result && result.data) setData(result.data);
     });
   }, []);
+  useEffect(() => { load(); }, [load]);
 
   if (loading) return <Spinner label={t('common.loading')} />;
   if (!data || data.vendors.length === 0) {
@@ -390,7 +395,19 @@ function Vendors() {
         {data.vendors.map((vendor) => (
           <li key={vendor.id}>
             <div className="flex items-baseline justify-between gap-3 mb-1">
-              <span className="text-sm text-foreground truncate">{vendor.name}</span>
+              <span className="flex items-center gap-1 min-w-0">
+                <span className="text-sm text-foreground truncate">{vendor.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setFixing(vendor.id)}
+                  aria-label={t('vendorFix.editVendor').replace('{vendor}', vendor.name)}
+                  title={t('vendorFix.editVendor').replace('{vendor}', vendor.name)}
+                  className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted shrink-0
+                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Pencil className="w-3 h-3" aria-hidden="true" />
+                </button>
+              </span>
               <span className="text-sm font-semibold text-foreground tabular-nums shrink-0">
                 {formatMoney(vendor.spend)}
               </span>
@@ -410,6 +427,10 @@ function Vendors() {
           </li>
         ))}
       </ul>
+
+      {fixing && (
+        <VendorFixDialog vendorId={fixing} onClose={() => setFixing(null)} onDone={load} />
+      )}
     </div>
   );
 }
@@ -658,6 +679,8 @@ function InvoiceList() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [previewing, setPreviewing] = useState<{ number: string; deleting: boolean } | null>(null);
+  /** The invoice whose supplier is being corrected. */
+  const [fixing, setFixing] = useState<string | null>(null);
 
   const deferredSearch = useDeferredValue(search);
   const locale = language === 'pt' ? 'pt-PT' : 'en-GB';
@@ -734,6 +757,17 @@ function InvoiceList() {
                     <>
                       <button
                         type="button"
+                        onClick={() => setFixing(invoice.invoiceNumber!)}
+                        aria-label={t('vendorFix.title')}
+                        title={t('vendorFix.title')}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground
+                                   hover:bg-muted transition-colors focus-visible:outline-none
+                                   focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Building2 className="w-4 h-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setPreviewing({ number: invoice.invoiceNumber!, deleting: false })}
                         aria-label={t('accounting.previewInvoice').replace('{number}', invoice.invoiceNumber)}
                         className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground
@@ -781,7 +815,11 @@ function InvoiceList() {
           startConfirmingDelete={previewing.deleting}
           onClose={() => setPreviewing(null)}
           onDeleted={load}
+          onChanged={load}
         />
+      )}
+      {fixing && (
+        <VendorFixDialog invoiceNumber={fixing} onClose={() => setFixing(null)} onDone={load} />
       )}
     </div>
   );

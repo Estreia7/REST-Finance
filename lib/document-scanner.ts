@@ -56,6 +56,26 @@ export interface CostReceiptResult {
   grandTotal: number;
   suggestedType: 'COGS' | 'OPEX';
   suggestedCategory: string;
+  /** What the app checked after reading. Added by the scan route. */
+  checks?: ScanChecks;
+}
+
+/**
+ * Kept with every reading, so a bad one can be explained later: whether the
+ * QR was read and what it corrected, and whether the supplier looks like
+ * the customer the invoice was addressed to.
+ */
+export interface ScanChecks {
+  qrRead: boolean;
+  qrChanged: string[];
+  /** The customer's NIF according to the QR, when it carries one. */
+  qrBuyerNif: string | null;
+  doubt: 'customerNif' | 'customerName' | null;
+  /** The supplier already on file under this NIF, by its saved name. */
+  knownVendor: string | null;
+  knownVendorId: string | null;
+  /** That saved name is the customer's: an earlier invoice was misread. */
+  knownVendorIsCustomer: boolean;
 }
 
 export interface DailyReportResult {
@@ -83,6 +103,8 @@ export async function scanDocument(
     categories?: ScanCategory[];
     /** Who asked, so the call is logged against them in the usage console. */
     usage?: { restaurantId: string; userId: string };
+    /** Who the invoice is addressed to, so it is never read as the supplier. */
+    customer?: { names: string[]; taxIds: string[] };
   } = {},
 ): Promise<ScanResult> {
   const apiUrl = process.env.DOCUMENT_SCANNER_API_URL;

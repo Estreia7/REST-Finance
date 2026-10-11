@@ -387,3 +387,73 @@ fornecedor sem prazo = 30 dias; o custo fixo diz como é pago e cada mês herda.
 ### Por verificar
 - O passo de pagamento no scanner e o juntar fatura por fotografia não foram
   corridos ponta a ponta: precisam de uma leitura real pela IA.
+
+---
+
+# Fornecedor errado numa fatura: corrigir, e não voltar a acontecer (2026-10-11)
+
+Caso real: FR 26202304/0000049479 (Smash and Dough). Lida a 07/10 com o nome
+do cliente ("DANIEL MARQUES ARAÚJO") e o NIF certo do fornecedor
+(500145415); relida a 08/10 como "RECHEIO-ALBUFEIRA", recusada como
+duplicada. Como os fornecedores se encontram pelo NIF, o NIF do Recheio
+ficou com o nome do Daniel, e todas as faturas Recheio seguintes iriam para
+lá. O QR não tem culpa: só traz NIFs, nunca nomes, e o NIF estava certo.
+O pedido: a app deve permitir corrigir (não corrigir eu à mão).
+
+## Plano
+- [x] Corrigir na app, a partir da fatura (Faturas, pré-visualização, aviso
+      de duplicado do scanner) e do fornecedor (Fornecedores):
+      - "O nome deste fornecedor está errado" → renomear/NIF; vale para
+        todas as faturas dele; se colidir com outro, juntar os dois.
+      - "Esta fatura é de outro fornecedor" → mover só esta fatura: custo e
+        partes, linhas, respostas aprendidas, correções; repreçar
+        ingredientes; oferecer apagar o fornecedor que ficar vazio.
+      - Sugerir o que outra leitura da mesma fatura disse.
+      - Registar a correção no Cérebro.
+- [x] Prevenir:
+      - Prompt: emitente vs cliente; dizer ao leitor quem é o cliente
+        (restaurante, donos, NIF do restaurante).
+      - Verificação depois da leitura: NIF igual ao do cliente (QR B ou NIF
+        do restaurante) ou nome igual ao do cliente → aviso no ecrã de
+        revisão; fornecedor já conhecido pelo NIF → usar o nome guardado.
+      - O nome mais longo já não substitui sozinho o de um fornecedor.
+      - Deixar de criar fornecedores antes da revisão (rota do scan).
+      - Guardar o resultado do QR na leitura, para se saber da próxima vez.
+      - NIF do fornecedor editável na revisão; NIF do restaurante nas
+        Definições.
+- [x] pt/en, changelog, testes, QA.
+
+## Review
+
+### Causa (FR 26202304/0000049479)
+- O leitor tirou o **nome** do bloco do cliente e o **NIF** certo do
+  fornecedor. O QR não carrega nomes, por isso não podia ajudar no nome.
+- Os fornecedores encontram-se pelo NIF, logo o NIF do Recheio ficou com o
+  nome do dono. Pior: a regra "o nome mais comprido ganha" deixaria uma
+  leitura com o nome do cliente renomear um fornecedor bom.
+- O restaurante não tinha NIF guardado e não havia onde o escrever.
+
+### O que ficou
+- Corrigir: na lista de Faturas, na pré-visualização, em Fornecedores e no
+  aviso de duplicado do scanner. Renomear (todas as faturas) ou mover uma
+  fatura (custo e partes, linhas, memórias/ligações copiadas ou movidas,
+  correções; ingredientes repreçados; fornecedor vazio pode ser apagado).
+  Sugere o nome de outras leituras, exceto as que o dono já rejeitou.
+- Prevenir: prompt sabe quem é o cliente (PROMPT_VERSION 2026-10-11.1);
+  verificação depois da leitura guardada em `checks`; nome mais comprido
+  só substitui se for o mesmo nome por extenso; a rota do scan deixou de
+  criar fornecedores; NIF editável na revisão; NIF da empresa nas Definições.
+
+### Verificação
+- 897 testes (10 novos), tsc e build limpos.
+- No browser, com o caso real reproduzido: renomear pôs o nome do Recheio no
+  NIF e registou a correção; mover levou linha, custo e memória e apagou o
+  fornecedor vazio; chamada real ao scan marcou o NIF guardado com nome de
+  cliente e não criou fornecedor.
+
+### Por fazer pelo dono
+- Em produção, abrir a fatura e usar "Corrigir fornecedor" (a outra
+  leitura já sugere RECHEIO-ALBUFEIRA). Não mexi nos dados.
+- Escrever o NIF da empresa em Definições.
+- O aviso no ecrã de revisão só foi visto pelo pedido ao servidor, não com
+  uma leitura real da IA.

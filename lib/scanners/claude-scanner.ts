@@ -34,7 +34,7 @@ export const SCANNER_MODEL = 'claude-haiku-5-5';
  * prompt change rather than guessed at. Date-stamped rather than numbered:
  * the question asked later is always "what were we sending in September?".
  */
-export const PROMPT_VERSION = '2026-10-08.3';
+export const PROMPT_VERSION = '2026-10-11.1';
 
 /**
  * Room for the answer. A long cash-and-carry invoice runs to forty lines, and
@@ -82,6 +82,7 @@ Rules that matter for Portuguese documents:
 - Dates are DAY first: "03/09/2026" is 3 September 2026. Return every date as YYYY-MM-DD.
 - "IVA" is VAT. Totals labelled "Total", "Total a pagar" or "Importância Liquida" are the amount owed INCLUDING VAT unless the document says otherwise.
 - "NIF" or "Contribuinte" is the 9-digit tax number. Copy it exactly; do not reformat it.
+- An invoice names TWO parties. The SUPPLIER (vendor) is the company that ISSUED it: its name sits with its logo and letterhead, usually at the very top or in the footer, together with its own NIF/NIPC, "Capital Social", "Conservatória" or its registered address. The CUSTOMER is who it is addressed TO: a block headed "Exmo.(s) Sr.(s)", "Cliente", "Nome", "Destinatário" or "Contribuinte" with a client number, often in a box on the right and sometimes in larger type than the supplier. The customer is the restaurant or its owner, by name. Never report the customer as the vendor, and never report the customer's NIF as vendorTaxId — if only the customer's NIF is legible, leave vendorTaxId out.
 - A "fatura-recibo" is both invoice and receipt. Treat it as an invoice.
 - Wholesale invoices often print TWO quantities per line and two prices with them. A cash-and-carry line may read: PR Unit/KG 5,490 | Unit/KG 3,840 | Preço U.V. 21,08 | Quant 1 | Val.total 21,08. That is 3,840 kg bought at 5,49 per kilo, coming to 21,08 — not one unit at 21,08. Whenever a line is billed by weight or volume, report the weight or volume as the quantity and the price per kilo or litre as the unit price, so that quantity x unitPrice equals the line total. The pack count ("Quant 1") is how many packages, not how much was bought.
 - The weight column tells you which kind of line it is. On the same invoice: COSTELINHA with Unit/KG 3,840 was billed by weight, so it is 3,840 kg at 5,49 per kilo. KETCHUP 5,7KG with Unit/KG 1 was billed by the package, so it is 1 package at 16,99 — one tub that happens to hold 5,7 kg. Use unit "kg" for the first and "un" for the second.
@@ -271,13 +272,37 @@ export interface ClaudeScanOutcome {
  * it is stored encrypted in the settings table and only the caller knows how
  * to get at it.
  */
+/**
+ * Names the customer, so the reader can tell it from the supplier.
+ *
+ * Added to the message rather than the system prompt, which stays the same
+ * for every restaurant. The invoice already carries these names; saying them
+ * is what lets the reader rule them out.
+ */
+function customerNote(customer: { names: string[]; taxIds: string[] } | undefined): string {
+  if (!customer) return '';
+  const names = customer.names.map((n) => n.trim()).filter(Boolean);
+  const nifs = customer.taxIds.map((n) => n.replace(/\D/g, '')).filter((n) => n.length === 9);
+  if (names.length === 0 && nifs.length === 0) return '';
+  return (
+    '\n\nThe CUSTOMER on this invoice is the restaurant or its owner' +
+    (names.length ? `, which may appear as: ${names.map((n) => `"${n}"`).join(', ')}` : '') +
+    (nifs.length ? `; its NIF: ${nifs.join(', ')}` : '') +
+    '. These are never the vendor: report the company that issued the invoice.'
+  );
+}
+
 export async function claudeScan(
   imageBase64: string,
   mediaType: MediaType,
   scanType: ScanType,
   apiKey: string,
   /** The restaurant's cost categories; each invoice line is placed in one. */
-  options: { categories?: ScanCategory[] } = {},
+  options: {
+    categories?: ScanCategory[];
+    /** Who the invoice is addressed to, named so it is not taken for the supplier. */
+    customer?: { names: string[]; taxIds: string[] };
+  } = {},
 ): Promise<ClaudeScanOutcome> {
   const client = new Anthropic({ apiKey });
 
@@ -309,7 +334,7 @@ export async function claudeScan(
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
-          { type: 'text', text: USER_PROMPT[scanType] },
+          { type: 'text', text: USER_PROMPT[scanType] + customerNote(isReceipt ? options.customer : undefined) },
         ],
       },
     ],

@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { X, Loader2, Trash2, FileText, AlertTriangle } from 'lucide-react';
+import { X, Loader2, Trash2, FileText, AlertTriangle, Building2 } from 'lucide-react';
 import { getInvoiceImage, deleteInvoice } from '../accounting-actions';
 import { useLanguage } from '@/lib/language-context';
+import VendorFixDialog from './VendorFixDialog';
 
 /**
  * The photograph behind a figure.
@@ -23,12 +24,15 @@ export default function InvoicePreview({
   invoiceNumber,
   onClose,
   onDeleted,
+  onChanged,
   startConfirmingDelete = false,
 }: {
   invoiceNumber: string;
   onClose: () => void;
   /** Called after the invoice and its figures have been removed. */
   onDeleted?: () => void;
+  /** Called after the invoice's supplier was corrected. */
+  onChanged?: () => void;
   /**
    * Opens with the delete warning already showing. Set when the owner
    * came by the bin on an invoice row: they have said what they want, but
@@ -40,6 +44,8 @@ export default function InvoicePreview({
   const [image, setImage] = useState<{ imagePath: string; scannedAt: string } | null | 'loading'>('loading');
   const [confirming, setConfirming] = useState(startConfirmingDelete);
   const [busy, setBusy] = useState(false);
+  // Correcting who the invoice is from, over the page itself.
+  const [fixing, setFixing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,10 +58,11 @@ export default function InvoicePreview({
 
   // Escape closes, as it does everywhere else a layer opens over the page.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    // While the correction is open, Escape is that dialog's to close.
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !fixing) onClose(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, fixing]);
 
   const remove = async () => {
     setBusy(true);
@@ -75,6 +82,7 @@ export default function InvoicePreview({
   };
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={onClose}
@@ -165,19 +173,40 @@ export default function InvoicePreview({
               </div>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => setConfirming(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-danger
-                         hover:underline underline-offset-2 focus-visible:outline-none
-                         focus-visible:ring-2 focus-visible:ring-ring rounded"
-            >
-              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-              {t('accounting.deleteInvoice')}
-            </button>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setFixing(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground
+                           hover:underline underline-offset-2 focus-visible:outline-none
+                           focus-visible:ring-2 focus-visible:ring-ring rounded"
+              >
+                <Building2 className="w-3.5 h-3.5" aria-hidden="true" />
+                {t('vendorFix.title')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirming(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-danger
+                           hover:underline underline-offset-2 focus-visible:outline-none
+                           focus-visible:ring-2 focus-visible:ring-ring rounded"
+              >
+                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                {t('accounting.deleteInvoice')}
+              </button>
+            </div>
           )}
         </div>
       </div>
     </div>
+    {/* Outside the backdrop, whose click closes the preview. */}
+    {fixing && (
+      <VendorFixDialog
+        invoiceNumber={invoiceNumber}
+        onClose={() => setFixing(false)}
+        onDone={() => onChanged?.()}
+      />
+    )}
+    </>
   );
 }

@@ -35,9 +35,33 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.10.1';
+export const CHANGELOG_VERSION = '2026.10.11.1';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.11.1',
+    date: '2026-10-11',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Corrigir o fornecedor de uma fatura, e tudo o que vem com ela',
+        detail:
+          'Em Contabilidade › Faturas, carregue no ícone do prédio ao lado de uma fatura (ou em «Corrigir fornecedor» quando a abre). Se o fornecedor está certo mas o nome não, corrige-o e todas as faturas dele mudam. Se a fatura é de outro fornecedor, só ela muda: o custo, as linhas, os pagamentos e o que a app aprendeu com elas. Quando outra fotografia da mesma fatura leu um nome diferente, a app mostra-o para o poder usar. Em Fornecedores, o lápis ao lado do nome faz o mesmo.',
+      },
+      {
+        kind: 'improvement',
+        title: 'A app distingue melhor quem passou a fatura de quem a recebeu',
+        detail:
+          'Uma fatura passada em nome do dono chegou a ficar com o dono como fornecedor. Agora a leitura sabe quem é o cliente e nunca o regista como fornecedor. Se ainda assim o nome ou o NIF lidos forem os do cliente, o ecrã de revisão avisa antes de guardar, e mostra o fornecedor a que esse NIF já pertence. O NIF do fornecedor também pode ser corrigido nesse ecrã. Em Definições pode agora indicar o NIF da empresa, que ajuda nesta distinção.',
+      },
+      {
+        kind: 'fix',
+        title: 'Um fornecedor já não muda de nome sozinho por causa de uma leitura',
+        detail:
+          'Uma leitura com um nome mais comprido já não substitui o nome de um fornecedor que a app conhece, a não ser que seja o mesmo nome escrito por extenso. E uma fatura fotografada e depois deitada fora já não deixa um fornecedor novo para trás.',
+      },
+    ],
+  },
   {
     version: '2026.10.10.1',
     date: '2026-10-10',

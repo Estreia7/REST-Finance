@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireMember, isAuthError } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
 import { scanDocument, isScannerAvailable, type ScanResult } from '@/lib/document-scanner';
-import { readInvoiceQr, applyQrTruth } from '@/lib/pt-invoice-qr';
+import { readInvoiceQr, applyQrTruth, type InvoiceQrData } from '@/lib/pt-invoice-qr';
+import { checkVendorReading, looksLikeCustomer, type CustomerIdentity } from '@/lib/vendor-reading';
 import { saveImage } from '@/lib/uploads';
 import { scanRequestSchema, formatZodError } from '@/lib/validations';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -65,11 +66,17 @@ export async function POST(request: NextRequest) {
         })
       : [];
 
+    // Who the invoice is addressed to: the restaurant and its owners. Told
+    // to the reader, and checked against after, because an invoice made out
+    // to the owner by name was read with the owner as the supplier.
+    const customer = scanType === 'COST_RECEIPT' ? await customerOf(membership.restaurantId) : null;
+
     // Extract data using the document scanner adapter
     const rawData = await scanDocument(imageBase64, mediaType, scanType, {
       categories: categories.map((c) => ({ name: c.name, type: c.type as 'COGS' | 'OPEX' })),
       // So the administrator can see which restaurant this reading was for.
       usage: { restaurantId: membership.restaurantId, userId: authResult.userId },
+      ...(customer ? { customer } : {}),
     });
 
     // A Portuguese certified invoice carries a QR code holding the date,
@@ -81,7 +88,10 @@ export async function POST(request: NextRequest) {
     //
     // This has been running on the administrator bench since it was
     // written; the owner scanning an invoice never had it.
-    const extractedData = await applyQrCorrections(imageBase64, mediaType, rawData);
+    const corrected = await applyQrCorrections(imageBase64, mediaType, rawData);
+    const extractedData = customer
+      ? await checkSupplier(membership.restaurantId, corrected.data, corrected.qr, corrected.changed, customer)
+      : corrected.data;
 
     // The photograph itself, kept so the owner can look at the document
     // behind a figure rather than taking it on trust. It was being thrown
@@ -102,54 +112,25 @@ export async function POST(request: NextRequest) {
       // Left empty; the reading stands on its own.
     }
 
-    // Save scan record + create vendor/items in a transaction for cost receipts
-    const result = await prisma.$transaction(async (tx) => {
-      let vendorId: string | null = null;
-      let costEntryId: string | null = null;
-
-      // For cost receipts: create vendor and invoice items
-      if (extractedData.type === 'cost_receipt' && extractedData.items.length > 0) {
-        // Find or create vendor
-        const vendor = await tx.vendor.upsert({
-          where: {
-            restaurantId_name: {
-              restaurantId: membership.restaurantId,
-              name: extractedData.vendor.trim(),
-            },
-          },
-          update: {
-            isActive: true,
-            ...(extractedData.vendorTaxId ? { taxId: extractedData.vendorTaxId } : {}),
-          },
-          create: {
-            restaurantId: membership.restaurantId,
-            name: extractedData.vendor.trim(),
-            taxId: extractedData.vendorTaxId || null,
-          },
-        });
-        vendorId = vendor.id;
-      }
-
-      // Save scan record
-      const scan = await tx.receiptScan.create({
-        data: {
-          restaurantId: membership.restaurantId,
-          userId: authResult.userId,
-          imageUrl: imagePath,
-          scanType: scanType,
-          extractedData: extractedData as any,
-          status: 'PROCESSED',
-        },
-      });
-
-      return { scan, vendorId, costEntryId };
+    // The reading only. No supplier is created here: that waits until the
+    // owner has seen the invoice and saved it. Creating one from an unchecked
+    // reading filed suppliers under whatever was read — including the
+    // customer — and kept them even when the scan was thrown away.
+    const scan = await prisma.receiptScan.create({
+      data: {
+        restaurantId: membership.restaurantId,
+        userId: authResult.userId,
+        imageUrl: imagePath,
+        scanType: scanType,
+        extractedData: extractedData as any,
+        status: 'PROCESSED',
+      },
     });
 
     return NextResponse.json({
       success: true,
       data: extractedData,
-      scanId: result.scan.id,
-      vendorId: result.vendorId,
+      scanId: scan.id,
       isMock: !process.env.DOCUMENT_SCANNER_API_URL,
     });
   } catch (error: unknown) {
@@ -175,17 +156,75 @@ async function applyQrCorrections(
   imageBase64: string,
   mediaType: string,
   data: ScanResult,
-): Promise<ScanResult> {
-  if (data.type !== 'cost_receipt') return data;
+): Promise<{ data: ScanResult; qr: InvoiceQrData | null; changed: string[] }> {
+  if (data.type !== 'cost_receipt') return { data, qr: null, changed: [] };
 
   try {
     const bytes = Buffer.from(imageBase64, 'base64');
     const blob = new Blob([new Uint8Array(bytes)], { type: mediaType });
     const qr = await readInvoiceQr(blob);
-    if (!qr) return data;
+    if (!qr) return { data, qr: null, changed: [] };
 
-    const { corrected } = applyQrTruth(data as unknown as Record<string, unknown>, qr);
-    return corrected as unknown as ScanResult;
+    const { corrected, changed } = applyQrTruth(data as unknown as Record<string, unknown>, qr);
+    return { data: corrected as unknown as ScanResult, qr, changed };
+  } catch {
+    return { data, qr: null, changed: [] };
+  }
+}
+
+/** The restaurant's name and NIF, and the names of its owners. */
+async function customerOf(restaurantId: string): Promise<CustomerIdentity> {
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+    select: {
+      name: true,
+      taxId: true,
+      memberships: { where: { role: 'OWNER' }, select: { user: { select: { name: true } } } },
+    },
+  });
+  return {
+    names: [restaurant?.name ?? '', ...(restaurant?.memberships ?? []).map((m) => m.user.name ?? '')].filter(Boolean),
+    taxIds: restaurant?.taxId ? [restaurant.taxId] : [],
+  };
+}
+
+/**
+ * Checks the supplier read off the invoice before the owner sees it.
+ *
+ * The customer's own NIF is never kept as the supplier's. A supplier already
+ * on file under the NIF is named, so the review screen can show the name the
+ * invoice will actually be filed under. Everything checked is kept with the
+ * reading, so a wrong supplier can be explained afterwards.
+ */
+async function checkSupplier(
+  restaurantId: string,
+  data: ScanResult,
+  qr: InvoiceQrData | null,
+  qrChanged: string[],
+  customer: CustomerIdentity,
+): Promise<ScanResult> {
+  if (data.type !== 'cost_receipt') return data;
+  try {
+    const verdict = checkVendorReading(data, customer, qr);
+    const known = verdict.vendorTaxId
+      ? await prisma.vendor.findFirst({
+          where: { restaurantId, taxId: verdict.vendorTaxId },
+          select: { id: true, name: true },
+        })
+      : null;
+    return {
+      ...data,
+      vendorTaxId: verdict.vendorTaxId,
+      checks: {
+        qrRead: !!qr,
+        qrChanged,
+        qrBuyerNif: qr?.buyerNif ?? null,
+        doubt: verdict.doubt,
+        knownVendor: known?.name ?? null,
+        knownVendorId: known?.id ?? null,
+        knownVendorIsCustomer: known ? looksLikeCustomer(known.name, customer) : false,
+      },
+    };
   } catch {
     return data;
   }

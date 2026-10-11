@@ -19,6 +19,10 @@ import { loadFrameFromFile } from '@/lib/detect-in-file';
 import PaymentFields, { emptyPaymentDraft, paymentFromDraft, type PaymentDraft } from './PaymentFields';
 import { attachScannedInvoice, getPaymentVendors } from '../payment-actions';
 import { formatMoney } from '@/lib/format';
+import VendorFixDialog from './VendorFixDialog';
+import { getVendorFixContext } from '../vendor-fix-actions';
+import { normaliseName } from '@/lib/vendor-reading';
+import type { ScanChecks } from '@/lib/document-scanner';
 
 type ScanType = 'COST_RECEIPT' | 'DAILY_REPORT';
 
@@ -39,6 +43,8 @@ interface CostReceiptData {
   grandTotal: number;
   suggestedType: 'COGS' | 'OPEX';
   suggestedCategory: string;
+  /** What the app checked about the supplier after reading. */
+  checks?: ScanChecks;
 }
 
 interface DailyReportData {
@@ -133,6 +139,10 @@ export default function ReceiptScanner({
   /** "Is it paid?" — asked for every new invoice, not for one being attached. */
   const [payment, setPayment] = useState<PaymentDraft>(emptyPaymentDraft);
   const [vendors, setVendors] = useState<Array<{ name: string; termsDays: number | null }>>([]);
+  /** Correcting a supplier from here: a saved invoice's, or one on file by NIF. */
+  const [fixingVendor, setFixingVendor] = useState<{ invoiceNumber?: string; vendorId?: string } | null>(null);
+  /** The owner retyped the NIF, so who it belongs to is no longer known. */
+  const [nifEdited, setNifEdited] = useState(false);
   const [saving, setSaving] = useState(false);
   /**
    * The invoice whose lines are being identified.
@@ -503,6 +513,7 @@ export default function ReceiptScanner({
     setScanId(null);
     setEditData(null);
     setPayment(emptyPaymentDraft());
+    setNifEdited(false);
     if (fileRef.current) fileRef.current.value = '';
 
     if (queue.length > 0) {
@@ -575,6 +586,19 @@ export default function ReceiptScanner({
             >
               {t('scanner.duplicateDiscard')}
             </button>
+            {/* This reading names a different supplier than the one saved:
+                often this one is right, and the saved invoice is what needs
+                correcting. */}
+            {!duplicate.attachable && editData?.type === 'cost_receipt'
+              && normaliseName((editData as CostReceiptData).vendor) !== normaliseName(duplicate.vendorName) && (
+              <button
+                type="button"
+                onClick={() => setFixingVendor({ invoiceNumber: duplicate.invoiceNumber })}
+                className="cta-button-secondary !py-2 !px-4 !text-sm"
+              >
+                {t('vendorFix.fixSaved')}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -765,10 +789,58 @@ export default function ReceiptScanner({
                     <input type="date" value={(editData as CostReceiptData).date} onChange={e => setEditData({ ...editData, date: e.target.value } as any)} className="input-field !py-1.5 !text-xs" />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-1">{t('scanner.vendor')}</label>
-                    <input type="text" value={(editData as CostReceiptData).vendor} onChange={e => setEditData({ ...editData, vendor: e.target.value } as any)} className="input-field !py-1.5 !text-xs" />
+                    <label htmlFor="scan-nif" className="text-xs text-muted-foreground block mb-1">{t('vendorFix.nif')}</label>
+                    <input
+                      id="scan-nif"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={11}
+                      value={(editData as CostReceiptData).vendorTaxId ?? ''}
+                      onChange={e => { setNifEdited(true); setEditData({ ...editData, vendorTaxId: e.target.value } as any); }}
+                      className="input-field !py-1.5 !text-xs tabular-nums"
+                    />
                   </div>
                 </div>
+                {(() => {
+                  const d = editData as CostReceiptData;
+                  const checks = d.checks;
+                  // A supplier already on file under this NIF is where the
+                  // invoice will go, whatever name was read. Shown as such,
+                  // with the way to correct it if that name is wrong.
+                  const known = !nifEdited && checks?.knownVendorId && checks.knownVendor
+                    ? { id: checks.knownVendorId, name: checks.knownVendor }
+                    : null;
+                  if (known) {
+                    return (
+                      <div className={`rounded-lg p-3 text-xs ${checks?.knownVendorIsCustomer ? 'bg-warning/10' : 'bg-muted'}`}>
+                        <p className="text-muted-foreground">{t('scanner.vendor')}</p>
+                        <p className="text-sm font-semibold text-foreground [overflow-wrap:anywhere]">{known.name}</p>
+                        <p className={`mt-1 ${checks?.knownVendorIsCustomer ? 'text-warning font-semibold' : 'text-muted-foreground'}`}>
+                          {checks?.knownVendorIsCustomer ? t('vendorFix.knownIsCustomer') : t('vendorFix.knownByNif')}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setFixingVendor({ vendorId: known.id })}
+                          className="mt-1.5 text-xs font-semibold text-primary-ink hover:underline"
+                        >
+                          {t('vendorFix.title')}
+                        </button>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div>
+                      <label htmlFor="scan-vendor" className="text-xs text-muted-foreground block mb-1">{t('scanner.vendor')}</label>
+                      <input id="scan-vendor" type="text" value={d.vendor} onChange={e => setEditData({ ...editData, vendor: e.target.value } as any)} className="input-field !py-1.5 !text-xs" />
+                      {checks?.doubt && (
+                        <p className="flex items-start gap-1.5 mt-1.5 text-[11px] font-semibold text-warning">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                          {checks.doubt === 'customerNif' ? t('vendorFix.doubtNif') : t('vendorFix.doubtName')}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
                 {/* Items list */}
                 <div className="space-y-2">
                   <div className="text-xs text-muted-foreground">{t('scanner.items')}</div>
@@ -879,6 +951,27 @@ export default function ReceiptScanner({
           detectedCorners={captured.corners}
           onDone={handlePageDone}
           onCancel={() => { setCaptured(null); setStage('camera'); }}
+        />
+      )}
+
+      {fixingVendor && (
+        <VendorFixDialog
+          invoiceNumber={fixingVendor.invoiceNumber}
+          vendorId={fixingVendor.vendorId}
+          onClose={() => setFixingVendor(null)}
+          onDone={async () => {
+            // A supplier renamed from the review: show its new name.
+            const id = fixingVendor.vendorId;
+            if (!id || editData?.type !== 'cost_receipt') return;
+            const r = await getVendorFixContext({ vendorId: id });
+            if ('data' in r && r.data?.current) {
+              const d = editData as CostReceiptData;
+              setEditData({
+                ...d,
+                checks: d.checks && { ...d.checks, knownVendor: r.data.current.name, knownVendorIsCustomer: false },
+              } as ExtractionResult);
+            }
+          }}
         />
       )}
 

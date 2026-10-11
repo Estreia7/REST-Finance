@@ -46,6 +46,7 @@ export default function SettingsPanel({
   const [timezone, setTimezone] = useState(restaurant?.timezone || 'Europe/Lisbon');
   const [currency, setCurrency] = useState(restaurant?.currency || 'EUR');
   const [municipalityCode, setMunicipalityCode] = useState<string | null>(restaurant?.municipalityCode ?? null);
+  const [restaurantNif, setRestaurantNif] = useState<string>(restaurant?.taxId ?? '');
   const [savingRestaurant, setSavingRestaurant] = useState(false);
 
   const handleSaveProfile = async () => {
@@ -70,7 +71,7 @@ export default function SettingsPanel({
 
   const handleSaveRestaurant = async () => {
     setSavingRestaurant(true);
-    const result = await updateRestaurantSettings({ name: restaurantName, timezone, currency, municipalityCode });
+    const result = await updateRestaurantSettings({ name: restaurantName, timezone, currency, municipalityCode, taxId: restaurantNif });
     if (result.success) { toast.success(t('settings.restaurantUpdated')); onUpdate?.(); }
     else toast.error(result.error ? translateError(language, result.error) : t('settings.updateFailed'));
     setSavingRestaurant(false);
@@ -173,6 +174,11 @@ export default function SettingsPanel({
             <div>
               <label htmlFor="settings-restaurant-name" className="text-xs font-medium text-muted-foreground block mb-2">{t('settings.restaurantName')}</label>
               <input id="settings-restaurant-name" type="text" value={restaurantName} onChange={e => setRestaurantName(e.target.value)} className="input-field" />
+            </div>
+            <div>
+              <label htmlFor="settings-nif" className="text-xs font-medium text-muted-foreground block mb-2">{t('settings.taxId')}</label>
+              <input id="settings-nif" type="text" inputMode="numeric" maxLength={11} value={restaurantNif} onChange={e => setRestaurantNif(e.target.value)} className="input-field tabular-nums" />
+              <p className="text-[11px] text-muted-foreground mt-1.5">{t('settings.taxIdHint')}</p>
             </div>
             <div>
               <label htmlFor="settings-municipality" className="text-xs font-medium text-muted-foreground block mb-2">{t('settings.municipality')}</label>

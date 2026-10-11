@@ -13,6 +13,7 @@ import {
 import { requireAuth, requireOwner, requireMember, isAuthError, refuseWhileImpersonating } from '@/lib/auth-helpers';
 import { isDemoAccount } from '@/lib/demo';
 import { findMunicipality } from '@/lib/derrama';
+import { isValidNif } from '@/lib/pt-validation';
 import { calculateKpis, toPercent, safeDivide, percentChange } from '@/lib/kpi';
 // Keep these in sync with the Prisma enums in schema.prisma
 type CostType = 'COGS' | 'OPEX';
@@ -1086,10 +1087,18 @@ export async function updateRestaurantSettings(data: {
   currency?: string;
   /** A council code from lib/municipalities.ts; null clears it. */
   municipalityCode?: string | null;
+  /**
+   * The company's NIF. Also how a scanned invoice tells the restaurant, its
+   * customer, from the supplier that issued it. Empty clears it.
+   */
+  taxId?: string | null;
 }) {
   try {
     const owner = await requireOwner();
     if (isAuthError(owner)) return { error: owner.error };
+
+    const nif = data.taxId === undefined ? undefined : (data.taxId ?? '').replace(/\D/g, '');
+    if (nif && !isValidNif(nif)) return { error: 'settings.taxIdInvalid' };
 
     // Only a code the Tax Authority's list knows: anything else would leave
     // the tax estimate pointing at a council with no rates.
@@ -1104,6 +1113,7 @@ export async function updateRestaurantSettings(data: {
         ...(data.timezone && { timezone: data.timezone }),
         ...(data.currency && { currency: data.currency }),
         ...(data.municipalityCode !== undefined && { municipalityCode: data.municipalityCode }),
+        ...(nif !== undefined && { taxId: nif || null }),
       },
     });
 
