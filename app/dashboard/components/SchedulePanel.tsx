@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   Loader2, ChevronLeft, ChevronRight, Plus, Trash2, Pencil, X, Check,
-  CalendarOff, CalendarCheck, CalendarDays, CopyPlus, Copy, Download, Users, Eraser,
+  CalendarOff, CalendarCheck, CalendarDays, CopyPlus, Copy, Download, Users, Eraser, GripVertical,
 } from 'lucide-react';
 import {
   getScheduleWeeks, addEmployee, updateEmployee, removeEmployee,
@@ -112,6 +112,54 @@ const DEFAULT_SHIFTS = [
 type ScheduleView = 'week' | 'month';
 
 /**
+ * What can be laid on a cell: a shift's hours, or the eraser.
+ *
+ * Dragged from the palette, dragged from a filled cell, or held as a "brush"
+ * after a tap — the last because a phone has no drag, and because painting
+ * Monday to Friday is five taps instead of five dialogs.
+ */
+type Paint =
+  | {
+      kind: 'shift';
+      label: string;
+      startMin: number;
+      endMin: number;
+      breakStartMin: number | null;
+      breakEndMin: number | null;
+    }
+  | { kind: 'clear' };
+
+/** The drag payload's type, so only our own drags light a cell up. */
+const DRAG_TYPE = 'application/x-rest-finance-shift';
+
+/** Starts a drag carrying a paint. */
+function startPaintDrag(e: React.DragEvent, paint: Paint) {
+  e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(paint));
+  e.dataTransfer.effectAllowed = 'copy';
+}
+
+/** The paint a drop carries, or null when it is not one of ours. */
+function readPaintDrop(e: React.DragEvent): Paint | null {
+  try {
+    const raw = e.dataTransfer.getData(DRAG_TYPE);
+    return raw ? (JSON.parse(raw) as Paint) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What a cell needs to take a drop or a brush. Shared by the week table and
+ * the phone's day list, so a shift lands the same way in both.
+ */
+interface PaintTarget {
+  brush: Paint | null;
+  dragOver: string | null;
+  setDragOver: (key: string | null) => void;
+  onPaint: (employeeId: string, date: string, paint: Paint) => void;
+}
+
+/**
  * Remembered per browser, not per account: it is a question of screen, and
  * the phone never offers the month anyway.
  */
@@ -217,6 +265,80 @@ export default function SchedulePanel() {
   const suggestions = DEFAULT_SHIFTS.filter(
     (d) => !savedShifts.some((t) => t.startMin === d.startMin && t.endMin === d.endMin)
   );
+
+  // ── Drag and drop, and painting with a tapped shift ──────────────────
+  const [brush, setBrush] = useState<Paint | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+
+  // Escape puts the brush down, as it closes everything else.
+  useEffect(() => {
+    if (!brush) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setBrush(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [brush]);
+
+  const palette: Paint[] = [
+    ...savedShifts.map((s) => ({
+      kind: 'shift' as const, label: s.label,
+      startMin: s.startMin, endMin: s.endMin, breakStartMin: s.breakStartMin, breakEndMin: s.breakEndMin,
+    })),
+    ...suggestions.map((d) => ({
+      kind: 'shift' as const, label: t(d.labelKey),
+      startMin: d.startMin, endMin: d.endMin, breakStartMin: d.breakStartMin, breakEndMin: d.breakEndMin,
+    })),
+  ];
+
+  /**
+   * Lays a shift (or the eraser) on one cell.
+   *
+   * Shown at once and saved behind it: painting a week is a dozen cells in a
+   * row, and waiting for the whole month to reload after each one would make
+   * the fast way the slow way. A save that fails says so and brings the grid
+   * back to what the server has.
+   */
+  const paintCell = async (employeeId: string, date: string, paint: Paint) => {
+    if (closedSet.has(date)) { toast.error(t('schedule.paintClosed')); return; }
+    if (onLeaveAt(employeeId, date)) { toast.error(t('schedule.onLeaveError')); return; }
+    const current = shiftAt(employeeId, date);
+
+    if (paint.kind === 'clear') {
+      if (!current) return;
+      setData((prev) => prev && {
+        ...prev,
+        shifts: prev.shifts.filter((x) => !(x.employeeId === employeeId && x.date === date)),
+      });
+      const r = await clearShift(employeeId, date);
+      if (!r.success) { toast.error(r.error ? t(r.error) : t('schedule.saveFailed')); load(); }
+      return;
+    }
+
+    if (
+      current && current.startMin === paint.startMin && current.endMin === paint.endMin
+      && current.breakStartMin === paint.breakStartMin && current.breakEndMin === paint.breakEndMin
+    ) return;
+
+    // A note written for that person on that day stays with the day.
+    const note = current?.note ?? null;
+    const placed: Shift = {
+      id: current?.id ?? `pending-${employeeId}-${date}`,
+      employeeId, date, note,
+      startMin: paint.startMin, endMin: paint.endMin,
+      breakStartMin: paint.breakStartMin, breakEndMin: paint.breakEndMin,
+    };
+    setData((prev) => prev && {
+      ...prev,
+      shifts: [...prev.shifts.filter((x) => !(x.employeeId === employeeId && x.date === date)), placed],
+    });
+    const r = await setShift({
+      employeeId, date, note,
+      startMin: paint.startMin, endMin: paint.endMin,
+      breakStartMin: paint.breakStartMin, breakEndMin: paint.breakEndMin,
+    });
+    if (!r.success) { toast.error(r.error ? t(r.error) : t('schedule.saveFailed')); load(); }
+  };
+
+  const paintTarget: PaintTarget = { brush, dragOver, setDragOver, onPaint: paintCell };
 
   const run = async (fn: () => Promise<{ success: boolean; error?: string }>, okMsg?: string) => {
     setBusy(true);
@@ -440,6 +562,7 @@ export default function SchedulePanel() {
         onToggleClosure={(key, closed) => toggleDay(key, closed, 'schedule.closureReasonPrompt')}
         onEditCell={(employeeId, date) => setEditingCell({ employeeId, date })}
         onEditPerson={setEditingPerson}
+        paint={paintTarget}
       />
     );
   };
@@ -534,6 +657,15 @@ export default function SchedulePanel() {
         {!isMonth && <div className="mt-4">{weekActions(weekStart)}</div>}
       </div>
 
+      {employees.length > 0 && (
+        <ShiftPalette
+          items={palette}
+          brush={brush}
+          onBrush={setBrush}
+          onDragEnd={() => setDragOver(null)}
+        />
+      )}
+
       {employees.length === 0 ? (
         <EmptyState onAdd={() => setShowAddPerson(true)} />
       ) : isMonth ? (
@@ -612,6 +744,7 @@ export default function SchedulePanel() {
             onToggleClosure={(key, closed) => toggleDay(key, closed, 'schedule.closureReasonShortPrompt')}
             onEditCell={(employeeId, date) => setEditingCell({ employeeId, date })}
             onAddPerson={() => setShowAddPerson(true)}
+            paint={paintTarget}
           />
         </>
       )}
@@ -694,6 +827,98 @@ export default function SchedulePanel() {
 // ───────────────────────────────────────────────────────────────────────────
 
 /**
+ * The shifts, ready to be laid on the grid.
+ *
+ * Each one can be dragged onto a cell, or tapped to pick it up as a brush and
+ * then laid with a tap on each cell — the way it works on a phone, which has
+ * no drag. The eraser does the same in reverse. Kept in view while the month
+ * scrolls, because the cells it is meant for are further down.
+ */
+function ShiftPalette({
+  items, brush, onBrush, onDragEnd,
+}: {
+  items: Paint[];
+  brush: Paint | null;
+  onBrush: (paint: Paint | null) => void;
+  onDragEnd: () => void;
+}) {
+  const { t } = useLanguage();
+  const same = (a: Paint | null, b: Paint) =>
+    !!a && a.kind === b.kind && (a.kind === 'clear' || (b.kind === 'shift'
+      && a.label === b.label && a.startMin === b.startMin && a.endMin === b.endMin
+      && a.breakStartMin === b.breakStartMin && a.breakEndMin === b.breakEndMin));
+  const eraser: Paint = { kind: 'clear' };
+  const held = brush ? (brush.kind === 'clear' ? t('schedule.paletteEraser') : brush.label) : null;
+
+  const chip = (paint: Paint, key: string) => {
+    const active = same(brush, paint);
+    return (
+      <button
+        key={key}
+        type="button"
+        draggable
+        onDragStart={(e) => startPaintDrag(e, paint)}
+        onDragEnd={onDragEnd}
+        onClick={() => onBrush(active ? null : paint)}
+        aria-pressed={active}
+        className={`shrink-0 inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-left
+          cursor-grab active:cursor-grabbing transition-colors
+          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+          ${active
+            ? 'border-primary bg-primary-subtle text-foreground'
+            : 'border-border-subtle bg-surface text-foreground hover:border-border'}`}
+      >
+        <GripVertical className="w-3.5 h-3.5 text-muted-foreground hidden md:block" aria-hidden="true" />
+        {paint.kind === 'clear' ? (
+          <>
+            <Eraser className="w-3.5 h-3.5 text-danger" aria-hidden="true" />
+            <span className="text-xs font-semibold">{t('schedule.paletteEraser')}</span>
+          </>
+        ) : (
+          <span className="leading-tight">
+            <span className="block text-xs font-semibold">{paint.label}</span>
+            <span className="block text-[10px] text-muted-foreground tabular-nums">
+              {formatShiftTimes(paint.startMin, paint.endMin, paint.breakStartMin, paint.breakEndMin)}
+            </span>
+          </span>
+        )}
+      </button>
+    );
+  };
+
+  return (
+    <div className="card-glass p-3 sm:p-4 md:sticky md:top-16 md:z-20" role="region" aria-label={t('schedule.paletteTitle')}>
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <p className="text-xs text-muted-foreground">
+          <span className="font-semibold text-foreground">{t('schedule.paletteTitle')}</span>
+          {' · '}
+          <span className="hidden md:inline">{t('schedule.paletteHintDesktop')}</span>
+          <span className="md:hidden">{t('schedule.paletteHintPhone')}</span>
+        </p>
+      </div>
+      <div className="flex gap-1.5 overflow-x-auto -mx-3 px-3 sm:-mx-4 sm:px-4 pb-0.5 no-scrollbar">
+        {items.map((paint, i) => chip(paint, `p-${i}`))}
+        {chip(eraser, 'eraser')}
+      </div>
+      {held && (
+        <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-primary-subtle px-3 py-2" role="status">
+          <span className="text-xs text-foreground">
+            {t('schedule.paletteHolding').replace('{shift}', held)}
+          </span>
+          <button
+            type="button"
+            onClick={() => onBrush(null)}
+            className="shrink-0 text-xs font-semibold text-primary-ink hover:underline"
+          >
+            {t('schedule.paletteStop')}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * A week's own buttons: repeat it, send it, clear it.
  *
  * Shared by the week view and every week of the month view, so copying in the
@@ -770,7 +995,7 @@ function WeekActions({
 /** One week as a table: a row per person, a column per day, the total last. */
 function WeekGrid({
   days, employees, closedSet, shiftAt, onLeaveAt, totals, busy, isOutside,
-  onToggleClosure, onEditCell, onEditPerson,
+  onToggleClosure, onEditCell, onEditPerson, paint,
 }: {
   days: Date[];
   employees: Employee[];
@@ -784,6 +1009,7 @@ function WeekGrid({
   onToggleClosure: (dateKey: string, closed: boolean) => void;
   onEditCell: (employeeId: string, date: string) => void;
   onEditPerson: (employee: Employee) => void;
+  paint: PaintTarget;
 }) {
   const { t } = useLanguage();
 
@@ -887,15 +1113,44 @@ function WeekGrid({
                   // The weekend band runs the full height of its column, so
                   // the last row rounds off where the header began.
                   const tint = closed ? 'bg-muted' : weekend ? `bg-weekend ${lastRow ? 'rounded-b-sm' : ''}` : '';
+                  const onLeave = onLeaveAt(emp.id, key);
+                  const cellKey = `${emp.id}|${key}`;
+                  const droppable = !closed && !onLeave;
+                  const over = paint.dragOver === cellKey;
                   return (
-                    <td key={key} className={`px-1 py-1.5 ${tint}`}>
-                      <div className={outside ? 'opacity-55 hover:opacity-100 focus-within:opacity-100 transition-opacity' : ''}>
+                    <td
+                      key={key}
+                      className={`px-1 py-1.5 ${tint}`}
+                      onDragOver={(e) => {
+                        if (!droppable || !e.dataTransfer.types.includes(DRAG_TYPE)) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'copy';
+                        if (!over) paint.setDragOver(cellKey);
+                      }}
+                      onDragLeave={(e) => {
+                        // Moving onto the button inside the cell is not leaving it.
+                        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+                        if (over) paint.setDragOver(null);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        paint.setDragOver(null);
+                        const dropped = readPaintDrop(e);
+                        if (dropped && droppable) paint.onPaint(emp.id, key, dropped);
+                      }}
+                    >
+                      <div
+                        className={`rounded-lg transition-shadow ${over ? 'ring-2 ring-primary ring-offset-1 ring-offset-card' : ''}
+                          ${outside && !over ? 'opacity-55 hover:opacity-100 focus-within:opacity-100 transition-opacity' : ''}`}
+                      >
                         <ShiftCell
                           closed={closed}
-                          onLeave={onLeaveAt(emp.id, key)}
+                          onLeave={onLeave}
                           shift={shift}
                           color={color}
-                          onClick={() => onEditCell(emp.id, key)}
+                          painting={!!paint.brush}
+                          onClick={() => (paint.brush ? paint.onPaint(emp.id, key, paint.brush) : onEditCell(emp.id, key))}
+                          onDragEnd={() => paint.setDragOver(null)}
                         />
                       </div>
                     </td>
@@ -915,7 +1170,7 @@ function WeekGrid({
 }
 
 function ShiftCell({
-  closed, onLeave, shift, color, onClick,
+  closed, onLeave, shift, color, onClick, painting = false, onDragEnd,
 }: {
   closed: boolean;
   /** Booked as holiday in the Equipa tab: not a cell to put a shift in. */
@@ -923,8 +1178,12 @@ function ShiftCell({
   shift: Shift | null;
   color: ReturnType<typeof employeeColor>;
   onClick: () => void;
+  /** A brush is held: a tap lays it here instead of opening the dialog. */
+  painting?: boolean;
+  onDragEnd?: () => void;
 }) {
   const { t } = useLanguage();
+  const cursor = painting ? 'cursor-copy' : '';
 
   // Named, not blank. An empty cell reads as "not scheduled yet"; the point
   // of closing a day is that it is settled. Outlined rather than filled:
@@ -959,9 +1218,9 @@ function ShiftCell({
       <button
         type="button"
         onClick={onClick}
-        className="w-full h-11 rounded-lg border border-dashed border-border text-muted-foreground/50
-                   hover:border-primary hover:text-primary transition-colors
-                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={`w-full h-11 rounded-lg border border-dashed border-border text-muted-foreground/50
+                   hover:border-primary hover:text-primary transition-colors ${cursor}
+                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
         aria-label={t('schedule.setShift')}
       >
         <Plus className="w-3.5 h-3.5 mx-auto" aria-hidden="true" />
@@ -973,8 +1232,18 @@ function ShiftCell({
     <button
       type="button"
       onClick={onClick}
-      className="w-full min-h-[44px] rounded-lg px-1 py-1.5 text-center transition-opacity hover:opacity-80
-                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      // Dragging a shift copies its hours to wherever it is dropped.
+      draggable
+      onDragStart={(e) => startPaintDrag(e, {
+        kind: 'shift', label: '',
+        startMin: shift.startMin, endMin: shift.endMin,
+        breakStartMin: shift.breakStartMin, breakEndMin: shift.breakEndMin,
+      })}
+      onDragEnd={onDragEnd}
+      title={t('schedule.dragToCopy')}
+      className={`w-full min-h-[44px] rounded-lg px-1 py-1.5 text-center transition-opacity hover:opacity-80
+                 ${painting ? 'cursor-copy' : 'cursor-grab active:cursor-grabbing'}
+                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
       style={{ background: color.bg, color: color.ink }}
     >
       {/* A split shift is stacked, not squeezed onto one line: the column is
@@ -1019,7 +1288,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 /** The phone view: one day at a time, every person on it. */
 function MobileSchedule({
   days, employees, closedSet, shiftAt, onLeaveAt, totals, busy,
-  onToggleClosure, onEditCell, onAddPerson,
+  onToggleClosure, onEditCell, onAddPerson, paint,
 }: {
   days: Date[];
   employees: Employee[];
@@ -1031,6 +1300,7 @@ function MobileSchedule({
   onToggleClosure: (dateKey: string, closed: boolean) => void;
   onEditCell: (employeeId: string, date: string) => void;
   onAddPerson: () => void;
+  paint: PaintTarget;
 }) {
   const { t } = useLanguage();
   const todayKey = dateKey(new Date());
@@ -1118,7 +1388,7 @@ function MobileSchedule({
               <button
                 key={emp.id}
                 type="button"
-                onClick={() => onEditCell(emp.id, key)}
+                onClick={() => (paint.brush ? paint.onPaint(emp.id, key, paint.brush) : onEditCell(emp.id, key))}
                 className="w-full min-h-[56px] px-4 py-3 flex items-center gap-3 text-left
                            active:bg-muted transition-colors
                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"

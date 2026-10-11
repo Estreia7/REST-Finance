@@ -35,9 +35,21 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.11.1';
+export const CHANGELOG_VERSION = '2026.10.11.2';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.11.2',
+    date: '2026-10-11',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'Horários mais rápidos: arraste os turnos para o quadro',
+        detail:
+          'Em Horários há agora uma barra com os seus turnos (Manhã, Tarde, Partido…). No computador, arraste um turno para a célula de uma pessoa e fica marcado; arraste um turno já marcado para outra célula e é copiado. Também pode clicar num turno e depois nas células, uma a uma, para marcar a semana inteira sem abrir nenhuma janela — é assim que funciona no telemóvel. O «Apagar» limpa as células da mesma forma.',
+      },
+    ],
+  },
   {
     version: '2026.10.11.1',
     date: '2026-10-11',
