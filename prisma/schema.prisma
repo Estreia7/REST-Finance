@@ -130,6 +130,7 @@ model Restaurant {
   lineMemories      InvoiceLineMemory[]
   aiUsage           AiUsage[]
   scanCorrections   ScanCorrection[]
+  budgets           Budget[]
 
   @@map("restaurants")
 }
@@ -301,6 +302,7 @@ model Category {
   posProducts    PosProduct[]
   invoiceItems   InvoiceItem[]
   lineMemories   InvoiceLineMemory[]
+  budgetLines    BudgetLine[]
 
   @@index([restaurantId, isActive])
   @@map("categories")
@@ -1424,4 +1426,119 @@ model InvoiceLineMemory {
   @@unique([restaurantId, sourceName, vendorId])
   @@index([restaurantId, vendorId])
   @@map("invoice_line_memories")
+}
+
+/// Where a budget figure sits on the statement. The same five bands as the
+/// annual P&L (USAR), so a plan can be laid beside what happened line by line.
+enum BudgetSection {
+  REVENUE
+  COGS
+  LABOUR
+  OPEX
+  OCCUPANCY
+}
+
+/// The "what if" an owner can try on top of the plan.
+enum BudgetScenarioKind {
+  /// One more person: gross salary from a month on.
+  HIRE
+  /// A one-off purchase, paid at once or over a number of months.
+  PURCHASE
+  /// A new monthly cost from a month on (software, a second store room).
+  FIXED_COST
+  /// Sales up or down by a percentage from a month on.
+  REVENUE_CHANGE
+  /// Cost of sales up or down by a percentage from a month on.
+  COGS_CHANGE
+}
+
+/// One restaurant's plan for one calendar year.
+model Budget {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  year Int
+
+  /// The year whose real figures the lines were last imported from, so the
+  /// screen can say what the plan was based on. Null for a plan typed by hand.
+  importedFromYear Int? @map("imported_from_year")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  lines     BudgetLine[]
+  scenarios BudgetScenario[]
+
+  @@unique([restaurantId, year])
+  @@map("budgets")
+}
+
+/// One planned line, twelve months across.
+model BudgetLine {
+  id       String @id @default(uuid())
+  budget   Budget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  budgetId String @map("budget_id")
+
+  section BudgetSection
+
+  /// The cost category this line plans, so it can be compared with what was
+  /// actually booked there. Null for a revenue line or a line of the owner's
+  /// own that matches no category.
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryId String?   @map("category_id")
+
+  /// For a revenue line: which takings it plans — 'total', 'dineIn' or
+  /// 'takeaway' — the same split the daily summary keeps.
+  channel String?
+
+  /// The owner's own wording. Empty on an imported line that takes its name
+  /// from its category or channel, which the screen translates.
+  label String @default("")
+
+  /// January first, twelve values.
+  months Decimal[] @db.Decimal(12, 2)
+
+  /// Cost of sales planned as a share of revenue (0.3000 is 30%). When set,
+  /// the months follow the planned revenue and `months` is not read: food
+  /// bought rises and falls with what is sold.
+  revenueShare Decimal? @map("revenue_share") @db.Decimal(6, 4)
+
+  sortOrder Int @default(0) @map("sort_order")
+
+  @@index([budgetId])
+  @@map("budget_lines")
+}
+
+/// One "what if" on a budget, switched on or off to see what it does.
+model BudgetScenario {
+  id       String @id @default(uuid())
+  budget   Budget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  budgetId String @map("budget_id")
+
+  kind   BudgetScenarioKind
+  label  String
+  /// Switched-on items are part of the plan; off ones are only being tried.
+  active Boolean @default(true)
+
+  /// Which band its cost lands in. Fixed by the kind except for a new fixed
+  /// cost, which may be an operating cost or occupancy (a second store room).
+  section BudgetSection
+
+  /// Gross monthly salary (HIRE), purchase price (PURCHASE) or monthly
+  /// amount (FIXED_COST).
+  amount        Decimal? @db.Decimal(12, 2)
+  /// Percentage change, 5 for +5% (REVENUE_CHANGE, COGS_CHANGE).
+  percent       Decimal? @db.Decimal(6, 2)
+  /// Meal allowance per worked month (HIRE).
+  mealAllowance Decimal? @map("meal_allowance") @db.Decimal(10, 2)
+  /// 1–12, the first month it applies.
+  startMonth    Int      @map("start_month")
+  /// Months a purchase is paid over. 1 is paid at once.
+  spreadMonths  Int?     @map("spread_months")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([budgetId])
+  @@map("budget_scenarios")
 }

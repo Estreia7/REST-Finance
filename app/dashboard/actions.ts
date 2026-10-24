@@ -27,6 +27,7 @@ import { paymentColumns, type PaymentInput } from '@/lib/payments';
 import { dayKey } from '@/lib/ai-usage';
 import { ensureVendor } from '@/lib/vendors-server';
 import { foldMonthlySeries, UNCATEGORISED_SERIES } from '@/lib/monthly-series';
+import { plannedRevenueFor } from '@/lib/budget-server';
 
 export async function getRestaurant() {
   try {
@@ -1006,22 +1007,6 @@ export async function getTicketAnalysis(dateFrom: Date, dateTo: Date) {
   }
 }
 
-export async function updateRevenueTarget(target: number) {
-  try {
-    const owner = await requireOwner();
-    if (isAuthError(owner)) return { error: owner.error };
-
-    await prisma.restaurant.update({
-      where: { id: owner.restaurantId },
-      data: { monthlyRevenueTarget: target },
-    });
-
-    return { success: true };
-  } catch (error: unknown) {
-    return { error: toClientError('Failed to update target', error, 'write') };
-  }
-}
-
 // ─── Settings & Staff Actions ─────────────────────────────────────────────
 
 export async function updateUserProfile(name: string) {
@@ -1613,15 +1598,20 @@ export async function getAdvancedDashboardStats() {
       primeCostTrend.push(primeCost);
     }
 
-    // The owner's real revenue target, set in GoalsPanel. Null when unset so
-    // the UI can prompt for one instead of charting a number we invented.
-    const restaurant = await prisma.restaurant.findUnique({
-      where: { id: owner.restaurantId },
-      select: { monthlyRevenueTarget: true },
-    });
-    const monthlyGoal = restaurant?.monthlyRevenueTarget
+    // The month's target: the revenue budgeted for it, which changes with the
+    // season, or else the single monthly figure the old Goals screen kept.
+    // Null when neither exists, so the UI shows no bar rather than charting a
+    // number we invented.
+    const [budgeted, restaurant] = await Promise.all([
+      plannedRevenueFor(owner.restaurantId, now),
+      prisma.restaurant.findUnique({
+        where: { id: owner.restaurantId },
+        select: { monthlyRevenueTarget: true },
+      }),
+    ]);
+    const monthlyGoal = budgeted ?? (restaurant?.monthlyRevenueTarget
       ? Number(restaurant.monthlyRevenueTarget)
-      : null;
+      : null);
 
     return {
       success: true,

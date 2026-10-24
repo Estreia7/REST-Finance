@@ -35,9 +35,37 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.11.2';
+export const CHANGELOG_VERSION = '2026.10.24.2';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.24.2',
+    date: '2026-10-24',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Orçamento anual: planeie o ano mês a mês e compare com o real',
+        detail:
+          'Em Análises › Orçamento, no lugar das Metas. Comece pelos números do ano passado, com o crescimento que espera, e veja depois, mês a mês, o orçado ao lado do que aconteceu.',
+      },
+      {
+        kind: 'new',
+        title: 'Simulações: teste uma decisão antes de a tomar',
+        detail:
+          'No Orçamento, experimente contratar mais uma pessoa, comprar um equipamento, um novo custo fixo ou uma subida de preços, e veja logo quanto muda o resultado do ano. Cada simulação liga-se e desliga-se.',
+      },
+      {
+        kind: 'improvement',
+        title: 'A meta do mês no Painel segue o orçamento',
+        detail:
+          'A barra do mês compara agora as vendas com a receita orçada para esse mês, que muda com a época, em vez de um valor igual todos os meses.',
+      },
+      {
+        kind: 'fix',
+        title: 'A lupa já não fica por cima do texto na escolha do concelho',
+      },
+    ],
+  },
   {
     version: '2026.10.11.2',
     date: '2026-10-11',

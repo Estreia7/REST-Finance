@@ -90,7 +90,7 @@ export default function UserManagementPanel() {
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
-        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder={t('admin.userList.searchPlaceholder')} aria-label={t('admin.userList.searchPlaceholder')} className="input-field pl-9 w-full" />
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder={t('admin.userList.searchPlaceholder')} aria-label={t('admin.userList.searchPlaceholder')} className="input-field !pl-9 w-full" />
       </div>
 
       {/* Users table */}

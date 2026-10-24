@@ -20,7 +20,7 @@ import PosImportPanel from './components/PosImportPanel';
 import PnLPanel from './components/PnLPanel';
 import ComparativePanel from './components/ComparativePanel';
 import TicketAnalysisPanel from './components/TicketAnalysisPanel';
-import GoalsPanel from './components/GoalsPanel';
+import BudgetPanel from './components/BudgetPanel';
 import MonthlyReportPanel from './components/MonthlyReportPanel';
 import PriceTrackingPanel from './components/PriceTrackingPanel';
 import { trialDaysLeft } from '@/lib/billing-utils';
@@ -188,7 +188,7 @@ function DashboardPageInner() {
   const [autoStartCamera, setAutoStartCamera] = useState(false);
   const [revenueSubView, setRevenueSubView] = useState<'entry' | 'history' | 'scan' | 'import'>('entry');
   const [costSubView, setCostSubView] = useState<'entry' | 'history' | 'scan'>('entry');
-  const [analyticsSubView, setAnalyticsSubView] = useState<'pnl' | 'compare' | 'tickets' | 'goals' | 'report'>('pnl');
+  const [analyticsSubView, setAnalyticsSubView] = useState<'pnl' | 'compare' | 'tickets' | 'budget' | 'report'>('pnl');
   /**
    * Food & Beverage: what the kitchen and the bar sell and what it costs them.
    * Split out of Analytics, which is about the business's numbers; these are
@@ -768,14 +768,14 @@ function DashboardPageInner() {
                   { value: "pnl", label: 'P&L' },
                   { value: "compare", label: t('nav.comparison') },
                   { value: "tickets", label: t('nav.tickets') },
-                  { value: "goals", label: t('nav.goals') },
+                  { value: "budget", label: t('nav.budget') },
                   { value: "report", label: t('nav.report') },
                 ]}
               />
               {analyticsSubView === 'pnl' && <PnLPanel />}
               {analyticsSubView === 'compare' && <ComparativePanel />}
               {analyticsSubView === 'tickets' && <TicketAnalysisPanel />}
-              {analyticsSubView === 'goals' && <GoalsPanel restaurant={restaurant} stats={stats} onUpdate={loadData} />}
+              {analyticsSubView === 'budget' && <BudgetPanel />}
               {analyticsSubView === 'report' && <MonthlyReportPanel />}
             </>
           )}

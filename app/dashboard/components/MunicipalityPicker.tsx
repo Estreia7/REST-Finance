@@ -103,7 +103,7 @@ export default function MunicipalityPicker({
             setOpen(false);
           }
         }}
-        className="input-field pl-9 pr-9"
+        className="input-field !pl-9 !pr-9"
       />
       {selected && (
         <button

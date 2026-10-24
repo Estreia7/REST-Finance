@@ -1,3 +1,75 @@
+# Orçamento anual (substitui "Metas")
+
+## Situação hoje (2026-10-24)
+- Análises › Metas guarda um único número (`Restaurant.monthlyRevenueTarget`)
+  igual para todos os meses. Não há plano de custos nem comparação.
+- O erro do ecrã: o € fica por cima do valor porque `.input-field` (fora de
+  `@layer`) repõe `px-4` e anula o `pl-8`. O mesmo defeito existe em
+  `admin/page.tsx:606`, `UserManagementPanel.tsx:93`,
+  `MunicipalityPicker.tsx:106` (os outros já usam `!pl-`).
+- Outro erro escondido: o progresso compara com a receita do período
+  selecionado no topo (pode ser "esta semana"), não com a do mês.
+
+## Proposta
+Um orçamento por ano, organizado nas mesmas bandas do P&L (USAR): Receita,
+Custo das mercadorias, Pessoal, Despesas operacionais, Ocupação → Resultado.
+
+1. **Orçamento base** — 12 meses por linha. Linhas por categoria (as mesmas
+   do P&L, para comparar linha a linha) + linhas livres.
+   - Custo das mercadorias pode ser planeado como **% da receita**: se a
+     receita mudar, o custo acompanha.
+2. **Importar do ano anterior** — preenche a partir do P&L real de N-1, com
+   um ajuste opcional (ex.: +5%). Escolher quais bandas importar (por omissão
+   todas). Meses sem dados ficam a 0, sinalizados.
+3. **Simulações** ("e se…") — itens que se ligam/desligam por cima do base:
+   - Contratar pessoa: salário bruto, mês de entrada → custo mensal =
+     bruto × 14/12 × (1 + 23,75% TSU) + subsídio de alimentação.
+   - Comprar equipamento: valor e mês; pago de uma vez ou repartido por N
+     meses.
+   - Novo custo fixo mensal (ex.: renda, software) a partir de um mês.
+   - Variação de receita (% a partir de um mês, ex.: preços +3%).
+   - Variação de custo de mercadorias (% , ex.: fornecedor +5%).
+   Mostra lado a lado: Base, Com simulações, e a diferença no resultado anual.
+4. **Comparação** — Orçado vs Real por mês e acumulado do ano (YTD), por
+   banda e por categoria, com desvio € e %.
+5. Topo do painel: a meta do mês nos KPIs passa a vir da receita orçada
+   desse mês (cai para o valor antigo se não houver orçamento).
+
+## Modelo de dados (migração nova, nada apagado)
+- `Budget` (restaurantId, year, único por restaurante+ano)
+- `BudgetLine` (budgetId, section, categoryId?, label, months Decimal[12],
+  revenuePercent? para linhas em % da receita)
+- `BudgetScenarioItem` (budgetId, kind, label, active, parâmetros: amount,
+  startMonth, spreadMonths, percent…)
+- `monthlyRevenueTarget` fica na tabela (fallback), deixa de ter ecrã.
+
+## Passos
+- [x] Corrigir o padding nos campos com ícone (o ecrã de Metas saiu; ficaram
+      admin, utilizadores e concelho)
+- [x] Prisma: modelos + migração escrita à mão, verificada em PGlite
+- [x] `lib/budget.ts`: cálculo puro (base, simulações, comparação) + testes
+- [x] `budget-actions.ts`: ler/gravar, importar N-1, CRUD de simulações
+- [x] `BudgetPanel.tsx` (desktop: 12 meses em grelha; telemóvel: um mês)
+      no lugar de Metas em Análises
+- [x] KPIs usam a receita orçada do mês
+- [x] Traduções pt + en, glossário, changelog, apresentação
+- [x] Tour: sem passo novo (é um ecrã de segunda ordem)
+- [x] Testes, typecheck, build, QA visual desktop + telemóvel em pt e en
+
+## Revisão (2026-10-24)
+- Migração: esquema do HEAD + SQL novo = esquema novo ("No difference").
+- 28 testes novos em `tests/budget.test.ts`; suite completa e build passam.
+- Visto no browser: importar 2025 (+5%/+2%), aviso dos meses sem receita,
+  editar células, contratação (€1000 brutos → €1649,45/mês) e equipamento
+  repartido, comparação Jan–Set, telemóvel 390px, inglês.
+- O total do ano é editável: reparte em proporção (mantém a sazonalidade).
+- A meta antiga (`monthly_revenue_target`) fica como recurso para o KPI do
+  mês enquanto não houver orçamento; sem ecrã para a editar.
+- Build local no Node 24 precisa de
+  `NODE_OPTIONS="--max-old-space-size=8192 --max-semi-space-size=64"`.
+
+---
+
 # Apresentação: movimento que explica, texto que pergunta
 
 ## Situação hoje (2026-10-09)

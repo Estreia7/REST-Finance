@@ -23,7 +23,7 @@ interface KPICardsProps {
     netIncomePercent: number;
     cogsPercent: number;
     cogsPercentChange: number;
-    /** Null until the owner sets a target in GoalsPanel. */
+    /** The month's budgeted revenue; null until there is a budget or an old target. */
     monthlyGoal: number | null;
     /** False when no cost category is flagged as labour — Prime Cost is then
      *  COGS-only and must be shown as incomplete, not as a healthy number. */

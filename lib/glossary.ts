@@ -63,11 +63,8 @@ export type GlossaryKey =
   | 'avgTicketTakeaway'
   | 'totalTickets'
   | 'target'
-  | 'progress'
-  | 'dailyPace'
-  | 'dailyNeeded'
-  | 'projectedMonthly'
-  | 'remaining'
+  | 'budget'
+  | 'budgetVariance'
   | 'trendBadge'
   | 'sparkline'
   | 'priceAlert'
@@ -215,31 +212,19 @@ const pt: Record<GlossaryKey, GlossaryEntry> = {
   },
 
   target: {
-    term: 'Meta',
-    plain: 'O valor de vendas que definiu como objetivo para o mês.',
-  },
-  progress: {
-    term: 'Progresso',
+    term: 'Orçamento do Mês',
     plain:
-      'Quanto da meta já cumpriu. 60% a meio do mês é estar a bom ritmo; 60% no dia 28 já não é.',
+      'A receita que o orçamento prevê para este mês. Muda de mês para mês, porque agosto não vende o mesmo que fevereiro.',
   },
-  dailyPace: {
-    term: 'Média Diária',
-    plain: 'Quanto tem vendido por dia, em média, desde o início do mês.',
-  },
-  dailyNeeded: {
-    term: 'Necessário por Dia',
+  budget: {
+    term: 'Orçamento',
     plain:
-      'Quanto precisa de vender em cada dia que falta para chegar à meta. Se for maior do que a média diária, o ritmo atual não chega.',
+      'O que espera vender e gastar em cada mês do ano, escrito antes de acontecer. Serve para decidir com tempo e, no fim de cada mês, ver onde se afastou do plano.',
   },
-  projectedMonthly: {
-    term: 'Projeção Mensal',
+  budgetVariance: {
+    term: 'Desvio',
     plain:
-      'Onde o mês vai acabar se continuar a vender ao ritmo dos dias que já passaram. É uma estimativa, não uma garantia.',
-  },
-  remaining: {
-    term: 'Falta',
-    plain: 'Quanto falta vender para chegar à meta do mês.',
+      'A diferença entre o que aconteceu e o que estava orçado. Vender mais ou gastar menos do que o previsto é um desvio a favor.',
   },
 
   trendBadge: {
@@ -412,31 +397,19 @@ const en: Record<GlossaryKey, GlossaryEntry> = {
   },
 
   target: {
-    term: 'Target',
-    plain: 'The sales figure you set as the goal for the month.',
-  },
-  progress: {
-    term: 'Progress',
+    term: "This Month's Budget",
     plain:
-      'How much of the target you have reached. 60% halfway through the month is good going; 60% on the 28th is not.',
+      'The revenue your budget expects for this month. It changes month to month, because August does not sell what February does.',
   },
-  dailyPace: {
-    term: 'Daily Average',
-    plain: 'How much you have been selling per day, on average, since the month began.',
-  },
-  dailyNeeded: {
-    term: 'Needed per Day',
+  budget: {
+    term: 'Budget',
     plain:
-      'How much you need to sell on each remaining day to hit the target. If it is above your daily average, the current pace will not get you there.',
+      'What you expect to sell and spend in each month of the year, written down before it happens. It lets you decide in good time and, at the end of each month, see where you drifted from the plan.',
   },
-  projectedMonthly: {
-    term: 'Monthly Projection',
+  budgetVariance: {
+    term: 'Variance',
     plain:
-      'Where the month lands if you keep selling at the pace of the days so far. An estimate, not a promise.',
-  },
-  remaining: {
-    term: 'Remaining',
-    plain: 'How much is still to be sold to reach the monthly target.',
+      'The gap between what happened and what was budgeted. Selling more or spending less than planned is a favourable variance.',
   },
 
   trendBadge: {

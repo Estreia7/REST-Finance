@@ -4,7 +4,7 @@ import { getTranslation } from '@/lib/translations';
 const KEYS = [
   'nav.dashboard','nav.revenue','nav.costs','nav.analytics','nav.team',
   'nav.billing','nav.settings','nav.entry','nav.scan','nav.history',
-  'nav.comparison','nav.goals','nav.report','nav.showDetails','nav.hideDetails',
+  'nav.comparison','nav.budget','nav.report','nav.showDetails','nav.hideDetails',
   'nav.logTodayRevenue','nav.logCosts','nav.sectionMain','nav.sectionManage',
   'navbar.admin','navbar.dashboard',
 ];

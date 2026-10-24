@@ -603,7 +603,7 @@ export default function AdminPage() {
                       aria-label={t('admin.clientList.searchPlaceholder')}
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      className="input-field pl-9 w-full"
+                      className="input-field !pl-9 w-full"
                     />
                   </div>
                   <div className="flex gap-1.5 shrink-0">

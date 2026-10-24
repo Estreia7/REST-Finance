@@ -16,7 +16,7 @@ const KEYS: GlossaryKey[] = [
   'pctOfRevenue',
   'costs', 'margin', 'monthlyAvg', 'revenueVsPrev', 'profitVsPrev',
   'avgTicket', 'avgTicketDineIn', 'avgTicketTakeaway', 'totalTickets',
-  'target', 'progress', 'dailyPace', 'dailyNeeded', 'projectedMonthly', 'remaining',
+  'target', 'budget', 'budgetVariance',
   'trendBadge', 'sparkline',
   'priceAlert', 'priceThreshold', 'unitPrice', 'monthlyReport',
 ];
