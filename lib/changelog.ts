@@ -43,6 +43,12 @@ export const CHANGELOG: Release[] = [
     date: '2026-10-28',
     entries: [
       {
+        kind: 'improvement',
+        title: 'Documentos de conformidade: ver, editar e validade automática',
+        detail:
+          'Em Conformidade, clique num documento para o ver sem o descarregar, e no lápis para corrigir os dados. Com a data de emissão e a renovação, o «Válido até» preenche-se sozinho e mostra quantos dias faltam.',
+      },
+      {
         kind: 'fix',
         title: 'Na Comparação mensal, cada valor diz o que é',
         detail:

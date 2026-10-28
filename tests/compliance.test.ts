@@ -3,8 +3,36 @@ import {
   statusFor,
   daysUntilExpiry,
   nextExpiryFrom,
+  resolveExpiry,
+  toDateInput,
   EXPIRY_WARNING_DAYS,
 } from '@/lib/compliance';
+
+describe('resolveExpiry', () => {
+  const issued = new Date('2026-03-01T00:00:00Z');
+
+  it('follows the issue date and renewal when no expiry was typed', () => {
+    expect(resolveExpiry(issued, null, 'ANNUAL')).toEqual(new Date('2027-03-01T00:00:00Z'));
+    expect(resolveExpiry(issued, undefined, 'MONTHLY')).toEqual(new Date('2026-04-01T00:00:00Z'));
+  });
+
+  it('keeps an expiry the owner typed, whatever the renewal says', () => {
+    const typed = new Date('2026-12-31T00:00:00Z');
+    expect(resolveExpiry(issued, typed, 'ANNUAL')).toBe(typed);
+  });
+
+  it('leaves it empty without an issue date, or for a one-off document', () => {
+    expect(resolveExpiry(null, null, 'ANNUAL')).toBeNull();
+    expect(resolveExpiry(issued, null, 'NONE')).toBeNull();
+  });
+});
+
+describe('toDateInput', () => {
+  it('formats for a date input, and is empty for nothing', () => {
+    expect(toDateInput(new Date(Date.UTC(2026, 2, 1)))).toBe('2026-03-01');
+    expect(toDateInput(null)).toBe('');
+  });
+});
 
 const NOW = new Date('2026-09-12T12:00:00Z');
 const inDays = (n: number) => new Date(NOW.getTime() + n * 86_400_000);

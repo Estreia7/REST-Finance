@@ -2,19 +2,25 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Download, FileText, Loader2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { Eye, FileText, Loader2, Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import {
   daysUntilExpiry as daysUntil,
+  toDateInput,
   type ComplianceStatus,
   type ComplianceSummary as Summary,
   type RenewalPeriod,
 } from '@/lib/compliance';
 import { TYPE_LABEL_KEYS, STATUS_STYLE, RENEWAL_LABEL_KEYS } from './compliance-labels';
+import { expiryPhrase } from './compliance-expiry';
 import ComplianceSummary from './ComplianceSummary';
+import ComplianceDocForm, { type DocFormValues } from './ComplianceDocForm';
+import ComplianceDocPreview from './ComplianceDocPreview';
+import Dialog from './Dialog';
 import { useLanguage } from '@/lib/language-context';
 import {
   getComplianceDocs,
   uploadComplianceDoc,
+  updateComplianceDoc,
   deleteComplianceDoc,
 } from '../compliance-actions';
 
@@ -42,26 +48,18 @@ function formatDate(value: Date | null, locale: string): string {
   });
 }
 
-/** The part an owner acts on: how long is left, in words. */
-function expiryPhrase(doc: Doc, t: (key: string) => string): string | null {
-  const days = daysUntil(doc.expiresAt);
-  if (days === null) return null;
+/** A blank form field travels to the server as null, never as "". */
+const orNull = (value: string) => value.trim() || null;
 
-  // The count sits in the middle of the phrase in both languages, but the rest
-  // of the wording differs on either side of it ("expirou há 3 dias" against
-  // "expired 3 days ago"), so each phrase is one key holding a {n} slot rather
-  // than a chain of fragments that would only read correctly in Portuguese.
-  const fill = (key: string, n: number) => t(key).replace('{n}', String(n));
-
-  if (days < 0) {
-    const n = Math.abs(days);
-    return fill(n === 1 ? 'compliance.expiry.expiredOne' : 'compliance.expiry.expiredMany', n);
-  }
-  if (days === 0) return t('compliance.expiry.today');
-  return fill(
-    days === 1 ? 'compliance.expiry.expiresOne' : 'compliance.expiry.expiresMany',
-    days,
-  );
+function formValuesOf(doc: Doc): DocFormValues {
+  return {
+    type: doc.type,
+    name: doc.name,
+    renewalPeriod: doc.renewalPeriod,
+    reference: doc.reference ?? '',
+    issuedAt: toDateInput(doc.issuedAt),
+    expiresAt: toDateInput(doc.expiresAt),
+  };
 }
 
 /**
@@ -81,6 +79,8 @@ export default function CompliancePanel() {
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [previewing, setPreviewing] = useState<Doc | null>(null);
+  const [editing, setEditing] = useState<Doc | null>(null);
 
   const load = useCallback(async () => {
     const result = await getComplianceDocs();
@@ -98,15 +98,16 @@ export default function CompliancePanel() {
     load();
   }, [load]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-
-    const file = formData.get('file');
-    if (!(file instanceof File) || file.size === 0) {
+  const handleAdd = async (values: DocFormValues, file: File | null) => {
+    if (!file || file.size === 0) {
       toast.error(t('compliance.toast.pickFile'));
       return;
+    }
+
+    const formData = new FormData();
+    formData.set('file', file);
+    for (const [key, value] of Object.entries(values)) {
+      if (value.trim()) formData.set(key, value);
     }
 
     setSaving(true);
@@ -118,9 +119,33 @@ export default function CompliancePanel() {
       return;
     }
 
-    form.reset();
     setAdding(false);
     toast.success(t('compliance.toast.saved'));
+    load();
+  };
+
+  const handleEdit = async (values: DocFormValues) => {
+    if (!editing) return;
+
+    setSaving(true);
+    const result = await updateComplianceDoc(editing.id, {
+      type: values.type,
+      name: values.name,
+      renewalPeriod: values.renewalPeriod,
+      reference: orNull(values.reference),
+      issuedAt: orNull(values.issuedAt),
+      expiresAt: orNull(values.expiresAt),
+      notes: editing.notes,
+    });
+    setSaving(false);
+
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+
+    setEditing(null);
+    toast.success(t('compliance.toast.updated'));
     load();
   };
 
@@ -179,102 +204,15 @@ export default function CompliancePanel() {
         </div>
 
         {adding && (
-          <form onSubmit={handleSubmit} className="mt-5 rounded-lg border border-border bg-surface p-4 space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="doc-type" className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  {t('compliance.form.type')}
-                </label>
-                <select id="doc-type" name="type" required className="input-field" defaultValue="INSURANCE">
-                  {Object.entries(TYPE_LABEL_KEYS).map(([value, key]) => (
-                    <option key={value} value={value}>{t(key)}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="doc-name" className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  {t('compliance.form.name')}
-                </label>
-                <input
-                  id="doc-name"
-                  name="name"
-                  required
-                  placeholder={t('compliance.form.namePlaceholder')}
-                  className="input-field"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="doc-renewal" className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  {t('compliance.form.renewal')}
-                </label>
-                <select id="doc-renewal" name="renewalPeriod" className="input-field" defaultValue="ANNUAL">
-                  {(Object.keys(RENEWAL_LABEL_KEYS) as RenewalPeriod[]).map((value) => (
-                    <option key={value} value={value}>{t(RENEWAL_LABEL_KEYS[value])}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="doc-reference" className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  {t('compliance.form.reference')}
-                </label>
-                <input id="doc-reference" name="reference" className="input-field" />
-              </div>
-
-              <div>
-                <label htmlFor="doc-issued" className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  {t('compliance.form.issuedAt')}
-                </label>
-                <input id="doc-issued" name="issuedAt" type="date" className="input-field" />
-              </div>
-
-              <div>
-                <label htmlFor="doc-expires" className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  {t('compliance.form.expiresAt')}
-                </label>
-                <input id="doc-expires" name="expiresAt" type="date" className="input-field" />
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {t('compliance.form.expiresHint')}
-                </p>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label htmlFor="doc-file" className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  {t('compliance.form.file')}
-                </label>
-                <input
-                  id="doc-file"
-                  name="file"
-                  type="file"
-                  required
-                  accept="application/pdf,image/png,image/jpeg,image/webp"
-                  className="input-field file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1 file:text-xs file:text-foreground"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button type="submit" disabled={saving} className="cta-button">
-                {saving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-                    {t('compliance.form.saving')}
-                  </>
-                ) : (
-                  t('compliance.form.submit')
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setAdding(false)}
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
-                {t('compliance.form.cancel')}
-              </button>
-            </div>
-          </form>
+          <div className="mt-5 rounded-lg border border-border bg-surface p-4">
+            <ComplianceDocForm
+              withFile
+              saving={saving}
+              submitLabel={t('compliance.form.submit')}
+              onSubmit={handleAdd}
+              onCancel={() => setAdding(false)}
+            />
+          </div>
         )}
 
         {docs.length === 0 ? (
@@ -308,12 +246,23 @@ export default function CompliancePanel() {
               <tbody className="divide-y divide-border-subtle">
                 {docs.map((doc) => {
                   const style = STATUS_STYLE[doc.status];
-                  const phrase = expiryPhrase(doc, t);
+                  const days = daysUntil(doc.expiresAt);
+                  const phrase = days === null ? null : expiryPhrase(days, t);
+                  // Renews, yet has no date: the countdown can only start once
+                  // the issue date is in, so the gap is named where the date
+                  // would be rather than passed off as "no expiry".
+                  const needsDate = !doc.expiresAt && doc.renewalPeriod !== 'NONE';
 
                   return (
                     <tr key={doc.id}>
                       <td className="py-3 pr-4 align-top">
-                        <span className="block font-medium text-foreground">{doc.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewing(doc)}
+                          className="block text-left font-medium text-foreground hover:underline underline-offset-2"
+                        >
+                          {doc.name}
+                        </button>
                         {doc.reference && (
                           <span className="block text-xs text-muted-foreground">{doc.reference}</span>
                         )}
@@ -329,7 +278,7 @@ export default function CompliancePanel() {
                             className={`shrink-0 w-2.5 h-2.5 rounded-full ${style.dot} ${style.glow}`}
                             aria-hidden="true"
                           />
-                          <span className={`text-xs font-medium ${style.text}`}>{t(style.labelKey)}</span>
+                          <span className={`text-xs font-medium ${style.text}`}>{t(needsDate ? 'compliance.status.noDate' : style.labelKey)}</span>
                         </span>
                       </td>
 
@@ -351,18 +300,38 @@ export default function CompliancePanel() {
                             the state, and a document with no expiry would
                             otherwise read "Sem validade" twice across. */}
                         {phrase && (
-                          <span className={`block text-xs ${style.text}`}>{phrase}</span>
+                          <span className={`block text-xs font-medium ${style.text}`}>{phrase}</span>
+                        )}
+                        {needsDate && (
+                          <button
+                            type="button"
+                            onClick={() => { setAdding(false); setEditing(doc); }}
+                            className="block text-xs font-medium text-primary-ink hover:underline"
+                          >
+                            {t('compliance.expiry.needsDate')}
+                          </button>
                         )}
                       </td>
 
                       <td className="py-3 align-top text-right whitespace-nowrap">
-                        <a
-                          href={`/api/images/${doc.filePath}`}
+                        <button
+                          type="button"
+                          onClick={() => setPreviewing(doc)}
                           className="inline-flex p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
-                          aria-label={`${t('compliance.download')} ${doc.name}`}
+                          aria-label={`${t('compliance.preview')} ${doc.name}`}
+                          title={t('compliance.preview')}
                         >
-                          <Download className="w-4 h-4" aria-hidden="true" />
-                        </a>
+                          <Eye className="w-4 h-4" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setAdding(false); setEditing(doc); }}
+                          className="inline-flex p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                          aria-label={`${t('compliance.edit')} ${doc.name}`}
+                          title={t('compliance.edit')}
+                        >
+                          <Pencil className="w-4 h-4" aria-hidden="true" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleDelete(doc)}
@@ -380,6 +349,28 @@ export default function CompliancePanel() {
           </div>
         )}
       </div>
+
+      {previewing && (
+        <ComplianceDocPreview
+          doc={previewing}
+          onClose={() => setPreviewing(null)}
+          onEdit={() => { setAdding(false); setEditing(previewing); setPreviewing(null); }}
+        />
+      )}
+
+      {editing && (
+        <Dialog title={t('compliance.editTitle')} onClose={() => setEditing(null)}>
+          <ComplianceDocForm
+            key={editing.id}
+            initial={formValuesOf(editing)}
+            withFile={false}
+            saving={saving}
+            submitLabel={t('compliance.form.update')}
+            onSubmit={handleEdit}
+            onCancel={() => setEditing(null)}
+          />
+        </Dialog>
+      )}
     </div>
   );
 }

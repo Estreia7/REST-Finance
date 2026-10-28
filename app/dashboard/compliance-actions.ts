@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { saveDocument, deleteStoredImage } from '@/lib/uploads';
 import { toClientError } from '@/lib/errors';
-import { EXPIRY_WARNING_DAYS, statusFor, summarise } from '@/lib/compliance';
+import { EXPIRY_WARNING_DAYS, resolveExpiry, statusFor, summarise } from '@/lib/compliance';
 
 /**
  * Compliance documents: insurance, licences, certificates.
@@ -96,7 +96,9 @@ export async function uploadComplianceDoc(formData: FormData) {
         mimeType: saved.kind === 'pdf' ? 'application/pdf' : `image/${saved.kind}`,
         sizeBytes: saved.sizeBytes,
         issuedAt: parsed.data.issuedAt ?? null,
-        expiresAt: parsed.data.expiresAt ?? null,
+        expiresAt: resolveExpiry(
+          parsed.data.issuedAt, parsed.data.expiresAt, parsed.data.renewalPeriod,
+        ),
         notes: parsed.data.notes ?? null,
         uploadedById: owner.userId,
       },
@@ -112,6 +114,7 @@ export async function uploadComplianceDoc(formData: FormData) {
 export async function updateComplianceDoc(
   id: string,
   input: {
+    type?: string;
     name: string;
     renewalPeriod?: 'NONE' | 'MONTHLY' | 'ANNUAL';
     reference?: string | null;
@@ -133,7 +136,7 @@ export async function updateComplianceDoc(
 
     const parsed = metadataSchema.safeParse({
       ...input,
-      type: existing.type,
+      type: input.type ?? existing.type,
       renewalPeriod: input.renewalPeriod ?? existing.renewalPeriod,
     });
     if (!parsed.success) {
@@ -147,11 +150,14 @@ export async function updateComplianceDoc(
     await prisma.complianceDoc.update({
       where: { id },
       data: {
+        type: parsed.data.type,
         name: parsed.data.name,
         renewalPeriod: parsed.data.renewalPeriod,
         reference: parsed.data.reference ?? null,
         issuedAt: parsed.data.issuedAt ?? null,
-        expiresAt: parsed.data.expiresAt ?? null,
+        expiresAt: resolveExpiry(
+          parsed.data.issuedAt, parsed.data.expiresAt, parsed.data.renewalPeriod,
+        ),
         notes: parsed.data.notes ?? null,
       },
     });

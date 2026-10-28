@@ -59,10 +59,41 @@ export function nextExpiryFrom(from: Date, period: RenewalPeriod): Date | null {
   if (period === 'NONE') return null;
 
   const next = new Date(from);
-  if (period === 'MONTHLY') next.setMonth(next.getMonth() + 1);
-  else next.setFullYear(next.getFullYear() + 1);
+  if (period === 'MONTHLY') next.setUTCMonth(next.getUTCMonth() + 1);
+  else next.setUTCFullYear(next.getUTCFullYear() + 1);
 
   return next;
+}
+
+/**
+ * The expiry to store: the one the owner typed, or else the one their issue
+ * date and renewal imply.
+ *
+ * An annual HACCP certificate issued on 1 March is valid until 1 March next
+ * year; asking the owner to work that out and type it is how documents end
+ * up with no expiry at all, and so are never chased.
+ */
+export function resolveExpiry(
+  issuedAt: Date | null | undefined,
+  expiresAt: Date | null | undefined,
+  period: RenewalPeriod,
+): Date | null {
+  if (expiresAt) return expiresAt;
+  if (!issuedAt) return null;
+  return nextExpiryFrom(issuedAt, period);
+}
+
+/**
+ * A date as the value of an `<input type="date">`.
+ *
+ * Read in UTC, because that is how a typed date is stored (midnight UTC): in
+ * local time a Brazilian browser would show the day before.
+ */
+export function toDateInput(value: Date | string | null | undefined): string {
+  if (!value) return '';
+  const d = new Date(value);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 }
 
 /**

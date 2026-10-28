@@ -16,7 +16,7 @@ import { resolveStoredPath, kindFromPath, DOC_MIME } from '@/lib/uploads';
 export const dynamic = 'force-dynamic';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { path: string[] } }
 ) {
   const auth = await requireAuth();
@@ -106,6 +106,14 @@ export async function GET(
   const kind = kindFromPath(storedPath);
   if (!kind) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+  // A compliance PDF may be shown in place, for the preview in the vault.
+  // The worry behind forcing a download is pointing a PDF viewer at a file
+  // somebody else supplied; this scope is the owner's own uploads, readable
+  // by that owner alone, so the only person the viewer is pointed at is the
+  // one who chose the file. Every other PDF still downloads.
+  const inline =
+    kind === 'pdf' && scope === 'compliance' && new URL(request.url).searchParams.get('inline') === '1';
+
   try {
     const bytes = await readFile(absolute);
     return new NextResponse(new Uint8Array(bytes), {
@@ -117,7 +125,7 @@ export async function GET(
         'X-Content-Type-Options': 'nosniff',
         // Forces a download rather than rendering in place. A PDF viewer is
         // a large attack surface to point at user-supplied files.
-        ...(kind === 'pdf' ? { 'Content-Disposition': 'attachment' } : {}),
+        ...(kind === 'pdf' && !inline ? { 'Content-Disposition': 'attachment' } : {}),
       },
     });
   } catch {

@@ -19,6 +19,15 @@ const baseConfig = {
           { key: 'X-DNS-Prefetch-Control', value: 'on' },
         ],
       },
+      {
+        // The compliance preview frames the owner's own PDF inside the app.
+        // Same origin only; listed after the rule above so it overrides it.
+        source: '/api/images/compliance/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
+        ],
+      },
     ];
   },
 };
