@@ -30,9 +30,9 @@ type Doc = {
   renewalPeriod: RenewalPeriod;
   name: string;
   reference: string | null;
-  filePath: string;
-  mimeType: string;
-  sizeBytes: number;
+  filePath: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
   issuedAt: Date | null;
   expiresAt: Date | null;
   notes: string | null;
@@ -99,13 +99,8 @@ export default function CompliancePanel() {
   }, [load]);
 
   const handleAdd = async (values: DocFormValues, file: File | null) => {
-    if (!file || file.size === 0) {
-      toast.error(t('compliance.toast.pickFile'));
-      return;
-    }
-
     const formData = new FormData();
-    formData.set('file', file);
+    if (file) formData.set('file', file);
     for (const [key, value] of Object.entries(values)) {
       if (value.trim()) formData.set(key, value);
     }
@@ -124,8 +119,14 @@ export default function CompliancePanel() {
     load();
   };
 
-  const handleEdit = async (values: DocFormValues) => {
+  const handleEdit = async (values: DocFormValues, file: File | null) => {
     if (!editing) return;
+
+    let fileData: FormData | undefined;
+    if (file) {
+      fileData = new FormData();
+      fileData.set('file', file);
+    }
 
     setSaving(true);
     const result = await updateComplianceDoc(editing.id, {
@@ -136,7 +137,7 @@ export default function CompliancePanel() {
       issuedAt: orNull(values.issuedAt),
       expiresAt: orNull(values.expiresAt),
       notes: editing.notes,
-    });
+    }, fileData);
     setSaving(false);
 
     if (result.error) {
@@ -147,6 +148,11 @@ export default function CompliancePanel() {
     setEditing(null);
     toast.success(t('compliance.toast.updated'));
     load();
+  };
+
+  const openEdit = (doc: Doc) => {
+    setAdding(false);
+    setEditing(doc);
   };
 
   const handleDelete = async (doc: Doc) => {
@@ -206,7 +212,7 @@ export default function CompliancePanel() {
         {adding && (
           <div className="mt-5 rounded-lg border border-border bg-surface p-4">
             <ComplianceDocForm
-              withFile
+              fileLabel={t('compliance.form.file')}
               saving={saving}
               submitLabel={t('compliance.form.submit')}
               onSubmit={handleAdd}
@@ -256,15 +262,20 @@ export default function CompliancePanel() {
                   return (
                     <tr key={doc.id}>
                       <td className="py-3 pr-4 align-top">
+                        {/* Opens the paper when there is one; without, the
+                            edit, which is where a file gets attached. */}
                         <button
                           type="button"
-                          onClick={() => setPreviewing(doc)}
+                          onClick={() => (doc.filePath ? setPreviewing(doc) : openEdit(doc))}
                           className="block text-left font-medium text-foreground hover:underline underline-offset-2"
                         >
                           {doc.name}
                         </button>
                         {doc.reference && (
                           <span className="block text-xs text-muted-foreground">{doc.reference}</span>
+                        )}
+                        {!doc.filePath && (
+                          <span className="block text-xs text-muted-foreground italic">{t('compliance.noFile')}</span>
                         )}
                       </td>
 
@@ -305,7 +316,7 @@ export default function CompliancePanel() {
                         {needsDate && (
                           <button
                             type="button"
-                            onClick={() => { setAdding(false); setEditing(doc); }}
+                            onClick={() => openEdit(doc)}
                             className="block text-xs font-medium text-primary-ink hover:underline"
                           >
                             {t('compliance.expiry.needsDate')}
@@ -314,18 +325,20 @@ export default function CompliancePanel() {
                       </td>
 
                       <td className="py-3 align-top text-right whitespace-nowrap">
+                        {doc.filePath && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewing(doc)}
+                            className="inline-flex p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                            aria-label={`${t('compliance.preview')} ${doc.name}`}
+                            title={t('compliance.preview')}
+                          >
+                            <Eye className="w-4 h-4" aria-hidden="true" />
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() => setPreviewing(doc)}
-                          className="inline-flex p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
-                          aria-label={`${t('compliance.preview')} ${doc.name}`}
-                          title={t('compliance.preview')}
-                        >
-                          <Eye className="w-4 h-4" aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setAdding(false); setEditing(doc); }}
+                          onClick={() => openEdit(doc)}
                           className="inline-flex p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
                           aria-label={`${t('compliance.edit')} ${doc.name}`}
                           title={t('compliance.edit')}
@@ -350,11 +363,11 @@ export default function CompliancePanel() {
         )}
       </div>
 
-      {previewing && (
+      {previewing?.filePath && (
         <ComplianceDocPreview
-          doc={previewing}
+          doc={{ name: previewing.name, filePath: previewing.filePath, mimeType: previewing.mimeType }}
           onClose={() => setPreviewing(null)}
-          onEdit={() => { setAdding(false); setEditing(previewing); setPreviewing(null); }}
+          onEdit={() => { openEdit(previewing); setPreviewing(null); }}
         />
       )}
 
@@ -363,7 +376,7 @@ export default function CompliancePanel() {
           <ComplianceDocForm
             key={editing.id}
             initial={formValuesOf(editing)}
-            withFile={false}
+            fileLabel={t(editing.filePath ? 'compliance.form.fileReplace' : 'compliance.form.fileAttach')}
             saving={saving}
             submitLabel={t('compliance.form.update')}
             onSubmit={handleEdit}

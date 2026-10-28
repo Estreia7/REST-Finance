@@ -12,7 +12,7 @@
  * Re-runnable: it clears only the documents it created.
  */
 
-import { PrismaClient, type ComplianceDocType, type RenewalPeriod } from '@prisma/client';
+import { PrismaClient, type ComplianceCategory, type RenewalPeriod } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import fs from 'fs';
@@ -61,12 +61,13 @@ trailer<</Root 1 0 R>>
 }
 
 type DocSpec = {
-  type: ComplianceDocType;
+  type: ComplianceCategory;
   name: string;
   reference: string;
   renewalPeriod: RenewalPeriod;
   issuedAt: Date;
   expiresAt: Date | null;
+  withoutFile?: boolean;
 };
 
 /** Everything in order: the congratulation line. */
@@ -80,7 +81,7 @@ const TIDY: DocSpec[] = [
     expiresAt: inDays(205),
   },
   {
-    type: 'ASAE_LICENCE',
+    type: 'LICENCE',
     name: 'Licença de utilização',
     reference: 'LIC-CM-4471',
     renewalPeriod: 'ANNUAL',
@@ -88,7 +89,7 @@ const TIDY: DocSpec[] = [
     expiresAt: inDays(125),
   },
   {
-    type: 'HACCP',
+    type: 'LICENCE',
     name: 'Plano HACCP',
     reference: 'HACCP-2026',
     renewalPeriod: 'NONE',
@@ -96,7 +97,7 @@ const TIDY: DocSpec[] = [
     expiresAt: null,
   },
   {
-    type: 'FIRE_SAFETY',
+    type: 'SAFETY',
     name: 'Segurança contra incêndios',
     reference: 'SCIE-88210',
     renewalPeriod: 'ANNUAL',
@@ -104,7 +105,7 @@ const TIDY: DocSpec[] = [
     expiresAt: inDays(275),
   },
   {
-    type: 'PEST_CONTROL',
+    type: 'HYGIENE',
     name: 'Controlo de pragas',
     reference: 'PR-3391',
     renewalPeriod: 'MONTHLY',
@@ -113,7 +114,7 @@ const TIDY: DocSpec[] = [
   },
 ];
 
-/** One of each problem state: red, amber, and a required type never uploaded. */
+/** One of each problem state: red, amber, and a document still without its file. */
 const UNTIDY: DocSpec[] = [
   {
     type: 'INSURANCE',
@@ -125,7 +126,7 @@ const UNTIDY: DocSpec[] = [
     expiresAt: inDays(-14),
   },
   {
-    type: 'ASAE_LICENCE',
+    type: 'LICENCE',
     name: 'Licença de utilização',
     reference: 'LIC-CM-9920',
     renewalPeriod: 'ANNUAL',
@@ -134,7 +135,7 @@ const UNTIDY: DocSpec[] = [
     expiresAt: inDays(9),
   },
   {
-    type: 'HACCP',
+    type: 'LICENCE',
     name: 'Plano HACCP',
     reference: 'HACCP-2025',
     renewalPeriod: 'NONE',
@@ -142,7 +143,7 @@ const UNTIDY: DocSpec[] = [
     expiresAt: null,
   },
   {
-    type: 'WASTE_CONTRACT',
+    type: 'CONTRACT',
     name: 'Contrato de recolha de resíduos',
     reference: 'RES-2026-41',
     renewalPeriod: 'MONTHLY',
@@ -150,7 +151,16 @@ const UNTIDY: DocSpec[] = [
     // Amber, and monthly, so the renewal column has something to say.
     expiresAt: inDays(10),
   },
-  // FIRE_SAFETY deliberately absent, so the summary reports one missing.
+  {
+    type: 'SAFETY',
+    name: 'Segurança contra incêndios',
+    reference: 'SCIE-10233',
+    renewalPeriod: 'ANNUAL',
+    issuedAt: inDays(-100),
+    expiresAt: inDays(265),
+    // Recorded before the paper was scanned, so the no-file row is reachable.
+    withoutFile: true,
+  },
 ];
 
 /** Writes the placeholder file the same way an upload would, and returns its stored path. */
@@ -169,7 +179,7 @@ async function seedVault(restaurantId: string, userId: string, specs: DocSpec[],
   await prisma.complianceDoc.deleteMany({ where: { restaurantId } });
 
   for (const spec of specs) {
-    const { storedPath, size } = writePlaceholder(restaurantId, spec);
+    const file = spec.withoutFile ? null : writePlaceholder(restaurantId, spec);
 
     await prisma.complianceDoc.create({
       data: {
@@ -178,9 +188,9 @@ async function seedVault(restaurantId: string, userId: string, specs: DocSpec[],
         name: spec.name,
         reference: spec.reference,
         renewalPeriod: spec.renewalPeriod,
-        filePath: storedPath,
-        mimeType: 'application/pdf',
-        sizeBytes: size,
+        filePath: file?.storedPath ?? null,
+        mimeType: file ? 'application/pdf' : null,
+        sizeBytes: file?.size ?? null,
         issuedAt: spec.issuedAt,
         expiresAt: spec.expiresAt,
         uploadedById: userId,
@@ -236,7 +246,7 @@ async function main() {
   await seedVault(second.id, user.id, UNTIDY, second.name);
 
   console.log(`\n  ${first.restaurant.name} is fully in order.`);
-  console.log(`  ${SECOND_RESTAURANT} has one expired, two expiring and one missing.`);
+  console.log(`  ${SECOND_RESTAURANT} has one expired, two expiring and one without its file.`);
   console.log('  The switcher appears in the sidebar now that there are two.\n');
 }
 

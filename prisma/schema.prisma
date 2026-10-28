@@ -52,14 +52,12 @@ enum RenewalPeriod {
   ANNUAL
 }
 
-enum ComplianceDocType {
-  INSURANCE // Seguro de responsabilidade civil
-  HACCP // Plano HACCP
-  FIRE_SAFETY // Segurança contra incêndios
-  ASAE_LICENCE // Licença de utilização / ASAE
-  HYGIENE_CERT // Formação em higiene alimentar
-  WASTE_CONTRACT // Contrato de recolha de resíduos
-  PEST_CONTROL // Controlo de pragas
+enum ComplianceCategory {
+  LICENCE // Licenças: utilização / ASAE, HACCP
+  INSURANCE // Seguros
+  SAFETY // Segurança: incêndios, extintores
+  HYGIENE // Higiene: formação, controlo de pragas
+  CONTRACT // Contratos: recolha de resíduos, manutenção
   OTHER
 }
 
@@ -578,14 +576,16 @@ model ComplianceDoc {
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
   restaurantId String     @map("restaurant_id")
 
-  type      ComplianceDocType
+  /// The category; the document itself is named in `name`.
+  type      ComplianceCategory
   name      String
   /// Policy or licence number, as printed on the document.
   reference String?
 
-  filePath  String @map("file_path")
-  mimeType  String @map("mime_type")
-  sizeBytes Int    @map("size_bytes")
+  /// Null until the paper is scanned: the dates can be recorded first.
+  filePath  String? @map("file_path")
+  mimeType  String? @map("mime_type")
+  sizeBytes Int?    @map("size_bytes")
 
   /// Monthly or annual renewal. NONE for one-off documents.
   renewalPeriod RenewalPeriod @default(NONE) @map("renewal_period")

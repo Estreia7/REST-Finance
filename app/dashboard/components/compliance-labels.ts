@@ -16,13 +16,11 @@ import type { ComplianceStatus } from '@/lib/compliance';
  */
 
 export const TYPE_LABEL_KEYS: Record<string, string> = {
+  LICENCE: 'compliance.type.licence',
   INSURANCE: 'compliance.type.insurance',
-  HACCP: 'compliance.type.haccp',
-  FIRE_SAFETY: 'compliance.type.fireSafety',
-  ASAE_LICENCE: 'compliance.type.asaeLicence',
-  HYGIENE_CERT: 'compliance.type.hygieneCert',
-  WASTE_CONTRACT: 'compliance.type.wasteContract',
-  PEST_CONTROL: 'compliance.type.pestControl',
+  SAFETY: 'compliance.type.safety',
+  HYGIENE: 'compliance.type.hygiene',
+  CONTRACT: 'compliance.type.contract',
   OTHER: 'compliance.type.other',
 };
 

@@ -97,61 +97,54 @@ export function toDateInput(value: Date | string | null | undefined): string {
 }
 
 /**
- * The documents a Portuguese restaurant is expected to keep to hand.
- *
- * "Missing" has to mean something before the summary can count it, and an
- * empty vault reporting "tudo em dia" would be worse than useless. These four
- * are the ones an ASAE inspection asks for; anything else an owner adds is a
- * bonus rather than a requirement.
+ * The categories a document is filed under. The document itself is whatever
+ * the owner names it: "Plano HACCP" is a licence, "Contrato de pragas" is
+ * hygiene, and a fixed list of specific documents never fitted every kitchen.
  */
-export const REQUIRED_DOC_TYPES = [
+export const COMPLIANCE_CATEGORIES = [
+  'LICENCE',
   'INSURANCE',
-  'HACCP',
-  'ASAE_LICENCE',
-  'FIRE_SAFETY',
+  'SAFETY',
+  'HYGIENE',
+  'CONTRACT',
+  'OTHER',
 ] as const;
 
-export type RequiredDocType = (typeof REQUIRED_DOC_TYPES)[number];
+export type ComplianceCategory = (typeof COMPLIANCE_CATEGORIES)[number];
 
 export type ComplianceSummary = {
-  /** Required types with no document at all on file. */
-  missingTypes: RequiredDocType[];
-  expiredCount: number;
-  expiringCount: number;
+  /** Names of the documents past their date, soonest-lapsed first as given. */
+  expired: string[];
+  /** Names of the documents inside the warning window. */
+  expiring: string[];
   totalDocs: number;
-  /** Nothing missing, nothing lapsed, nothing about to lapse. */
+  /** At least one document, and none lapsed or about to. */
   allClear: boolean;
 };
 
 /**
  * Rolls a restaurant's documents up into the line shown at the top of the page.
  *
- * A document that has lapsed does not count as present: an expired licence is
- * the same problem as a missing one on the day somebody asks to see it.
+ * Every row answers for itself: there is no list of documents a restaurant
+ * must have, only the ones the owner keeps, each judged by its own date. An
+ * empty vault is not "tudo em dia", though; it is simply empty.
  */
 export function summarise(
-  docs: { type: string; expiresAt: Date | null }[],
+  docs: { name: string; expiresAt: Date | null }[],
   now = new Date()
 ): ComplianceSummary {
-  const usable = new Set(
-    docs.filter((d) => statusFor(d.expiresAt, now) !== 'expired').map((d) => d.type)
-  );
-
-  const missingTypes = REQUIRED_DOC_TYPES.filter((t) => !usable.has(t));
-
-  let expiredCount = 0;
-  let expiringCount = 0;
+  const expired: string[] = [];
+  const expiring: string[] = [];
   for (const doc of docs) {
     const status = statusFor(doc.expiresAt, now);
-    if (status === 'expired') expiredCount += 1;
-    else if (status === 'expiring') expiringCount += 1;
+    if (status === 'expired') expired.push(doc.name);
+    else if (status === 'expiring') expiring.push(doc.name);
   }
 
   return {
-    missingTypes,
-    expiredCount,
-    expiringCount,
+    expired,
+    expiring,
     totalDocs: docs.length,
-    allClear: missingTypes.length === 0 && expiredCount === 0 && expiringCount === 0,
+    allClear: docs.length > 0 && expired.length === 0 && expiring.length === 0,
   };
 }

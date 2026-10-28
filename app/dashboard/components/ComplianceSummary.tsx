@@ -1,7 +1,6 @@
 'use client';
 
 import { AlertTriangle, PartyPopper } from 'lucide-react';
-import { TYPE_LABEL_KEYS } from './compliance-labels';
 import { useLanguage } from '@/lib/language-context';
 import type { ComplianceSummary as Summary } from '@/lib/compliance';
 
@@ -45,27 +44,30 @@ export default function ComplianceSummary({
     );
   }
 
+  // An empty vault: nothing to praise and nothing to warn about. The table's
+  // own empty state says what to do next.
+  if (summary.totalDocs === 0) return null;
+
   // Phrased as separate clauses rather than one total, because "3 documentos"
-  // hides whether the problem is paperwork never uploaded or a licence that
-  // lapsed last week.
+  // hides whether the problem is a licence that lapsed last week or one that
+  // still has a few days to run.
   const parts: string[] = [];
-  if (summary.missingTypes.length > 0) {
-    const n = summary.missingTypes.length;
-    parts.push(`${n} ${n === 1 ? t('compliance.summary.missingOne') : t('compliance.summary.missingMany')}`);
-  }
-  if (summary.expiredCount > 0) {
-    const n = summary.expiredCount;
+  if (summary.expired.length > 0) {
+    const n = summary.expired.length;
     parts.push(`${n} ${n === 1 ? t('compliance.summary.expiredOne') : t('compliance.summary.expiredMany')}`);
   }
-  if (summary.expiringCount > 0) {
-    const n = summary.expiringCount;
-    parts.push(`${n} ${t('compliance.summary.expiringSoon')}`);
+  if (summary.expiring.length > 0) {
+    parts.push(`${summary.expiring.length} ${t('compliance.summary.expiringSoon')}`);
   }
 
   const tone =
-    summary.expiredCount > 0 || summary.missingTypes.length > 0
+    summary.expired.length > 0
       ? { border: 'border-danger/30', bg: 'bg-danger/5', icon: 'text-danger' }
       : { border: 'border-warning/30', bg: 'bg-warning/5', icon: 'text-warning' };
+
+  // Named, so the owner knows which papers to go and find without scanning
+  // the table for the red lamps.
+  const named = [...summary.expired, ...summary.expiring];
 
   return (
     <div className={`flex items-start gap-3 rounded-xl border ${tone.border} ${tone.bg} p-4`}>
@@ -75,16 +77,9 @@ export default function ComplianceSummary({
         <p className="font-semibold text-foreground">
           {restaurantName || t('compliance.summary.theRestaurant')}: {parts.join(', ')}.
         </p>
-
-        {summary.missingTypes.length > 0 && (
-          <p className="mt-1 text-muted-foreground">
-            {t('compliance.summary.notUploaded')}{' '}
-            {summary.missingTypes
-              .map((type) => (TYPE_LABEL_KEYS[type] ? t(TYPE_LABEL_KEYS[type]) : type))
-              .join(', ')}
-            .
-          </p>
-        )}
+        <p className="mt-1 text-muted-foreground">
+          {t('compliance.summary.toRenew')} {named.join(', ')}.
+        </p>
       </div>
     </div>
   );

@@ -16,7 +16,7 @@ export default function ComplianceDocPreview({
   onClose,
   onEdit,
 }: {
-  doc: { name: string; filePath: string; mimeType: string };
+  doc: { name: string; filePath: string; mimeType: string | null };
   onClose: () => void;
   onEdit: () => void;
 }) {

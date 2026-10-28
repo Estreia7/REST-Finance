@@ -6,7 +6,13 @@ import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { saveDocument, deleteStoredImage } from '@/lib/uploads';
 import { toClientError } from '@/lib/errors';
-import { EXPIRY_WARNING_DAYS, resolveExpiry, statusFor, summarise } from '@/lib/compliance';
+import {
+  COMPLIANCE_CATEGORIES,
+  EXPIRY_WARNING_DAYS,
+  resolveExpiry,
+  statusFor,
+  summarise,
+} from '@/lib/compliance';
 
 /**
  * Compliance documents: insurance, licences, certificates.
@@ -20,21 +26,10 @@ import { EXPIRY_WARNING_DAYS, resolveExpiry, statusFor, summarise } from '@/lib/
  * incident.
  */
 
-const DOC_TYPES = [
-  'INSURANCE',
-  'HACCP',
-  'FIRE_SAFETY',
-  'ASAE_LICENCE',
-  'HYGIENE_CERT',
-  'WASTE_CONTRACT',
-  'PEST_CONTROL',
-  'OTHER',
-] as const;
-
 const RENEWAL_PERIODS = ['NONE', 'MONTHLY', 'ANNUAL'] as const;
 
 const metadataSchema = z.object({
-  type: z.enum(DOC_TYPES, { message: 'Tipo de documento inválido' }),
+  type: z.enum(COMPLIANCE_CATEGORIES, { message: 'Categoria inválida' }),
   renewalPeriod: z.enum(RENEWAL_PERIODS).default('NONE'),
   name: z.string().trim().min(2, 'Nome demasiado curto').max(120, 'Nome demasiado longo'),
   reference: z.string().trim().max(80).optional().nullable(),
@@ -46,13 +41,32 @@ const metadataSchema = z.object({
 /** Cap per restaurant, so storage cannot grow without bound. */
 const MAX_DOCS = 200;
 
+/**
+ * The file sent with the form, stored, as the columns that describe it.
+ * Null when none was chosen: the file is optional, and a document can be
+ * recorded first and scanned when the paper turns up.
+ */
+async function storeAttachedFile(restaurantId: string, formData: FormData) {
+  const file = formData.get('file');
+  if (!(file instanceof File) || file.size === 0) return { ok: true as const, columns: null };
+
+  const saved = await saveDocument(restaurantId, file);
+  if (!saved.ok) return { ok: false as const, error: saved.error };
+
+  return {
+    ok: true as const,
+    columns: {
+      filePath: saved.storedPath,
+      mimeType: saved.kind === 'pdf' ? 'application/pdf' : `image/${saved.kind}`,
+      sizeBytes: saved.sizeBytes,
+    },
+  };
+}
+
 export async function uploadComplianceDoc(formData: FormData) {
   try {
     const owner = await requireOwner();
     if (isAuthError(owner)) return { error: owner.error };
-
-    const file = formData.get('file');
-    if (!(file instanceof File)) return { error: 'Nenhum ficheiro recebido.' };
 
     const raw = {
       type: formData.get('type'),
@@ -82,8 +96,8 @@ export async function uploadComplianceDoc(formData: FormData) {
       return { error: `Limite de ${MAX_DOCS} documentos atingido.` };
     }
 
-    const saved = await saveDocument(owner.restaurantId, file);
-    if (!saved.ok) return { error: saved.error };
+    const stored = await storeAttachedFile(owner.restaurantId, formData);
+    if (!stored.ok) return { error: stored.error };
 
     const doc = await prisma.complianceDoc.create({
       data: {
@@ -92,9 +106,7 @@ export async function uploadComplianceDoc(formData: FormData) {
         renewalPeriod: parsed.data.renewalPeriod,
         name: parsed.data.name,
         reference: parsed.data.reference ?? null,
-        filePath: saved.storedPath,
-        mimeType: saved.kind === 'pdf' ? 'application/pdf' : `image/${saved.kind}`,
-        sizeBytes: saved.sizeBytes,
+        ...stored.columns,
         issuedAt: parsed.data.issuedAt ?? null,
         expiresAt: resolveExpiry(
           parsed.data.issuedAt, parsed.data.expiresAt, parsed.data.renewalPeriod,
@@ -121,7 +133,9 @@ export async function updateComplianceDoc(
     issuedAt?: string | null;
     expiresAt?: string | null;
     notes?: string | null;
-  }
+  },
+  /** Carries a `file` when one is being attached or replaced. */
+  fileData?: FormData,
 ) {
   try {
     const owner = await requireOwner();
@@ -147,9 +161,17 @@ export async function updateComplianceDoc(
       return { error: 'A data de validade é anterior à data de emissão.' };
     }
 
+    // A replaced file is not deleted from disk: like a removed document, the
+    // old paper stays archived as the record of what was in force.
+    const stored = fileData
+      ? await storeAttachedFile(owner.restaurantId, fileData)
+      : { ok: true as const, columns: null };
+    if (!stored.ok) return { error: stored.error };
+
     await prisma.complianceDoc.update({
       where: { id },
       data: {
+        ...stored.columns,
         type: parsed.data.type,
         name: parsed.data.name,
         renewalPeriod: parsed.data.renewalPeriod,

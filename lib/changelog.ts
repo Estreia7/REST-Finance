@@ -35,13 +35,19 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.28.1';
+export const CHANGELOG_VERSION = '2026.10.28.2';
 
 export const CHANGELOG: Release[] = [
   {
-    version: '2026.10.28.1',
+    version: '2026.10.28.2',
     date: '2026-10-28',
     entries: [
+      {
+        kind: 'improvement',
+        title: 'Conformidade organizada por categorias, e o ficheiro passa a opcional',
+        detail:
+          'Cada documento fica numa categoria (Licenças, Seguros, Segurança, Higiene, Contratos) e chama-se como quiser, por exemplo «Plano HACCP» em Licenças. Pode registar as datas já e anexar o ficheiro mais tarde. Os avisos são por documento, cada um pela sua validade.',
+      },
       {
         kind: 'improvement',
         title: 'Documentos de conformidade: ver, editar e validade automática',

@@ -32,15 +32,15 @@ export type DocFormValues = {
  */
 export default function ComplianceDocForm({
   initial,
-  withFile,
+  fileLabel,
   saving,
   submitLabel,
   onSubmit,
   onCancel,
 }: {
   initial?: Partial<DocFormValues>;
-  /** Adding asks for the file; editing keeps the one already on file. */
-  withFile: boolean;
+  /** The file is optional both ways; the label says whether it adds or replaces. */
+  fileLabel: string;
   saving: boolean;
   submitLabel: string;
   onSubmit: (values: DocFormValues, file: File | null) => void;
@@ -48,7 +48,7 @@ export default function ComplianceDocForm({
 }) {
   const { t } = useLanguage();
   const [values, setValues] = useState<DocFormValues>({
-    type: initial?.type ?? 'INSURANCE',
+    type: initial?.type ?? 'LICENCE',
     name: initial?.name ?? '',
     renewalPeriod: initial?.renewalPeriod ?? 'ANNUAL',
     reference: initial?.reference ?? '',
@@ -180,19 +180,16 @@ export default function ComplianceDocForm({
           </p>
         </div>
 
-        {withFile && (
-          <div className="sm:col-span-2">
-            <label htmlFor="doc-file" className={label}>{t('compliance.form.file')}</label>
-            <input
-              id="doc-file"
-              type="file"
-              required
-              accept="application/pdf,image/png,image/jpeg,image/webp"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="input-field file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1 file:text-xs file:text-foreground"
-            />
-          </div>
-        )}
+        <div className="sm:col-span-2">
+          <label htmlFor="doc-file" className={label}>{fileLabel}</label>
+          <input
+            id="doc-file"
+            type="file"
+            accept="application/pdf,image/png,image/jpeg,image/webp"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="input-field file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1 file:text-xs file:text-foreground"
+          />
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
