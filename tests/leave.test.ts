@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  easterSunday, portugueseHolidays, holidayOn, isLeaveWorkingDay, leaveWorkingDays,
+  easterSunday, portugueseHolidays, holidayOn, isLeaveWorkingDay, leaveWorkingDays, leaveDayOf,
   addMonths, completeMonths, entitlementFor, leaveBalance, onLeave,
 } from '@/lib/leave';
 import { dateKey, parseDateKey } from '@/lib/schedule';
@@ -180,5 +180,21 @@ describe('onLeave', () => {
     expect(onLeave(leaves, '2026-08-10')).toBe(true);
     expect(onLeave(leaves, '2026-08-14')).toBe(true);
     expect(onLeave(leaves, '2026-08-15')).toBe(false);
+  });
+});
+
+describe('leaveDayOf', () => {
+  // 21 to 31 December 2026: Christmas and the weekend in between do not count.
+  const leave = { start: '2026-12-21', end: '2026-12-31' };
+
+  it('numbers the working days of a booking', () => {
+    expect(leaveDayOf(leave, '2026-12-21')).toEqual({ day: 1, total: 8 });
+    expect(leaveDayOf(leave, '2026-12-28')).toEqual({ day: 5, total: 8 });
+    expect(leaveDayOf(leave, '2026-12-31')).toEqual({ day: 8, total: 8 });
+  });
+
+  it('has no number on a weekend or holiday inside the booking', () => {
+    expect(leaveDayOf(leave, '2026-12-25')).toBeNull();
+    expect(leaveDayOf(leave, '2026-12-26')).toBeNull();
   });
 });

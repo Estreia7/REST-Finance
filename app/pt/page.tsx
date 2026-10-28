@@ -16,7 +16,7 @@ import DeckPage from '@/app/components/presentation/DeckPage';
 export const metadata: Metadata = {
   title: 'REST Finance — Apresentação',
   description:
-    'Como o REST Finance põe as receitas, os custos e as margens do teu restaurante num sítio só.',
+    'Como o REST Finance põe as receitas, as despesas e as margens do teu restaurante num sítio só.',
   // Kept out of search results: this is a link to hand over, not a page to
   // rank. The public landing page is what should be found.
   robots: { index: false, follow: false },

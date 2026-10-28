@@ -35,9 +35,33 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.24.2';
+export const CHANGELOG_VERSION = '2026.10.28.1';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.28.1',
+    date: '2026-10-28',
+    entries: [
+      {
+        kind: 'fix',
+        title: 'Na Comparação mensal, cada valor diz o que é',
+        detail:
+          'Ao passar por cima de um mês, a caixa mostra agora «Receita», «Despesas» e «Lucro» ao lado de cada número, em vez de três valores soltos.',
+      },
+      {
+        kind: 'improvement',
+        title: '«Custos» passa a chamar-se «Despesas»',
+        detail:
+          'O separador onde lança faturas e pagamentos, o historial, as despesas fixas mensais e os gráficos dizem agora «Despesas». O custo de cada prato, o custo das mercadorias e o custo com pessoal mantêm o nome, porque são isso mesmo: custos.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Calendário de férias mais fácil de ler',
+        detail:
+          'Em Equipa › Férias, cada pessoa aparece numa cor forte e só sua, bem visível também ao fim de semana. Ao lado do nome vê em que dia das férias vai — por exemplo «dia 3 de 10» — contado em dias úteis, como no saldo.',
+      },
+    ],
+  },
   {
     version: '2026.10.24.2',
     date: '2026-10-24',

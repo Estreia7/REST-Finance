@@ -166,9 +166,9 @@ const pt: Record<GlossaryKey, GlossaryEntry> = {
   },
 
   costs: {
-    term: 'Custos',
+    term: 'Despesas',
     plain:
-      'Todas as despesas do mês somadas: comida, bebida, salários, renda e o resto.',
+      'Tudo o que o restaurante gastou no mês, somado: comida, bebida, salários, renda e o resto.',
   },
   margin: {
     term: 'Margem',

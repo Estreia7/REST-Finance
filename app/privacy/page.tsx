@@ -23,7 +23,7 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-semibold text-foreground">2. Dados Que Recolhemos</h2>
             <ul className="list-disc pl-5 space-y-1">
               <li><strong>Dados de conta:</strong> nome, email, password (encriptada)</li>
-              <li><strong>Dados do restaurante:</strong> nome, NIF, dados financeiros (receitas, custos, faturas)</li>
+              <li><strong>Dados do restaurante:</strong> nome, NIF, dados financeiros (receitas, despesas, faturas)</li>
               <li><strong>Dados de utilização:</strong> logs de acesso, ações realizadas, exportações</li>
               <li><strong>Dados de pagamento:</strong> processados pelo Stripe (não armazenamos dados de cartão)</li>
               <li><strong>Documentos digitalizados:</strong> imagens de faturas/recibos enviados para processamento</li>

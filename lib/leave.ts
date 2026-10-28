@@ -125,6 +125,17 @@ export function leaveWorkingDays(start: string, end: string): string[] {
   return datesBetween(start, end).filter(isLeaveWorkingDay);
 }
 
+/**
+ * Which day of a booking `key` is, counted the way the balance counts: in
+ * working days. A weekend or holiday inside the booking is not a day of
+ * leave, so it has no number.
+ */
+export function leaveDayOf(leave: LeaveRange, key: string): { day: number; total: number } | null {
+  const days = leaveWorkingDays(leave.start, leave.end);
+  const i = days.indexOf(key);
+  return i < 0 ? null : { day: i + 1, total: days.length };
+}
+
 // ── Entitlement ────────────────────────────────────────────────────────────
 
 /**

@@ -20,3 +20,17 @@ same mince is "Carne Smash" and "EXTRA CARNE").
 **Rule:** when the domain allows one-to-many, keep offering related candidates
 (unticked) next to the automatic pick. Auto-linking decides the default, not
 what the owner is allowed to see.
+
+## Colours that must tell people apart are the app's job, and always strong
+
+**What happened:** the holiday calendar showed each person in the colour the
+owner picked for them in the rota. Two people had both picked blue, and the
+pastel labels disappeared on the light-blue weekend cells. My first fix kept the
+owner's colours and only nudged the duplicates; the owner wanted the calendar
+to choose the colours itself, and every one of them clearly visible.
+
+**Rule:** when colour is how the owner tells people (or series) apart, the app
+assigns it from a fixed palette of strong, distinct hues (no greys, no
+pastels), checked for contrast against every background it sits on. A user's
+own colour choice is for the screen where they made it, not a constraint on
+every other view.

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   startOfWeek,
+  leaveColors,
+  LEAVE_COLORS,
   weekDates,
   addDays,
   addWeeks,
@@ -290,5 +292,30 @@ describe('formatMonthTitle', () => {
 describe('formatWeekShort', () => {
   it('names a week that crosses months by day and month', () => {
     expect(formatWeekShort(parseDateKey('2026-09-28'))).toBe('28/9 – 4/10');
+  });
+});
+
+describe('leaveColors', () => {
+  it('gives each person a different colour, in the rota order', () => {
+    const map = leaveColors(['a', 'b', 'c']);
+    expect([...map.values()]).toEqual(LEAVE_COLORS.slice(0, 3));
+  });
+
+  it('repeats only once every colour is in use', () => {
+    const map = leaveColors(Array.from({ length: 9 }, (_, i) => String(i)));
+    expect(new Set([...map.values()].slice(0, 8)).size).toBe(8);
+    expect(map.get('8')).toBe(LEAVE_COLORS[0]);
+  });
+
+  // Labels are white text on these, on weekday and weekend cells alike.
+  const lum = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => {
+      const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  it.each([...LEAVE_COLORS])('%s carries white text at 4.5:1', (hex) => {
+    expect(1.05 / (lum(hex) + 0.05)).toBeGreaterThanOrEqual(4.5);
   });
 });

@@ -324,7 +324,7 @@ export default function ComparativePanel() {
               <Tooltip
                 {...tooltipProps(chart)}
                 cursor={{ fill: chart.grid, opacity: 0.35 }}
-                formatter={(value: number) => [fmt(value)]}
+                formatter={(value: number, name: string) => [fmt(value), name]}
               />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} iconType="circle" iconSize={8} />
               <Bar dataKey="revenue" name={t('charts.revenue')} fill={chart.primary} radius={[3, 3, 0, 0]} />

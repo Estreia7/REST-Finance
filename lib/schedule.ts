@@ -288,3 +288,26 @@ export type EmployeeColorKey = (typeof EMPLOYEE_COLORS)[number]['key'];
 export function employeeColor(key: string) {
   return EMPLOYEE_COLORS.find((c) => c.key === key) ?? EMPLOYEE_COLORS[0];
 }
+
+/**
+ * The holiday calendar's own colours, chosen by the app, not the owner.
+ *
+ * Overlapping holidays are the point of that calendar, so every colour is a
+ * strong, clearly different hue (no greys, no pastels) that carries white text
+ * at 4.5:1 or better on any cell, weekday or weekend.
+ */
+export const LEAVE_COLORS = [
+  '#1d4ed8', // blue
+  '#047857', // green
+  '#b91c1c', // red
+  '#7e22ce', // purple
+  '#c2410c', // orange
+  '#0f766e', // teal
+  '#be185d', // pink
+  '#a16207', // mustard
+] as const;
+
+/** One colour per person, in the rota's order; repeats only past eight people. */
+export function leaveColors(ids: string[]): Map<string, string> {
+  return new Map(ids.map((id, i) => [id, LEAVE_COLORS[i % LEAVE_COLORS.length]]));
+}

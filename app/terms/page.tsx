@@ -23,7 +23,7 @@ export default function TermsPage() {
             <h2 className="text-lg font-semibold text-foreground">2. Descrição do Serviço</h2>
             <p>O REST Finance é uma plataforma de gestão financeira para restaurantes que permite:</p>
             <ul className="list-disc pl-5 space-y-1">
-              <li>Registar receitas e custos diários</li>
+              <li>Registar receitas e despesas diárias</li>
               <li>Digitalizar e processar faturas de fornecedores</li>
               <li>Gerar relatórios financeiros (P&L, exportações CSV/PDF)</li>
               <li>Monitorizar alterações de preços nos fornecedores</li>

@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     template: '%s · REST Finance',
   },
   description:
-    'Receitas, custos e margens do teu restaurante em tempo real. Prime Cost, food cost e lucro líquido calculados automaticamente. Sem Excel.',
+    'Receitas, despesas e margens do teu restaurante em tempo real. Prime Cost, food cost e lucro líquido calculados automaticamente. Sem Excel.',
   applicationName: 'REST Finance',
   openGraph: {
     type: 'website',
@@ -51,7 +51,7 @@ export const metadata: Metadata = {
     siteName: 'REST Finance',
     title: 'REST Finance: controlo financeiro para restaurantes',
     description:
-      'Receitas, custos e margens do teu restaurante em tempo real. Sem Excel, sem folhas de cálculo.',
+      'Receitas, despesas e margens do teu restaurante em tempo real. Sem Excel, sem folhas de cálculo.',
   },
   twitter: {
     card: 'summary_large_image',

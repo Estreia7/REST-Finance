@@ -9,10 +9,10 @@ import {
 import { getLeaveOverview, saveLeave, removeLeave, setEmployeeStartDate } from '../leave-actions';
 import { downloadFile, DownloadError } from '@/lib/download-file';
 import {
-  leaveBalance, leaveWorkingDays, holidayOn, onLeave, type LeaveBalance, type LeaveRange,
+  leaveBalance, leaveWorkingDays, leaveDayOf, holidayOn, onLeave, type LeaveBalance, type LeaveRange,
 } from '@/lib/leave';
 import {
-  monthWeekStarts, weekDates, parseDateKey, dateKey, isWeekend, formatMonthTitle, employeeColor,
+  monthWeekStarts, weekDates, parseDateKey, dateKey, isWeekend, formatMonthTitle, leaveColors,
 } from '@/lib/schedule';
 import { useLanguage } from '@/lib/language-context';
 import Dialog from './Dialog';
@@ -99,6 +99,9 @@ export default function LeavePanel() {
   useEffect(() => { load(); }, [load]);
 
   const employees = useMemo(() => data?.employees ?? [], [data]);
+  // The calendar picks its own colours rather than the rota's: overlapping
+  // holidays are the point of it, so each person needs a strong, distinct one.
+  const colorOf = useMemo(() => leaveColors(employees.map((e) => e.id)), [employees]);
   const leaves = useMemo(() => data?.leaves ?? [], [data]);
   const byId = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
 
@@ -272,14 +275,22 @@ export default function LeavePanel() {
                       {/* Names on a laptop, up to three, then a count. */}
                       <span className="hidden md:flex flex-col gap-0.5 min-w-0">
                         {away.slice(0, 3).map((emp) => {
-                          const c = employeeColor(emp.color);
+                          const leave = leavesOf(emp.id).find((l) => l.start <= key && key <= l.end);
+                          const nth = leave ? leaveDayOf(leave, key) : null;
                           return (
                             <span
                               key={emp.id}
-                              className="block truncate rounded px-1 py-px text-[10px] font-semibold"
-                              style={{ background: c.bg, color: c.ink }}
+                              className="flex items-baseline gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                              style={{ background: colorOf.get(emp.id) }}
                             >
-                              {emp.name}
+                              <span className="truncate">{emp.name}</span>
+                              {nth && (
+                                <span className="ml-auto shrink-0 font-medium tabular-nums opacity-90">
+                                  {t('leave.dayOfLeave')
+                                    .replace('{day}', String(nth.day))
+                                    .replace('{total}', String(nth.total))}
+                                </span>
+                              )}
                             </span>
                           );
                         })}
@@ -295,7 +306,7 @@ export default function LeavePanel() {
                             <span
                               key={emp.id}
                               className="w-1.5 h-1.5 rounded-full"
-                              style={{ background: employeeColor(emp.color).dot }}
+                              style={{ background: colorOf.get(emp.id) }}
                             />
                           ))}
                         </span>
@@ -343,7 +354,6 @@ export default function LeavePanel() {
               <ul className="mt-2 space-y-1">
                 {selectedAway.map((emp) => {
                   const leave = leavesOf(emp.id).find((l) => l.start <= selectedDay && selectedDay <= l.end)!;
-                  const c = employeeColor(emp.color);
                   return (
                     <li key={emp.id}>
                       <button
@@ -352,7 +362,7 @@ export default function LeavePanel() {
                         className="w-full flex items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-muted
                                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
-                        <span className="w-1 h-6 rounded-full shrink-0" style={{ background: c.dot }} aria-hidden="true" />
+                        <span className="w-1 h-6 rounded-full shrink-0" style={{ background: colorOf.get(emp.id) }} aria-hidden="true" />
                         <span className="text-sm font-semibold text-foreground flex-1 truncate">{emp.name}</span>
                         <span className="text-xs text-muted-foreground tabular-nums">
                           {formatRange(leave.start, leave.end, language)}
@@ -382,6 +392,7 @@ export default function LeavePanel() {
             <EmployeeBalance
               key={emp.id}
               employee={emp}
+              color={colorOf.get(emp.id)}
               balance={balanceOf(emp)}
               leaves={leavesOf(emp.id).filter(
                 (l) => l.start <= `${month.year}-12-31` && l.end >= `${month.year}-01-01`,
@@ -586,9 +597,10 @@ function LeaveMapPreview({ year, onClose }: { year: number; onClose: () => void 
 }
 
 function EmployeeBalance({
-  employee, balance, leaves, onBook, onEdit, onEditStart,
+  employee, color, balance, leaves, onBook, onEdit, onEditStart,
 }: {
   employee: LeaveEmployee;
+  color?: string;
   balance: LeaveBalance;
   leaves: Leave[];
   onBook: () => void;
@@ -596,7 +608,6 @@ function EmployeeBalance({
   onEditStart: () => void;
 }) {
   const { t, language } = useLanguage();
-  const c = employeeColor(employee.color);
   const today = dateKey(new Date());
 
   // What can be used this year: this year's days plus what carried over and
@@ -609,7 +620,7 @@ function EmployeeBalance({
     <li className="px-4 sm:px-5 py-4">
       <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
         <div className="flex items-center gap-2.5 min-w-[11rem] flex-1">
-          <span className="w-1 h-9 rounded-full shrink-0" style={{ background: c.dot }} aria-hidden="true" />
+          <span className="w-1 h-9 rounded-full shrink-0" style={{ background: color }} aria-hidden="true" />
           <span className="min-w-0">
             <span className="block text-sm font-semibold text-foreground truncate">{employee.name}</span>
             {employee.startDate ? (

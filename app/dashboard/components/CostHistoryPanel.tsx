@@ -100,7 +100,7 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
     try {
       await downloadFile(
         `/api/export/csv?type=costs&from=${dateFrom}&to=${dateTo}`,
-        exportFilename('custos', dateFrom, dateTo),
+        exportFilename('despesas', dateFrom, dateTo),
       );
       toast.success(t('costHistory.exportDone'));
     } catch {

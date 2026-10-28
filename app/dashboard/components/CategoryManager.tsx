@@ -94,7 +94,7 @@ export default function CategoryManager() {
 
   const handleDeactivate = async (category: Category) => {
     const message = category.entryCount > 0
-      ? `"${category.name}" tem ${category.entryCount} lançamentos. Deixa de aparecer em novos custos, mas o histórico mantém-se. Continuar?`
+      ? `"${category.name}" tem ${category.entryCount} lançamentos. Deixa de aparecer em novas despesas, mas o histórico mantém-se. Continuar?`
       : `Desativar "${category.name}"?`;
     if (!confirm(message)) return;
 
