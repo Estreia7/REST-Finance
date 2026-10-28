@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  Loader2, Eye, Paperclip, CalendarClock, Undo2, Repeat, Pencil, Wallet,
+  Loader2, Eye, Paperclip, CalendarClock, Undo2, Repeat, Pencil, Wallet, Link2,
 } from 'lucide-react';
 import {
   getPayables, markPaid, markUnpaid, setDueDate, setVendorTerms,
@@ -16,6 +16,7 @@ import { PayablesRunway } from './PayablesCard';
 import { METHOD_ICON } from './PaymentFields';
 import AttachInvoiceDialog from './AttachInvoiceDialog';
 import InvoicePreview from './InvoicePreview';
+import JoinCostDialog from './JoinCostDialog';
 import Dialog from './Dialog';
 
 /**
@@ -59,6 +60,7 @@ export default function PaymentsPanel({ initialFilter = 'open' }: { initialFilte
   const [terms, setTerms] = useState<PayableGroup | null>(null);
   const [attaching, setAttaching] = useState<{ row: PayableRow; hasVendor: boolean } | null>(null);
   const [previewing, setPreviewing] = useState<string | null>(null);
+  const [joining, setJoining] = useState<PayableRow | null>(null);
 
   useEffect(() => { setFilter(initialFilter); }, [initialFilter]);
 
@@ -246,6 +248,7 @@ export default function PaymentsPanel({ initialFilter = 'open' }: { initialFilte
                         onReopen={() => reopen(row)}
                         onDue={() => setDating(row)}
                         onAttach={() => setAttaching({ row, hasVendor: !!group.vendorId })}
+                        onJoin={() => setJoining(row)}
                         onPreview={() => row.previewNumber && setPreviewing(row.previewNumber)}
                       />
                     ))}
@@ -321,12 +324,26 @@ export default function PaymentsPanel({ initialFilter = 'open' }: { initialFilte
       {previewing && (
         <InvoicePreview invoiceNumber={previewing} onClose={() => setPreviewing(null)} onDeleted={load} />
       )}
+      {joining?.duplicateOf && (
+        <JoinCostDialog
+          cost={{ id: joining.id, dateKey: joining.dateKey, amount: joining.amount, description: joining.description }}
+          invoice={{
+            id: joining.duplicateOf.invoiceId,
+            invoiceNumber: joining.duplicateOf.invoiceNumber,
+            vendorName: joining.duplicateOf.vendorName,
+            dateKey: joining.duplicateOf.dateKey,
+            amount: joining.duplicateOf.amount,
+          }}
+          onClose={() => setJoining(null)}
+          onJoined={() => { setJoining(null); load(); }}
+        />
+      )}
     </div>
   );
 }
 
 function PayableItem({
-  row, selected, onSelect, shortDate, onPay, onReopen, onDue, onAttach, onPreview,
+  row, selected, onSelect, shortDate, onPay, onReopen, onDue, onAttach, onJoin, onPreview,
 }: {
   row: PayableRow;
   selected: boolean;
@@ -336,6 +353,7 @@ function PayableItem({
   onReopen: () => void;
   onDue: () => void;
   onAttach: () => void;
+  onJoin: () => void;
   onPreview: () => void;
 }) {
   const { t } = useLanguage();
@@ -395,6 +413,26 @@ function PayableItem({
             <span className="font-medium text-foreground tabular-nums">{shortDate(row.dateKey)}</span>
             {row.invoiceNumber ? (
               <span className="text-muted-foreground [overflow-wrap:anywhere]">{row.invoiceNumber}</span>
+            ) : row.duplicateOf ? (
+              // The invoice is already in the app: the paper to attach is
+              // that one, and attaching means joining the two.
+              <button
+                type="button"
+                onClick={onJoin}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-warning/40 bg-warning/10
+                           text-[11px] font-medium text-foreground hover:border-warning text-left
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Link2 className="w-3 h-3 shrink-0 text-warning" aria-hidden="true" />
+                <span className="[overflow-wrap:anywhere]">
+                  {t('payments.looksLike').replace(
+                    '{invoice}',
+                    row.duplicateOf.invoiceNumber ?? t('payments.duplicateNoNumber'),
+                  )}
+                  {' · '}
+                  <span className="font-semibold text-primary-ink">{t('payments.join')}</span>
+                </span>
+              </button>
             ) : !row.recurring && (
               // Not on a month booked by a fixed cost: rent has no invoice
               // to chase every month. It can still be added from the history.

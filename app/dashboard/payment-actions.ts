@@ -6,6 +6,11 @@ import { toClientError } from '@/lib/errors';
 import { dayKey } from '@/lib/ai-usage';
 import { ensureVendor } from '@/lib/vendors-server';
 import {
+  findDuplicateCosts,
+  mergeDuplicateCost,
+  type DuplicateSuggestion,
+} from '@/lib/duplicate-costs-server';
+import {
   PAYMENT_METHODS,
   addDays,
   daysBetween,
@@ -55,6 +60,8 @@ export interface PayableRow {
   previewNumber: string | null;
   /** True when the cost has no invoice yet: the paper can still be added. */
   needsInvoice: boolean;
+  /** An invoice already on file that this cost looks like a second copy of. */
+  duplicateOf: DuplicateSuggestion | null;
   state: PaymentState;
   method: PaymentMethodKey | null;
   paidKey: string | null;
@@ -130,6 +137,7 @@ function toRow(e: PayableRecord, todayKey: string): PayableRow {
     invoiceNumber: number,
     previewNumber: scanned,
     needsInvoice: !number && e.invoiceItems.length === 0,
+    duplicateOf: null,
     state: paymentState(status, todayKey),
     method: e.paymentMethod,
     paidKey: paidOn(status, todayKey),
@@ -185,6 +193,15 @@ export async function getPayables(input: { filter?: PayablesFilter; vendorId?: s
     ]);
 
     const rows = (records as PayableRecord[]).map((r) => ({ row: toRow(r, todayKey), vendor: r.vendor }));
+
+    // An old cost that is really an invoice already on file says so on its
+    // row, where the owner would otherwise go looking for the paper.
+    if (rows.some((r) => r.row.needsInvoice)) {
+      const duplicates = new Map(
+        (await findDuplicateCosts(owner.restaurantId)).map((d) => [d.orphanId, d]),
+      );
+      for (const { row } of rows) row.duplicateOf = duplicates.get(row.id) ?? null;
+    }
     const summary: PayablesSummary = summarisePayables(rows.map((r) => r.row), todayKey);
 
     const groups = new Map<string, PayableGroup>();
@@ -402,6 +419,111 @@ async function numberInUse(restaurantId: string, number: string, exceptId: strin
   return !!(onCost || onLines);
 }
 
+/** The original cost of the scanned invoice carrying this number, if any. */
+async function invoiceCostByNumber(restaurantId: string, number: string): Promise<string | null> {
+  const line = await prisma.invoiceItem.findFirst({
+    where: { restaurantId, invoiceNumber: number, costEntry: { deletedAt: null } },
+    select: { costEntry: { select: { id: true, splitFromId: true } } },
+  });
+  return line?.costEntry ? line.costEntry.splitFromId ?? line.costEntry.id : null;
+}
+
+/** Old costs that are invoices already on file, for the tidy-up list. */
+export async function getDuplicateCosts() {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const suggestions = await findDuplicateCosts(owner.restaurantId);
+    if (suggestions.length === 0) return { success: true as const, data: [] };
+
+    const olds = await prisma.costEntry.findMany({
+      where: { id: { in: suggestions.map((s) => s.orphanId) }, restaurantId: owner.restaurantId },
+      select: { id: true, date: true, amount: true, description: true, paidAt: true, paymentMethod: true },
+    });
+    const byId = new Map(olds.map((o) => [o.id, o]));
+
+    return {
+      success: true as const,
+      data: suggestions.flatMap((s) => {
+        const old = byId.get(s.orphanId);
+        if (!old) return [];
+        return [{
+          ...s,
+          old: {
+            dateKey: toDayKey(old.date),
+            amount: cents(Number(old.amount)),
+            description: old.description,
+            paid: !!old.paidAt,
+          },
+        }];
+      }),
+    };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to find duplicate costs', error, 'read') };
+  }
+}
+
+/**
+ * Joins old costs into the invoices they duplicate, one pair or many.
+ *
+ * Each pair is checked again on the server, against what the matcher finds
+ * now: the owner confirms a suggestion, and a forged or stale pair is not one.
+ */
+export async function mergeDuplicateCosts(input: { pairs: Array<{ duplicateId: string; invoiceId: string }> }) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const pairs = (input.pairs ?? []).filter((p) => UUID.test(p.duplicateId) && UUID.test(p.invoiceId));
+    if (pairs.length === 0 || pairs.length > MAX_BULK) return { error: 'payments.mergeInvalid' };
+
+    const current = new Map(
+      (await findDuplicateCosts(owner.restaurantId)).map((s) => [s.orphanId, s.invoiceId]),
+    );
+
+    let merged = 0;
+    for (const pair of pairs) {
+      if (current.get(pair.duplicateId) !== pair.invoiceId) continue;
+      const result = await mergeDuplicateCost({
+        restaurantId: owner.restaurantId,
+        userId: owner.userId,
+        duplicateId: pair.duplicateId,
+        invoiceId: pair.invoiceId,
+      });
+      if (result.ok) merged += 1;
+    }
+    if (merged === 0) return { error: 'payments.mergeInvalid' };
+    return { success: true as const, data: { merged } };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to join duplicate costs', error, 'write') };
+  }
+}
+
+/**
+ * Joins a cost into an invoice the owner named by its number. Not one the
+ * matcher suggested, so it is not checked against it: the owner typed the
+ * number off the paper, which is stronger evidence than any guess.
+ */
+export async function mergeIntoInvoice(input: { duplicateId: string; invoiceId: string }) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+    if (!UUID.test(input.duplicateId) || !UUID.test(input.invoiceId)) return { error: 'payments.mergeInvalid' };
+
+    const result = await mergeDuplicateCost({
+      restaurantId: owner.restaurantId,
+      userId: owner.userId,
+      duplicateId: input.duplicateId,
+      invoiceId: input.invoiceId,
+    });
+    if (!result.ok) return { error: result.error };
+    return { success: true as const };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to join the cost to its invoice', error, 'write') };
+  }
+}
+
 /**
  * The paper for a cost entered without it: the document number, and the
  * supplier when the cost had none.
@@ -421,7 +543,16 @@ export async function attachInvoiceNumber(input: {
     const cost = await originalCost(owner.restaurantId, input.costEntryId);
     if (!cost) return { error: 'payments.notFound' };
     if (cost._count.invoiceItems > 0) return { error: 'payments.alreadyHasInvoice' };
-    if (await numberInUse(owner.restaurantId, number, cost.id)) return { error: 'payments.numberInUse' };
+    if (await numberInUse(owner.restaurantId, number, cost.id)) {
+      // The number belongs to an invoice already scanned: this cost is that
+      // purchase counted a second time, and joining is the answer, not a
+      // different number.
+      const invoice = await invoiceCostByNumber(owner.restaurantId, number);
+      if (invoice && invoice !== cost.id) {
+        return { error: 'payments.numberIsInvoice', invoiceId: invoice };
+      }
+      return { error: 'payments.numberInUse' };
+    }
 
     const vendor = !cost.vendorId && input.vendorName?.trim()
       ? await ensureVendor(owner.restaurantId, input.vendorName.trim().slice(0, 200))

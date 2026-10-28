@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Camera, Loader2 } from 'lucide-react';
 import Dialog from './Dialog';
+import JoinCostDialog from './JoinCostDialog';
 import ReceiptScanner, { type AttachTarget } from './ReceiptScanner';
 import { attachInvoiceNumber } from '../payment-actions';
 import { useLanguage } from '@/lib/language-context';
@@ -33,6 +34,7 @@ export default function AttachInvoiceDialog({
   const [number, setNumber] = useState('');
   const [vendorName, setVendorName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [joinInvoiceId, setJoinInvoiceId] = useState<string | null>(null);
 
   const saveNumber = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,12 +47,29 @@ export default function AttachInvoiceDialog({
     });
     setSaving(false);
     if ('error' in result) {
+      // That number is an invoice already scanned: this cost is the same
+      // purchase, and the way forward is joining them rather than an error.
+      if (result.error === 'payments.numberIsInvoice' && 'invoiceId' in result && result.invoiceId) {
+        setJoinInvoiceId(result.invoiceId);
+        return;
+      }
       toast.error(t(result.error ?? 'errors.write'));
       return;
     }
     toast.success(t('payments.attached'));
     onAttached();
   };
+
+  if (joinInvoiceId) {
+    return (
+      <JoinCostDialog
+        cost={{ id: target.costEntryId, amount: target.amount, description: target.description }}
+        invoice={{ id: joinInvoiceId, invoiceNumber: number.trim() }}
+        onClose={() => setJoinInvoiceId(null)}
+        onJoined={onAttached}
+      />
+    );
+  }
 
   return (
     <Dialog title={t('payments.attachTitle')} onClose={onClose} wide={scanning}>

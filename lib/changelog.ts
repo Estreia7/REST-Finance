@@ -35,13 +35,19 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.28.2';
+export const CHANGELOG_VERSION = '2026.10.28.3';
 
 export const CHANGELOG: Release[] = [
   {
-    version: '2026.10.28.2',
+    version: '2026.10.28.3',
     date: '2026-10-28',
     entries: [
+      {
+        kind: 'fix',
+        title: 'Compras contadas duas vezes, encontradas e juntadas',
+        detail:
+          'Faturas lidas pela versão antiga da app ficaram como uma despesa sem fatura, e a mesma fatura lida outra vez contava outra vez. Em Pagamentos, essas despesas dizem agora «Parece ser a fatura…» com um botão Juntar; em Contabilidade › Arrumar pode juntá-las todas de uma vez. Fica só a fatura, e se a despesa já estava paga, a fatura fica paga.',
+      },
       {
         kind: 'improvement',
         title: 'Conformidade organizada por categorias, e o ficheiro passa a opcional',

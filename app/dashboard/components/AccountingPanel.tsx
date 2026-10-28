@@ -23,6 +23,7 @@ import ListSearch from './ListSearch';
 import InvoicePreview from './InvoicePreview';
 import PaymentsPanel from './PaymentsPanel';
 import VendorFixDialog from './VendorFixDialog';
+import DuplicateCosts from './DuplicateCosts';
 import type { PayablesFilter } from '../payment-actions';
 
 /**
@@ -447,6 +448,7 @@ function Vendors() {
 function Tidy() {
   return (
     <div className="space-y-4">
+      <DuplicateCosts />
       <DuplicateVendors />
       <DuplicateIngredients />
     </div>
