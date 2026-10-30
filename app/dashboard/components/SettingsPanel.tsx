@@ -10,6 +10,7 @@ import {
 } from '../image-actions';
 import ImageUpload from './ImageUpload';
 import CategoryManager from './CategoryManager';
+import InvoiceEmailCard from './InvoiceEmailCard';
 import MunicipalityPicker from './MunicipalityPicker';
 import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
@@ -242,6 +243,9 @@ export default function SettingsPanel({
       )}
 
       {/* Categories */}
+      {/* The invoice email address; hidden until the server is set up. */}
+      {restaurant && <InvoiceEmailCard />}
+
       {restaurant && <CategoryManager />}
 
       {/* Appearance */}

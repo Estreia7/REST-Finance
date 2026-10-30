@@ -20,6 +20,9 @@ export async function processScan(input: {
   scanType: ScanType;
   /** Where it came from: the app, or the restaurant's invoice email address. */
   source?: 'APP' | 'EMAIL';
+  /** For an emailed invoice: who sent it, and the attachment's name. */
+  fromEmail?: string | null;
+  fileName?: string | null;
 }): Promise<{ data: ScanResult; scanId: string }> {
   const { restaurantId, userId, base64, mediaType, scanType } = input;
 
@@ -85,6 +88,9 @@ export async function processScan(input: {
       scanType,
       extractedData: data as object,
       status: 'PROCESSED',
+      source: input.source ?? 'APP',
+      fromEmail: input.fromEmail?.slice(0, 320) ?? null,
+      fileName: input.fileName?.slice(0, 255) ?? null,
     },
     select: { id: true },
   });

@@ -21,6 +21,7 @@ import { attachScannedInvoice, getPaymentVendors } from '../payment-actions';
 import { formatMoney } from '@/lib/format';
 import VendorFixDialog from './VendorFixDialog';
 import { getVendorFixContext } from '../vendor-fix-actions';
+import { linkScanToCost } from '../invoice-email-actions';
 import { normaliseName } from '@/lib/vendor-reading';
 import type { ScanChecks } from '@/lib/document-scanner';
 
@@ -90,6 +91,13 @@ interface ReceiptScannerProps {
    * rather than booked as a second cost, and `onSaved` waits for the end.
    */
   attachTo?: AttachTarget | null;
+  /**
+   * A reading made earlier, such as an invoice that arrived by email: the
+   * scanner opens straight on its review, as if it had just been read.
+   */
+  initialScan?: { scanId: string; data: unknown } | null;
+  /** Called when the review is over (saved, line by line included, or cancelled). */
+  onFinished?: () => void;
 }
 
 export interface AttachTarget {
@@ -108,6 +116,8 @@ export default function ReceiptScanner({
   autoStart = false,
   onAutoStarted,
   attachTo = null,
+  initialScan = null,
+  onFinished,
 }: ReceiptScannerProps) {
   const { t, language } = useLanguage();
   // Where the tab decides the type, it is the type — not just the starting
@@ -187,6 +197,16 @@ export default function ReceiptScanner({
   const [scanId, setScanId] = useState<string | null>(null);
   const [editData, setEditData] = useState<ExtractionResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // An earlier reading opens on its review. Keyed on the id, so a parent
+  // re-render does not throw away what the owner has already corrected.
+  useEffect(() => {
+    if (!initialScan) return;
+    setExtracted(initialScan.data as ExtractionResult);
+    setEditData(initialScan.data as ExtractionResult);
+    setScanId(initialScan.scanId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialScan?.scanId]);
 
   const reviewingCost = editData?.type === 'cost_receipt';
   useEffect(() => {
@@ -501,6 +521,10 @@ export default function ReceiptScanner({
             });
         if (result.success) {
           const entryId = (result as { data?: { id?: string } }).data?.id;
+          // The reading is now a cost: filed against it, which also takes an
+          // emailed invoice off the waiting list.
+          const linkTo = entryId ?? target?.costEntryId;
+          if (scanId && linkTo) linkScanToCost({ scanId, costEntryId: linkTo }).catch(() => undefined);
 
           // The money is recorded; what the lines are is a separate
           // question, and one only the owner can answer. Asking it here
@@ -550,6 +574,7 @@ export default function ReceiptScanner({
       return;
     }
     setImagePreview(null);
+    onFinished?.();
   };
 
   return (
@@ -692,7 +717,8 @@ export default function ReceiptScanner({
       )}
 
       {/* Camera / upload */}
-      {!imagePreview && (
+      {/* Nothing to capture while reviewing a reading made earlier. */}
+      {!imagePreview && !extracted && (
         <button
           type="button"
           onClick={() => setPickingSource(true)}

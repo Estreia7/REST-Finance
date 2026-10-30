@@ -69,6 +69,7 @@ import SettingsPanel    from './components/SettingsPanel';
 import SupportPanel     from './components/SupportPanel';
 import Walkthrough      from './components/Walkthrough';
 import SetupChecklist   from './components/SetupChecklist';
+import EmailedInvoices  from './components/EmailedInvoices';
 import PageShell, { type PageWidth } from './components/PageShell';
 import TrialBanner      from '@/app/components/TrialBanner';
 
@@ -390,8 +391,8 @@ function DashboardPageInner() {
       window.location.assign(`/dashboard?${params.toString()}`);
       return;
     }
-    if (tab === 'accounting' && view && view !== 'history') setAccountingOpen({ view, ...(filter ? { filter } : {}) });
-    if (tab === 'costs' && view === 'history') setCostSubView('history');
+    if (tab === 'accounting' && view && view !== 'history' && view !== 'scan') setAccountingOpen({ view, ...(filter ? { filter } : {}) });
+    if (tab === 'costs' && (view === 'history' || view === 'scan')) setCostSubView(view);
     handleTabChange(tab);
   };
 
@@ -794,13 +795,16 @@ function DashboardPageInner() {
                 </>
               )}
               {costSubView === 'scan' && (
-                <div className="max-w-2xl">
-                  <ReceiptScanner
-                    onSaved={loadData}
-                    defaultScanType="COST_RECEIPT"
-                    autoStart={autoStartCamera}
-                    onAutoStarted={() => setAutoStartCamera(false)}
-                  />
+                <div className="max-w-2xl space-y-4">
+                  {/* Invoices that arrived by email, waiting to be checked. */}
+                  <EmailedInvoices onSaved={loadData}>
+                    <ReceiptScanner
+                      onSaved={loadData}
+                      defaultScanType="COST_RECEIPT"
+                      autoStart={autoStartCamera}
+                      onAutoStarted={() => setAutoStartCamera(false)}
+                    />
+                  </EmailedInvoices>
                 </div>
               )}
               {costSubView === 'history' && (

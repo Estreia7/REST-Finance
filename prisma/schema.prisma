@@ -100,6 +100,11 @@ model Restaurant {
   /// district/council code ("0813" is Silves). See lib/derrama.ts.
   municipalityCode String? @map("municipality_code")
 
+  /// The private part of the restaurant's invoice email address,
+  /// <token>@<INBOUND_EMAIL_DOMAIN>. Null until the owner asks for one;
+  /// replaced, never reused, when they ask for a new one.
+  inboxToken String? @unique @map("inbox_token")
+
   memberships       Membership[]
   categories        Category[]
   dailySummaries    DailySummary[]
@@ -472,6 +477,11 @@ enum ScanType {
   DAILY_REPORT
 }
 
+enum ScanSource {
+  APP
+  EMAIL
+}
+
 enum ScanStatus {
   PENDING
   PROCESSED
@@ -524,9 +534,18 @@ model ReceiptScan {
   /// that was never confirmed, which is itself worth knowing.
   reviewedAt DateTime? @map("reviewed_at")
 
+  /// Taken in the app, or emailed to the restaurant's invoice address. An
+  /// emailed one waits for the owner in Despesas › Digitalizar until it is
+  /// saved or set aside.
+  source   ScanSource @default(APP)
+  /// The sender and the attachment's name, for an emailed invoice.
+  fromEmail String?   @map("from_email")
+  fileName  String?   @map("file_name")
+
   invoiceItems InvoiceItem[]
   corrections  ScanCorrection[]
 
+  @@index([restaurantId, source, reviewedAt])
   @@map("receipt_scans")
 }
 

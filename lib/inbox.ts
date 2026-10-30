@@ -14,6 +14,7 @@ export const INBOX_KINDS = [
   'overdue',
   'duplicateCosts',
   'complianceExpired',
+  'emailInvoices',
   'bankOpen',
   'uncategorisedLines',
   'uncategorisedCosts',
@@ -27,7 +28,7 @@ export type InboxSeverity = 'high' | 'medium' | 'low';
 /** Where each item is fixed: a dashboard tab, and the view inside it. */
 export interface InboxTarget {
   tab: 'accounting' | 'costs' | 'compliance';
-  view?: 'payments' | 'bank' | 'tidy' | 'lines' | 'history';
+  view?: 'payments' | 'bank' | 'tidy' | 'lines' | 'history' | 'scan';
   filter?: 'overdue';
 }
 
@@ -37,6 +38,8 @@ export interface InboxCounts {
   duplicateVendors: number;
   /** Bank payments imported but not yet matched to an invoice. */
   bankOpen: { count: number; total: number };
+  /** Invoices that arrived by email and are waiting to be checked. */
+  emailInvoices: { count: number; total: number };
   uncategorisedLines: { count: number; total: number };
   uncategorisedCosts: { count: number; total: number };
   complianceExpired: number;
@@ -59,6 +62,7 @@ const SEVERITY: Record<InboxKind, InboxSeverity> = {
   duplicateCosts: 'high',
   complianceExpired: 'high',
   // The numbers are incomplete until these are sorted.
+  emailInvoices: 'medium',
   bankOpen: 'medium',
   uncategorisedLines: 'medium',
   uncategorisedCosts: 'medium',
@@ -71,6 +75,7 @@ const TARGET: Record<InboxKind, InboxTarget> = {
   overdue: { tab: 'accounting', view: 'payments', filter: 'overdue' },
   duplicateCosts: { tab: 'accounting', view: 'tidy' },
   duplicateVendors: { tab: 'accounting', view: 'tidy' },
+  emailInvoices: { tab: 'costs', view: 'scan' },
   bankOpen: { tab: 'accounting', view: 'bank' },
   uncategorisedLines: { tab: 'accounting', view: 'lines' },
   uncategorisedCosts: { tab: 'costs', view: 'history' },
@@ -86,6 +91,7 @@ export function buildInbox(c: InboxCounts): InboxItem[] {
     { kind: 'overdue', count: c.overdue.count, amount: c.overdue.total },
     { kind: 'duplicateCosts', count: c.duplicateCosts.count, amount: c.duplicateCosts.total },
     { kind: 'duplicateVendors', count: c.duplicateVendors, amount: null },
+    { kind: 'emailInvoices', count: c.emailInvoices.count, amount: c.emailInvoices.total },
     { kind: 'bankOpen', count: c.bankOpen.count, amount: c.bankOpen.total },
     { kind: 'uncategorisedLines', count: c.uncategorisedLines.count, amount: c.uncategorisedLines.total },
     { kind: 'uncategorisedCosts', count: c.uncategorisedCosts.count, amount: c.uncategorisedCosts.total },

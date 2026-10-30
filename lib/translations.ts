@@ -3093,6 +3093,11 @@ export const translations = {
         low: 'quando puder',
       },
       kinds: {
+        emailInvoices: {
+          one: '1 fatura recebida por email por rever',
+          other: '{count} faturas recebidas por email por rever',
+          body: 'Chegaram ao endereço de faturas do restaurante e já foram lidas. Confira e guarde.',
+        },
         overdue: {
           one: '1 pagamento em atraso',
           other: '{count} pagamentos em atraso',
@@ -3194,6 +3199,37 @@ export const translations = {
         notFound: 'Esse movimento já não está por conciliar.',
         costGone: 'Uma das faturas já foi paga ou apagada. Atualize e escolha outra vez.',
       },
+    },
+    // Invoices by email (InvoiceEmailCard, EmailedInvoices)
+    invoiceEmail: {
+      title: 'Faturas por email',
+      lead: 'Um endereço só deste restaurante. As faturas enviadas para lá chegam já lidas e ficam à espera em Despesas › Digitalizar.',
+      create: 'Criar o endereço',
+      copy: 'Copiar',
+      copied: 'Copiado.',
+      suppliersTitle: 'Peça aos fornecedores para o porem em cópia',
+      supplierMessage: 'Olá. A partir de agora, quando enviarem faturas, por favor ponham também em cópia {address}. Obrigado.',
+      copyMessage: 'Copiar a mensagem',
+      forwardTitle: 'Ou reencaminhe do seu email (Gmail)',
+      forwardStep1: 'Em Definições › Encaminhamento e POP/IMAP, adicione este endereço para encaminhamento.',
+      forwardStep2: 'Crie um filtro por fornecedor: De: o email do fornecedor.',
+      forwardStep3: 'Escolha «Encaminhar para» este endereço. Só as faturas desse fornecedor chegam cá.',
+      limits: 'São lidos os PDF e as fotografias de faturas (até 7 MB cada). Logótipos e outros anexos são ignorados.',
+      replace: 'Gerar um endereço novo',
+      replaceConfirm: 'O endereço atual deixa de funcionar e os encaminhamentos para ele também. Continuar?',
+      notEnabled: 'As faturas por email ainda não estão ativas neste servidor.',
+      notFound: 'Essa fatura já não está à espera.',
+    },
+    emailedInvoices: {
+      titleOne: '1 fatura recebida por email à espera',
+      titleOther: '{count} faturas recebidas por email à espera',
+      from: 'De {from}',
+      unnamed: 'Fatura sem nome',
+      view: 'Ver',
+      dismiss: 'Pôr de lado',
+      review: 'Rever e guardar',
+      back: 'Voltar às faturas recebidas',
+      forwardTo: 'Reencaminhe faturas para',
     },
     // First-run setup wizard (app/onboarding) and the dashboard checklist
     onboarding: {
@@ -6375,6 +6411,11 @@ export const translations = {
         low: 'when you can',
       },
       kinds: {
+        emailInvoices: {
+          one: '1 emailed invoice to check',
+          other: '{count} emailed invoices to check',
+          body: 'They reached the restaurant invoice address and have been read. Check them and save.',
+        },
         overdue: {
           one: '1 overdue payment',
           other: '{count} overdue payments',
@@ -6476,6 +6517,37 @@ export const translations = {
         notFound: 'That movement is no longer waiting to be reconciled.',
         costGone: 'One of the invoices has already been paid or deleted. Refresh and choose again.',
       },
+    },
+    // Invoices by email (InvoiceEmailCard, EmailedInvoices)
+    invoiceEmail: {
+      title: 'Invoices by email',
+      lead: 'An address for this restaurant only. Invoices sent to it arrive already read and wait in Expenses › Scan.',
+      create: 'Create the address',
+      copy: 'Copy',
+      copied: 'Copied.',
+      suppliersTitle: 'Ask your suppliers to copy it in',
+      supplierMessage: 'Hello. From now on, when you send invoices, please also copy in {address}. Thank you.',
+      copyMessage: 'Copy the message',
+      forwardTitle: 'Or forward from your own email (Gmail)',
+      forwardStep1: 'In Settings › Forwarding and POP/IMAP, add this address for forwarding.',
+      forwardStep2: 'Create a filter per supplier: From: the supplier email.',
+      forwardStep3: 'Choose "Forward it to" this address. Only that supplier invoices arrive here.',
+      limits: 'PDFs and photos of invoices are read (up to 7 MB each). Logos and other attachments are ignored.',
+      replace: 'Generate a new address',
+      replaceConfirm: 'The current address stops working, and so does any forwarding to it. Continue?',
+      notEnabled: 'Invoices by email are not switched on for this server yet.',
+      notFound: 'That invoice is no longer waiting.',
+    },
+    emailedInvoices: {
+      titleOne: '1 emailed invoice waiting',
+      titleOther: '{count} emailed invoices waiting',
+      from: 'From {from}',
+      unnamed: 'Unnamed invoice',
+      view: 'View',
+      dismiss: 'Set aside',
+      review: 'Check and save',
+      back: 'Back to emailed invoices',
+      forwardTo: 'Forward invoices to',
     },
     // First-run setup wizard (app/onboarding) and the dashboard checklist
     onboarding: {

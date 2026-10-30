@@ -1,0 +1,15 @@
+{
+  "name": "rest-finance-email-worker",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Hands invoices emailed to <token>@faturas.<domain> to REST Finance.",
+  "scripts": {
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "postal-mime": "2.4.3"
+  },
+  "devDependencies": {
+    "wrangler": "3.114.0"
+  }
+}

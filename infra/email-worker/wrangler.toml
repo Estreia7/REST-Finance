@@ -1,0 +1,8 @@
+# Cloudflare Email Worker for invoices by email. See README.md.
+name = "rest-finance-invoices"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[vars]
+# Where REST Finance answers. The secret is set with `wrangler secret put`.
+APP_URL = "https://rest-finance.bruno-dev.xyz"
