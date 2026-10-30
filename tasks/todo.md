@@ -529,3 +529,24 @@ O pedido: a app deve permitir corrigir (não corrigir eu à mão).
 - Escrever o NIF da empresa em Definições.
 - O aviso no ecrã de revisão só foi visto pelo pedido ao servidor, não com
   uma leitura real da IA.
+
+---
+
+# Onboarding wizard + centred layout (2026-10-30)
+
+Plan: ~/.claude/plans/https-app-mytinz-com-onboarding-regiao-o-nifty-leaf.md (Tinz audit + roadmap).
+
+- [x] `/onboarding`: 4 skippable steps (restaurant + VAT region, dining room, fixed costs, first numbers)
+- [x] Dashboard gate (owners only, never while impersonating); backfill migration marks existing restaurants done
+- [x] Setup checklist card replaces the hardcoded PT welcome card; dismissal per restaurant in AppSetting
+- [x] Seats / service hours / monthly target editable in Settings › Restaurante
+- [x] Fixed costs: direct-debit tick per row; this month's non-direct-debit rows booked as paid
+- [x] PageShell: centred column (wide 1200 / medium 3xl / narrow 2xl) for every dashboard tab
+- [x] PT + EN, changelog, presentation point
+
+## Review
+- Found in QA and fixed: "1.200" was read as €1.20 (PT thousands); fixed costs showed as overdue on the first screen;
+  `getRestaurant` passed Prisma Decimals to the client once seats/hours/target were set; site navbar over the wizard.
+- Verified on PGlite + next dev: full flow (DB rows checked), skip on mobile, existing owner at 1920px, EN.
+- Not done yet (Phase 0b remainder): shared page header / toolbar / EmptyState pattern, tab by tab.
+- Open question: lib/tax-rules.ts has Madeira reduced VAT 5%; Tinz shows 4%. Verify the current rate.

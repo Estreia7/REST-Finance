@@ -35,9 +35,27 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.28.3';
+export const CHANGELOG_VERSION = '2026.10.30.1';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.30.1',
+    date: '2026-10-30',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Configuração guiada para restaurantes novos',
+        detail:
+          'Uma conta nova começa por quatro passos curtos: NIF, concelho e região do IVA; lugares e horas de serviço; custos fixos do mês; e por onde começar (importar vendas, ler uma fatura ou escrever a faturação do dia). Tudo pode ser saltado.',
+      },
+      {
+        kind: 'new',
+        title: 'Lista do que falta configurar, no Painel',
+        detail:
+          'Mostra o que ainda falta para os números ficarem certos, cada linha leva ao sítio onde se faz, e pode ser escondida. Lugares, horas de serviço e objetivo mensal passam também a estar em Definições › Restaurante, e com eles aparece a receita por lugar-hora.',
+      },
+    ],
+  },
   {
     version: '2026.10.28.3',
     date: '2026-10-28',

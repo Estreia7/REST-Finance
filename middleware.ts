@@ -17,7 +17,7 @@ import { getToken } from 'next-auth/jwt';
  *
  * This is a redirect for unauthenticated visitors, not a security boundary.
  */
-const PROTECTED = ['/dashboard', '/admin'];
+const PROTECTED = ['/dashboard', '/admin', '/onboarding'];
 const AUTH_PAGES = ['/login', '/register'];
 
 // Auth.js prefixes the cookie with __Secure- when served over HTTPS, and
@@ -83,5 +83,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/admin/:path*', '/login', '/register'],
+  matcher: ['/dashboard/:path*', '/admin/:path*', '/onboarding', '/login', '/register'],
 };

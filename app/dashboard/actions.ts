@@ -60,7 +60,16 @@ export async function getRestaurant() {
       return { error: 'Restaurant not found' };
     }
 
-    return { success: true, data: membership.restaurant };
+    // Decimals cannot cross to the client; plain numbers, or null when unset.
+    const { monthlyRevenueTarget, serviceHoursPerDay, ...restaurant } = membership.restaurant;
+    return {
+      success: true,
+      data: {
+        ...restaurant,
+        monthlyRevenueTarget: monthlyRevenueTarget === null ? null : Number(monthlyRevenueTarget),
+        serviceHoursPerDay: serviceHoursPerDay === null ? null : Number(serviceHoursPerDay),
+      },
+    };
   } catch (error: unknown) {
     return { error: toClientError('Failed to fetch restaurant', error, 'read') };
   }
@@ -1077,10 +1086,28 @@ export async function updateRestaurantSettings(data: {
    * customer, from the supplier that issued it. Empty clears it.
    */
   taxId?: string | null;
+  /**
+   * The dining room, for RevPASH and the per-seat figures. Null clears; these
+   * are validated by the caller with lib/onboarding.ts validateRoom.
+   */
+  seats?: number | null;
+  serviceHoursPerDay?: number | null;
+  monthlyRevenueTarget?: number | null;
 }) {
   try {
     const owner = await requireOwner();
     if (isAuthError(owner)) return { error: owner.error };
+
+    // Checked again here: the action is reachable without the form.
+    if (data.seats != null && (!Number.isInteger(data.seats) || data.seats < 1 || data.seats > 2000)) {
+      return { error: 'onboarding.room.seatsInvalid' };
+    }
+    if (data.serviceHoursPerDay != null && !(data.serviceHoursPerDay > 0 && data.serviceHoursPerDay <= 24)) {
+      return { error: 'onboarding.room.hoursInvalid' };
+    }
+    if (data.monthlyRevenueTarget != null && !(data.monthlyRevenueTarget > 0)) {
+      return { error: 'onboarding.room.targetInvalid' };
+    }
 
     const nif = data.taxId === undefined ? undefined : (data.taxId ?? '').replace(/\D/g, '');
     if (nif && !isValidNif(nif)) return { error: 'settings.taxIdInvalid' };
@@ -1099,6 +1126,9 @@ export async function updateRestaurantSettings(data: {
         ...(data.currency && { currency: data.currency }),
         ...(data.municipalityCode !== undefined && { municipalityCode: data.municipalityCode }),
         ...(nif !== undefined && { taxId: nif || null }),
+        ...(data.seats !== undefined && { seats: data.seats }),
+        ...(data.serviceHoursPerDay !== undefined && { serviceHoursPerDay: data.serviceHoursPerDay }),
+        ...(data.monthlyRevenueTarget !== undefined && { monthlyRevenueTarget: data.monthlyRevenueTarget }),
       },
     });
 

@@ -139,6 +139,7 @@ export default function PresentationPanel() {
                   t('presentation.heroPointOne'),
                   t('presentation.heroPointTwo'),
                   t('presentation.heroPointThree'),
+                  t('presentation.heroPointFour'),
                 ]}
               />
             </div>

@@ -11,8 +11,10 @@ export default function ConditionalNavbar() {
   // have no navigation of their own: a site header on top of them would be
   // both unreachable by remote and in the way.
   const isDeckPage = pathname === '/pt' || pathname === '/en';
+  // The setup wizard is part of the app, with its own header.
+  const isOnboardingPage = pathname?.startsWith('/onboarding');
 
-  if (isAdminPage || isDashboardPage || isDeckPage) {
+  if (isAdminPage || isDashboardPage || isDeckPage || isOnboardingPage) {
     return null;
   }
 

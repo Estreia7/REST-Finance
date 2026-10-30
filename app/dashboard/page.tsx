@@ -29,7 +29,7 @@ import { greetingName } from '@/lib/welcome-quotes';
 import { consumeJustSignedIn } from '@/lib/welcome-signal';
 import WelcomeSplash from '@/app/components/WelcomeSplash';
 import DashboardLoading from '@/app/components/DashboardLoading';
-import { Plus, ChevronDown, ChevronUp, Rocket, PlayCircle, TrendingUp as TrendingUpIcon, DollarSign as DollarSignIcon } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, PlayCircle } from 'lucide-react';
 
 // Components
 import Sidebar          from './components/Sidebar';
@@ -61,6 +61,8 @@ import EstadoPanel from './components/EstadoPanel';
 import SettingsPanel    from './components/SettingsPanel';
 import SupportPanel     from './components/SupportPanel';
 import Walkthrough      from './components/Walkthrough';
+import SetupChecklist   from './components/SetupChecklist';
+import PageShell, { type PageWidth } from './components/PageShell';
 import TrialBanner      from '@/app/components/TrialBanner';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -319,6 +321,11 @@ function DashboardPageInner() {
     if (tab && ['dashboard','revenue','costs','analytics','fnb','compliance','schedule','estado','users','billing','settings'].includes(tab)) {
       setActiveTab(tab);
     }
+    // Where the setup wizard's last step sends the owner: straight into the
+    // screen for their first numbers.
+    const sub = searchParams.get('sub');
+    if (tab === 'revenue' && (sub === 'entry' || sub === 'import' || sub === 'scan' || sub === 'history')) setRevenueSubView(sub);
+    if (tab === 'costs' && (sub === 'entry' || sub === 'scan' || sub === 'history')) setCostSubView(sub);
     const upgrade = searchParams.get('upgrade');
     if (upgrade === 'success') toast.success(t('dashboard.upgradeSuccess'));
     if (upgrade === 'canceled') toast.info(t('dashboard.upgradeCanceled'));
@@ -331,6 +338,18 @@ function DashboardPageInner() {
     await signOut({ callbackUrl: '/' });
     router.push('/');
   };
+
+  /**
+   * How wide the current screen's column is. Forms are narrow, so the fields
+   * and the tabs above them line up in one centred column; tables and charts
+   * get the wide one.
+   */
+  const pageWidth: PageWidth =
+    (activeTab === 'revenue' && revenueSubView !== 'history') || (activeTab === 'costs' && costSubView !== 'history')
+      ? 'narrow'
+      : activeTab === 'settings' || activeTab === 'billing' || activeTab === 'users'
+        ? 'medium'
+        : 'wide';
 
   const handleTabChange = (tab: Tab) => {
     if (hasUnsavedChanges && activeTab === 'settings') {
@@ -516,7 +535,8 @@ function DashboardPageInner() {
         )}
 
         {/* Content */}
-        <main className="flex-1 p-4 md:p-6 space-y-6">
+        <main className="flex-1 p-4 md:p-6">
+          <PageShell width={pageWidth}>
           {activeTab === 'dashboard' && (
             <>
               {/* The restaurant's masthead: its logo, its name, and today. The
@@ -536,40 +556,9 @@ function DashboardPageInner() {
                 </div>
               )}
 
-              {/* Onboarding card — shown when no data exists */}
-              {stats.revenue === 0 && stats.costs === 0 && last7DaysData.length === 0 && (
-                <div className="card-glass p-6 sm:p-8 border border-primary/20 bg-primary-subtle">
-                  <div className="flex items-start gap-4">
-                    <div className="w-11 h-11 rounded-xl gradient-bg flex items-center justify-center shadow-glow-sm shrink-0">
-                      <Rocket className="w-5 h-5 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h2 className="text-lg font-bold text-foreground">
-                        Bem-vindo ao REST Finance{currentUser?.name ? `, ${currentUser.name.split(' ')[0]}` : ''}!
-                      </h2>
-                      <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                        Começa por registar a receita de hoje. Demora menos de 2 minutos e vais logo ver os teus KPIs a funcionar.
-                      </p>
-                      <div className="flex flex-col sm:flex-row gap-3 mt-4">
-                        <button
-                          onClick={() => handleTabChange('revenue')}
-                          className="cta-button py-2.5 px-5 text-sm"
-                        >
-                          <TrendingUpIcon className="w-4 h-4" />
-                          {t('nav.logTodayRevenue')}
-                        </button>
-                        <button
-                          onClick={() => handleTabChange('costs')}
-                          className="cta-button-secondary py-2.5 px-5 text-sm"
-                        >
-                          <DollarSignIcon className="w-4 h-4" />
-                          {t('nav.logCosts')}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* What setup still lacks, until it is complete or dismissed. */}
+              <SetupChecklist refreshKey={dataVersion} onOpen={(tab) => handleTabChange(tab)} />
+
 
               <KPICards stats={stats} advancedStats={advancedStats} last7DaysData={last7DaysData} monthProgress={monthProgress} />
 
@@ -860,6 +849,7 @@ function DashboardPageInner() {
               )}
             </div>
           )}
+          </PageShell>
         </main>
       </div>
 

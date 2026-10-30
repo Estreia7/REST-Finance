@@ -77,7 +77,9 @@ export async function registerUser(data: {
       redirect: false,
     });
 
-    return { success: true, redirectTo: '/dashboard?onboarding=true' };
+    // The setup wizard first; it hands over to the dashboard (and its tour)
+    // when finished or skipped.
+    return { success: true, redirectTo: '/onboarding' };
   } catch (error: unknown) {
     if (isUniqueConstraintError(error, 'email')) {
       return { error: 'Este email já está registado. Tenta iniciar sessão.' };

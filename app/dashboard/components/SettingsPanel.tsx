@@ -14,6 +14,7 @@ import MunicipalityPicker from './MunicipalityPicker';
 import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
 import { MIN_PASSWORD_LENGTH } from '@/lib/validations';
+import { validateRoom } from '@/lib/onboarding';
 
 interface SettingsPanelProps {
   pendingTheme:      'light' | 'dark';
@@ -47,6 +48,10 @@ export default function SettingsPanel({
   const [currency, setCurrency] = useState(restaurant?.currency || 'EUR');
   const [municipalityCode, setMunicipalityCode] = useState<string | null>(restaurant?.municipalityCode ?? null);
   const [restaurantNif, setRestaurantNif] = useState<string>(restaurant?.taxId ?? '');
+  // The dining room, for RevPASH and the per-seat figures.
+  const [seats, setSeats] = useState<string>(restaurant?.seats ? String(restaurant.seats) : '');
+  const [serviceHours, setServiceHours] = useState<string>(restaurant?.serviceHoursPerDay ? String(Number(restaurant.serviceHoursPerDay)) : '');
+  const [revenueTarget, setRevenueTarget] = useState<string>(restaurant?.monthlyRevenueTarget ? String(Number(restaurant.monthlyRevenueTarget)) : '');
   const [savingRestaurant, setSavingRestaurant] = useState(false);
 
   const handleSaveProfile = async () => {
@@ -70,15 +75,20 @@ export default function SettingsPanel({
   };
 
   const handleSaveRestaurant = async () => {
+    const room = validateRoom({ seats, serviceHoursPerDay: serviceHours, monthlyRevenueTarget: revenueTarget });
+    if (!room.ok) { toast.error(t(room.error)); return; }
     setSavingRestaurant(true);
-    const result = await updateRestaurantSettings({ name: restaurantName, timezone, currency, municipalityCode, taxId: restaurantNif });
+    const result = await updateRestaurantSettings({
+      name: restaurantName, timezone, currency, municipalityCode, taxId: restaurantNif,
+      seats: room.seats, serviceHoursPerDay: room.serviceHoursPerDay, monthlyRevenueTarget: room.monthlyRevenueTarget,
+    });
     if (result.success) { toast.success(t('settings.restaurantUpdated')); onUpdate?.(); }
     else toast.error(result.error ? translateError(language, result.error) : t('settings.updateFailed'));
     setSavingRestaurant(false);
   };
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="space-y-6">
       {/* Profile */}
       <div className="card-glass p-6">
         <div className="flex items-center gap-2 mb-5">
@@ -184,6 +194,23 @@ export default function SettingsPanel({
               <label htmlFor="settings-municipality" className="text-xs font-medium text-muted-foreground block mb-2">{t('settings.municipality')}</label>
               <MunicipalityPicker id="settings-municipality" value={municipalityCode} onChange={setMunicipalityCode} />
               <p className="text-[11px] text-muted-foreground mt-1.5">{t('settings.municipalityHint')}</p>
+            </div>
+            <div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div>
+                  <label htmlFor="settings-seats" className="text-xs font-medium text-muted-foreground block mb-2">{t('onboarding.room.seats')}</label>
+                  <input id="settings-seats" inputMode="numeric" value={seats} onChange={e => setSeats(e.target.value)} className="input-field tabular-nums" />
+                </div>
+                <div>
+                  <label htmlFor="settings-hours" className="text-xs font-medium text-muted-foreground block mb-2">{t('onboarding.room.hours')}</label>
+                  <input id="settings-hours" inputMode="decimal" value={serviceHours} onChange={e => setServiceHours(e.target.value)} className="input-field tabular-nums" />
+                </div>
+                <div>
+                  <label htmlFor="settings-target" className="text-xs font-medium text-muted-foreground block mb-2">{t('onboarding.room.target')}</label>
+                  <input id="settings-target" inputMode="decimal" value={revenueTarget} onChange={e => setRevenueTarget(e.target.value)} className="input-field tabular-nums" />
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1.5">{t('onboarding.room.why')}</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
