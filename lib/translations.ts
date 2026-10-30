@@ -3253,6 +3253,38 @@ export const translations = {
       noAnswer: 'Não cheguei a uma resposta. Tente perguntar de outra forma.',
       badRequest: 'Não foi possível enviar a pergunta.',
     },
+    // Emails (lib/weekly-report.ts, app/forgot-password/actions.ts)
+    emails: {
+      reset: {
+        subject: 'Definir uma nova palavra-passe',
+        body: 'Recebemos um pedido para definir uma nova palavra-passe no REST Finance. O link funciona durante uma hora.',
+        button: 'Definir nova palavra-passe',
+        ignore: 'Se não foi você a pedir, ignore este email: a palavra-passe atual continua a funcionar.',
+      },
+      weekly: {
+        subject: '{restaurant}: a sua semana ({period})',
+        revenue: 'Faturação',
+        vsPrevious: 'vs. semana anterior',
+        costs: 'Despesas',
+        result: 'Resultado',
+        foodCost: 'Food cost',
+        topCategories: 'Onde foi o dinheiro',
+        priceRises: 'Preços que subiram',
+        payables: 'A pagar a fornecedores',
+        unpaid: 'Por pagar',
+        overdue: 'Em atraso',
+        urgentOne: '1 coisa urgente espera por si em «Precisa de ti».',
+        urgentOther: '{count} coisas urgentes esperam por si em «Precisa de ti».',
+        open: 'Abrir o painel',
+        footer: 'Recebe este resumo porque o ativou. Pode desligá-lo em Definições: {url}',
+      },
+    },
+    weeklyReport: {
+      title: 'Resumo semanal por email',
+      lead: 'À segunda de manhã: faturação, despesas e resultado da semana anterior, preços que subiram e o que está por pagar.',
+      on: 'Vai receber o resumo à segunda-feira.',
+      off: 'Resumo semanal desligado.',
+    },
     // First-run setup wizard (app/onboarding) and the dashboard checklist
     onboarding: {
       eyebrow: 'Configuração inicial',
@@ -6592,6 +6624,38 @@ export const translations = {
       refused: 'I cannot answer that question.',
       noAnswer: 'I did not reach an answer. Try asking another way.',
       badRequest: 'The question could not be sent.',
+    },
+    // Emails (lib/weekly-report.ts, app/forgot-password/actions.ts)
+    emails: {
+      reset: {
+        subject: 'Set a new password',
+        body: 'We received a request to set a new password for REST Finance. The link works for one hour.',
+        button: 'Set a new password',
+        ignore: 'If you did not ask for this, ignore this email: your current password keeps working.',
+      },
+      weekly: {
+        subject: '{restaurant}: your week ({period})',
+        revenue: 'Takings',
+        vsPrevious: 'vs. the week before',
+        costs: 'Expenses',
+        result: 'Result',
+        foodCost: 'Food cost',
+        topCategories: 'Where the money went',
+        priceRises: 'Prices that went up',
+        payables: 'Owed to suppliers',
+        unpaid: 'To pay',
+        overdue: 'Overdue',
+        urgentOne: '1 urgent thing is waiting for you in Needs you.',
+        urgentOther: '{count} urgent things are waiting for you in Needs you.',
+        open: 'Open the dashboard',
+        footer: 'You get this summary because you switched it on. Turn it off in Settings: {url}',
+      },
+    },
+    weeklyReport: {
+      title: 'Weekly email summary',
+      lead: 'On Monday morning: last week takings, expenses and result, prices that went up and what is still to pay.',
+      on: 'You will get the summary on Mondays.',
+      off: 'Weekly summary switched off.',
     },
     // First-run setup wizard (app/onboarding) and the dashboard checklist
     onboarding: {

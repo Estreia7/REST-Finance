@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { toClientError } from '@/lib/errors';
 import { MIN_PASSWORD_LENGTH } from '@/lib/validations';
+import { sendMail, escapeHtml } from '@/lib/mailer';
+import { getTranslation, type Language } from '@/lib/translations';
 
 /**
  * Starts a password reset.
@@ -17,7 +19,7 @@ export async function requestPasswordReset(email: string) {
 
     const user = await prisma.user.findUnique({
       where: { email: normalised },
-      select: { id: true },
+      select: { id: true, language: true },
     });
 
     if (user) {
@@ -30,10 +32,19 @@ export async function requestPasswordReset(email: string) {
         data: { identifier: normalised, token, expires },
       });
 
-      // No mail provider is configured yet. Until one is, the link is logged
-      // server-side so an administrator can pass it on.
+      // Sent in the person's own language. Without a mail provider the link
+      // is logged server-side instead, so an administrator can pass it on.
       const base = process.env.NEXT_PUBLIC_APP_URL ?? '';
-      console.info(`[password-reset] ${normalised}: ${base}/reset-password?token=${token}`);
+      const link = `${base}/reset-password?token=${token}`;
+      const lang: Language = user.language === 'en' ? 'en' : 'pt';
+      const tr = (k: string) => getTranslation(lang, `emails.reset.${k}`);
+      const sent = await sendMail({
+        to: normalised,
+        subject: tr('subject'),
+        text: `${tr('body')}\n\n${link}\n\n${tr('ignore')}`,
+        html: `<p>${escapeHtml(tr('body'))}</p><p><a href="${escapeHtml(link)}">${escapeHtml(tr('button'))}</a></p><p style="color:#666;font-size:13px">${escapeHtml(tr('ignore'))}</p>`,
+      });
+      if (!sent) console.info(`[password-reset] ${normalised}: ${link}`);
     }
 
     return { success: true };

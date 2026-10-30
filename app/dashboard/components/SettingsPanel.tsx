@@ -11,6 +11,7 @@ import {
 import ImageUpload from './ImageUpload';
 import CategoryManager from './CategoryManager';
 import InvoiceEmailCard from './InvoiceEmailCard';
+import WeeklyReportToggle from './WeeklyReportToggle';
 import MunicipalityPicker from './MunicipalityPicker';
 import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
@@ -245,6 +246,9 @@ export default function SettingsPanel({
       {/* Categories */}
       {/* The invoice email address; hidden until the server is set up. */}
       {restaurant && <InvoiceEmailCard />}
+
+      {/* The Monday email with last week's numbers; hidden until mail is set up. */}
+      <WeeklyReportToggle />
 
       {restaurant && <CategoryManager />}
 
