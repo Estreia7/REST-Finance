@@ -35,9 +35,21 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.30.6';
+export const CHANGELOG_VERSION = '2026.10.30.7';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.30.7',
+    date: '2026-10-30',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Stock: o que tem em casa, o que vale e o que encomendar',
+        detail:
+          'Novo separador Stock. Os artigos vêm do que já compra (sugeridos a partir das faturas) e as compras entram sozinhas. Faça uma contagem completa ou só a essencial (os artigos que fazem 80% das compras): fica a saber o valor em casa e quanto gastou de facto desde a última contagem. Defina um mínimo e a encomenda aparece pronta por fornecedor, para copiar ou enviar por email.',
+      },
+    ],
+  },
   {
     version: '2026.10.30.6',
     date: '2026-10-30',

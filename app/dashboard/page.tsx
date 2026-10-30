@@ -71,13 +71,14 @@ import Walkthrough      from './components/Walkthrough';
 import SetupChecklist   from './components/SetupChecklist';
 import EmailedInvoices  from './components/EmailedInvoices';
 import AssistantLauncher from './components/AssistantLauncher';
+import StockPanel       from './components/StockPanel';
 import PageShell, { type PageWidth } from './components/PageShell';
 import TrialBanner      from '@/app/components/TrialBanner';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 type CostType = 'COGS' | 'OPEX';
 type CostTypeOrEmpty = CostType | '';
-type Tab = 'dashboard' | 'inbox' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'inbox' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'stock' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
 interface Category {
   id: string;
@@ -344,7 +345,7 @@ function DashboardPageInner() {
   // ── Handle URL params (e.g. ?tab=billing from Stripe redirect) ───────────
   useEffect(() => {
     const tab = searchParams.get('tab') as Tab | null;
-    if (tab && ['dashboard','inbox','revenue','costs','analytics','fnb','accounting','compliance','schedule','estado','users','billing','settings'].includes(tab)) {
+    if (tab && ['dashboard','inbox','revenue','costs','analytics','fnb','stock','accounting','compliance','schedule','estado','users','billing','settings'].includes(tab)) {
       setActiveTab(tab);
     }
     // Where the setup wizard's last step sends the owner: straight into the
@@ -881,6 +882,8 @@ function DashboardPageInner() {
               onOpenConsumed={() => setAccountingOpen(null)}
             />
           )}
+
+          {activeTab === 'stock' && <StockPanel />}
 
           {activeTab === 'inbox' && <InboxPanel refreshKey={dataVersion} onOpen={openInboxItem} />}
 

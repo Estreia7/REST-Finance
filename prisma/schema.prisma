@@ -135,6 +135,8 @@ model Restaurant {
   scanCorrections   ScanCorrection[]
   budgets           Budget[]
   bankTransactions  BankTransaction[]
+  stockItems        StockItem[]
+  stockCounts       StockCount[]
 
   @@map("restaurants")
 }
@@ -537,10 +539,10 @@ model ReceiptScan {
   /// Taken in the app, or emailed to the restaurant's invoice address. An
   /// emailed one waits for the owner in Despesas › Digitalizar until it is
   /// saved or set aside.
-  source   ScanSource @default(APP)
+  source    ScanSource @default(APP)
   /// The sender and the attachment's name, for an emailed invoice.
-  fromEmail String?   @map("from_email")
-  fileName  String?   @map("file_name")
+  fromEmail String?    @map("from_email")
+  fileName  String?    @map("file_name")
 
   invoiceItems InvoiceItem[]
   corrections  ScanCorrection[]
@@ -651,6 +653,7 @@ model Vendor {
   itemLinks      InvoiceItemLink[]
   lineMemories   InvoiceLineMemory[]
   corrections    ScanCorrection[]
+  stockItems     StockItem[]
 
   @@unique([restaurantId, name])
   @@map("vendors")
@@ -1627,4 +1630,70 @@ model BankMatch {
   @@unique([bankTransactionId, costEntryId])
   @@index([costEntryId])
   @@map("bank_matches")
+}
+
+/// Something the restaurant keeps in the house and counts.
+///
+/// Tied to a product as invoice lines name it (normalizedName + unit), so
+/// purchases arrive in stock by themselves. See lib/stock.ts.
+model StockItem {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  name           String
+  normalizedName String   @map("normalized_name")
+  unit           String   @default("")
+  /// A shelf or family to group by when counting: "Peixe", "Limpeza".
+  shelf          String?
+  /// Who it is usually ordered from.
+  vendor         Vendor?  @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  vendorId       String?  @map("vendor_id")
+  /// Below this, it is on the next order.
+  minQuantity    Decimal? @map("min_quantity") @db.Decimal(12, 3)
+  active         Boolean  @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  countLines StockCountLine[]
+
+  @@unique([restaurantId, normalizedName, unit])
+  @@map("stock_items")
+}
+
+enum StockCountKind {
+  FULL
+  ESSENTIAL
+}
+
+/// A count of what was in the house, on one day.
+model StockCount {
+  id           String         @id @default(uuid())
+  restaurant   Restaurant     @relation(fields: [restaurantId], references: [id])
+  restaurantId String         @map("restaurant_id")
+  kind         StockCountKind
+  countedById  String         @map("counted_by")
+  countedAt    DateTime       @default(now()) @map("counted_at")
+
+  lines StockCountLine[]
+
+  @@index([restaurantId, countedAt])
+  @@map("stock_counts")
+}
+
+/// One item's quantity in a count, with the average price at the time, so the
+/// value of a past count does not move when prices do.
+model StockCountLine {
+  id       String     @id @default(uuid())
+  count    StockCount @relation(fields: [countId], references: [id], onDelete: Cascade)
+  countId  String     @map("count_id")
+  item     StockItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId   String     @map("item_id")
+  quantity Decimal    @db.Decimal(12, 3)
+  unitCost Decimal?   @map("unit_cost") @db.Decimal(10, 4)
+
+  @@unique([countId, itemId])
+  @@index([itemId])
+  @@map("stock_count_lines")
 }
