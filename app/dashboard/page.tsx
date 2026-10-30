@@ -70,6 +70,7 @@ import SupportPanel     from './components/SupportPanel';
 import Walkthrough      from './components/Walkthrough';
 import SetupChecklist   from './components/SetupChecklist';
 import EmailedInvoices  from './components/EmailedInvoices';
+import AssistantLauncher from './components/AssistantLauncher';
 import PageShell, { type PageWidth } from './components/PageShell';
 import TrialBanner      from '@/app/components/TrialBanner';
 
@@ -920,6 +921,10 @@ function DashboardPageInner() {
           </PageShell>
         </main>
       </div>
+
+      {/* "Pergunta": questions about the restaurant's own numbers. Owners only:
+          the restaurant is loaded only for them. */}
+      {restaurant && !showTour && <AssistantLauncher raised={activeTab === 'dashboard'} />}
 
       {/* Mobile FAB — quick entry shortcut */}
       {activeTab === 'dashboard' && (

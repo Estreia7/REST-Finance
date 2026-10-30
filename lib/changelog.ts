@@ -35,9 +35,21 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.30.5';
+export const CHANGELOG_VERSION = '2026.10.30.6';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.30.6',
+    date: '2026-10-30',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Pergunta: faça perguntas sobre os seus números',
+        detail:
+          'O botão redondo no canto de cada ecrã (ou Ctrl+K) abre uma conversa. Pergunte, por exemplo, quanto pagou a cada fornecedor no mês passado, que preços subiram ou qual foi o food cost do mês. As respostas vêm dos números do seu restaurante, e diz-lhe quando falta informação.',
+      },
+    ],
+  },
   {
     version: '2026.10.30.5',
     date: '2026-10-30',

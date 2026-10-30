@@ -2539,6 +2539,7 @@ export const translations = {
       heroPointTwo: 'Margem por prato, não por palpite',
       heroPointThree: 'Impostos previstos antes de chegarem',
       heroPointFour: 'Configurado em poucos minutos, passo a passo',
+      heroPointFive: 'Pergunte e a app responde com os seus números',
 
       // Section 1: the problem
       problemLabel: 'O problema',
@@ -3230,6 +3231,27 @@ export const translations = {
       review: 'Rever e guardar',
       back: 'Voltar às faturas recebidas',
       forwardTo: 'Reencaminhe faturas para',
+    },
+    // The assistant ("Pergunta", app/dashboard/components/AssistantLauncher.tsx)
+    assistant: {
+      title: 'Pergunta',
+      open: 'Perguntar sobre os seus números',
+      disclosure: 'Está a falar com uma IA. As respostas podem conter erros.',
+      emptyTitle: 'Em que posso ajudar?',
+      emptyBody: 'Respostas com os números do seu restaurante.',
+      suggest1: 'Quanto paguei a cada fornecedor no mês passado?',
+      suggest2: 'Que preços subiram nos últimos 3 meses?',
+      suggest3: 'Qual foi o meu food cost este mês?',
+      placeholder: 'Pergunte algo sobre o seu restaurante...',
+      send: 'Enviar',
+      thinking: 'A ver os números...',
+      failed: 'Não foi possível responder agora. Tente outra vez.',
+      busy: 'Muitos pedidos de uma vez. Tente daqui a um minuto.',
+      rateLimited: 'Chegou ao limite de perguntas desta hora. Tente mais tarde.',
+      unavailable: 'O assistente ainda não está ativo neste servidor.',
+      refused: 'Não posso responder a essa pergunta.',
+      noAnswer: 'Não cheguei a uma resposta. Tente perguntar de outra forma.',
+      badRequest: 'Não foi possível enviar a pergunta.',
     },
     // First-run setup wizard (app/onboarding) and the dashboard checklist
     onboarding: {
@@ -5855,6 +5877,7 @@ export const translations = {
       heroPointTwo: 'Margin per dish, not per guess',
       heroPointThree: 'Tax forecast before it lands',
       heroPointFour: 'Set up in a few minutes, step by step',
+      heroPointFive: 'Ask, and the app answers with your own figures',
 
       // Section 1: the problem
       problemLabel: 'The problem',
@@ -6548,6 +6571,27 @@ export const translations = {
       review: 'Check and save',
       back: 'Back to emailed invoices',
       forwardTo: 'Forward invoices to',
+    },
+    // The assistant ("Pergunta", app/dashboard/components/AssistantLauncher.tsx)
+    assistant: {
+      title: 'Ask',
+      open: 'Ask about your numbers',
+      disclosure: 'You are talking to an AI. Answers may contain mistakes.',
+      emptyTitle: 'How can I help?',
+      emptyBody: 'Answers from your restaurant figures.',
+      suggest1: 'How much did I pay each supplier last month?',
+      suggest2: 'Which prices went up in the last 3 months?',
+      suggest3: 'What was my food cost this month?',
+      placeholder: 'Ask something about your restaurant...',
+      send: 'Send',
+      thinking: 'Looking at the numbers...',
+      failed: 'Could not answer right now. Try again.',
+      busy: 'Too many requests at once. Try again in a minute.',
+      rateLimited: 'You have reached this hour question limit. Try again later.',
+      unavailable: 'The assistant is not switched on for this server yet.',
+      refused: 'I cannot answer that question.',
+      noAnswer: 'I did not reach an answer. Try asking another way.',
+      badRequest: 'The question could not be sent.',
     },
     // First-run setup wizard (app/onboarding) and the dashboard checklist
     onboarding: {

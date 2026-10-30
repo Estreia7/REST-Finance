@@ -34,6 +34,8 @@ export const MODEL_PRICES: Record<string, ModelPrice> = {
     longPrompt: { overInputTokens: 100_000, input: 0.5, output: 2.5 },
   },
   'claude-haiku-4-5': { label: 'Claude Haiku 4.5', input: 1, output: 5 },
+  // The in-app assistant ("Pergunta").
+  'claude-opus-5-5': { label: 'Claude Opus 5.5', input: 4, output: 20 },
 };
 
 /** The display name for a model id, or the id itself when it is not listed. */

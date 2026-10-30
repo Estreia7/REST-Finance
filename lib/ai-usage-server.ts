@@ -7,9 +7,10 @@ import type { UsageSubject } from './ai-usage';
 export interface AiUsageEntry {
   restaurantId: string | null;
   userId: string | null;
-  /** "scan" for an owner's document, "bench" for the extraction lab. */
-  source: 'scan' | 'bench';
-  scanType: ScanType;
+  /** "scan" for an owner's document, "bench" for the extraction lab, "assistant" for a question asked in the app. */
+  source: 'scan' | 'bench' | 'assistant';
+  /** Null for calls that read no document. */
+  scanType: ScanType | null;
   /** What the call reported. Absent when it failed before reaching the model. */
   telemetry?: ScanTelemetry;
   /** What the call read, so the console can name the document. */
