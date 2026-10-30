@@ -14,6 +14,7 @@ export const INBOX_KINDS = [
   'overdue',
   'duplicateCosts',
   'complianceExpired',
+  'bankOpen',
   'uncategorisedLines',
   'uncategorisedCosts',
   'duplicateVendors',
@@ -26,7 +27,7 @@ export type InboxSeverity = 'high' | 'medium' | 'low';
 /** Where each item is fixed: a dashboard tab, and the view inside it. */
 export interface InboxTarget {
   tab: 'accounting' | 'costs' | 'compliance';
-  view?: 'payments' | 'tidy' | 'lines' | 'history';
+  view?: 'payments' | 'bank' | 'tidy' | 'lines' | 'history';
   filter?: 'overdue';
 }
 
@@ -34,6 +35,8 @@ export interface InboxCounts {
   overdue: { count: number; total: number };
   duplicateCosts: { count: number; total: number };
   duplicateVendors: number;
+  /** Bank payments imported but not yet matched to an invoice. */
+  bankOpen: { count: number; total: number };
   uncategorisedLines: { count: number; total: number };
   uncategorisedCosts: { count: number; total: number };
   complianceExpired: number;
@@ -56,6 +59,7 @@ const SEVERITY: Record<InboxKind, InboxSeverity> = {
   duplicateCosts: 'high',
   complianceExpired: 'high',
   // The numbers are incomplete until these are sorted.
+  bankOpen: 'medium',
   uncategorisedLines: 'medium',
   uncategorisedCosts: 'medium',
   // Worth doing, not urgent.
@@ -67,6 +71,7 @@ const TARGET: Record<InboxKind, InboxTarget> = {
   overdue: { tab: 'accounting', view: 'payments', filter: 'overdue' },
   duplicateCosts: { tab: 'accounting', view: 'tidy' },
   duplicateVendors: { tab: 'accounting', view: 'tidy' },
+  bankOpen: { tab: 'accounting', view: 'bank' },
   uncategorisedLines: { tab: 'accounting', view: 'lines' },
   uncategorisedCosts: { tab: 'costs', view: 'history' },
   complianceExpired: { tab: 'compliance' },
@@ -81,6 +86,7 @@ export function buildInbox(c: InboxCounts): InboxItem[] {
     { kind: 'overdue', count: c.overdue.count, amount: c.overdue.total },
     { kind: 'duplicateCosts', count: c.duplicateCosts.count, amount: c.duplicateCosts.total },
     { kind: 'duplicateVendors', count: c.duplicateVendors, amount: null },
+    { kind: 'bankOpen', count: c.bankOpen.count, amount: c.bankOpen.total },
     { kind: 'uncategorisedLines', count: c.uncategorisedLines.count, amount: c.uncategorisedLines.total },
     { kind: 'uncategorisedCosts', count: c.uncategorisedCosts.count, amount: c.uncategorisedCosts.total },
     { kind: 'complianceExpired', count: c.complianceExpired, amount: null },

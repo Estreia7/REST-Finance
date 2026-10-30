@@ -5,6 +5,7 @@ const none: InboxCounts = {
   overdue: { count: 0, total: 0 },
   duplicateCosts: { count: 0, total: 0 },
   duplicateVendors: 0,
+  bankOpen: { count: 0, total: 0 },
   uncategorisedLines: { count: 0, total: 0 },
   uncategorisedCosts: { count: 0, total: 0 },
   complianceExpired: 0,

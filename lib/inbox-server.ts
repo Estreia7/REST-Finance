@@ -20,7 +20,7 @@ const cents = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 export async function readInboxCounts(restaurantId: string): Promise<InboxCounts> {
   const todayKey = dayKey(new Date());
 
-  const [unpaid, duplicates, vendorGroups, lines, costs, docs] = await Promise.all([
+  const [unpaid, duplicates, vendorGroups, lines, costs, docs, bank] = await Promise.all([
     // The same rows Payments reads: originals only, a split's parts belong to it.
     prisma.costEntry.findMany({
       where: { restaurantId, deletedAt: null, splitFromId: null, paidAt: null },
@@ -54,6 +54,13 @@ export async function readInboxCounts(restaurantId: string): Promise<InboxCounts
       where: { restaurantId, deletedAt: null, expiresAt: { not: null } },
       select: { expiresAt: true },
     }),
+    // Imported payments not yet matched to an invoice. Fees, income and cash
+    // are not invoices, so they do not wait on the owner here.
+    prisma.bankTransaction.aggregate({
+      where: { restaurantId, status: 'OPEN', kind: 'PAYMENT' },
+      _count: { _all: true },
+      _sum: { amount: true },
+    }),
   ]);
 
   let overdueCount = 0;
@@ -80,6 +87,7 @@ export async function readInboxCounts(restaurantId: string): Promise<InboxCounts
       total: cents(duplicates.reduce((s, d) => s + d.amount, 0)),
     },
     duplicateVendors: vendorGroups.length,
+    bankOpen: { count: bank._count._all, total: cents(Math.abs(Number(bank._sum.amount ?? 0))) },
     uncategorisedLines: {
       count: lines._count._all,
       total: cents(Number(lines._sum.totalPrice ?? 0)),

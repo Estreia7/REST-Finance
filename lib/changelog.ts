@@ -35,9 +35,21 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.30.2';
+export const CHANGELOG_VERSION = '2026.10.30.3';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.30.3',
+    date: '2026-10-30',
+    entries: [
+      {
+        kind: 'new',
+        title: 'O extrato do banco ligado às faturas',
+        detail:
+          'Em Contabilidade › Banco, importe o extrato exportado do site do banco (CSV, Excel ou OFX). Cada pagamento aparece ao lado da fatura que pagou — também quando uma transferência paga várias do mesmo fornecedor. Confirme e a fatura fica paga na data em que o dinheiro saiu; as que são certas confirmam-se todas de uma vez. As comissões do banco podem ser lançadas como despesa com um toque.',
+      },
+    ],
+  },
   {
     version: '2026.10.30.2',
     date: '2026-10-30',

@@ -21,6 +21,7 @@ import { formatMoney } from '@/lib/format';
 import SubTabs from './SubTabs';
 import ListSearch from './ListSearch';
 import InvoicePreview from './InvoicePreview';
+import BankPanel from './BankPanel';
 import PaymentsPanel from './PaymentsPanel';
 import VendorFixDialog from './VendorFixDialog';
 import DuplicateCosts from './DuplicateCosts';
@@ -39,7 +40,7 @@ import type { PayablesFilter } from '../payment-actions';
  * that quietly stop the costing from being true.
  */
 
-type View = 'invoices' | 'payments' | 'lines' | 'vendors' | 'tidy';
+type View = 'invoices' | 'payments' | 'bank' | 'lines' | 'vendors' | 'tidy';
 export type AccountingOpen = { view: View; filter?: PayablesFilter };
 
 /**
@@ -83,6 +84,7 @@ export default function AccountingPanel({
         tabs={[
           { value: 'invoices', label: t('accounting.tabInvoices') },
           { value: 'payments', label: t('accounting.tabPayments') },
+          { value: 'bank', label: t('accounting.tabBank') },
           { value: 'lines', label: t('accounting.tabLines') },
           { value: 'vendors', label: t('accounting.tabVendors') },
           { value: 'tidy', label: t('accounting.tabTidy') },
@@ -91,6 +93,7 @@ export default function AccountingPanel({
 
       {view === 'invoices' && <InvoiceList />}
       {view === 'payments' && <PaymentsPanel initialFilter={paymentsFilter} />}
+      {view === 'bank' && <BankPanel />}
       {view === 'lines' && <Invoices initialSearch={initialSearch} onSearchConsumed={onSearchConsumed} />}
       {view === 'vendors' && <Vendors />}
       {view === 'tidy' && <Tidy />}

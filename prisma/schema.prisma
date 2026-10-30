@@ -129,6 +129,7 @@ model Restaurant {
   aiUsage           AiUsage[]
   scanCorrections   ScanCorrection[]
   budgets           Budget[]
+  bankTransactions  BankTransaction[]
 
   @@map("restaurants")
 }
@@ -374,6 +375,8 @@ model CostEntry {
 
   invoiceItems InvoiceItem[]
   receiptScans ReceiptScan[]
+  /// The bank movements that paid this cost, once the owner confirmed them.
+  bankMatches  BankMatch[]
 
   /// The entry this one was split from, when one invoice held lines of
   /// several categories. A Makro invoice with meat, beer and bleach is one
@@ -1519,7 +1522,7 @@ model BudgetScenario {
   kind   BudgetScenarioKind
   label  String
   /// Switched-on items are part of the plan; off ones are only being tried.
-  active Boolean @default(true)
+  active Boolean            @default(true)
 
   /// Which band its cost lands in. Fixed by the kind except for a new fixed
   /// cost, which may be an operating cost or occupancy (a second store room).
@@ -1541,4 +1544,68 @@ model BudgetScenario {
 
   @@index([budgetId])
   @@map("budget_scenarios")
+}
+
+/// What a bank movement is. Only PAYMENT is ever matched to invoices; money
+/// in, bank fees and cash withdrawals are kept to one side.
+enum BankKind {
+  PAYMENT
+  INCOME
+  FEE
+  CASH
+}
+
+enum BankStatus {
+  /// Waiting for the owner.
+  OPEN
+  /// Confirmed against one or more invoices, or booked as an expense.
+  MATCHED
+  /// Set aside by the owner: not an invoice payment.
+  IGNORED
+}
+
+/// One line of an imported bank statement.
+///
+/// Imported from the bank's own export (CSV, Excel or OFX), never from a live
+/// connection. `importHash` makes a second import of an overlapping period add
+/// only the new lines. See lib/bank-statement.ts and lib/bank-matching.ts.
+model BankTransaction {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  date        DateTime @db.Date
+  /// Signed: money out is negative.
+  amount      Decimal  @db.Decimal(12, 2)
+  description String
+  balance     Decimal? @db.Decimal(12, 2)
+
+  kind   BankKind
+  status BankStatus @default(OPEN)
+
+  importHash   String    @map("import_hash")
+  importedById String    @map("imported_by")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  matchedAt    DateTime? @map("matched_at")
+
+  matches BankMatch[]
+
+  @@unique([restaurantId, importHash])
+  @@index([restaurantId, status, date])
+  @@map("bank_transactions")
+}
+
+/// A movement paid this cost. One transfer often settles several invoices
+/// from one supplier, so a movement can have several.
+model BankMatch {
+  id                String          @id @default(uuid())
+  bankTransaction   BankTransaction @relation(fields: [bankTransactionId], references: [id], onDelete: Cascade)
+  bankTransactionId String          @map("bank_transaction_id")
+  costEntry         CostEntry       @relation(fields: [costEntryId], references: [id])
+  costEntryId       String          @map("cost_entry_id")
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  @@unique([bankTransactionId, costEntryId])
+  @@index([costEntryId])
+  @@map("bank_matches")
 }

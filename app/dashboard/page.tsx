@@ -351,7 +351,7 @@ function DashboardPageInner() {
     if (tab === 'costs' && (sub === 'entry' || sub === 'scan' || sub === 'history')) setCostSubView(sub);
     // Where an inbox item from another restaurant lands after the switch.
     const view = searchParams.get('view');
-    if (tab === 'accounting' && (view === 'payments' || view === 'tidy' || view === 'lines')) {
+    if (tab === 'accounting' && (view === 'payments' || view === 'bank' || view === 'tidy' || view === 'lines')) {
       setAccountingOpen({ view, ...(searchParams.get('filter') === 'overdue' ? { filter: 'overdue' as const } : {}) });
     }
     const upgrade = searchParams.get('upgrade');
