@@ -39,6 +39,8 @@ interface KPICardsProps {
     remaining: number;
     dailyAverage: number | null;
     projection: number | null;
+    /** What is left after costs at month end, at this pace. See lib/month-forecast.ts. */
+    forecast?: { result: number; margin: number | null } | null;
   } | null;
 }
 
@@ -179,6 +181,22 @@ export default function KPICards({
                 </span>
                 <span className="text-xs font-bold text-primary tabular-nums">
                   {formatMoney(monthProgress.projection)}
+                </span>
+              </div>
+            )}
+            {monthProgress.forecast && monthProgress.remaining > 0 && (
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[10px] text-muted-foreground">
+                  {t('kpi.forecastResult')}
+                  <TooltipHint text={t('kpi.forecastResultHint')} underline={false}>
+                    <span className="ml-1 cursor-help opacity-60" aria-hidden="true">?</span>
+                  </TooltipHint>
+                </span>
+                <span className={`text-xs font-bold tabular-nums ${monthProgress.forecast.result < 0 ? 'text-danger' : 'text-foreground'}`}>
+                  {formatMoney(monthProgress.forecast.result)}
+                  {monthProgress.forecast.margin !== null && (
+                    <span className="ml-1 font-medium text-muted-foreground">({monthProgress.forecast.margin.toFixed(1)}%)</span>
+                  )}
                 </span>
               </div>
             )}

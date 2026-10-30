@@ -49,6 +49,7 @@ import { formatMoney } from '@/lib/format';
 import IngredientRanking from './components/IngredientRanking';
 import { getMonthProgress } from './product-actions';
 import type { MonthProgress } from '@/lib/trading-days';
+import type { MonthForecast } from '@/lib/month-forecast';
 import MonthlyStackChart from './components/MonthlyStackChart';
 import RestaurantLogo   from './components/RestaurantLogo';
 import RecurringCostsPanel from './components/RecurringCostsPanel';
@@ -139,7 +140,7 @@ function DashboardPageInner() {
   const [chartYear, setChartYear] = useState(new Date().getFullYear());
   const [revenueYears, setRevenueYears] = useState<number[]>([]);
   // How far through the month the restaurant is, for the revenue card.
-  const [monthProgress, setMonthProgress] = useState<MonthProgress | null>(null);
+  const [monthProgress, setMonthProgress] = useState<(MonthProgress & { forecast: MonthForecast | null }) | null>(null);
   /** An invoice number to open Accounting on, set when arriving from a price. */
   const [accountingSearch, setAccountingSearch] = useState('');
   /** Where Accounting opens: Payments, with a filter, from the dashboard card. */
@@ -245,7 +246,7 @@ function DashboardPageInner() {
       ] = results;
 
       if (yearsData && 'data' in yearsData) setRevenueYears(yearsData.data as number[]);
-      if (progressData && 'data' in progressData) setMonthProgress(progressData.data as MonthProgress);
+      if (progressData && 'data' in progressData) setMonthProgress(progressData.data as MonthProgress & { forecast: MonthForecast | null });
 
       if (restaurantData && 'data' in restaurantData) setRestaurant(restaurantData.data);
       if (staffData && 'data' in staffData)           setStaff(staffData.data as unknown as StaffMember[]);

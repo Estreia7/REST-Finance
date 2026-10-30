@@ -35,9 +35,21 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.30.3';
+export const CHANGELOG_VERSION = '2026.10.30.4';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.30.4',
+    date: '2026-10-30',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Resultado previsto do mês',
+        detail:
+          'No cartão da receita do Painel, ao lado da estimativa de vendas, aparece agora quanto sobra no fim do mês a este ritmo: as despesas já lançadas, os custos fixos que ainda faltam e a comida e bebida para as vendas que faltam. Fica a vermelho se o mês estiver a caminho de prejuízo.',
+      },
+    ],
+  },
   {
     version: '2026.10.30.3',
     date: '2026-10-30',

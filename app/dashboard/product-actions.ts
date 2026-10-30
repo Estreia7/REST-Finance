@@ -15,6 +15,8 @@ import {
   type ProductTotals,
 } from '@/lib/products';
 import { monthProgress, type MonthProgress } from '@/lib/trading-days';
+import { monthForecast } from '@/lib/month-forecast';
+import { nextOccurrence } from '@/lib/recurring-costs';
 
 /**
  * Reading the product side of the POS import.
@@ -312,7 +314,7 @@ export async function getMonthProgress() {
     const from = new Date(Date.UTC(year, month, 1));
     const to = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59));
 
-    const [summaries, closures] = await Promise.all([
+    const [summaries, closures, costs, cogs, fixed] = await Promise.all([
       prisma.dailySummary.findMany({
         where: {
           restaurantId: owner.restaurantId,
@@ -325,6 +327,20 @@ export async function getMonthProgress() {
         where: { restaurantId: owner.restaurantId, date: { gte: from, lte: to } },
         select: { date: true },
       }),
+      // For the forecast result: what is booked so far, and of it the food
+      // and drink, which grow with sales.
+      prisma.costEntry.aggregate({
+        where: { restaurantId: owner.restaurantId, deletedAt: null, date: { gte: from, lte: to } },
+        _sum: { amount: true },
+      }),
+      prisma.costEntry.aggregate({
+        where: { restaurantId: owner.restaurantId, deletedAt: null, type: 'COGS', date: { gte: from, lte: to } },
+        _sum: { amount: true },
+      }),
+      prisma.recurringCost.findMany({
+        where: { restaurantId: owner.restaurantId, active: true },
+        select: { amount: true, dayOfMonth: true, startDate: true, endDate: true, lastGeneratedDate: true },
+      }),
     ]);
 
     const progress = monthProgress({
@@ -336,7 +352,29 @@ export async function getMonthProgress() {
       closedDates: closures.map((c) => c.date.toISOString().slice(0, 10)),
     });
 
-    return { success: true, data: progress satisfies MonthProgress };
+    // Fixed costs whose next booking falls after today and inside this month.
+    const todayKey = new Date(Date.UTC(year, month, now.getUTCDate())).toISOString().slice(0, 10);
+    const endKey = to.toISOString().slice(0, 10);
+    const key = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
+    const fixedStillDue = fixed.reduce((sum, r) => {
+      const next = nextOccurrence({
+        startDate: key(r.startDate)!,
+        dayOfMonth: r.dayOfMonth,
+        endDate: key(r.endDate),
+        lastGeneratedDate: key(r.lastGeneratedDate),
+      });
+      return next && next > todayKey && next <= endKey ? sum + Number(r.amount) : sum;
+    }, 0);
+
+    const forecast = monthForecast({
+      revenueSoFar: progress.revenueSoFar,
+      projectedRevenue: progress.projection,
+      costsSoFar: Number(costs._sum.amount ?? 0),
+      cogsSoFar: Number(cogs._sum.amount ?? 0),
+      fixedStillDue,
+    });
+
+    return { success: true, data: { ...(progress satisfies MonthProgress), forecast } };
   } catch (error: unknown) {
     return { error: toClientError('Failed to read month progress', error, 'read') };
   }
