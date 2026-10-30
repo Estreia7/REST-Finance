@@ -3,9 +3,9 @@
 import { useLanguage } from '@/lib/language-context';
 import { Wordmark } from '@/app/components/Logo';
 import RestaurantSwitcher from './RestaurantSwitcher';
-import { LayoutDashboard, TrendingUp, DollarSign, Users, CreditCard, Settings, LogOut, X, BarChart3, ShieldCheck, CalendarDays, Landmark, FileText, UtensilsCrossed } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, DollarSign, Users, CreditCard, Settings, LogOut, X, BarChart3, ShieldCheck, CalendarDays, Landmark, FileText, UtensilsCrossed, Inbox } from 'lucide-react';
 
-type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'inbox' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
 interface SidebarProps {
   activeTab:    Tab;
@@ -17,10 +17,13 @@ interface SidebarProps {
   onLogout:     () => void;
   isOpen:       boolean;
   onClose:      () => void;
+  /** A count next to a nav item: what the inbox is waiting on. Zero hides it. */
+  badges?:      Partial<Record<Tab, number>>;
 }
 
 const NAV_MAIN = [
   { id: 'dashboard' as Tab, icon: LayoutDashboard, tKey: 'nav.dashboard' },
+  { id: 'inbox'     as Tab, icon: Inbox,           tKey: 'nav.inbox' },
   { id: 'revenue'   as Tab, icon: TrendingUp,      tKey: 'nav.revenue' },
   { id: 'costs'     as Tab, icon: DollarSign,      tKey: 'nav.costs' },
   { id: 'analytics' as Tab, icon: BarChart3,       tKey: 'nav.analytics' },
@@ -39,7 +42,7 @@ const NAV_MANAGE = [
   { id: 'settings' as Tab, icon: Settings,   tKey: 'nav.settings' },
 ] as const;
 
-function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLogout, onClose }: Omit<SidebarProps, 'isOpen'>) {
+function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLogout, onClose, badges }: Omit<SidebarProps, 'isOpen'>) {
   const { t } = useLanguage();
 
 
@@ -52,7 +55,12 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
       className={`nav-item w-full ${activeTab === id ? 'active' : ''}`}
     >
       <Icon className="w-4 h-4 shrink-0" />
-      <span>{label}</span>
+      <span className="flex-1 text-left">{label}</span>
+      {!!badges?.[id] && (
+        <span className="min-w-[1.25rem] rounded-full bg-danger px-1.5 py-0.5 text-center text-[10px] font-bold leading-none text-white tabular-nums">
+          {badges[id]! > 99 ? '99+' : badges[id]}
+        </span>
+      )}
     </button>
   );
 

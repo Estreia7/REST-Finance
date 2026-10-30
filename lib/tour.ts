@@ -48,6 +48,14 @@ export const TOUR_STEPS: TourStep[] = [
     bodyKey: 'tour.dashboard.body',
     placement: 'right',
   },
+  {
+    // Everything waiting on a decision, worst first. A daily habit.
+    anchor: 'nav-inbox',
+    tab: 'dashboard',
+    titleKey: 'tour.inbox.title',
+    bodyKey: 'tour.inbox.body',
+    placement: 'right',
+  },
   // No separate "Revenue" step: the daily-entry step below takes the owner
   // to that tab itself and now says the till report can be photographed, so
   // pointing at the menu item first was the same step twice.
@@ -83,13 +91,8 @@ export const TOUR_STEPS: TourStep[] = [
     bodyKey: 'tour.fnb.body',
     placement: 'right',
   },
-  {
-    anchor: 'nav-schedule',
-    tab: 'revenue',
-    titleKey: 'tour.schedule.title',
-    bodyKey: 'tour.schedule.body',
-    placement: 'right',
-  },
+  // The rota had this place; it is set up once a week, while the inbox is
+  // the first thing to check every morning, so it earned the step.
   // "What's new" deliberately has no step: the unread dot explains it the
   // first time something lands there, and a step spent on it is a step not
   // spent on the daily habit. Its data-tour anchor is kept for when it is
@@ -108,4 +111,4 @@ export const TOUR_STEPS: TourStep[] = [
  * seen any of it gets the full run. The version is what lets us tell those
  * apart later without guessing.
  */
-export const TOUR_VERSION = 1;
+export const TOUR_VERSION = 2;

@@ -39,7 +39,13 @@ import KPICards         from './components/KPICards';
 import RevenueChart     from './components/RevenueChart';
 import ProductsPanel    from './components/ProductsPanel';
 import SubTabs          from './components/SubTabs';
-import AccountingPanel  from './components/AccountingPanel';
+import AccountingPanel, { type AccountingOpen } from './components/AccountingPanel';
+import InboxPanel       from './components/InboxPanel';
+import { getInbox }     from './inbox-actions';
+import { setActiveRestaurant } from './restaurant-actions';
+import { inboxTotals, type InboxItem } from '@/lib/inbox';
+import { translateError } from '@/lib/error-messages';
+import { formatMoney } from '@/lib/format';
 import IngredientRanking from './components/IngredientRanking';
 import { getMonthProgress } from './product-actions';
 import type { MonthProgress } from '@/lib/trading-days';
@@ -68,7 +74,7 @@ import TrialBanner      from '@/app/components/TrialBanner';
 // ─── Types ─────────────────────────────────────────────────────────────────
 type CostType = 'COGS' | 'OPEX';
 type CostTypeOrEmpty = CostType | '';
-type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'inbox' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
 interface Category {
   id: string;
@@ -137,7 +143,9 @@ function DashboardPageInner() {
   /** An invoice number to open Accounting on, set when arriving from a price. */
   const [accountingSearch, setAccountingSearch] = useState('');
   /** Where Accounting opens: Payments, with a filter, from the dashboard card. */
-  const [accountingOpen, setAccountingOpen] = useState<{ view: 'payments'; filter: PayablesFilter } | null>(null);
+  const [accountingOpen, setAccountingOpen] = useState<AccountingOpen | null>(null);
+  /** What is urgent in the inbox, for the sidebar badge and the dashboard card. */
+  const [inboxUrgent, setInboxUrgent] = useState<{ count: number; amount: number }>({ count: 0, amount: 0 });
   // Each chart keeps its own year: comparing this year's sales with last
   // year's costs is a question an owner asks, and moving one chart should
   // not move the others.
@@ -277,6 +285,21 @@ function DashboardPageInner() {
     return () => { stale = true; };
   }, [costYear, dataVersion]);
 
+  // The inbox badge and the dashboard card: only what is urgent in the
+  // restaurant on screen, so the number is not permanently non-zero.
+  useEffect(() => {
+    if (dataVersion === 0) return;
+    let stale = false;
+    getInbox().then((r) => {
+      if (stale || !r.success) return;
+      const active = r.data.find((g) => g.active);
+      const urgent = active ? active.items.filter((i) => i.severity === 'high') : [];
+      const totals = inboxTotals(urgent);
+      setInboxUrgent({ count: totals.count, amount: totals.amount });
+    });
+    return () => { stale = true; };
+  }, [dataVersion]);
+
   const loadCategories = useCallback(async () => {
     const result = await getCategories();
     if (result && 'data' in result) setCategories(result.data as unknown as Category[]);
@@ -318,7 +341,7 @@ function DashboardPageInner() {
   // ── Handle URL params (e.g. ?tab=billing from Stripe redirect) ───────────
   useEffect(() => {
     const tab = searchParams.get('tab') as Tab | null;
-    if (tab && ['dashboard','revenue','costs','analytics','fnb','compliance','schedule','estado','users','billing','settings'].includes(tab)) {
+    if (tab && ['dashboard','inbox','revenue','costs','analytics','fnb','accounting','compliance','schedule','estado','users','billing','settings'].includes(tab)) {
       setActiveTab(tab);
     }
     // Where the setup wizard's last step sends the owner: straight into the
@@ -326,6 +349,11 @@ function DashboardPageInner() {
     const sub = searchParams.get('sub');
     if (tab === 'revenue' && (sub === 'entry' || sub === 'import' || sub === 'scan' || sub === 'history')) setRevenueSubView(sub);
     if (tab === 'costs' && (sub === 'entry' || sub === 'scan' || sub === 'history')) setCostSubView(sub);
+    // Where an inbox item from another restaurant lands after the switch.
+    const view = searchParams.get('view');
+    if (tab === 'accounting' && (view === 'payments' || view === 'tidy' || view === 'lines')) {
+      setAccountingOpen({ view, ...(searchParams.get('filter') === 'overdue' ? { filter: 'overdue' as const } : {}) });
+    }
     const upgrade = searchParams.get('upgrade');
     if (upgrade === 'success') toast.success(t('dashboard.upgradeSuccess'));
     if (upgrade === 'canceled') toast.info(t('dashboard.upgradeCanceled'));
@@ -347,9 +375,24 @@ function DashboardPageInner() {
   const pageWidth: PageWidth =
     (activeTab === 'revenue' && revenueSubView !== 'history') || (activeTab === 'costs' && costSubView !== 'history')
       ? 'narrow'
-      : activeTab === 'settings' || activeTab === 'billing' || activeTab === 'users'
+      : activeTab === 'settings' || activeTab === 'billing' || activeTab === 'users' || activeTab === 'inbox'
         ? 'medium'
         : 'wide';
+
+  const openInboxItem = async (item: InboxItem, restaurantId: string, isActive: boolean) => {
+    const { tab, view, filter } = item.target;
+    if (!isActive) {
+      // Another restaurant: switch first, then load straight onto the screen.
+      const switched = await setActiveRestaurant(restaurantId);
+      if (switched && 'error' in switched && switched.error) { toast.error(translateError(language, switched.error)); return; }
+      const params = new URLSearchParams({ tab, ...(view ? { view, sub: view } : {}), ...(filter ? { filter } : {}) });
+      window.location.assign(`/dashboard?${params.toString()}`);
+      return;
+    }
+    if (tab === 'accounting' && view && view !== 'history') setAccountingOpen({ view, ...(filter ? { filter } : {}) });
+    if (tab === 'costs' && view === 'history') setCostSubView('history');
+    handleTabChange(tab);
+  };
 
   const handleTabChange = (tab: Tab) => {
     if (hasUnsavedChanges && activeTab === 'settings') {
@@ -500,6 +543,7 @@ function DashboardPageInner() {
         onLogout={handleLogout}
         isOpen={isSidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        badges={{ inbox: inboxUrgent.count }}
       />
 
       {/* Main */}
@@ -559,6 +603,23 @@ function DashboardPageInner() {
               {/* What setup still lacks, until it is complete or dismissed. */}
               <SetupChecklist refreshKey={dataVersion} onOpen={(tab) => handleTabChange(tab)} />
 
+
+              {inboxUrgent.count > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('inbox')}
+                  className="flex w-full items-center gap-3 rounded-xl border border-danger/30 bg-danger/5 px-4 py-3 text-left transition-colors hover:bg-danger/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-danger" aria-hidden="true" />
+                  <span className="flex-1 text-sm font-semibold text-foreground">
+                    {t(inboxUrgent.count === 1 ? 'inbox.bannerOne' : 'inbox.bannerOther').replace('{count}', String(inboxUrgent.count))}
+                  </span>
+                  {inboxUrgent.amount > 0 && (
+                    <span className="text-sm font-semibold tabular-nums text-foreground">{formatMoney(inboxUrgent.amount)}</span>
+                  )}
+                  <span className="text-xs font-medium text-primary-ink">{t('inbox.open')}</span>
+                </button>
+              )}
 
               <KPICards stats={stats} advancedStats={advancedStats} last7DaysData={last7DaysData} monthProgress={monthProgress} />
 
@@ -814,6 +875,8 @@ function DashboardPageInner() {
               onOpenConsumed={() => setAccountingOpen(null)}
             />
           )}
+
+          {activeTab === 'inbox' && <InboxPanel refreshKey={dataVersion} onOpen={openInboxItem} />}
 
           {activeTab === 'compliance' && <CompliancePanel />}
 

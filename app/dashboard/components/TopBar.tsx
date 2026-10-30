@@ -6,11 +6,12 @@ import { useLanguage } from '@/lib/language-context';
 import WhatsNew from './WhatsNew';
 import RestaurantLogo from './RestaurantLogo';
 
-type Tab = 'dashboard' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
+type Tab = 'dashboard' | 'inbox' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
 /** Which dictionary entry names each tab in the breadcrumb. */
 const TAB_LABEL_KEYS: Record<Tab, string> = {
   dashboard:  'topBar.tabDashboard',
+  inbox:      'topBar.tabInbox',
   revenue:    'topBar.tabRevenue',
   costs:      'topBar.tabCosts',
   analytics:  'topBar.tabAnalytics',

@@ -928,6 +928,7 @@ export const translations = {
     // Dashboard navigation
     nav: {
       dashboard: 'Dashboard',
+      inbox: 'Precisa de ti',
       revenue: 'Receita',
       costs: 'Despesas',
       analytics: 'Análises',
@@ -1683,6 +1684,7 @@ export const translations = {
     topBar: {
       openMenu: 'Abrir menu',
       tabDashboard: 'Painel',
+      tabInbox: 'Precisa de ti',
       tabRevenue: 'Receita',
       tabCosts: 'Despesas',
       tabAnalytics: 'Análises',
@@ -2508,6 +2510,10 @@ export const translations = {
         title: 'Horários',
         body: 'Monte a semana da equipa e envie-a por WhatsApp numa imagem.',
       },
+      inbox: {
+        title: 'Precisa de ti',
+        body: 'O que está à espera de uma decisão sua, o mais urgente primeiro. Comece aqui o dia.',
+      },
       whatsNew: {
         title: 'Novidades',
         body: 'Sempre que houver algo novo, fica aqui com um ponto por ler.',
@@ -3060,6 +3066,63 @@ export const translations = {
         discardAll: 'Descartar tudo',
         discardConfirm: 'Perde todas as páginas digitalizadas até agora. Tem a certeza?',
         keepScanning: 'Continuar',
+      },
+    },
+    // "Precisa de ti" inbox (app/dashboard/components/InboxPanel.tsx)
+    inbox: {
+      title: 'Precisa de ti',
+      lead: '{count} decisões à espera, as mais urgentes primeiro.',
+      leadWithMoney: '{count} decisões à espera · {amount} em causa.',
+      leadEmpty: 'Tudo o que a app encontrou para decidir aparece aqui.',
+      emptyTitle: 'Nada por resolver',
+      emptyBody: 'Sem pagamentos em atraso, compras repetidas ou documentos a caducar. Os números do painel não têm decisões pendentes.',
+      failed: 'Não foi possível ler o que está pendente. Tente outra vez daqui a pouco.',
+      current: 'aberto agora',
+      resolve: 'Resolver',
+      open: 'Ver',
+      bannerOne: '1 coisa urgente precisa de si',
+      bannerOther: '{count} coisas urgentes precisam de si',
+      severity: {
+        high: 'urgente',
+        medium: 'importante',
+        low: 'quando puder',
+      },
+      kinds: {
+        overdue: {
+          one: '1 pagamento em atraso',
+          other: '{count} pagamentos em atraso',
+          body: 'Já passaram da data. Marque os que já pagou ou combine com o fornecedor.',
+        },
+        duplicateCosts: {
+          one: '1 compra pode estar contada duas vezes',
+          other: '{count} compras podem estar contadas duas vezes',
+          body: 'Uma despesa antiga parece ser uma fatura que já está registada. Junte-as para a despesa não pesar a dobrar.',
+        },
+        complianceExpired: {
+          one: '1 documento caducado',
+          other: '{count} documentos caducados',
+          body: 'Uma licença ou seguro fora de validade só é problema no dia da inspeção.',
+        },
+        uncategorisedLines: {
+          one: '1 artigo de fatura sem categoria',
+          other: '{count} artigos de fatura sem categoria',
+          body: 'Sem categoria não entram no food cost nem no mapa de despesas certo.',
+        },
+        uncategorisedCosts: {
+          one: '1 despesa sem categoria',
+          other: '{count} despesas sem categoria',
+          body: 'Contam no total, mas não aparecem onde deviam na demonstração de resultados.',
+        },
+        duplicateVendors: {
+          one: '1 fornecedor registado com vários nomes',
+          other: '{count} fornecedores registados com vários nomes',
+          body: 'O mesmo NIF com nomes diferentes divide o histórico de preços. Junte-os num só.',
+        },
+        complianceExpiring: {
+          one: '1 documento a caducar em breve',
+          other: '{count} documentos a caducar em breve',
+          body: 'Renove antes da data para não ficar sem cobertura.',
+        },
       },
     },
     // First-run setup wizard (app/onboarding) and the dashboard checklist
@@ -4088,6 +4151,7 @@ export const translations = {
     // Dashboard navigation
     nav: {
       dashboard: 'Dashboard',
+      inbox: 'Needs you',
       revenue: 'Revenue',
       costs: 'Costs',
       analytics: 'Analytics',
@@ -4834,6 +4898,7 @@ export const translations = {
     topBar: {
       openMenu: 'Open menu',
       tabDashboard: 'Dashboard',
+      tabInbox: 'Needs you',
       tabRevenue: 'Revenue',
       tabCosts: 'Costs',
       tabAnalytics: 'Analytics',
@@ -5655,6 +5720,10 @@ export const translations = {
         title: 'Schedule',
         body: 'Build the team week and send it to them on WhatsApp as an image.',
       },
+      inbox: {
+        title: 'Needs you',
+        body: 'Everything waiting on a decision from you, most urgent first. Start your day here.',
+      },
       whatsNew: {
         title: "What's new",
         body: 'Whenever something changes, it lands here with an unread dot.',
@@ -6209,6 +6278,63 @@ export const translations = {
         discardAll: 'Discard everything',
         discardConfirm: 'You will lose every page scanned so far. Are you sure?',
         keepScanning: 'Keep scanning',
+      },
+    },
+    // "Needs you" inbox (app/dashboard/components/InboxPanel.tsx)
+    inbox: {
+      title: 'Needs you',
+      lead: '{count} decisions waiting, most urgent first.',
+      leadWithMoney: '{count} decisions waiting · {amount} at stake.',
+      leadEmpty: 'Anything the app finds that needs a decision shows up here.',
+      emptyTitle: 'Nothing to sort out',
+      emptyBody: 'No overdue payments, repeated purchases or documents running out. The dashboard numbers have no decisions pending.',
+      failed: 'Could not read what is pending. Try again in a moment.',
+      current: 'open now',
+      resolve: 'Sort it',
+      open: 'View',
+      bannerOne: '1 urgent thing needs you',
+      bannerOther: '{count} urgent things need you',
+      severity: {
+        high: 'urgent',
+        medium: 'important',
+        low: 'when you can',
+      },
+      kinds: {
+        overdue: {
+          one: '1 overdue payment',
+          other: '{count} overdue payments',
+          body: 'Past their date. Mark the ones you have paid, or talk to the supplier.',
+        },
+        duplicateCosts: {
+          one: '1 purchase may be counted twice',
+          other: '{count} purchases may be counted twice',
+          body: 'An old expense looks like an invoice already on file. Join them so the cost does not count double.',
+        },
+        complianceExpired: {
+          one: '1 expired document',
+          other: '{count} expired documents',
+          body: 'A lapsed licence or insurance is only a problem on the day of the inspection.',
+        },
+        uncategorisedLines: {
+          one: '1 invoice item with no category',
+          other: '{count} invoice items with no category',
+          body: 'Without one they miss the food cost and the right line of your expenses.',
+        },
+        uncategorisedCosts: {
+          one: '1 expense with no category',
+          other: '{count} expenses with no category',
+          body: 'They count in the total but not where they belong in the profit and loss.',
+        },
+        duplicateVendors: {
+          one: '1 supplier recorded under several names',
+          other: '{count} suppliers recorded under several names',
+          body: 'The same tax number under different names splits the price history. Merge them into one.',
+        },
+        complianceExpiring: {
+          one: '1 document expiring soon',
+          other: '{count} documents expiring soon',
+          body: 'Renew before the date so you are never left without cover.',
+        },
       },
     },
     // First-run setup wizard (app/onboarding) and the dashboard checklist

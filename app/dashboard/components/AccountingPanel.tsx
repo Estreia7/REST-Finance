@@ -40,6 +40,7 @@ import type { PayablesFilter } from '../payment-actions';
  */
 
 type View = 'invoices' | 'payments' | 'lines' | 'vendors' | 'tidy';
+export type AccountingOpen = { view: View; filter?: PayablesFilter };
 
 /**
  * @param initialSearch an invoice number to open on, when the owner
@@ -54,8 +55,11 @@ export default function AccountingPanel({
 }: {
   initialSearch?: string;
   onSearchConsumed?: () => void;
-  /** Opens on Payments with a filter, when arriving from the dashboard card. */
-  initialOpen?: { view: 'payments'; filter: PayablesFilter } | null;
+  /**
+   * Opens on a given view — Payments with a filter from the dashboard card,
+   * Tidy up or Lines from the inbox.
+   */
+  initialOpen?: AccountingOpen | null;
   onOpenConsumed?: () => void;
 } = {}) {
   const { t } = useLanguage();
@@ -66,7 +70,7 @@ export default function AccountingPanel({
   useEffect(() => {
     if (!initialOpen) return;
     setView(initialOpen.view);
-    setPaymentsFilter(initialOpen.filter);
+    if (initialOpen.filter) setPaymentsFilter(initialOpen.filter);
     onOpenConsumed?.();
   }, [initialOpen, onOpenConsumed]);
 

@@ -35,9 +35,21 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.30.1';
+export const CHANGELOG_VERSION = '2026.10.30.2';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.30.2',
+    date: '2026-10-30',
+    entries: [
+      {
+        kind: 'new',
+        title: '«Precisa de ti»: tudo o que espera por uma decisão sua, numa lista',
+        detail:
+          'Pagamentos em atraso, compras que podem estar contadas duas vezes, artigos e despesas sem categoria, fornecedores com vários nomes e documentos a caducar, os mais urgentes primeiro e com o valor em causa. Cada linha abre o sítio onde se resolve. Quem tem vários restaurantes vê todos. O que é urgente aparece também no topo do Painel.',
+      },
+    ],
+  },
   {
     version: '2026.10.30.1',
     date: '2026-10-30',
