@@ -89,7 +89,8 @@ export interface DailyReportResult {
 
 export type ScanResult = CostReceiptResult | DailyReportResult;
 
-export type MediaType = 'image/jpeg' | 'image/png' | 'image/webp';
+/** A PDF is a supplier's own invoice file, emailed or downloaded; read as a document. */
+export type MediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf';
 export type ScanType = 'COST_RECEIPT' | 'DAILY_REPORT';
 
 // ─── Provider Selection ─────────────────────────────────────────────────────

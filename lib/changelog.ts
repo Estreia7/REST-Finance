@@ -35,9 +35,21 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.30.4';
+export const CHANGELOG_VERSION = '2026.10.30.5';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.10.30.5',
+    date: '2026-10-30',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Faturas em PDF lidas diretamente',
+        detail:
+          'Em Despesas › Digitalizar, «Escolher ficheiro» aceita agora o PDF que o fornecedor envia por email. É lido tal como está, sem fotografar nem recortar, e fica guardado para o poder abrir mais tarde.',
+      },
+    ],
+  },
   {
     version: '2026.10.30.4',
     date: '2026-10-30',

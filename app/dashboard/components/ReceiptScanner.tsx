@@ -98,6 +98,9 @@ export interface AttachTarget {
   description: string | null;
 }
 
+/** A PDF under 7 MB stays under the scan route's 10 million base64 characters. */
+const MAX_PDF_BYTES = 7 * 1024 * 1024;
+
 export default function ReceiptScanner({
   onSaved,
   defaultScanType = 'DAILY_REPORT',
@@ -125,6 +128,8 @@ export default function ReceiptScanner({
    * later means finding it never.
    */
   const [quality, setQuality] = useState<QualityCheck | null>(null);
+  /** The file name, when the document is a PDF rather than a photograph. */
+  const [pdfName, setPdfName] = useState<string | null>(null);
   /** An invoice already recorded under this number, shown instead of saving. */
   const [duplicate, setDuplicate] = useState<{
     invoiceNumber: string;
@@ -276,6 +281,25 @@ export default function ReceiptScanner({
 
     setCurrentPages([]);
     setDocuments([]);
+
+    // A PDF is the supplier's own file: read as it is, with no crop and no
+    // photo check. The browser cannot draw it on a canvas anyway, which is
+    // why picking one used to fail with "could not read the file".
+    if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+      if (file.size > MAX_PDF_BYTES) { toast.error(t('scanner.pdfTooLarge')); return; }
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).replace(/^data:[^;]*;/, 'data:application/pdf;'));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      }).catch(() => null);
+      if (!dataUrl) { toast.error(t('scanner.couldNotReadFile')); return; }
+      setPdfName(file.name);
+      setImagePreview(dataUrl);
+      return;
+    }
+    setPdfName(null);
+
     setReadingFile(true);
     try {
       const { frame, corners } = await loadFrameFromFile(file);
@@ -347,7 +371,8 @@ export default function ReceiptScanner({
   // refuse photographs the product then reads perfectly well. Do not move
   // this check earlier.
   useEffect(() => {
-    if (!imagePreview) { setQuality(null); return; }
+    // A PDF is not a photograph: there is no blur or glare to measure.
+    if (!imagePreview || imagePreview.startsWith('data:application/pdf')) { setQuality(null); return; }
     let cancelled = false;
     (async () => {
       try {
@@ -368,7 +393,9 @@ export default function ReceiptScanner({
 
     try {
       const base64 = imagePreview.split(',')[1];
-      const mediaType = imagePreview.startsWith('data:image/png')
+      const mediaType = imagePreview.startsWith('data:application/pdf')
+        ? 'application/pdf'
+        : imagePreview.startsWith('data:image/png')
         ? 'image/png'
         : imagePreview.startsWith('data:image/webp')
         ? 'image/webp'
@@ -706,7 +733,16 @@ export default function ReceiptScanner({
       {imagePreview && !extracted && (
         <div className="space-y-4">
           <div className="relative rounded-xl overflow-hidden border border-border">
-            <img src={imagePreview} alt="Receipt" className="w-full max-h-[400px] object-contain bg-black/20" />
+            {imagePreview.startsWith('data:application/pdf') ? (
+              // A PDF is read as the supplier sent it; there is nothing to
+              // crop, so the name stands in for a picture.
+              <div className="flex items-center gap-3 bg-muted px-4 py-6">
+                <FileText className="h-8 w-8 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="min-w-0 truncate text-sm font-medium text-foreground">{pdfName ?? t('scanner.pdfFile')}</span>
+              </div>
+            ) : (
+              <img src={imagePreview} alt="Receipt" className="w-full max-h-[400px] object-contain bg-black/20" />
+            )}
           </div>
           {/* Said before the scan, not after: once the model has read a
               blurred page it returns figures that look like an answer. */}

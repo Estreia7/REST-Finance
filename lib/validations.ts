@@ -88,7 +88,7 @@ export const changePasswordSchema = z.object({
 // === Scan Request ===
 export const scanRequestSchema = z.object({
   imageBase64: z.string().min(100, 'Imagem inválida').max(10_000_000, 'Imagem demasiado grande (max 7.5MB)'),
-  mediaType: z.enum(['image/jpeg', 'image/png', 'image/webp'], { message: 'Formato de imagem inválido' }),
+  mediaType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], { message: 'Formato de imagem inválido' }),
   scanType: z.enum(['COST_RECEIPT', 'DAILY_REPORT'], { message: 'Tipo de scan inválido' }),
 });
 

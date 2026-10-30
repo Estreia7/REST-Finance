@@ -94,7 +94,9 @@ export type SaveDocResult =
  */
 export async function saveDocument(
   ownerId: string,
-  file: File
+  file: File,
+  /** Compliance documents, or a supplier invoice that arrived as a PDF. */
+  scope: 'compliance' | 'invoices' = 'compliance',
 ): Promise<SaveDocResult> {
   if (file.size === 0) return { ok: false, error: 'O ficheiro está vazio.' };
   if (file.size > MAX_DOC_BYTES) {
@@ -112,7 +114,7 @@ export async function saveDocument(
     return { ok: false, error: 'Identificador inválido.' };
   }
 
-  const dir = path.join(STORAGE_ROOT, 'compliance', ownerId);
+  const dir = path.join(STORAGE_ROOT, scope, ownerId);
   await mkdir(dir, { recursive: true });
 
   const filename = `${randomUUID()}.${kind}`;
@@ -120,7 +122,7 @@ export async function saveDocument(
 
   return {
     ok: true,
-    storedPath: path.posix.join('compliance', ownerId, filename),
+    storedPath: path.posix.join(scope, ownerId, filename),
     kind,
     sizeBytes: file.size,
   };
