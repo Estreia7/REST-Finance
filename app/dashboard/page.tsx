@@ -61,7 +61,6 @@ import QuickAddSheet, { type QuickAddKind, type QuickAddMethod } from './compone
 import StaffPanel       from './components/StaffPanel';
 import TeamTab          from './components/TeamTab';
 import BillingPanel     from './components/BillingPanel';
-import CompliancePanel from './components/CompliancePanel';
 import SchedulePanel from './components/SchedulePanel';
 import MenuCalculatorPanel from './components/MenuCalculatorPanel';
 import EstadoPanel from './components/EstadoPanel';
@@ -72,6 +71,7 @@ import SetupChecklist   from './components/SetupChecklist';
 import EmailedInvoices  from './components/EmailedInvoices';
 import AssistantLauncher from './components/AssistantLauncher';
 import StockPanel       from './components/StockPanel';
+import { ComplianceArea } from './components/HaccpPanel';
 import PageShell, { type PageWidth } from './components/PageShell';
 import TrialBanner      from '@/app/components/TrialBanner';
 
@@ -887,7 +887,7 @@ function DashboardPageInner() {
 
           {activeTab === 'inbox' && <InboxPanel refreshKey={dataVersion} onOpen={openInboxItem} />}
 
-          {activeTab === 'compliance' && <CompliancePanel />}
+          {activeTab === 'compliance' && <ComplianceArea />}
 
           {activeTab === 'schedule' && <SchedulePanel />}
 

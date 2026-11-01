@@ -137,6 +137,8 @@ model Restaurant {
   bankTransactions  BankTransaction[]
   stockItems        StockItem[]
   stockCounts       StockCount[]
+  checklists        ChecklistTemplate[]
+  checklistRecords  ChecklistRecord[]
 
   @@map("restaurants")
 }
@@ -1696,4 +1698,46 @@ model StockCountLine {
   @@unique([countId, itemId])
   @@index([itemId])
   @@map("stock_count_lines")
+}
+
+/// A HACCP checklist or temperature sheet the restaurant fills in. `items` is
+/// a list of { id, label, kind: "check" | "temperature", min?, max? } (see
+/// lib/haccp.ts); labels are the restaurant's own text.
+model ChecklistTemplate {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  name      String
+  items     Json
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  records ChecklistRecord[]
+
+  @@index([restaurantId, active, sortOrder])
+  @@map("checklist_templates")
+}
+
+/// One filling-in of a template: every answer as given, kept even if the
+/// template changes later, which is what makes it evidence.
+model ChecklistRecord {
+  id           String            @id @default(uuid())
+  restaurant   Restaurant        @relation(fields: [restaurantId], references: [id])
+  restaurantId String            @map("restaurant_id")
+  template     ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId   String            @map("template_id")
+
+  templateName String   @map("template_name")
+  answers      Json
+  issues       Int      @default(0)
+  notes        String?
+  doneById     String   @map("done_by")
+  doneByName   String?  @map("done_by_name")
+  doneAt       DateTime @default(now()) @map("done_at")
+
+  @@index([restaurantId, doneAt])
+  @@map("checklist_records")
 }

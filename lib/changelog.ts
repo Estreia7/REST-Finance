@@ -35,9 +35,21 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.10.30.7';
+export const CHANGELOG_VERSION = '2026.11.01.1';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.01.1',
+    date: '2026-11-01',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Registos HACCP: temperaturas e listas de verificação no telemóvel',
+        detail:
+          'Em Conformidade › Registos HACCP. Comece com as folhas habituais (abertura, temperaturas, fecho, limpeza) ou crie as suas. A equipa preenche no telemóvel, as temperaturas fora do intervalo ficam assinaladas, e o mês inteiro exporta-se num ficheiro para mostrar à inspeção.',
+      },
+    ],
+  },
   {
     version: '2026.10.30.7',
     date: '2026-10-30',
