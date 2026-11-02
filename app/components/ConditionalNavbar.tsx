@@ -13,8 +13,10 @@ export default function ConditionalNavbar() {
   const isDeckPage = pathname === '/pt' || pathname === '/en';
   // The setup wizard is part of the app, with its own header.
   const isOnboardingPage = pathname?.startsWith('/onboarding');
+  // The time clock's PIN pad fills a tablet at the door.
+  const isKioskPage = pathname?.startsWith('/kiosk');
 
-  if (isAdminPage || isDashboardPage || isDeckPage || isOnboardingPage) {
+  if (isAdminPage || isDashboardPage || isDeckPage || isOnboardingPage || isKioskPage) {
     return null;
   }
 

@@ -8,6 +8,7 @@ import { Plan } from '@prisma/client';
 import { z } from 'zod';
 import { toClientError, isUniqueConstraintError } from '@/lib/errors';
 import { MIN_PASSWORD_LENGTH } from '@/lib/validations';
+import { MODULES, isModuleKey } from '@/lib/modules';
 
 /**
  * Admin edits are bounded exactly like an owner's own edits. Without this the
@@ -465,6 +466,41 @@ async function verifyAdmin() {
   const admin = await requireAdmin();
   if (isAuthError(admin)) return null;
   return admin;
+}
+
+/**
+ * Switches an extra module (lib/modules.ts) on or off for one restaurant.
+ * Only from the admin console: owners cannot switch modules. Switching off
+ * hides the module and refuses its actions, but keeps its data, so switching
+ * it back on finds everything where it was.
+ */
+export async function setRestaurantModule(restaurantId: string, key: string, enabled: boolean) {
+  try {
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
+    if (!isModuleKey(key)) return { error: 'modules.errors.unknown' };
+
+    const restaurant = await prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { modules: true } });
+    if (!restaurant) return { error: 'Not found' };
+    const next = new Set(restaurant.modules.filter(isModuleKey));
+    if (enabled) next.add(key); else next.delete(key);
+    const modules = MODULES.filter((m) => next.has(m));
+
+    await prisma.$transaction([
+      prisma.restaurant.update({ where: { id: restaurantId }, data: { modules } }),
+      prisma.auditLog.create({
+        data: {
+          restaurantId,
+          action: enabled ? 'admin.module.enable' : 'admin.module.disable',
+          actorUserId: admin.userId,
+          metadata: { module: key },
+        },
+      }),
+    ]);
+    return { success: true as const, data: { modules } };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to update modules', error, 'write') };
+  }
 }
 
 export async function getRestaurantDetail(restaurantId: string) {

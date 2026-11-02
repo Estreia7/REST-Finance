@@ -105,6 +105,11 @@ model Restaurant {
   /// replaced, never reused, when they ask for a new one.
   inboxToken String? @unique @map("inbox_token")
 
+  /// Extra modules an administrator has switched on for this restaurant, by
+  /// key ("stock", "timeClock"). See lib/modules.ts: what a plan includes is
+  /// added on top of this there, so a new plan needs no migration.
+  modules String[] @default([]) @map("modules")
+
   memberships       Membership[]
   categories        Category[]
   dailySummaries    DailySummary[]
@@ -139,6 +144,7 @@ model Restaurant {
   stockCounts       StockCount[]
   checklists        ChecklistTemplate[]
   checklistRecords  ChecklistRecord[]
+  timeEntries       TimeEntry[]
 
   @@map("restaurants")
 }
@@ -753,9 +759,15 @@ model ScheduleEmployee {
   createdAt DateTime  @default(now()) @map("created_at")
   deletedAt DateTime? @map("deleted_at")
 
-  shifts Shift[]
-  leaves EmployeeLeave[]
+  /// The kiosk PIN, as an HMAC keyed with the server secret (lib/time-clock.ts).
+  /// Unique per restaurant: one PIN is one person. Null until the owner sets one.
+  pinHash String? @map("pin_hash")
 
+  shifts      Shift[]
+  leaves      EmployeeLeave[]
+  timeEntries TimeEntry[]
+
+  @@unique([restaurantId, pinHash])
   @@index([restaurantId, active, sortOrder])
   @@map("schedule_employees")
 }
@@ -1740,4 +1752,29 @@ model ChecklistRecord {
 
   @@index([restaurantId, doneAt])
   @@map("checklist_records")
+}
+
+/// One clock-in, and its clock-out once it happens. Made at the kiosk with a
+/// PIN; the owner can fix a forgotten clock-out or add a missing entry, and
+/// every such change keeps who made it.
+model TimeEntry {
+  id           String           @id @default(uuid())
+  restaurant   Restaurant       @relation(fields: [restaurantId], references: [id])
+  restaurantId String           @map("restaurant_id")
+  employee     ScheduleEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId   String           @map("employee_id")
+
+  clockIn  DateTime  @map("clock_in")
+  clockOut DateTime? @map("clock_out")
+
+  /// kiosk | manual
+  source     String    @default("kiosk")
+  editedById String?   @map("edited_by")
+  editedAt   DateTime? @map("edited_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([restaurantId, clockIn])
+  @@index([employeeId, clockOut])
+  @@map("time_entries")
 }

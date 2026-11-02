@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { toClientError } from '@/lib/errors';
+import { moduleOff } from '@/lib/modules-server';
 import { toDayKey } from '@/lib/payments';
 import {
   averageUnitCost, suggestItems, essentialItemIds, estimatedOnHand, orderQuantity, usage, lineKey,
@@ -123,6 +124,8 @@ export async function getStockOverview() {
   try {
     const owner = await requireOwner();
     if (isAuthError(owner)) return fail(owner.error);
+    const off = await moduleOff(owner.restaurantId, 'stock');
+    if (off) return fail(off);
     const rows = await loadRows(owner.restaurantId);
     const lastCount = await prisma.stockCount.findFirst({
       where: { restaurantId: owner.restaurantId },
@@ -152,6 +155,8 @@ export async function getStockSuggestions() {
   try {
     const owner = await requireOwner();
     if (isAuthError(owner)) return fail(owner.error);
+    const off = await moduleOff(owner.restaurantId, 'stock');
+    if (off) return fail(off);
     const [lines, existing] = await Promise.all([
       purchases(owner.restaurantId, new Date(Date.now() - 120 * DAY)),
       prisma.stockItem.findMany({ where: { restaurantId: owner.restaurantId }, select: { normalizedName: true, unit: true } }),
@@ -167,6 +172,8 @@ export async function addStockItems(items: ItemSuggestion[]) {
   try {
     const owner = await requireOwner();
     if (isAuthError(owner)) return fail(owner.error);
+    const off = await moduleOff(owner.restaurantId, 'stock');
+    if (off) return fail(off);
     const vendorIds = [...new Set(items.map((i) => i.vendorId).filter((v): v is string => !!v && UUID.test(v)))];
     const owned = new Set((await prisma.vendor.findMany({
       where: { id: { in: vendorIds }, restaurantId: owner.restaurantId }, select: { id: true },
@@ -192,6 +199,8 @@ export async function updateStockItem(input: { id: string; minQuantity?: number 
   try {
     const owner = await requireOwner();
     if (isAuthError(owner)) return fail(owner.error);
+    const off = await moduleOff(owner.restaurantId, 'stock');
+    if (off) return fail(off);
     if (input.minQuantity != null && !(input.minQuantity >= 0 && input.minQuantity < 1_000_000)) return fail('stock.errors.invalidMin');
     const updated = await prisma.stockItem.updateMany({
       where: { id: input.id, restaurantId: owner.restaurantId },
@@ -216,6 +225,8 @@ export async function saveStockCount(input: { kind: 'FULL' | 'ESSENTIAL'; lines:
   try {
     const owner = await requireOwner();
     if (isAuthError(owner)) return fail(owner.error);
+    const off = await moduleOff(owner.restaurantId, 'stock');
+    if (off) return fail(off);
     const lines = input.lines.filter((l) => UUID.test(l.itemId) && Number.isFinite(l.quantity) && l.quantity >= 0 && l.quantity < 1_000_000);
     if (lines.length === 0) return fail('stock.errors.emptyCount');
 

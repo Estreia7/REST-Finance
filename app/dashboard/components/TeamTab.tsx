@@ -1,29 +1,32 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { KeyRound, Palmtree } from 'lucide-react';
+import { Clock, KeyRound, Palmtree } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 import LeavePanel from './LeavePanel';
+import ClockPanel from './ClockPanel';
 
 /**
- * The Equipa tab: holidays for the people on the rota, and who can open the
- * app. Two different lists — the rota's people have no account — kept under
+ * The Equipa tab: holidays and the time clock for the people on the rota, and
+ * who can open the app. Two different lists — the rota's people have no account — kept under
  * one tab because an owner thinks of both as "the team".
  *
  * Holidays first: they are the thing an owner comes back to every few weeks,
- * whereas access is set once when someone is hired.
+ * whereas access is set once when someone is hired. The clock is an extra
+ * module (lib/modules.ts): without it, its view is not offered.
  */
-export default function TeamTab({ access }: { access: ReactNode }) {
+export default function TeamTab({ access, clock }: { access: ReactNode; clock: boolean }) {
   const { t } = useLanguage();
-  const [view, setView] = useState<'leave' | 'access'>('leave');
+  const [view, setView] = useState<'leave' | 'clock' | 'access'>('leave');
 
   return (
     <div className="space-y-4">
       <div role="group" aria-label={t('teamTab.viewLabel')} className="inline-flex rounded-xl bg-muted p-1">
         {([
           ['leave', Palmtree, t('teamTab.leave')],
+          ['clock', Clock, t('teamTab.clock')],
           ['access', KeyRound, t('teamTab.access')],
-        ] as const).map(([value, Icon, label]) => (
+        ] as const).filter(([value]) => clock || value !== 'clock').map(([value, Icon, label]) => (
           <button
             key={value}
             type="button"
@@ -39,7 +42,7 @@ export default function TeamTab({ access }: { access: ReactNode }) {
         ))}
       </div>
 
-      {view === 'leave' ? <LeavePanel /> : access}
+      {view === 'leave' ? <LeavePanel /> : view === 'clock' && clock ? <ClockPanel /> : access}
     </div>
   );
 }

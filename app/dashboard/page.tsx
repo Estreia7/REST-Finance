@@ -71,6 +71,7 @@ import SetupChecklist   from './components/SetupChecklist';
 import EmailedInvoices  from './components/EmailedInvoices';
 import AssistantLauncher from './components/AssistantLauncher';
 import StockPanel       from './components/StockPanel';
+import { hasModule, type ModuleKey } from '@/lib/modules';
 import { ComplianceArea } from './components/HaccpPanel';
 import PageShell, { type PageWidth } from './components/PageShell';
 import TrialBanner      from '@/app/components/TrialBanner';
@@ -79,6 +80,9 @@ import TrialBanner      from '@/app/components/TrialBanner';
 type CostType = 'COGS' | 'OPEX';
 type CostTypeOrEmpty = CostType | '';
 type Tab = 'dashboard' | 'inbox' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'stock' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
+
+/** The tabs that are an extra module, and which one. */
+const TAB_MODULE: Partial<Record<Tab, ModuleKey>> = { stock: 'stock' };
 
 interface Category {
   id: string;
@@ -363,6 +367,15 @@ function DashboardPageInner() {
     if (upgrade === 'canceled') toast.info(t('dashboard.upgradeCanceled'));
   }, [searchParams]);
 
+  // ── Extra modules this restaurant has (lib/modules.ts). A tab that belongs
+  //    to a module it does not have is not reachable, by link or otherwise.
+  const modules: ModuleKey[] = restaurant?.modules ?? [];
+  useEffect(() => {
+    if (!restaurant) return;
+    const needs = TAB_MODULE[activeTab];
+    if (needs && !hasModule(restaurant.modules, needs)) setActiveTab('dashboard');
+  }, [restaurant, activeTab]);
+
   // Theme is applied by ThemeProvider; the dashboard only reads it.
 
   // ── Handlers ─────────────────────────────────────────────────────────────
@@ -548,6 +561,7 @@ function DashboardPageInner() {
         isOpen={isSidebarOpen}
         onClose={() => setSidebarOpen(false)}
         badges={{ inbox: inboxUrgent.count }}
+        modules={modules}
       />
 
       {/* Main */}
@@ -857,6 +871,7 @@ function DashboardPageInner() {
 
           {activeTab === 'users' && (
             <TeamTab
+              clock={hasModule(modules, 'timeClock')}
               access={
                 <StaffPanel
                   staff={staff}
@@ -883,7 +898,7 @@ function DashboardPageInner() {
             />
           )}
 
-          {activeTab === 'stock' && <StockPanel />}
+          {activeTab === 'stock' && hasModule(modules, 'stock') && <StockPanel />}
 
           {activeTab === 'inbox' && <InboxPanel refreshKey={dataVersion} onOpen={openInboxItem} />}
 

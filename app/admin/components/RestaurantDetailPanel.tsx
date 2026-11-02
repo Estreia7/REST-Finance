@@ -7,7 +7,8 @@ import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
 import RestaurantBrainPanel from './RestaurantBrainPanel';
 import ImpersonateButton from './ImpersonateButton';
-import { getRestaurantDetail, getRestaurantRevenue, getRestaurantCosts, adminUpdateEntry, adminDeleteEntry, updateClient } from '../actions';
+import { getRestaurantDetail, getRestaurantRevenue, getRestaurantCosts, adminUpdateEntry, adminDeleteEntry, updateClient, setRestaurantModule } from '../actions';
+import { MODULES, PLAN_MODULES, type ModuleKey } from '@/lib/modules';
 
 interface RestaurantDetailPanelProps {
   restaurantId: string;
@@ -189,6 +190,14 @@ export default function RestaurantDetailPanel({ restaurantId, onBack }: Restaura
             </div>
           </div>
 
+          {/* Extra modules: switched on here only, never by the owner. */}
+          <ModulesCard
+            restaurantId={restaurantId}
+            plan={detail.plan}
+            stored={detail.modules ?? []}
+            onChanged={(modules) => setDetail((d: any) => ({ ...d, modules }))}
+          />
+
           {/* Staff list */}
           <div className="card-glass p-6">
             <h3 className="text-sm font-bold text-foreground mb-4">{t('admin.detail.membersTitle')} ({detail.memberships?.length || 0})</h3>
@@ -265,6 +274,69 @@ export default function RestaurantDetailPanel({ restaurantId, onBack }: Restaura
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * The extra modules (lib/modules.ts) for one restaurant. A module its plan
+ * already includes shows as on and cannot be switched off here.
+ */
+function ModulesCard({ restaurantId, plan, stored, onChanged }: {
+  restaurantId: string;
+  plan: keyof typeof PLAN_MODULES;
+  stored: string[];
+  onChanged: (modules: string[]) => void;
+}) {
+  const { t, language } = useLanguage();
+  const [busy, setBusy] = useState<ModuleKey | null>(null);
+  const fromPlan: readonly ModuleKey[] = PLAN_MODULES[plan] ?? [];
+
+  const toggle = async (key: ModuleKey, enabled: boolean) => {
+    setBusy(key);
+    const result = await setRestaurantModule(restaurantId, key, enabled);
+    setBusy(null);
+    if (result.success && result.data) {
+      onChanged(result.data.modules);
+      toast.success(t(enabled ? 'modules.admin.enabled' : 'modules.admin.disabled').replace('{name}', t(`modules.${key}.name`)));
+    } else toast.error(translateError(language, result.error));
+  };
+
+  return (
+    <div className="card-glass p-6">
+      <h3 className="text-sm font-bold text-foreground">{t('modules.admin.title')}</h3>
+      <p className="mt-1 mb-4 text-xs text-muted-foreground">{t('modules.admin.body')}</p>
+      <ul className="divide-y divide-border-subtle">
+        {MODULES.map((key) => {
+          const included = fromPlan.includes(key);
+          const on = included || stored.includes(key);
+          const labelId = `module-${key}`;
+          return (
+            <li key={key} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+              <div className="min-w-0">
+                <p id={labelId} className="text-sm font-medium text-foreground">{t(`modules.${key}.name`)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {included ? t('modules.admin.inPlan') : t(`modules.${key}.body`)}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={on}
+                aria-labelledby={labelId}
+                disabled={included || busy !== null}
+                onClick={() => toggle(key, !on)}
+                className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${on ? 'bg-primary' : 'bg-muted border border-border'}`}
+              >
+                {busy === key
+                  ? <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin text-muted-foreground" aria-hidden="true" />
+                  : <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-6' : 'translate-x-1'}`} />}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

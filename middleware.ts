@@ -17,7 +17,15 @@ import { getToken } from 'next-auth/jwt';
  *
  * This is a redirect for unauthenticated visitors, not a security boundary.
  */
-const PROTECTED = ['/dashboard', '/admin', '/onboarding'];
+const PROTECTED = ['/dashboard', '/admin', '/onboarding', '/kiosk'];
+
+/**
+ * A tablet the owner put in kiosk mode (Equipa › Ponto) shows only the PIN
+ * pad until the owner leaves it with their password. The name matches
+ * KIOSK_COOKIE in lib/time-clock.ts, which cannot be imported on the Edge.
+ */
+const KIOSK_COOKIE = 'rf_kiosk';
+const KIOSK_LOCKED = ['/dashboard', '/admin', '/onboarding'];
 const AUTH_PAGES = ['/login', '/register'];
 
 // Auth.js prefixes the cookie with __Secure- when served over HTTPS, and
@@ -71,6 +79,10 @@ export async function middleware(request: NextRequest) {
     return clearSessionCookies(request, NextResponse.redirect(loginUrl));
   }
 
+  if (session === 'valid' && request.cookies.has(KIOSK_COOKIE) && KIOSK_LOCKED.some((p) => pathname.startsWith(p))) {
+    return NextResponse.redirect(new URL('/kiosk', request.url));
+  }
+
   if (session === 'valid' && AUTH_PAGES.includes(pathname)) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
@@ -83,5 +95,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/admin/:path*', '/onboarding', '/login', '/register'],
+  matcher: ['/dashboard/:path*', '/admin/:path*', '/onboarding', '/kiosk', '/login', '/register'],
 };

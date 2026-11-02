@@ -11,6 +11,7 @@ import {
   formatZodError,
 } from '@/lib/validations';
 import { requireAuth, requireOwner, requireMember, isAuthError, refuseWhileImpersonating } from '@/lib/auth-helpers';
+import { enabledModules } from '@/lib/modules';
 import { isDemoAccount } from '@/lib/demo';
 import { findMunicipality } from '@/lib/derrama';
 import { isValidNif } from '@/lib/pt-validation';
@@ -68,6 +69,8 @@ export async function getRestaurant() {
         ...restaurant,
         monthlyRevenueTarget: monthlyRevenueTarget === null ? null : Number(monthlyRevenueTarget),
         serviceHoursPerDay: serviceHoursPerDay === null ? null : Number(serviceHoursPerDay),
+        // What the screens show: the stored switches plus what the plan includes.
+        modules: enabledModules(membership.restaurant),
       },
     };
   } catch (error: unknown) {

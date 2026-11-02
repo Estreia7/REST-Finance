@@ -3,6 +3,7 @@
 import { useLanguage } from '@/lib/language-context';
 import { Wordmark } from '@/app/components/Logo';
 import RestaurantSwitcher from './RestaurantSwitcher';
+import { hasModule, type ModuleKey } from '@/lib/modules';
 import { LayoutDashboard, TrendingUp, DollarSign, Users, CreditCard, Settings, LogOut, X, BarChart3, ShieldCheck, CalendarDays, Landmark, FileText, UtensilsCrossed, Inbox, Package } from 'lucide-react';
 
 type Tab = 'dashboard' | 'inbox' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'stock' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
@@ -19,9 +20,11 @@ interface SidebarProps {
   onClose:      () => void;
   /** A count next to a nav item: what the inbox is waiting on. Zero hides it. */
   badges?:      Partial<Record<Tab, number>>;
+  /** The extra modules this restaurant has; a module's item shows only with it. */
+  modules?:     ModuleKey[];
 }
 
-const NAV_MAIN = [
+const NAV_MAIN: ReadonlyArray<{ id: Tab; icon: typeof Package; tKey: string; module?: ModuleKey }> = [
   { id: 'dashboard' as Tab, icon: LayoutDashboard, tKey: 'nav.dashboard' },
   { id: 'inbox'     as Tab, icon: Inbox,           tKey: 'nav.inbox' },
   { id: 'revenue'   as Tab, icon: TrendingUp,      tKey: 'nav.revenue' },
@@ -29,13 +32,13 @@ const NAV_MAIN = [
   { id: 'analytics' as Tab, icon: BarChart3,       tKey: 'nav.analytics' },
   // The menu, its products and their prices: what is sold, not the books.
   { id: 'fnb'       as Tab, icon: UtensilsCrossed, tKey: 'nav.fnb' },
-  { id: 'stock'     as Tab, icon: Package,         tKey: 'nav.stock' },
+  { id: 'stock'     as Tab, icon: Package,         tKey: 'nav.stock', module: 'stock' },
   // Beside Costs, because that is where its records come from.
   { id: 'accounting' as Tab, icon: FileText,       tKey: 'nav.accounting' },
   { id: 'compliance' as Tab, icon: ShieldCheck,    tKey: 'nav.compliance' },
   { id: 'schedule'  as Tab, icon: CalendarDays,    tKey: 'nav.schedule' },
   { id: 'estado'    as Tab, icon: Landmark,        tKey: 'nav.estado' },
-] as const;
+];
 
 const NAV_MANAGE = [
   { id: 'users'    as Tab, icon: Users,      tKey: 'nav.team' },
@@ -43,7 +46,7 @@ const NAV_MANAGE = [
   { id: 'settings' as Tab, icon: Settings,   tKey: 'nav.settings' },
 ] as const;
 
-function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLogout, onClose, badges }: Omit<SidebarProps, 'isOpen'>) {
+function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLogout, onClose, badges, modules }: Omit<SidebarProps, 'isOpen'>) {
   const { t } = useLanguage();
 
 
@@ -92,7 +95,7 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
         <div>
           <div className="section-label px-3 mb-2">{t('nav.sectionMain')}</div>
           <div className="space-y-0.5">
-            {NAV_MAIN.map(({ id, icon, tKey }) => (
+            {NAV_MAIN.filter((item) => !item.module || hasModule(modules, item.module)).map(({ id, icon, tKey }) => (
               <NavItem key={id} id={id} icon={icon} label={t(tKey)} />
             ))}
           </div>
