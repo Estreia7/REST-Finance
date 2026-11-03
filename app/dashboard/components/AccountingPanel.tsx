@@ -25,6 +25,8 @@ import BankPanel from './BankPanel';
 import PaymentsPanel from './PaymentsPanel';
 import VendorFixDialog from './VendorFixDialog';
 import DuplicateCosts from './DuplicateCosts';
+import PurchasedProducts from './PurchasedProducts';
+import PurchasedProductDialog from './PurchasedProductDialog';
 import type { PayablesFilter } from '../payment-actions';
 
 /**
@@ -40,7 +42,7 @@ import type { PayablesFilter } from '../payment-actions';
  * that quietly stop the costing from being true.
  */
 
-type View = 'invoices' | 'payments' | 'bank' | 'lines' | 'vendors' | 'tidy';
+type View = 'invoices' | 'payments' | 'bank' | 'lines' | 'products' | 'vendors' | 'tidy';
 export type AccountingOpen = { view: View; filter?: PayablesFilter };
 
 /**
@@ -86,6 +88,7 @@ export default function AccountingPanel({
           { value: 'payments', label: t('accounting.tabPayments') },
           { value: 'bank', label: t('accounting.tabBank') },
           { value: 'lines', label: t('accounting.tabLines') },
+          { value: 'products', label: t('accounting.tabProducts') },
           { value: 'vendors', label: t('accounting.tabVendors') },
           { value: 'tidy', label: t('accounting.tabTidy') },
         ]}
@@ -95,6 +98,7 @@ export default function AccountingPanel({
       {view === 'payments' && <PaymentsPanel initialFilter={paymentsFilter} />}
       {view === 'bank' && <BankPanel />}
       {view === 'lines' && <Invoices initialSearch={initialSearch} onSearchConsumed={onSearchConsumed} />}
+      {view === 'products' && <PurchasedProducts />}
       {view === 'vendors' && <Vendors />}
       {view === 'tidy' && <Tidy />}
     </div>
@@ -124,6 +128,8 @@ function Invoices({ initialSearch = '', onSearchConsumed }: {
   const [categories, setCategories] = useState<CostCategory[]>([]);
   /** The line whose category is being saved. */
   const [savingCategory, setSavingCategory] = useState<string | null>(null);
+  /** The product open over the list, across every supplier. */
+  const [product, setProduct] = useState<string | null>(null);
 
   useEffect(() => {
     getCostCategories().then((result) => {
@@ -245,7 +251,16 @@ function Invoices({ initialSearch = '', onSearchConsumed }: {
               {data.rows.map((row) => (
                 <tr key={row.id} className="border-b border-border-subtle last:border-0">
                   <td className="px-4 py-2.5 min-w-0">
-                    <span className="text-foreground [overflow-wrap:anywhere]">{row.productName}</span>
+                    {/* The product, with every purchase of it from any
+                        supplier, opens from its name. */}
+                    <button
+                      type="button"
+                      onClick={() => setProduct(row.normalizedName)}
+                      className="text-left text-foreground [overflow-wrap:anywhere] hover:text-primary hover:underline underline-offset-2
+                                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                    >
+                      {row.productName}
+                    </button>
                     {/* What the kitchen calls it, where someone has said. */}
                     {row.ingredientName ? (
                       <span className="flex items-center gap-1 text-[11px] text-success mt-0.5">
@@ -361,6 +376,8 @@ function Invoices({ initialSearch = '', onSearchConsumed }: {
           onChanged={load}
         />
       )}
+
+      {product && <PurchasedProductDialog normalizedName={product} onClose={() => setProduct(null)} />}
 
       <p className="text-xs text-muted-foreground">
         {t('accounting.showing')

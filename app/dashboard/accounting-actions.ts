@@ -24,6 +24,8 @@ import { mergeVendorsTx } from '@/lib/vendors-server';
 export interface InvoiceRow {
   id: string;
   productName: string;
+  /** The product it belongs to, across suppliers. */
+  normalizedName: string;
   quantity: number;
   unit: string | null;
   unitPrice: number;
@@ -191,6 +193,7 @@ export async function getInvoiceLines(filters: {
     const mapped: InvoiceRow[] = rows.map((row) => ({
       id: row.id,
       productName: row.productName,
+      normalizedName: row.normalizedName,
       quantity: Number(row.quantity),
       unit: row.unit,
       unitPrice: Number(row.unitPrice),

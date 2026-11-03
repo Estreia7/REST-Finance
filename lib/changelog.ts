@@ -35,9 +35,21 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.01.1';
+export const CHANGELOG_VERSION = '2026.11.03.1';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.03.1',
+    date: '2026-11-03',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Cada artigo comprado tem a sua ficha',
+        detail:
+          'Em Contabilidade › Artigos, toque num artigo (ou no nome de um artigo em Linhas ou num alerta de preço) para ver quanto já gastou nele, o preço mais baixo e mais alto que pagou, a evolução do preço e todas as compras, de qualquer fornecedor. Cada compra abre a fatura.',
+      },
+    ],
+  },
   {
     version: '2026.11.01.1',
     date: '2026-11-01',

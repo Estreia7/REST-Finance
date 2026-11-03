@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
-import { getPriceAlerts, getProductPriceHistory } from '../price-actions';
+import { TrendingUp, TrendingDown, AlertTriangle, ChevronRight } from 'lucide-react';
+import { getPriceAlerts } from '../price-actions';
+import PurchasedProductDialog from './PurchasedProductDialog';
 import InfoHint from '@/app/components/InfoHint';
 import { useLanguage } from '@/lib/language-context';
 
@@ -17,21 +18,13 @@ interface PriceAlert {
   invoiceDate: Date | null;
 }
 
-interface PricePoint {
-  date: Date | null;
-  unitPrice: number;
-  quantity: number;
-  vendor: string | null;
-}
-
 export default function PriceTrackingPanel() {
   const { t } = useLanguage();
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [threshold, setThreshold] = useState(5);
   const [loading, setLoading] = useState(true);
-  const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
-  const [priceHistory, setPriceHistory] = useState<PricePoint[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  /** The product open over the list: every purchase, from every supplier. */
+  const [open, setOpen] = useState<string | null>(null);
 
   useEffect(() => {
     loadAlerts();
@@ -44,22 +37,6 @@ export default function PriceTrackingPanel() {
       setAlerts(result.data);
     }
     setLoading(false);
-  }
-
-  async function toggleHistory(productName: string, vendorId: string | null) {
-    const key = `${productName}::${vendorId}`;
-    if (expandedProduct === key) {
-      setExpandedProduct(null);
-      return;
-    }
-
-    setExpandedProduct(key);
-    setHistoryLoading(true);
-    const result = await getProductPriceHistory(productName, vendorId || undefined);
-    if (result.success) {
-      setPriceHistory(result.data);
-    }
-    setHistoryLoading(false);
   }
 
   return (
@@ -102,13 +79,10 @@ export default function PriceTrackingPanel() {
         <div className="space-y-2">
           {alerts.map((alert, i) => {
             const isIncrease = alert.changePercent > 0;
-            const key = `${alert.productName}::${alert.vendorId}`;
-            const isExpanded = expandedProduct === key;
-
             return (
               <div key={i} className="border border-border-subtle rounded-xl overflow-hidden">
                 <button
-                  onClick={() => toggleHistory(alert.productName, alert.vendorId)}
+                  onClick={() => setOpen(alert.normalizedName)}
                   className="w-full flex items-center gap-3 p-3 hover:bg-muted transition-colors text-left"
                 >
                   <div className={`p-1.5 rounded-lg ${isIncrease ? 'bg-red-500/10' : 'bg-green-500/10'}`}>
@@ -130,46 +104,16 @@ export default function PriceTrackingPanel() {
                       €{alert.previousPrice.toFixed(2)} → €{alert.currentPrice.toFixed(2)}
                     </div>
                   </div>
-                  {isExpanded ? (
-                    <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
-                  )}
+                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
                 </button>
 
-                {isExpanded && (
-                  <div className="border-t border-border-subtle p-3 bg-surface">
-                    {historyLoading ? (
-                      <div className="text-xs text-muted-foreground text-center py-2">{t('priceTracking.historyLoading')}</div>
-                    ) : priceHistory.length === 0 ? (
-                      <div className="text-xs text-muted-foreground text-center py-2">{t('priceTracking.historyEmpty')}</div>
-                    ) : (
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-xs font-medium text-muted-foreground mb-2">
-                          <span>{t('priceTracking.historyTitle')}</span>
-                          <span className="font-normal">
-                            {t('priceTracking.unitTimesQuantity')}<InfoHint term="unitPrice" />
-                          </span>
-                        </div>
-                        {priceHistory.map((point, j) => (
-                          <div key={j} className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">
-                              {point.date ? new Date(point.date).toLocaleDateString('pt-PT') : '—'}
-                            </span>
-                            <span className="text-foreground font-medium">
-                              €{point.unitPrice.toFixed(4)} × {point.quantity}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             );
           })}
         </div>
       )}
+
+      {open && <PurchasedProductDialog normalizedName={open} onClose={() => setOpen(null)} />}
     </div>
   );
 }
