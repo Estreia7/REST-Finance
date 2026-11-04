@@ -436,6 +436,10 @@ export default function SchedulePanel() {
    * steps around iOS, where a `download` link pointed at a blob has never been
    * dependable. Elsewhere, and if sharing a file is refused, it falls back to
    * the ordinary download link.
+   *
+   * `canShare` alone does not mean a phone: Windows answers yes too, and a
+   * click on "download" then opened its Share window instead of saving. A
+   * touch screen as the main pointer is what tells the two apart.
    */
   const downloadImage = async (wk: string) => {
     setDownloadingWeek(wk);
@@ -448,7 +452,8 @@ export default function SchedulePanel() {
       const filename = `horario-${wk}.jpg`;
       const file = new File([blob], filename, { type: 'image/jpeg' });
 
-      if (navigator.canShare?.({ files: [file] })) {
+      const onPhone = window.matchMedia('(pointer: coarse)').matches;
+      if (onPhone && navigator.canShare?.({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title: `${t('schedule.shareTitle')} ${label}` });
           return;

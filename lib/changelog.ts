@@ -35,9 +35,20 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.04.1';
+export const CHANGELOG_VERSION = '2026.11.04.2';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.04.2',
+    date: '2026-11-04',
+    entries: [
+      {
+        kind: 'fix',
+        title: 'Descarregar o horário no computador guarda logo o ficheiro',
+        detail: 'Antes abria a janela de partilha do Windows. No telemóvel continua a abrir a partilha, para enviar pelo WhatsApp.',
+      },
+    ],
+  },
   {
     version: '2026.11.04.1',
     date: '2026-11-04',
