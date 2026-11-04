@@ -1,14 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { toast } from 'sonner';
+import { useEffect, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowRight, Check, X, Receipt, Camera, TrendingDown,
   BarChart3, FileText, Users, Sparkle,
 } from 'lucide-react';
-import AuthModal from './components/AuthModal';
 import Logo, { Wordmark } from './components/Logo';
 import TiltCard from './components/landing/TiltCard';
 import WorkflowDiagram from './components/landing/WorkflowDiagram';
@@ -26,32 +24,18 @@ import { useLanguage } from '@/lib/language-context';
 function LandingPageInner() {
   const searchParams = useSearchParams();
   const { t } = useLanguage();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalTab, setModalTab] = useState<'login' | 'register'>('login');
+  const router = useRouter();
 
-  const openModal = useCallback((tab: 'login' | 'register') => {
-    setModalTab(tab);
-    setModalOpen(true);
-  }, []);
+  const openAuth = useCallback((tab: 'login' | 'register') => {
+    router.push(tab === 'login' ? '/login' : '/register');
+  }, [router]);
 
+  // Links from before sign-in had its own page, in old emails and bookmarks.
   useEffect(() => {
     const auth = searchParams.get('auth');
-    if (auth === 'login' || auth === 'register') openModal(auth);
-  }, [searchParams, openModal]);
-
-  // Sent here because the session had ended. Said once, so the owner knows
-  // why they are signing in again rather than wondering where their data went.
-  const expired = searchParams.get('expired') === '1';
-  useEffect(() => {
-    if (expired) toast.info(t('errors.auth'), { id: 'session-expired' });
-  }, [expired, t]);
-
-  // The navbar dispatches this rather than importing page state.
-  useEffect(() => {
-    const handler = (e: Event) => openModal((e as CustomEvent<'login' | 'register'>).detail);
-    window.addEventListener('open-auth', handler);
-    return () => window.removeEventListener('open-auth', handler);
-  }, [openModal]);
+    if (auth === 'register') router.replace('/register');
+    if (auth === 'login') router.replace(searchParams.get('expired') === '1' ? '/login?expired=1' : '/login');
+  }, [searchParams, router]);
 
   const features = [
     { icon: Receipt, key: 'entry', Art: DailyEntryArt },
@@ -68,7 +52,6 @@ function LandingPageInner() {
 
   return (
     <>
-      <AuthModal open={modalOpen} onOpenChange={setModalOpen} defaultTab={modalTab} />
 
       {/* HERO: asymmetric split. Copy left, real calculated metrics right. */}
       <section className="relative overflow-hidden border-b border-border">
@@ -90,14 +73,14 @@ function LandingPageInner() {
               </p>
 
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
-                <button onClick={() => openModal('register')} className="cta-button group">
+                <button onClick={() => openAuth('register')} className="cta-button group">
                   {t('landing.hero.cta')}
                   <ArrowRight
                     className="w-4 h-4 transition-transform group-hover:translate-x-0.5"
                     aria-hidden="true"
                   />
                 </button>
-                <button onClick={() => openModal('login')} className="cta-button-secondary">
+                <button onClick={() => openAuth('login')} className="cta-button-secondary">
                   {t('landing.hero.ctaSecondary')}
                 </button>
               </div>
@@ -304,7 +287,7 @@ function LandingPageInner() {
             <p className="mt-5 text-lg text-muted-foreground leading-relaxed">
               {t('landing.beta.body')}
             </p>
-            <button onClick={() => openModal('register')} className="cta-button mt-8">
+            <button onClick={() => openAuth('register')} className="cta-button mt-8">
               {t('landing.beta.cta')}
               <ArrowRight className="w-4 h-4" aria-hidden="true" />
             </button>
@@ -350,7 +333,7 @@ function LandingPageInner() {
                   {t('landing.finalCta.body')}
                 </p>
                 <div>
-                  <button onClick={() => openModal('register')} className="cta-button mt-8 group">
+                  <button onClick={() => openAuth('register')} className="cta-button mt-8 group">
                     {t('landing.finalCta.cta')}
                     <ArrowRight
                       className="w-4 h-4 transition-transform group-hover:translate-x-0.5"

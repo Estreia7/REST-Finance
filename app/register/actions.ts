@@ -25,7 +25,7 @@ export async function registerUser(data: {
     // directly, so the UI is not the control.
     if (!(await isRegistrationOpen())) {
       return {
-        error: 'O registo está fechado durante a beta. Pede acesso e criamos a tua conta.',
+        error: 'auth.errors.closed',
       };
     }
 
@@ -42,7 +42,7 @@ export async function registerUser(data: {
       select: { id: true },
     });
     if (existing) {
-      return { error: 'Este email já está registado. Tenta iniciar sessão.' };
+      return { error: 'auth.errors.taken' };
     }
 
     const passwordHash = await bcrypt.hash(parsed.data.password, 12);
@@ -82,7 +82,7 @@ export async function registerUser(data: {
     return { success: true, redirectTo: '/onboarding' };
   } catch (error: unknown) {
     if (isUniqueConstraintError(error, 'email')) {
-      return { error: 'Este email já está registado. Tenta iniciar sessão.' };
+      return { error: 'auth.errors.taken' };
     }
     return { error: toClientError('Failed to register', error, 'write') };
   }

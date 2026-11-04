@@ -5,6 +5,7 @@ import LanguageSelector from '@/app/components/LanguageSelector';
 import { useLanguage } from '@/lib/language-context';
 import WhatsNew from './WhatsNew';
 import RestaurantLogo from './RestaurantLogo';
+import RestaurantSwitcher from './RestaurantSwitcher';
 
 type Tab = 'dashboard' | 'inbox' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'stock' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
@@ -30,9 +31,11 @@ interface TopBarProps {
   activeTab:    Tab;
   restaurant:   any;
   onMenuClick:  () => void;
+  /** The dock is showing, so the sidebar's restaurant switcher is not. */
+  docked?:      boolean;
 }
 
-export default function TopBar({ activeTab, restaurant, onMenuClick }: TopBarProps) {
+export default function TopBar({ activeTab, restaurant, onMenuClick, docked = false }: TopBarProps) {
   const { t } = useLanguage();
 
   return (
@@ -70,6 +73,11 @@ export default function TopBar({ activeTab, restaurant, onMenuClick }: TopBarPro
 
       {/* Right side */}
       <div className="flex items-center gap-2 shrink-0">
+        {docked && (
+          <div className="hidden lg:block w-56 empty:hidden">
+            <RestaurantSwitcher onlyWhenSeveral />
+          </div>
+        )}
         <WhatsNew />
         <LanguageSelector />
       </div>

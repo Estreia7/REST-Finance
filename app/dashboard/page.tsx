@@ -33,6 +33,10 @@ import { Plus, ChevronDown, ChevronUp, PlayCircle } from 'lucide-react';
 
 // Components
 import Sidebar          from './components/Sidebar';
+import dynamic from 'next/dynamic';
+import { saveNavPreferences } from './nav-actions';
+import { translateError } from '@/lib/error-messages';
+import { isDockTheme, isNavMode, type DockTheme, type NavMode } from '@/lib/nav-preferences';
 import TopBar           from './components/TopBar';
 import MobileBottomNav  from './components/MobileBottomNav';
 import KPICards         from './components/KPICards';
@@ -44,7 +48,6 @@ import InboxPanel       from './components/InboxPanel';
 import { getInbox }     from './inbox-actions';
 import { setActiveRestaurant } from './restaurant-actions';
 import { inboxTotals, type InboxItem } from '@/lib/inbox';
-import { translateError } from '@/lib/error-messages';
 import { formatMoney } from '@/lib/format';
 import IngredientRanking from './components/IngredientRanking';
 import { getMonthProgress } from './product-actions';
@@ -79,6 +82,9 @@ import TrialBanner      from '@/app/components/TrialBanner';
 // ─── Types ─────────────────────────────────────────────────────────────────
 type CostType = 'COGS' | 'OPEX';
 type CostTypeOrEmpty = CostType | '';
+// Its own chunk: only someone who turned the dock on downloads the animation.
+const DashboardDock = dynamic(() => import('./components/DashboardDock'), { ssr: false });
+
 type Tab = 'dashboard' | 'inbox' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'stock' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
 /** The tabs that are an extra module, and which one. */
@@ -124,6 +130,34 @@ function DashboardPageInner() {
   // ── UI state
   const [activeTab, setActiveTab]       = useState<Tab>('dashboard');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [navMode, setNavMode] = useState<NavMode>('sidebar');
+  const [dockTheme, setDockTheme] = useState<DockTheme>('light');
+  const docked = navMode === 'dock';
+
+  // The account's choice, once it has loaded.
+  useEffect(() => {
+    if (isNavMode(currentUser?.navMode)) setNavMode(currentUser.navMode);
+    if (isDockTheme(currentUser?.dockTheme)) setDockTheme(currentUser.dockTheme);
+  }, [currentUser]);
+
+  // The assistant's button moves up out of the dock's way by this attribute.
+  // See the dock rules in globals.css.
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-docked', docked);
+    return () => document.documentElement.removeAttribute('data-docked');
+  }, [docked]);
+
+  /** Shown at once, then saved; a failed save puts the old value back. */
+  const changeNav = async (key: 'navMode' | 'dockTheme', value: NavMode | DockTheme) => {
+    const undo = key === 'navMode' ? navMode : dockTheme;
+    const apply = (v: NavMode | DockTheme) => (key === 'navMode' ? setNavMode(v as NavMode) : setDockTheme(v as DockTheme));
+    apply(value);
+    const result = await saveNavPreferences({ [key]: value });
+    if (!result.success) {
+      apply(undo);
+      toast.error(translateError(language, result.error));
+    }
+  };
 
   // ── Data
   const [restaurant, setRestaurant]       = useState<any>(null);
@@ -551,6 +585,8 @@ function DashboardPageInner() {
     <div className="min-h-dvh bg-background">
       {/* Sidebar */}
       <Sidebar
+        docked={docked}
+        onUseDock={() => changeNav('navMode', 'dock')}
         activeTab={activeTab}
         onTabChange={handleTabChange}
         restaurant={restaurant}
@@ -565,9 +601,10 @@ function DashboardPageInner() {
       />
 
       {/* Main */}
-      <div className="md:ml-60 flex flex-col min-h-dvh pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
+      <div className={`md:ml-60 flex flex-col min-h-dvh pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0 ${docked ? 'lg:ml-0 lg:pb-32' : ''}`}>
         {/* Top bar */}
         <TopBar
+          docked={docked}
           activeTab={activeTab}
           restaurant={restaurant}
           onMenuClick={() => setSidebarOpen(true)}
@@ -970,6 +1007,20 @@ function DashboardPageInner() {
         <QuickAddSheet
           onClose={() => setShowQuickAdd(false)}
           onChoose={handleQuickAdd}
+        />
+      )}
+
+      {/* The desktop dock. Below lg it does not draw, and the sidebar stays. */}
+      {docked && (
+        <DashboardDock
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          theme={dockTheme}
+          onToggleTheme={() => changeNav('dockTheme', dockTheme === 'dark' ? 'light' : 'dark')}
+          onUseSidebar={() => changeNav('navMode', 'sidebar')}
+          onLogout={handleLogout}
+          badges={{ inbox: inboxUrgent.count }}
+          modules={modules}
         />
       )}
 

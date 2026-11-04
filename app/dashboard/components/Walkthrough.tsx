@@ -37,6 +37,11 @@ const GAP = 12;
 const MARGIN = 12;
 const BUBBLE_WIDTH = 300;
 
+/** How long a step waits for its target to appear. */
+const ANCHOR_WAIT_MS = 1000;
+/** How long a step keeps following its target after finding it. */
+const SETTLE_MS = 900;
+
 export default function Walkthrough({ onNavigate, onClose }: WalkthroughProps) {
   const { t } = useLanguage();
   const [index, setIndex] = useState(0);
@@ -75,10 +80,23 @@ export default function Walkthrough({ onNavigate, onClose }: WalkthroughProps) {
     }
 
     let frame = 0;
+    let scrolled = false;
+    const started = performance.now();
 
     const measure = () => {
-      const el = document.querySelector<HTMLElement>(`[data-tour="${step.anchor}"]`);
+      const waited = performance.now() - started;
+      // The first one on screen: the same destination can sit in the sidebar
+      // and in the dock, and only one of them is showing.
+      const el = Array.from(document.querySelectorAll<HTMLElement>(`[data-tour="${step.anchor}"]`))
+        .find((node) => node.getClientRects().length > 0);
       if (!el) {
+        // The dock arrives a moment after the page, so a target is given a
+        // second to appear before it counts as missing.
+        if (waited < ANCHOR_WAIT_MS) {
+          setBox(null);
+          frame = requestAnimationFrame(measure);
+          return;
+        }
         // Not on this screen — skip rather than point at nothing. Going
         // forwards from a missing anchor must not walk backwards, so the last
         // step closes instead.
@@ -88,13 +106,15 @@ export default function Walkthrough({ onNavigate, onClose }: WalkthroughProps) {
         return;
       }
 
-      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      if (!scrolled) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      scrolled = true;
       const r = el.getBoundingClientRect();
       setBox({ top: r.top, left: r.left, width: r.width, height: r.height });
+      // Followed while it settles: a smooth scroll, or the dock sliding in.
+      if (waited < SETTLE_MS) frame = requestAnimationFrame(measure);
     };
 
     measure();
-    frame = requestAnimationFrame(measure);
 
     window.addEventListener('resize', measure);
     return () => {

@@ -30,6 +30,7 @@ type Restaurant = {
 export default function RestaurantSwitcher({
   current,
   onAddLogo,
+  onlyWhenSeveral = false,
 }: {
   /**
    * The active restaurant as the dashboard last loaded it. Preferred over the
@@ -38,6 +39,8 @@ export default function RestaurantSwitcher({
   current?: { name: string; logoPath: string | null } | null;
   /** Opens Settings. Given only to the owner, who is the one who can upload. */
   onAddLogo?: () => void;
+  /** Draws nothing for a single restaurant: for the top bar, which names it already. */
+  onlyWhenSeveral?: boolean;
 } = {}) {
   const { t } = useLanguage();
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -79,7 +82,7 @@ export default function RestaurantSwitcher({
   const logoPath = current ? current.logoPath : listed?.logoPath ?? null;
 
   if (restaurants.length < 2) {
-    if (!name) return null;
+    if (!name || onlyWhenSeveral) return null;
     return (
       <div className="flex items-center gap-3 rounded-xl border border-border-subtle bg-surface p-2.5">
         <RestaurantLogo logoPath={logoPath} name={name} size={40} />

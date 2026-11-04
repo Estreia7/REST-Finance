@@ -10,10 +10,6 @@ import { useLanguage } from '@/lib/language-context';
 import LanguageSelector from './LanguageSelector';
 import { useTheme } from '@/lib/theme-context';
 
-function openAuthModal(tab: 'login' | 'register') {
-  window.dispatchEvent(new CustomEvent('open-auth', { detail: tab }));
-}
-
 export default function Navbar() {
   const router = useRouter();
   const { t } = useLanguage();
@@ -144,13 +140,13 @@ export default function Navbar() {
                 ) : (
                   <>
                     <button
-                      onClick={() => openAuthModal('login')}
+                      onClick={() => router.push('/login')}
                       className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                     >
                       {t('navbar.login')}
                     </button>
                     <button
-                      onClick={() => openAuthModal('register')}
+                      onClick={() => router.push('/register')}
                       className="cta-button py-2 px-5 text-sm"
                     >
                       {t('navbar.register')}
@@ -247,13 +243,13 @@ export default function Navbar() {
                     ) : (
                       <>
                         <button
-                          onClick={() => { openAuthModal('login'); closeMobileMenu(); }}
+                          onClick={() => { router.push('/login'); closeMobileMenu(); }}
                           className="flex items-center justify-center w-full px-4 py-3.5 text-base font-medium text-foreground border border-border bg-muted rounded-xl hover:bg-muted transition-all"
                         >
                           {t('navbar.login')}
                         </button>
                         <button
-                          onClick={() => { openAuthModal('register'); closeMobileMenu(); }}
+                          onClick={() => { router.push('/register'); closeMobileMenu(); }}
                           className="cta-button w-full justify-center py-3.5 text-base"
                         >
                           {t('navbar.register')}

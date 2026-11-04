@@ -913,3 +913,492 @@ details > summary::-webkit-details-marker {
   }
   .pres-stagger > * { opacity: 0; }
 }
+
+/* ---------- desktop dock (app/dashboard/components/Dock.tsx) ---------- */
+
+.dock-wrap {
+  display: none;
+}
+
+/* Desktop only: below this the sidebar and the phone's tab bar stay. */
+@media (min-width: 1024px) {
+  html[data-docked] .assistant-fab {
+    bottom: 7rem;
+  }
+
+  .dock-wrap {
+    /* Light dock: frosted paper, white buttons, amber for where you are. */
+    --dock-panel: rgba(255, 253, 248, 0.78);
+    --dock-border: rgba(27, 36, 48, 0.12);
+    --dock-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 18px 40px -18px rgba(27, 36, 48, 0.35);
+    --dock-item: #ffffff;
+    --dock-item-border: rgba(27, 36, 48, 0.1);
+    --dock-item-hover: #fdf1d6;
+    --dock-icon: #57606e;
+    --dock-icon-hover: #1b2430;
+    --dock-current: #f5a70a;
+    --dock-current-icon: #1b2430;
+    --dock-dot: #1b2430;
+    --dock-label-bg: #1b2430;
+    --dock-label-fg: #ffffff;
+    --dock-divider: rgba(27, 36, 48, 0.16);
+
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 12px;
+    z-index: 35;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .dock-wrap[data-theme='dark'] {
+    /* Dark dock: deep navy glass, slate buttons, the same amber marker. */
+    --dock-panel: rgba(27, 36, 48, 0.86);
+    --dock-border: rgba(255, 255, 255, 0.1);
+    --dock-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 18px 40px -16px rgba(27, 36, 48, 0.6);
+    --dock-item: #2a3646;
+    --dock-item-border: rgba(255, 255, 255, 0.08);
+    --dock-item-hover: #36445a;
+    --dock-icon: #b9c1cc;
+    --dock-icon-hover: #ffffff;
+    --dock-dot: #f5a70a;
+    --dock-label-bg: #f5a70a;
+    --dock-label-fg: #1b2430;
+    --dock-divider: rgba(255, 255, 255, 0.16);
+  }
+}
+
+.dock {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-end;
+  width: fit-content;
+  max-width: calc(100vw - 32px);
+  padding: 0 14px 11px;
+  border: 1px solid var(--dock-border);
+  border-radius: 26px;
+  background: var(--dock-panel);
+  box-shadow: var(--dock-shadow);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  transition: background 240ms ease, border-color 240ms ease;
+}
+
+.dock-item {
+  position: relative;
+  flex: none;
+  aspect-ratio: 1;
+}
+
+.dock-item > button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 1px solid var(--dock-item-border);
+  border-radius: 50%;
+  background: var(--dock-item);
+  color: var(--dock-icon);
+  cursor: pointer;
+  transition: background 160ms, color 160ms, border-color 160ms;
+}
+
+.dock-item > button:hover {
+  background: var(--dock-item-hover);
+  color: var(--dock-icon-hover);
+}
+
+.dock-item[data-current] > button {
+  background: var(--dock-current);
+  border-color: transparent;
+  color: var(--dock-current-icon);
+}
+
+.dock-item > button:focus-visible {
+  outline: 2px solid var(--dock-dot);
+  outline-offset: 3px;
+}
+
+.dock-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dock-icon svg {
+  width: 100%;
+  height: 100%;
+  stroke-width: 1.75;
+}
+
+.dock-dot {
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--dock-dot);
+}
+
+.dock-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 20px;
+  padding: 3px 5px;
+  border-radius: 999px;
+  background: hsl(var(--danger));
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.dock-label {
+  position: absolute;
+  top: -26px;
+  left: 50%;
+  padding: 3px 9px;
+  border-radius: 8px;
+  background: var(--dock-label-bg);
+  color: var(--dock-label-fg);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 16px -8px rgba(27, 36, 48, 0.5);
+}
+
+.dock-divider {
+  flex: none;
+  align-self: center;
+  width: 1px;
+  height: 34px;
+  margin: 0 2px;
+  transform: translateY(5px);
+  background: var(--dock-divider);
+}
+
+/* ---------- sign-in and sign-up (app/login/AuthScreen.tsx) ---------- */
+
+.auth-screen {
+  display: flex;
+  min-height: 100dvh;
+  background: hsl(var(--background));
+  transition: background 500ms ease;
+}
+
+.auth-form {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 88px 24px max(40px, env(safe-area-inset-bottom));
+  transition:
+    flex-grow 620ms cubic-bezier(0.65, 0, 0.35, 1),
+    opacity 320ms ease,
+    filter 320ms ease;
+}
+
+.auth-top {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.auth-title {
+  font-size: clamp(2.25rem, 5vw, 3.25rem);
+  font-weight: 300;
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  color: hsl(var(--foreground));
+  text-wrap: balance;
+}
+
+/* Staggered arrival: fade, rise and un-blur. --d sets each element's turn. */
+.auth-in {
+  opacity: 0;
+  filter: blur(6px);
+  transform: translateY(14px);
+  animation: auth-in 700ms cubic-bezier(0.2, 0.7, 0.2, 1) var(--d, 0ms) forwards;
+}
+
+@keyframes auth-in {
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+.auth-field {
+  display: flex;
+  align-items: center;
+  border: 1px solid hsl(var(--border));
+  border-radius: 16px;
+  background: hsl(var(--muted) / 0.5);
+  transition: border-color 160ms, background 160ms, box-shadow 160ms;
+}
+
+.auth-field:focus-within {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--card));
+  box-shadow: 0 0 0 4px hsl(var(--primary) / 0.16);
+}
+
+.auth-field[data-error='true'] {
+  border-color: hsl(var(--danger));
+  box-shadow: 0 0 0 4px hsl(var(--danger) / 0.12);
+}
+
+.auth-field input {
+  flex: 1;
+  min-width: 0;
+  min-height: 52px;
+  padding: 0 18px;
+  border: 0;
+  background: transparent;
+  font-size: 16px; /* 16px keeps iOS from zooming in on focus */
+  color: hsl(var(--foreground));
+  outline: none;
+}
+
+.auth-field input::placeholder {
+  color: hsl(var(--muted-foreground) / 0.75);
+}
+
+.auth-field button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  margin-right: 3px;
+  border-radius: 12px;
+  color: hsl(var(--muted-foreground));
+  transition: color 140ms, background 140ms;
+}
+
+.auth-field button:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted));
+}
+
+.auth-error {
+  min-height: 20px;
+  margin: 10px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: hsl(var(--danger));
+}
+
+.auth-error[data-shake='true'] {
+  animation: auth-shake 380ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes auth-shake {
+  20%, 60% { transform: translateX(-7px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+.auth-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  border-radius: 16px;
+  background: #1b2430;
+  color: #f5b73a;
+  font-size: 16px;
+  font-weight: 650;
+  transition: background 160ms, transform 160ms;
+}
+
+.dark .auth-submit {
+  background: hsl(var(--primary));
+  color: #1b2430;
+}
+
+.auth-submit:hover:not(:disabled) {
+  background: #2a3646;
+}
+
+.dark .auth-submit:hover:not(:disabled) {
+  background: hsl(var(--primary) / 0.88);
+}
+
+.auth-submit:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.auth-submit:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.auth-hero {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .auth-hero {
+    display: block;
+    position: sticky;
+    top: 0;
+    flex: 1.15 1 0;
+    min-width: 0;
+    height: 100dvh;
+    padding: 14px;
+    transition: padding 620ms cubic-bezier(0.65, 0, 0.35, 1);
+  }
+}
+
+.auth-panel {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 28px;
+  background: radial-gradient(120% 90% at 50% 18%, #2c3849 0%, #222c3a 36%, #1b2430 78%);
+  opacity: 0;
+  transform: translateX(48px);
+  filter: blur(8px);
+  animation: auth-slide 900ms cubic-bezier(0.2, 0.7, 0.2, 1) 160ms forwards;
+  transition: border-radius 620ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+@keyframes auth-slide {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+    filter: blur(0);
+  }
+}
+
+.auth-orb {
+  position: absolute;
+  inset: 0 0 150px;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  animation: auth-fade 1400ms ease 500ms forwards;
+}
+
+@keyframes auth-fade {
+  to {
+    opacity: 1;
+  }
+}
+
+.auth-points {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  transition: opacity 280ms ease;
+}
+
+.auth-point {
+  flex: 1 1 0;
+  max-width: 260px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background: rgba(34, 44, 58, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  opacity: 0;
+  filter: blur(6px);
+  transform: translateY(18px) scale(0.96);
+  animation: auth-card 800ms cubic-bezier(0.2, 0.7, 0.2, 1) var(--d, 0ms) forwards;
+}
+
+/* Three cards need width: below 1200px only the first two show. */
+@media (max-width: 1199px) {
+  .auth-point:nth-child(3) {
+    display: none;
+  }
+}
+
+@keyframes auth-card {
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+.auth-point-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: rgba(245, 167, 10, 0.14);
+  color: #f5b73a;
+}
+
+/* The hand-off: the form steps aside and the navy fills the screen. */
+.auth-screen[data-entering='true'] {
+  background: #1b2430;
+}
+
+.auth-screen[data-entering='true'] .auth-form {
+  flex-grow: 0;
+  padding-inline: 0;
+  overflow: hidden;
+  opacity: 0;
+  filter: blur(6px);
+}
+
+.auth-screen[data-entering='true'] .auth-hero {
+  padding: 0;
+}
+
+.auth-screen[data-entering='true'] .auth-panel {
+  border-radius: 0;
+}
+
+.auth-screen[data-entering='true'] .auth-points {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-in,
+  .auth-panel,
+  .auth-orb,
+  .auth-point {
+    animation: none;
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+  .auth-error[data-shake='true'] {
+    animation: none;
+  }
+}

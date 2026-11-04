@@ -35,9 +35,26 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.03.1';
+export const CHANGELOG_VERSION = '2026.11.04.1';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.04.1',
+    date: '2026-11-04',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Modo dock: mais espaço no computador',
+        detail:
+          'No fundo da barra lateral, «Modo dock» troca a barra por uma fila de botões a flutuar no fundo do ecrã, que crescem ao passar o rato. Pode ser claro ou escuro, a escolha fica guardada na sua conta, e volta à barra lateral quando quiser.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Nova página de entrada',
+        detail: 'Entrar e criar conta têm agora uma página própria, em vez de uma janela por cima do site.',
+      },
+    ],
+  },
   {
     version: '2026.11.03.1',
     date: '2026-11-03',

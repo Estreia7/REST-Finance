@@ -78,7 +78,7 @@ export default function AssistantLauncher({ raised = false }: {
           onClick={() => setOpen(true)}
           aria-label={t('assistant.open')}
           title={`${t('assistant.open')} (Ctrl+K)`}
-          className={`fixed z-40 flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-background shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:bottom-6 md:right-6 ${
+          className={`assistant-fab fixed z-40 flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-background shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:bottom-6 md:right-6 ${
             raised ? 'bottom-[calc(10.5rem+env(safe-area-inset-bottom))]' : 'bottom-[calc(6rem+env(safe-area-inset-bottom))]'
           } right-[calc(1rem+env(safe-area-inset-right))]`}
         >

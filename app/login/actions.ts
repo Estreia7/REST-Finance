@@ -30,7 +30,7 @@ export async function checkUserRole(userId: string) {
     });
 
     if (!membership) {
-      return { error: 'A tua conta ainda não tem acesso a nenhum restaurante.' };
+      return { error: 'auth.errors.noAccess' };
     }
 
     return { role: membership.role, redirectTo: '/dashboard' };
@@ -77,7 +77,7 @@ export async function loginWithPassword(email: string, password: string) {
     if (error instanceof AuthError) {
       // One message for both a wrong password and an unknown address, so the
       // form cannot be used to discover which emails are registered.
-      return { error: 'Email ou palavra-passe incorretos.' };
+      return { error: 'auth.errors.invalid' };
     }
     throw error;
   }

@@ -4,9 +4,9 @@ import { useLanguage } from '@/lib/language-context';
 import { Wordmark } from '@/app/components/Logo';
 import RestaurantSwitcher from './RestaurantSwitcher';
 import { hasModule, type ModuleKey } from '@/lib/modules';
-import { LayoutDashboard, TrendingUp, DollarSign, Users, CreditCard, Settings, LogOut, X, BarChart3, ShieldCheck, CalendarDays, Landmark, FileText, UtensilsCrossed, Inbox, Package } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, DollarSign, Users, CreditCard, Settings, LogOut, X, BarChart3, ShieldCheck, CalendarDays, Landmark, FileText, UtensilsCrossed, Inbox, Package, PanelBottom } from 'lucide-react';
 
-type Tab = 'dashboard' | 'inbox' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'stock' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
+export type Tab = 'dashboard' | 'inbox' | 'revenue' | 'costs' | 'analytics' | 'fnb' | 'stock' | 'accounting' | 'compliance' | 'schedule' | 'estado' | 'users' | 'billing' | 'settings';
 
 interface SidebarProps {
   activeTab:    Tab;
@@ -22,9 +22,13 @@ interface SidebarProps {
   badges?:      Partial<Record<Tab, number>>;
   /** The extra modules this restaurant has; a module's item shows only with it. */
   modules?:     ModuleKey[];
+  /** Set while the dock is the desktop navigation: this panel leaves the desktop. */
+  docked?:      boolean;
+  /** Switches the desktop navigation to the dock. */
+  onUseDock?:   () => void;
 }
 
-const NAV_MAIN: ReadonlyArray<{ id: Tab; icon: typeof Package; tKey: string; module?: ModuleKey }> = [
+export const NAV_MAIN: ReadonlyArray<{ id: Tab; icon: typeof Package; tKey: string; module?: ModuleKey }> = [
   { id: 'dashboard' as Tab, icon: LayoutDashboard, tKey: 'nav.dashboard' },
   { id: 'inbox'     as Tab, icon: Inbox,           tKey: 'nav.inbox' },
   { id: 'revenue'   as Tab, icon: TrendingUp,      tKey: 'nav.revenue' },
@@ -40,13 +44,13 @@ const NAV_MAIN: ReadonlyArray<{ id: Tab; icon: typeof Package; tKey: string; mod
   { id: 'estado'    as Tab, icon: Landmark,        tKey: 'nav.estado' },
 ];
 
-const NAV_MANAGE = [
+export const NAV_MANAGE = [
   { id: 'users'    as Tab, icon: Users,      tKey: 'nav.team' },
   { id: 'billing'  as Tab, icon: CreditCard, tKey: 'nav.billing' },
   { id: 'settings' as Tab, icon: Settings,   tKey: 'nav.settings' },
 ] as const;
 
-function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLogout, onClose, badges, modules }: Omit<SidebarProps, 'isOpen'>) {
+function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLogout, onClose, badges, modules, onUseDock }: Omit<SidebarProps, 'isOpen'>) {
   const { t } = useLanguage();
 
 
@@ -110,6 +114,23 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
         </div>
       </nav>
 
+      {/* The dock is for a desktop only, so narrower screens never see this. */}
+      {onUseDock && (
+        <div className="hidden lg:block px-3 pb-3 shrink-0">
+          <button
+            type="button"
+            onClick={onUseDock}
+            className="flex w-full items-center gap-2.5 rounded-xl border border-dashed border-border px-3 py-2 text-left
+                       text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <PanelBottom className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span className="flex-1">{t('nav.useDock')}</span>
+            <span className="text-[10px] font-normal opacity-70">{t('nav.useDockHint')}</span>
+          </button>
+        </div>
+      )}
+
       {/* User card */}
       <div className="p-3 border-t border-border-subtle shrink-0">
         <div className="flex items-center gap-3 p-3 rounded-xl bg-muted border border-border-subtle">
@@ -159,7 +180,7 @@ export default function Sidebar(props: SidebarProps) {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 w-60 bg-card/60 backdrop-blur-xl border-r border-border-subtle z-40">
+      <aside className={`hidden md:flex flex-col fixed left-0 top-0 bottom-0 w-60 bg-card/60 backdrop-blur-xl border-r border-border-subtle z-40 ${props.docked ? 'lg:hidden' : ''}`}>
         <SidebarContent {...props} onClose={() => {}} />
       </aside>
 

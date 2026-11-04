@@ -190,6 +190,13 @@ model User {
   /// later rewrite can be offered without replaying it for everyone.
   tourVersion Int? @map("tour_version")
 
+  /// Desktop navigation, "sidebar" or "dock". Null is the sidebar. On the
+  /// account so the choice follows the owner to another computer.
+  navMode String? @map("nav_mode")
+
+  /// The dock's own look, "light" or "dark". Null is light.
+  dockTheme String? @map("dock_theme")
+
   accounts Account[]
   sessions Session[]
 

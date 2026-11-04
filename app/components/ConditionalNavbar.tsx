@@ -16,7 +16,10 @@ export default function ConditionalNavbar() {
   // The time clock's PIN pad fills a tablet at the door.
   const isKioskPage = pathname?.startsWith('/kiosk');
 
-  if (isAdminPage || isDashboardPage || isDeckPage || isOnboardingPage || isKioskPage) {
+  // Signing in fills the screen with its own panel.
+  const isAuthPage = pathname === '/login' || pathname === '/register';
+
+  if (isAdminPage || isDashboardPage || isDeckPage || isOnboardingPage || isKioskPage || isAuthPage) {
     return null;
   }
 

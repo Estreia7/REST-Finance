@@ -1200,6 +1200,8 @@ export async function getCurrentUser() {
         // undefined and drew the empty state, so a picture that saved
         // correctly looked like one that had failed to save at all.
         image: true,
+        navMode: true,
+        dockTheme: true,
       },
     });
 
