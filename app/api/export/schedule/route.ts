@@ -10,7 +10,7 @@ import {
   dateKey,
   parseDateKey,
   weekDates,
-  monthWeekStarts,
+  weeksAhead,
   weeksWithShifts,
 } from '@/lib/schedule';
 
@@ -32,15 +32,15 @@ import {
  *   - the default JPEG is for the download button, where the smaller file is
  *     what gets attached in WhatsApp.
  *
- * `?week=YYYY-MM-DD` draws one week. `?month=YYYY-MM` stacks the month's weeks
- * into one image, leaving out the ones with no shifts.
+ * `?week=YYYY-MM-DD` draws one week. `?weeks=4` stacks this week and the ones
+ * after it into one image, leaving out any with nothing marked.
  */
 
 export const dynamic = 'force-dynamic';
 
 const SCALE = 2;
 const BACKGROUND = '#fbfaf8';
-const MONTH_PARAM = /^(\d{4})-(0[1-9]|1[0-2])$/;
+const MAX_WEEKS = 6;
 
 function rasterise({ svg, width, height }: { svg: string; width: number; height: number }) {
   return sharp(Buffer.from(svg), { density: 72 * SCALE })
@@ -58,16 +58,16 @@ export async function GET(request: NextRequest) {
   }
 
   const weekParam = request.nextUrl.searchParams.get('week');
-  const monthParam = request.nextUrl.searchParams.get('month');
+  const weeksParam = request.nextUrl.searchParams.get('weeks');
   const wantsPng = request.nextUrl.searchParams.get('format') === 'png';
 
   let weeks: string[];
-  if (monthParam !== null) {
-    const match = MONTH_PARAM.exec(monthParam);
-    if (!match) {
-      return NextResponse.json({ error: 'Mês inválido' }, { status: 400 });
+  if (weeksParam !== null) {
+    const count = Number(weeksParam);
+    if (!Number.isInteger(count) || count < 1 || count > MAX_WEEKS) {
+      return NextResponse.json({ error: 'Semanas inválidas' }, { status: 400 });
     }
-    weeks = monthWeekStarts(Number(match[1]), Number(match[2]) - 1);
+    weeks = weeksAhead(new Date(), count);
   } else {
     const monday = weekParam ? startOfWeek(parseDateKey(weekParam)) : startOfWeek(new Date());
     if (Number.isNaN(monday.getTime())) {
@@ -79,7 +79,9 @@ export async function GET(request: NextRequest) {
   const from = parseDateKey(weeks[0]);
   const to = addDays(parseDateKey(weeks[weeks.length - 1]), 6);
 
-  const [restaurant, employees, shifts, closures, leaves] = await Promise.all([
+  const firstWeek = weeks[0];
+
+  const [restaurant, employees, shifts, closures, leaves, daysOff] = await Promise.all([
     prisma.restaurant.findUnique({
       where: { id: owner.restaurantId },
       select: { name: true, logoPath: true },
@@ -97,6 +99,10 @@ export async function GET(request: NextRequest) {
     prisma.employeeLeave.findMany({
       where: { restaurantId: owner.restaurantId, startDate: { lte: to }, endDate: { gte: from } },
       select: { employeeId: true, startDate: true, endDate: true },
+    }),
+    prisma.scheduleDayOff.findMany({
+      where: { restaurantId: owner.restaurantId, date: { gte: from, lte: to } },
+      select: { employeeId: true, date: true },
     }),
   ]);
 
@@ -116,10 +122,12 @@ export async function GET(request: NextRequest) {
     end: dateKey(l.endDate),
   }));
 
-  if (monthParam !== null) {
-    weeks = weeksWithShifts(weeks, allShifts.map((s) => s.date));
+  const allDaysOff = daysOff.map((d) => ({ employeeId: d.employeeId, date: dateKey(d.date) }));
+
+  if (weeksParam !== null) {
+    weeks = weeksWithShifts(weeks, [...allShifts, ...allDaysOff].map((s) => s.date));
     if (weeks.length === 0) {
-      return NextResponse.json({ error: 'Mês sem turnos' }, { status: 404 });
+      return NextResponse.json({ error: 'Sem turnos' }, { status: 404 });
     }
   }
 
@@ -141,6 +149,7 @@ export async function GET(request: NextRequest) {
       shifts: allShifts.filter((s) => days.has(s.date)),
       closures: allClosures.filter((c) => days.has(c.date)),
       leaves: allLeaves,
+      daysOff: allDaysOff.filter((d) => days.has(d.date)),
     });
   });
 
@@ -171,7 +180,7 @@ export async function GET(request: NextRequest) {
         // download keeps `attachment` so the browser saves it with a name.
         'Content-Disposition': wantsPng
           ? 'inline'
-          : `attachment; filename="horario-${monthParam ?? weeks[0]}.jpg"`,
+          : `attachment; filename="horario-${firstWeek}${weeksParam ? `-${weeksParam}-semanas` : ''}.jpg"`,
         'Cache-Control': 'no-store',
       },
     });

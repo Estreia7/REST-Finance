@@ -22,6 +22,7 @@ import {
   formatMonthTitle,
   formatWeekShort,
   weeksWithShifts,
+  weeksAhead,
 } from '@/lib/schedule';
 
 describe('startOfWeek', () => {
@@ -334,5 +335,17 @@ describe('weeksWithShifts', () => {
 
   it('is empty for a month without shifts', () => {
     expect(weeksWithShifts(weeks, [])).toEqual([]);
+  });
+});
+
+describe('weeksAhead', () => {
+  it('starts on the Monday of the week given and runs on from there', () => {
+    expect(weeksAhead(new Date('2026-11-05T12:00:00Z'), 4)).toEqual([
+      '2026-11-02', '2026-11-09', '2026-11-16', '2026-11-23',
+    ]);
+  });
+
+  it('crosses into the next month and year', () => {
+    expect(weeksAhead(new Date('2026-12-27T12:00:00Z'), 2)).toEqual(['2026-12-21', '2026-12-28']);
   });
 });

@@ -31,6 +31,7 @@ import {
   dateKey,
   parseDateKey,
   isWeekend,
+  DAY_OFF_COLOR,
 } from './schedule';
 
 export interface ImageEmployee {
@@ -58,6 +59,8 @@ export interface ImageInput {
   closures: Array<{ date: string; reason: string | null }>;
   /** Holidays touching the week, as inclusive date ranges. */
   leaves?: Array<{ employeeId: string; start: string; end: string }>;
+  /** Days off in the week: the restaurant is open, this person is not in. */
+  daysOff?: Array<{ employeeId: string; date: string }>;
   /**
    * The restaurant's logo as a `data:image/png;base64,…` URI, already sized
    * by the caller. Embedded rather than linked: the rasteriser has no session
@@ -100,7 +103,7 @@ const COLORS = {
   closedBg: '#f1f0ee',
   accent: '#b45309',
   /**
-   * The "Folga" chip. Outlined rather than filled, because every employee
+   * The chip on a closed day. Outlined rather than filled, because every employee
    * colour is a filled tint — including the grey one — so hue alone cannot
    * keep a closure apart from somebody's shift. Shape can: a shift is a
    * solid block, a closed day is an outline. It survives the JPEG
@@ -163,6 +166,8 @@ export function buildScheduleSvg(input: ImageInput): { svg: string; width: numbe
   for (const l of leaves) {
     if (weekKeys.some((k) => l.start <= k && k <= l.end)) working.add(l.employeeId);
   }
+  const offDays = new Set((input.daysOff ?? []).map((d) => `${d.employeeId}|${d.date}`));
+  for (const d of input.daysOff ?? []) working.add(d.employeeId);
   const employees = input.employees.filter((e) => working.has(e.id));
 
   const closedDays = new Map(input.closures.map((c) => [c.date, c.reason]));
@@ -322,7 +327,7 @@ export function buildScheduleSvg(input: ImageInput): { svg: string; width: numbe
           `<text x="${x + L.dayCol / 2}" y="${
             y + 31
           }" font-size="13" font-weight="600" text-anchor="middle" fill="${COLORS.offInk}">${
-            language === 'pt' ? 'Folga' : 'Day off'
+            language === 'pt' ? 'Fechado' : 'Closed'
           }</text>`
         );
         return;
@@ -334,6 +339,16 @@ export function buildScheduleSvg(input: ImageInput): { svg: string; width: numbe
           `<text x="${x + L.dayCol / 2}" y="${y + 31}" font-size="13" font-weight="600" text-anchor="middle" fill="${
             COLORS.leaveInk
           }">${language === 'pt' ? 'Férias' : 'On leave'}</text>`
+        );
+        return;
+      }
+
+      if (offDays.has(`${emp.id}|${key}`)) {
+        parts.push(
+          `<rect x="${x + 8}" y="${y + 10}" width="${L.dayCol - 16}" height="32" rx="7" fill="${DAY_OFF_COLOR.bg}"/>`,
+          `<text x="${x + L.dayCol / 2}" y="${y + 31}" font-size="14" font-weight="700" text-anchor="middle" fill="${
+            DAY_OFF_COLOR.ink
+          }">${language === 'pt' ? 'Folga' : 'Day off'}</text>`
         );
         return;
       }

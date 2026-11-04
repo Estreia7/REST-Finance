@@ -139,7 +139,7 @@ export default function KPICards({
           <TrendBadge value={advancedStats.revenueChange} />
         </div>
         <div className="mt-3 text-3xl font-black tabular-nums text-foreground">
-          €{advancedStats.totalRevenue.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+          €{advancedStats.totalRevenue.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </div>
         <div className="text-xs text-muted-foreground mt-1">
           {t('kpi.revenueThisMonth')}<InfoHint term="revenue" />

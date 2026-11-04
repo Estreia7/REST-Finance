@@ -13,22 +13,22 @@ describe('formatMoney', () => {
   it('never leaves stray decimals that read as thousands', () => {
     // The reported bug: 53952.4866 rendered as "53 952,487", which with a
     // comma decimal separator looks like fifty-three million.
-    expect(strip(formatMoney(53952.4866))).toBe('€53952');
+    expect(strip(formatMoney(53952.4866))).toBe('€53952,49');
   });
 
   it('rounds rather than truncates', () => {
-    expect(strip(formatMoney(1999.6))).toBe('€2000');
+    expect(strip(formatMoney(1999.6))).toBe('€1999,60');
   });
 
   it('handles zero and negatives', () => {
-    expect(strip(formatMoney(0))).toBe('€0');
-    expect(strip(formatMoney(-1234.56))).toBe('€-1235');
+    expect(strip(formatMoney(0))).toBe('€0,00');
+    expect(strip(formatMoney(-1234.56))).toBe('€-1234,56');
   });
 
   it('returns a safe value for NaN and Infinity', () => {
     // A division by zero upstream must not render "€NaN" to a client.
-    expect(formatMoney(NaN)).toBe('€0');
-    expect(formatMoney(Infinity)).toBe('€0');
+    expect(formatMoney(NaN)).toBe('€0,00');
+    expect(formatMoney(Infinity)).toBe('€0,00');
   });
 });
 

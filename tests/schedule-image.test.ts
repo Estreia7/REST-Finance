@@ -155,3 +155,22 @@ describe('buildScheduleSvg', () => {
     }
   });
 });
+
+describe('days off in the image', () => {
+  it('names a day off, and keeps someone whose only entry is one', () => {
+    const { svg } = buildScheduleSvg({
+      ...base,
+      employees: [...base.employees, { id: 'z', name: 'Zé Folgas', role: null, color: 'rose' }],
+      daysOff: [{ employeeId: 'z', date: '2026-09-15' }],
+    });
+    expect(svg).toContain('Zé Folgas');
+    expect(svg).toContain('>Folga<');
+    expect(svg).toContain('#a21caf');
+  });
+
+  it('calls a closed day closed, so "Folga" only ever means a person', () => {
+    const { svg } = buildScheduleSvg(base);
+    expect(svg).toContain('Fechado');
+    expect(svg).not.toContain('>Folga<');
+  });
+});

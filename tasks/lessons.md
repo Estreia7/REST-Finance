@@ -45,3 +45,21 @@ console, and could not find it.
 build it for both shells, `app/dashboard` and `app/admin`, unless told
 otherwise. Ask which screen the requester actually uses before leaving one out,
 and tell them how to reach the feature from the account they sign in with.
+
+## Money is shown to the cent, everywhere
+
+**What happened:** `formatMoney` defaulted to whole euros, so an invoice line of
+€4,32 read as "€4" next to a unit price with cents. The owner wants exact
+figures on every screen.
+
+**Rule:** euros always show two decimals. Only chart axes stay compact. Never
+add a screen that rounds money away, and use `formatMoney` rather than a local
+`toLocaleString`.
+
+## A row that scrolls sideways with no scrollbar hides what does not fit
+
+**What happened:** the shift palette was one row with a hidden scrollbar, so the
+owner saw a few shifts and concluded the app was limited to three.
+
+**Rule:** a list of choices wraps. Never rely on a hidden horizontal scroll for
+something the owner has to find.

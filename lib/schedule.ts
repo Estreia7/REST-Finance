@@ -80,6 +80,18 @@ export function monthWeekStarts(year: number, month: number): string[] {
   return starts;
 }
 
+/** How many shifts a restaurant can keep saved in the palette. */
+export const MAX_SAVED_SHIFTS = 40;
+
+/** A day off, on screen and in the image: loud, so nobody misses it. */
+export const DAY_OFF_COLOR = { bg: '#a21caf', ink: '#ffffff' };
+
+/** The Mondays of `count` weeks, starting with the one `from` falls in. */
+export function weeksAhead(from: Date, count: number): string[] {
+  const first = startOfWeek(from);
+  return Array.from({ length: count }, (_, i) => dateKey(addWeeks(first, i)));
+}
+
 /** The weeks holding at least one of these dates, which are `dateKey`s. */
 export function weeksWithShifts(weeks: string[], shiftDates: string[]): string[] {
   const dates = new Set(shiftDates);

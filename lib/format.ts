@@ -12,12 +12,12 @@
 
 const LOCALE = 'pt-PT';
 
-/** Euros. Whole numbers by default, since cents add noise to a KPI. */
+/** Euros, always to the cent: the owner wants the exact figure on every screen. */
 export function formatMoney(
   value: number,
-  { decimals = 0 }: { decimals?: number } = {}
+  { decimals = 2 }: { decimals?: number } = {}
 ): string {
-  if (!Number.isFinite(value)) return '€0';
+  if (!Number.isFinite(value)) return formatMoney(0, { decimals });
   return `€${value.toLocaleString(LOCALE, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
@@ -46,7 +46,7 @@ export function formatMoneyCompact(value: number): string {
       maximumFractionDigits: 1,
     })}k`;
   }
-  return formatMoney(value);
+  return formatMoney(value, { decimals: 0 });
 }
 
 /** A ratio already expressed as a percentage number (63.6 -> "63,6%"). */

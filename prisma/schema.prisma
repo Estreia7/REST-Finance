@@ -126,6 +126,7 @@ model Restaurant {
   shiftTemplates    ShiftTemplate[]
   shifts            Shift[]
   scheduleClosures  ScheduleClosure[]
+  scheduleDaysOff   ScheduleDayOff[]
   employeeLeaves    EmployeeLeave[]
   recurringCosts    RecurringCost[]
   ingredients       Ingredient[]
@@ -771,6 +772,7 @@ model ScheduleEmployee {
   pinHash String? @map("pin_hash")
 
   shifts      Shift[]
+  daysOff     ScheduleDayOff[]
   leaves      EmployeeLeave[]
   timeEntries TimeEntry[]
 
@@ -873,6 +875,28 @@ model Shift {
   @@unique([employeeId, date])
   @@index([restaurantId, date])
   @@map("shifts")
+}
+
+/// A person's day off, on a day the restaurant is open.
+///
+/// Its own table rather than a kind of Shift: hours, the time clock and staff
+/// cost all add up shifts, and a day off must never reach any of them.
+model ScheduleDayOff {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  employee   ScheduleEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId String           @map("employee_id")
+
+  /// Midnight UTC on the day, like Shift.date.
+  date DateTime @db.Date
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([employeeId, date])
+  @@index([restaurantId, date])
+  @@map("schedule_days_off")
 }
 
 /// A day the restaurant does not open.

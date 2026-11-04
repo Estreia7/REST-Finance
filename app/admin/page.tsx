@@ -461,11 +461,11 @@ export default function AdminPage() {
                     </span>
                   </div>
                   <div>
-                    <p className="text-2xl font-black tabular-nums text-foreground">€{mrr.toLocaleString(numberLocale)}</p>
+                    <p className="text-2xl font-black tabular-nums text-foreground">{formatMoney(mrr)}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{t('admin.kpi.mrrCaption')}</p>
                   </div>
                   <div className="pt-1 border-t border-border-subtle">
-                    <p className="text-xs text-muted-foreground">{t('admin.kpi.arrEstimate')}: <span className="text-foreground font-medium">€{arr.toLocaleString(numberLocale)}</span></p>
+                    <p className="text-xs text-muted-foreground">{t('admin.kpi.arrEstimate')}: <span className="text-foreground font-medium">{formatMoney(arr)}</span></p>
                   </div>
                 </div>
 

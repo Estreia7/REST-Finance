@@ -180,6 +180,7 @@ export async function saveLeave(input: {
 
   await prisma.$transaction([
     prisma.shift.deleteMany({ where: shiftsInRange }),
+    prisma.scheduleDayOff.deleteMany({ where: shiftsInRange }),
     input.id
       ? prisma.employeeLeave.update({ where: { id: input.id }, data })
       : prisma.employeeLeave.create({ data: { ...data, restaurantId: owner.restaurantId } }),

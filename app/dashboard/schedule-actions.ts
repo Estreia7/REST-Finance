@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
-import { startOfWeek, addWeeks, addDays, dateKey, parseDateKey, breakLength } from '@/lib/schedule';
+import { startOfWeek, addWeeks, addDays, dateKey, parseDateKey, breakLength, MAX_SAVED_SHIFTS } from '@/lib/schedule';
 import { EMPLOYEE_COLORS } from '@/lib/schedule';
 
 /**
@@ -47,16 +47,16 @@ function checkBreak(
   const hasEnd = breakEndMin != null;
 
   if (!hasStart && !hasEnd) return { breakStartMin: null, breakEndMin: null };
-  if (hasStart !== hasEnd) return { error: 'Indique o início e o fim da pausa' };
+  if (hasStart !== hasEnd) return { error: 'schedule.errors.breakBoth' };
 
   if (!validMinute(breakStartMin) || !validMinute(breakEndMin)) {
-    return { error: 'Horas da pausa inválidas' };
+    return { error: 'schedule.errors.breakHours' };
   }
 
   // breakLength returns 0 for anything it cannot use — outside the shift,
   // backwards, or empty — which is exactly the set to reject here.
   if (breakLength(startMin, endMin, breakStartMin, breakEndMin) === 0) {
-    return { error: 'A pausa tem de ficar dentro do turno' };
+    return { error: 'schedule.errors.breakInside' };
   }
 
   return { breakStartMin, breakEndMin };
@@ -88,7 +88,7 @@ export async function getScheduleWeeks(firstWeekStartKey?: string, weekCount = 1
   const weeks = Math.max(1, Math.min(MAX_VIEW_WEEKS, Math.floor(weekCount) || 1));
   const sunday = addDays(monday, weeks * 7 - 1);
 
-  const [employees, shifts, closures, templates, leaves] = await Promise.all([
+  const [employees, shifts, closures, templates, leaves, daysOff] = await Promise.all([
     prisma.scheduleEmployee.findMany({
       where: { restaurantId: owner.restaurantId, deletedAt: null },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -108,11 +108,16 @@ export async function getScheduleWeeks(firstWeekStartKey?: string, weekCount = 1
       where: { restaurantId: owner.restaurantId, startDate: { lte: sunday }, endDate: { gte: monday } },
       select: { employeeId: true, startDate: true, endDate: true },
     }),
+    prisma.scheduleDayOff.findMany({
+      where: { restaurantId: owner.restaurantId, date: { gte: monday, lte: sunday } },
+      select: { employeeId: true, date: true },
+    }),
   ]);
 
   return {
     success: true as const,
     data: {
+      daysOff: daysOff.map((d) => ({ employeeId: d.employeeId, date: dateKey(d.date) })),
       leaves: leaves.map((l) => ({
         employeeId: l.employeeId,
         start: dateKey(l.startDate),
@@ -234,6 +239,9 @@ export async function removeEmployee(id: string) {
     prisma.shift.deleteMany({
       where: { employeeId: id, restaurantId: owner.restaurantId, date: { gte: today } },
     }),
+    prisma.scheduleDayOff.deleteMany({
+      where: { employeeId: id, restaurantId: owner.restaurantId, date: { gte: today } },
+    }),
     prisma.scheduleEmployee.update({
       where: { id },
       data: { deletedAt: new Date(), active: false },
@@ -308,6 +316,11 @@ export async function setShift(input: {
   });
   if (onHoliday) return fail('schedule.onLeaveError');
 
+  // One thing per cell: working that day means it is no longer a day off.
+  await prisma.scheduleDayOff.deleteMany({
+    where: { restaurantId: owner.restaurantId, employeeId: input.employeeId, date },
+  });
+
   await prisma.shift.upsert({
     where: { employeeId_date: { employeeId: input.employeeId, date } },
     create: {
@@ -338,9 +351,50 @@ export async function clearShift(employeeId: string, date: string) {
   const owner = await requireOwner();
   if (isAuthError(owner)) return fail(owner.error);
 
-  await prisma.shift.deleteMany({
-    where: { employeeId, restaurantId: owner.restaurantId, date: parseDateKey(date) },
+  const day = parseDateKey(date);
+  await prisma.$transaction([
+    prisma.shift.deleteMany({ where: { employeeId, restaurantId: owner.restaurantId, date: day } }),
+    prisma.scheduleDayOff.deleteMany({ where: { employeeId, restaurantId: owner.restaurantId, date: day } }),
+  ]);
+
+  return { success: true as const };
+}
+
+/** Marks a person's day off, replacing any shift they had that day. */
+export async function setDayOff(employeeId: string, dateKeyValue: string) {
+  const owner = await requireOwner();
+  if (isAuthError(owner)) return fail(owner.error);
+
+  const employee = await prisma.scheduleEmployee.findFirst({
+    where: { id: employeeId, restaurantId: owner.restaurantId, deletedAt: null },
+    select: { id: true },
   });
+  if (!employee) return fail('Colaborador não encontrado');
+
+  const date = parseDateKey(dateKeyValue);
+  if (Number.isNaN(date.getTime())) return fail('Data inválida');
+
+  const [closed, onHoliday] = await Promise.all([
+    prisma.scheduleClosure.findFirst({
+      where: { restaurantId: owner.restaurantId, date },
+      select: { id: true },
+    }),
+    prisma.employeeLeave.findFirst({
+      where: { restaurantId: owner.restaurantId, employeeId, startDate: { lte: date }, endDate: { gte: date } },
+      select: { id: true },
+    }),
+  ]);
+  if (closed) return fail('schedule.paintClosed');
+  if (onHoliday) return fail('schedule.onLeaveError');
+
+  await prisma.$transaction([
+    prisma.shift.deleteMany({ where: { employeeId, restaurantId: owner.restaurantId, date } }),
+    prisma.scheduleDayOff.upsert({
+      where: { employeeId_date: { employeeId, date } },
+      create: { restaurantId: owner.restaurantId, employeeId, date },
+      update: {},
+    }),
+  ]);
 
   return { success: true as const };
 }
@@ -379,6 +433,7 @@ export async function toggleClosure(date: string, reason?: string) {
       },
     }),
     prisma.shift.deleteMany({ where: { restaurantId: owner.restaurantId, date: day } }),
+    prisma.scheduleDayOff.deleteMany({ where: { restaurantId: owner.restaurantId, date: day } }),
   ]);
 
   return { success: true as const, data: { closed: true } };
@@ -415,16 +470,19 @@ export async function copyWeekForward(input: {
 
   const sourceEnd = addDays(source, 6);
 
-  const [shifts, closures] = await Promise.all([
+  const [shifts, closures, daysOff] = await Promise.all([
     prisma.shift.findMany({
       where: { restaurantId: owner.restaurantId, date: { gte: source, lte: sourceEnd } },
     }),
     prisma.scheduleClosure.findMany({
       where: { restaurantId: owner.restaurantId, date: { gte: source, lte: sourceEnd } },
     }),
+    prisma.scheduleDayOff.findMany({
+      where: { restaurantId: owner.restaurantId, date: { gte: source, lte: sourceEnd } },
+    }),
   ]);
 
-  if (shifts.length === 0 && closures.length === 0) {
+  if (shifts.length === 0 && closures.length === 0 && daysOff.length === 0) {
     return fail('Esta semana está vazia — não há nada para copiar');
   }
 
@@ -486,6 +544,18 @@ export async function copyWeekForward(input: {
       .filter((row) => !onHoliday(row.employeeId, row.date));
   });
 
+  const dayOffRows = targetStarts.flatMap((target) => {
+    const weekOffset = Math.round((target.getTime() - source.getTime()) / 86_400_000);
+    return daysOff
+      .filter((d) => live.has(d.employeeId))
+      .map((d) => ({
+        restaurantId: owner.restaurantId,
+        employeeId: d.employeeId,
+        date: addDays(d.date, weekOffset),
+      }))
+      .filter((row) => !onHoliday(row.employeeId, row.date));
+  });
+
   const closureRows = targetStarts.flatMap((target) => {
     const weekOffset = Math.round((target.getTime() - source.getTime()) / 86_400_000);
     return closures.map((c) => ({
@@ -502,8 +572,12 @@ export async function copyWeekForward(input: {
     prisma.scheduleClosure.deleteMany({
       where: { restaurantId: owner.restaurantId, date: { gte: firstTarget, lte: lastTargetEnd } },
     }),
+    prisma.scheduleDayOff.deleteMany({
+      where: { restaurantId: owner.restaurantId, date: { gte: firstTarget, lte: lastTargetEnd } },
+    }),
     prisma.shift.createMany({ data: shiftRows }),
     prisma.scheduleClosure.createMany({ data: closureRows }),
+    prisma.scheduleDayOff.createMany({ data: dayOffRows }),
   ]);
 
   return {
@@ -527,6 +601,9 @@ export async function clearWeek(weekStartKey: string) {
     prisma.scheduleClosure.deleteMany({
       where: { restaurantId: owner.restaurantId, date: { gte: monday, lte: sunday } },
     }),
+    prisma.scheduleDayOff.deleteMany({
+      where: { restaurantId: owner.restaurantId, date: { gte: monday, lte: sunday } },
+    }),
   ]);
 
   return { success: true as const };
@@ -545,8 +622,8 @@ export async function saveTemplate(input: {
   if (isAuthError(owner)) return fail(owner.error);
 
   const label = input.label?.trim();
-  if (!label) return fail('O nome do turno é obrigatório');
-  if (!validMinute(input.startMin) || !validMinute(input.endMin)) return fail('Horas inválidas');
+  if (!label) return fail('schedule.errors.shiftName');
+  if (!validMinute(input.startMin) || !validMinute(input.endMin)) return fail('schedule.errors.shiftHours');
 
   const pause = checkBreak(
     input.startMin, input.endMin, input.breakStartMin, input.breakEndMin,
@@ -554,7 +631,7 @@ export async function saveTemplate(input: {
   if ('error' in pause) return fail(pause.error);
 
   const count = await prisma.shiftTemplate.count({ where: { restaurantId: owner.restaurantId } });
-  if (count >= 12) return fail('Máximo de 12 turnos guardados');
+  if (count >= MAX_SAVED_SHIFTS) return fail('schedule.errors.shiftLimit');
 
   await prisma.shiftTemplate.create({
     data: {
