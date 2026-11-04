@@ -21,6 +21,8 @@ import {
   paymentState,
   summarisePayables,
   toDayKey,
+  paymentColumns,
+  type PaymentInput,
   type PayablesSummary,
   type PaymentMethodKey,
   type PaymentState,
@@ -310,11 +312,86 @@ export async function markPaid(input: { ids: string[]; method: PaymentMethodKey;
 
     const { count } = await prisma.costEntry.updateMany({
       where: { id: { in: ids }, restaurantId: owner.restaurantId, splitFromId: null, deletedAt: null },
-      data: { paidAt: new Date(`${input.paidOn}T00:00:00Z`), paymentMethod: input.method },
+      data: {
+        paidAt: new Date(`${input.paidOn}T00:00:00Z`),
+        paymentMethod: input.method,
+        paymentToConfirm: false,
+      },
     });
     return { success: true as const, data: { count } };
   } catch (error: unknown) {
     return { error: toClientError('Failed to mark as paid', error, 'write') };
+  }
+}
+
+export interface PaymentToAnswer {
+  id: string;
+  vendorName: string | null;
+  invoiceNumber: string | null;
+  dateKey: string;
+  amount: number;
+  termsDays: number | null;
+}
+
+/** Invoices that saved themselves and still have to say how they were paid. */
+export async function getPaymentsToAnswer() {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const rows = await prisma.costEntry.findMany({
+      where: {
+        restaurantId: owner.restaurantId, deletedAt: null, splitFromId: null, paidAt: null, paymentToConfirm: true,
+      },
+      select: {
+        id: true, date: true, amount: true, invoiceNumber: true,
+        vendor: { select: { name: true, paymentTermsDays: true } },
+        splitParts: { where: { deletedAt: null }, select: { amount: true } },
+      },
+      orderBy: { date: 'asc' },
+      take: 200,
+    });
+    const data: PaymentToAnswer[] = rows.map((r) => ({
+      id: r.id,
+      vendorName: r.vendor?.name ?? null,
+      invoiceNumber: r.invoiceNumber,
+      dateKey: toDayKey(r.date),
+      amount: Number(r.amount) + r.splitParts.reduce((sum, p) => sum + Number(p.amount), 0),
+      termsDays: r.vendor?.paymentTermsDays ?? null,
+    }));
+    return { success: true as const, data };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to read the payments to answer', error, 'read') };
+  }
+}
+
+/** The owner's answer for an invoice that saved itself. */
+export async function answerPayment(input: { id: string; payment: PaymentInput }) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const entry = await prisma.costEntry.findFirst({
+      where: { id: input.id, restaurantId: owner.restaurantId, splitFromId: null, deletedAt: null },
+      select: { id: true, date: true },
+    });
+    if (!entry) return { error: 'accounting.lineNotFound' };
+
+    const paid = paymentColumns(input.payment, toDayKey(entry.date), dayKey(new Date()));
+    if ('error' in paid) return { error: paid.error };
+
+    await prisma.costEntry.update({
+      where: { id: entry.id },
+      data: {
+        paymentMethod: paid.paymentMethod,
+        paidAt: paid.paidKey ? new Date(`${paid.paidKey}T00:00:00Z`) : null,
+        dueDate: paid.dueKey ? new Date(`${paid.dueKey}T00:00:00Z`) : null,
+        paymentToConfirm: false,
+      },
+    });
+    return { success: true as const };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to save the payment', error, 'write') };
   }
 }
 

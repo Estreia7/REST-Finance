@@ -5,6 +5,7 @@ import { checkVendorReading, looksLikeCustomer, type CustomerIdentity } from '@/
 import { saveImage, saveDocument, resolveStoredPath } from '@/lib/uploads';
 import { betterProof, checkReading, rereadHint, type CheckedReading, type Proof } from '@/lib/invoice-checks';
 import { isCreditNoteNumber } from '@/lib/credit-notes';
+import { cleanTaxId, readerNote, rulesFor } from '@/lib/supplier-knowledge';
 import { readFile } from 'node:fs/promises';
 
 /**
@@ -116,17 +117,24 @@ async function readDocument(input: {
     ? await decodeQr(base64, mediaType)
     : null;
 
-  let reading = withQrTruth(await scanDocument(base64, mediaType, scanType, options), qr);
+  // What is known about how this supplier prints, when the QR says who it is
+  // before a word is read.
+  const known = await supplierNote(qr?.issuerNif, qr?.documentType);
+
+  let reading = withQrTruth(await scanDocument(base64, mediaType, scanType, { ...options, hint: known }), qr);
   let proof = proofOf(reading.data, qr);
 
   if (proof?.status === 'failed') {
     try {
+      // Without a QR, the first reading is what says who the supplier is.
+      const vendorTaxId = reading.data.type === 'cost_receipt' ? reading.data.vendorTaxId : null;
+      const note = known || await supplierNote(vendorTaxId, null);
       const { SCANNER_RETRY_MODEL } = await import('@/lib/scanners/claude-scanner');
       const again = withQrTruth(
         await scanDocument(base64, mediaType, scanType, {
           ...options,
           model: SCANNER_RETRY_MODEL,
-          hint: rereadHint(proof, reading.data as unknown as CheckedReading),
+          hint: note + rereadHint(proof, reading.data as unknown as CheckedReading),
         }),
         qr,
       );
@@ -164,6 +172,22 @@ async function readDocument(input: {
       },
     },
   };
+}
+
+/** What the reader should know about this supplier's invoices, or nothing. */
+async function supplierNote(taxId: string | null | undefined, docType: string | null | undefined): Promise<string> {
+  const nif = cleanTaxId(taxId);
+  if (!nif) return '';
+  try {
+    const rules = await prisma.supplierKnowledge.findMany({
+      where: { taxId: nif, active: true },
+      select: { note: true, docType: true, active: true },
+    });
+    return readerNote(rulesFor(rules, docType));
+  } catch {
+    // Reading without the hint beats not reading.
+    return '';
+  }
 }
 
 /** Reads a stored document again with today's reader. Saves nothing. */

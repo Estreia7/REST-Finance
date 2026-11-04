@@ -29,6 +29,7 @@ export async function readInboxCounts(restaurantId: string): Promise<InboxCounts
         amount: true,
         dueDate: true,
         paymentMethod: true,
+        paymentToConfirm: true,
         vendor: { select: { paymentTermsDays: true } },
         splitParts: { where: { deletedAt: null }, select: { amount: true } },
       },
@@ -94,7 +95,15 @@ export async function readInboxCounts(restaurantId: string): Promise<InboxCounts
 
   let overdueCount = 0;
   let overdueTotal = 0;
+  let toConfirmCount = 0;
+  let toConfirmTotal = 0;
   for (const e of unpaid) {
+    // Not late until someone says it was not paid: it may well have been.
+    if (e.paymentToConfirm) {
+      toConfirmCount++;
+      toConfirmTotal += Number(e.amount) + e.splitParts.reduce((s, p) => s + Number(p.amount), 0);
+      continue;
+    }
     const dueKey = dueDateFor({
       dateKey: toDayKey(e.date),
       dueKey: e.dueDate ? toDayKey(e.dueDate) : null,
@@ -111,6 +120,7 @@ export async function readInboxCounts(restaurantId: string): Promise<InboxCounts
 
   return {
     overdue: { count: overdueCount, total: cents(overdueTotal) },
+    paymentsToConfirm: { count: toConfirmCount, total: cents(toConfirmTotal) },
     duplicateCosts: {
       count: duplicates.length,
       total: cents(duplicates.reduce((s, d) => s + d.amount, 0)),

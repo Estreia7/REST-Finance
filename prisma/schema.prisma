@@ -214,6 +214,7 @@ model User {
   supportReplies        SupportTicket[]  @relation("SupportResponder")
   extractionTests       ExtractionTest[]
   aiUsage               AiUsage[]
+  supplierKnowledge SupplierKnowledge[] @relation("SupplierKnowledgeAuthor")
 
   @@map("users")
 }
@@ -396,6 +397,9 @@ model CostEntry {
   paymentMethod PaymentMethod? @map("payment_method")
   paidAt        DateTime?      @map("paid_at") @db.Date
   dueDate       DateTime?      @map("due_date") @db.Date
+  /// Saved by itself, so nobody has said how it was paid yet. The question
+  /// waits in "Precisa de ti"; until then it counts as still to pay.
+  paymentToConfirm Boolean @default(false) @map("payment_to_confirm")
 
   invoiceItems InvoiceItem[]
   receiptScans ReceiptScan[]
@@ -584,6 +588,31 @@ model ReceiptScan {
 /// reader being wrong, and both are what the next prompt change is measured
 /// against. Nothing here is consulted while reading — the memory already
 /// holds the right answers — it is the record of how often they were needed.
+/// How a supplier prints its invoices, told to the reader. Not per restaurant:
+/// a layout is the same for all of them. Approved by an administrator, and
+/// about columns and units only. See lib/supplier-knowledge.ts.
+model SupplierKnowledge {
+  id         String @id @default(uuid())
+  /// The supplier's NIF, nine digits.
+  taxId      String @map("tax_id")
+  vendorName String @map("vendor_name")
+  /// FT, FR or FS as the QR states it; null for every kind of document.
+  docType    String? @map("doc_type")
+  note       String
+  /// The suggestion it came from; null when written by hand.
+  source     String?
+  active     Boolean @default(true)
+
+  createdBy   User?   @relation("SupplierKnowledgeAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String? @map("created_by")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([taxId, active])
+  @@map("supplier_knowledge")
+}
+
 model ScanCorrection {
   id           String     @id @default(uuid())
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])

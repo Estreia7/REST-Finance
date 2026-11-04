@@ -147,6 +147,32 @@ export function checkReading(reading: CheckedReading, qr: Pick<InvoiceQrData, 't
   };
 }
 
+/**
+ * Whether an invoice can go in without anyone looking at it.
+ *
+ * Only one proved against its QR: the till's own figures, not a reading of
+ * paper. Anything else in doubt (who the supplier is, money coming back) still
+ * goes past the owner first.
+ */
+export function canSaveUnseen(input: {
+  vendor: string;
+  lines: number;
+  checks?: {
+    proof?: Pick<Proof, 'status'>;
+    doubt?: string | null;
+    creditNote?: boolean;
+    knownVendorIsCustomer?: boolean;
+  };
+}): boolean {
+  const { vendor, lines, checks } = input;
+  return checks?.proof?.status === 'proved'
+    && !checks.doubt
+    && !checks.creditNote
+    && !checks.knownVendorIsCustomer
+    && vendor.trim().length > 0
+    && lines > 0;
+}
+
 const RANK: Record<ProofStatus, number> = { proved: 0, partial: 1, failed: 2 };
 
 /** The better of two readings of one document. Ties keep the first. */

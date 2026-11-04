@@ -238,10 +238,12 @@ export async function createCostEntry(data: {
   invoiceNumber?: string | null;
   /** Whether it is already paid, and how. Omitted, it is still to pay. */
   payment?: PaymentInput;
+  /** Saved by itself: nobody was asked, so "Precisa de ti" asks later. */
+  paymentToConfirm?: boolean;
 }) {
   try {
     // Validate input
-    const { recurring, vendorName, vendorTaxId, invoiceNumber, payment, ...entry } = data;
+    const { recurring, vendorName, vendorTaxId, invoiceNumber, payment, paymentToConfirm, ...entry } = data;
     const parsed = costEntrySchema.safeParse(entry);
     if (!parsed.success) {
       return { success: false as const, error: formatZodError(parsed.error) };
@@ -278,6 +280,7 @@ export async function createCostEntry(data: {
       paymentMethod: paid.paymentMethod,
       paidAt: paid.paidKey ? new Date(`${paid.paidKey}T00:00:00Z`) : null,
       dueDate: paid.dueKey ? new Date(`${paid.dueKey}T00:00:00Z`) : null,
+      paymentToConfirm: paymentToConfirm === true && !payment,
     };
 
     if (!recurring) {

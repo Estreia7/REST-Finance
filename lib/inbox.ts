@@ -15,6 +15,7 @@ export const INBOX_KINDS = [
   'duplicateCosts',
   'complianceExpired',
   'emailInvoices',
+  'paymentsToConfirm',
   'bankOpen',
   'invoicesToConfirm',
   'creditNotes',
@@ -43,6 +44,8 @@ export interface InboxCounts {
   bankOpen: { count: number; total: number };
   /** Invoices that arrived by email and are waiting to be checked. */
   emailInvoices: { count: number; total: number };
+  /** Invoices saved by themselves that have not said how they were paid. */
+  paymentsToConfirm: { count: number; total: number };
   /** Invoices whose lines did not add up, even after a second reading. */
   invoicesToConfirm: { count: number; total: number };
   /** Credit notes waiting for the invoice they cancel. */
@@ -76,6 +79,7 @@ const SEVERITY: Record<InboxKind, InboxSeverity> = {
   invoicesToConfirm: 'medium',
   creditNotes: 'medium',
   linesToSetup: 'medium',
+  paymentsToConfirm: 'medium',
   uncategorisedLines: 'medium',
   uncategorisedCosts: 'medium',
   // Worth doing, not urgent.
@@ -92,6 +96,7 @@ const TARGET: Record<InboxKind, InboxTarget> = {
   invoicesToConfirm: { tab: 'accounting', view: 'confirm' },
   creditNotes: { tab: 'accounting', view: 'credits' },
   linesToSetup: { tab: 'accounting', view: 'setup' },
+  paymentsToConfirm: { tab: 'accounting', view: 'payments' },
   uncategorisedLines: { tab: 'accounting', view: 'lines' },
   uncategorisedCosts: { tab: 'costs', view: 'history' },
   complianceExpired: { tab: 'compliance' },
@@ -110,6 +115,7 @@ export function buildInbox(c: InboxCounts): InboxItem[] {
     { kind: 'bankOpen', count: c.bankOpen.count, amount: c.bankOpen.total },
     { kind: 'invoicesToConfirm', count: c.invoicesToConfirm.count, amount: c.invoicesToConfirm.total },
     { kind: 'creditNotes', count: c.creditNotes.count, amount: c.creditNotes.total },
+    { kind: 'paymentsToConfirm', count: c.paymentsToConfirm.count, amount: c.paymentsToConfirm.total },
     { kind: 'linesToSetup', count: c.linesToSetup.count, amount: c.linesToSetup.total },
     { kind: 'uncategorisedLines', count: c.uncategorisedLines.count, amount: c.uncategorisedLines.total },
     { kind: 'uncategorisedCosts', count: c.uncategorisedCosts.count, amount: c.uncategorisedCosts.total },

@@ -168,6 +168,36 @@ export const translations = {
         yearLabel: 'Escolher ano',
       },
       // A restaurant's brain: what it knows, how well invoices are read, where it is still wrong
+      knowledge: {
+        title: 'Conhecimento por fornecedor',
+        body: 'As correções de todos os restaurantes mostram como cada fornecedor imprime as faturas. Só o que aprovar aqui chega ao leitor, e vale para todos os clientes. Escreva sobre colunas e unidades, nunca sobre preços.',
+        empty: 'Ainda não há correções de fornecedores com NIF.',
+        summary: 'NIF {nif} · {corrections} correções · {restaurants} restaurantes · {rules} regras ativas',
+        seen: 'Visto {count} vezes nas correções',
+        approve: 'Aprovar esta regra',
+        saved: 'Regra guardada. O leitor passa a usá-la.',
+        rulesTitle: 'Regras',
+        switchOff: 'Desligar',
+        switchOn: 'Ligar',
+        examplesTitle: 'Correções recentes',
+        newRule: 'Nova regra',
+        newRulePlaceholder: 'Ex.: a coluna Qtd traz os quilos com três casas decimais.',
+        addRule: 'Adicionar regra',
+        docType: 'Tipo de documento',
+        docAll: 'Todos os documentos',
+        docFT: 'Faturas (FT)',
+        docFR: 'Faturas-recibo (FR)',
+        docFS: 'Faturas simplificadas (FS)',
+        suggest: {
+          weighed: 'Os produtos ao peso trazem os quilos ou litros na coluna da quantidade, com decimais, e o preço é por quilo ou litro. Não leia estas linhas como 1 unidade.',
+          packs: 'A descrição do produto traz o tamanho da embalagem. Leia-o de cada linha em vez de contar só embalagens.',
+          prices: 'Confirme que a quantidade, o preço unitário e o valor vêm das colunas certas: neste fornecedor as colunas costumam ficar trocadas.',
+        },
+        errors: {
+          taxId: 'Este fornecedor não tem um NIF válido.',
+          note: 'Escreva a regra com 10 a 500 caracteres.',
+        },
+      },
       brain: {
         loading: 'A carregar o cérebro do restaurante',
         notFound: 'Restaurante não encontrado.',
@@ -934,6 +964,10 @@ export const translations = {
       subSalesChannel: 'A repartição das vendas deste mês entre sala e take-away.',
     },
     // Dashboard navigation
+    paymentCard: {
+      position: '{current} de {total}',
+      noVendor: 'Fornecedor por indicar',
+    },
     lineSetup: {
       lead: 'Explique cada produto uma vez. Vale para as faturas já guardadas e para as próximas.',
       progress: '{current} de {total} · {amount} por configurar',
@@ -1578,6 +1612,7 @@ export const translations = {
       saveFailed: 'Erro ao guardar',
       revenueSaved: 'Receita do dia registada!',
       costSaved: 'Despesa registada!',
+      savedUnseen: 'Fatura conferida com o QR e guardada. O que faltar fica em Precisa de ti.',
       duplicateTitle: 'Esta fatura já está registada',
       duplicateBody: 'A fatura {number} de {vendor}, de {date}, já foi lançada. Registá-la outra vez duplicava a despesa e a mercadoria.',
       duplicateDiscard: 'Está bem, descartar',
@@ -3240,6 +3275,8 @@ export const translations = {
     },
     // "Precisa de ti" inbox (app/dashboard/components/InboxPanel.tsx)
     inbox: {
+      paymentCards: 'Como foram pagas',
+      lineCards: 'Produtos por explicar',
       title: 'Precisa de ti',
       lead: '{count} decisões à espera, as mais urgentes primeiro.',
       leadWithMoney: '{count} decisões à espera · {amount} em causa.',
@@ -3287,6 +3324,11 @@ export const translations = {
           one: '1 nota de crédito por conciliar',
           other: '{count} notas de crédito por conciliar',
           body: 'Não entram como despesa. Aguardam a fatura do mesmo valor que anulam.',
+        },
+        paymentsToConfirm: {
+          one: '1 fatura por dizer como foi paga',
+          other: '{count} faturas por dizer como foram pagas',
+          body: 'Já estão guardadas e conferidas. Só falta dizer se foram pagas, e como.',
         },
         linesToSetup: {
           one: '1 produto de faturas por configurar',
@@ -4040,6 +4082,36 @@ export const translations = {
         yearLabel: 'Choose a year',
       },
       // A restaurant's brain: what it knows, how well invoices are read, where it is still wrong
+      knowledge: {
+        title: 'Knowledge per supplier',
+        body: 'Corrections from every restaurant show how each supplier prints its invoices. Only what you approve here reaches the reader, and it applies to all clients. Write about columns and units, never about prices.',
+        empty: 'No corrections from suppliers with a tax number yet.',
+        summary: 'Tax no. {nif} · {corrections} corrections · {restaurants} restaurants · {rules} active rules',
+        seen: 'Seen {count} times in corrections',
+        approve: 'Approve this rule',
+        saved: 'Rule saved. The reader now uses it.',
+        rulesTitle: 'Rules',
+        switchOff: 'Switch off',
+        switchOn: 'Switch on',
+        examplesTitle: 'Recent corrections',
+        newRule: 'New rule',
+        newRulePlaceholder: 'E.g. the Qty column holds the kilos with three decimals.',
+        addRule: 'Add rule',
+        docType: 'Document type',
+        docAll: 'All documents',
+        docFT: 'Invoices (FT)',
+        docFR: 'Invoice-receipts (FR)',
+        docFS: 'Simplified invoices (FS)',
+        suggest: {
+          weighed: 'Goods sold by weight show the kilos or litres in the quantity column, with decimals, and the price is per kilo or litre. Do not read these lines as 1 unit.',
+          packs: 'The product description states the package size. Read it from each line instead of counting packages only.',
+          prices: 'Check that quantity, unit price and value come from the right columns: this supplier\'s columns tend to be read shifted.',
+        },
+        errors: {
+          taxId: 'This supplier has no valid tax number.',
+          note: 'Write the rule in 10 to 500 characters.',
+        },
+      },
       brain: {
         loading: "Loading the restaurant's brain",
         notFound: 'Restaurant not found.',
@@ -4799,6 +4871,10 @@ export const translations = {
       subSalesChannel: "This month's sales split between the dining room and takeaway.",
     },
     // Dashboard navigation
+    paymentCard: {
+      position: '{current} of {total}',
+      noVendor: 'No supplier yet',
+    },
     lineSetup: {
       lead: 'Explain each product once. It applies to saved invoices and to the next ones.',
       progress: '{current} of {total} · {amount} to set up',
@@ -5434,6 +5510,7 @@ export const translations = {
       saveFailed: 'Could not save',
       revenueSaved: 'Revenue for the day logged.',
       costSaved: 'Cost logged.',
+      savedUnseen: 'Invoice proved by its QR and saved. Anything left waits in Needs you.',
       duplicateTitle: 'This invoice is already recorded',
       duplicateBody: 'Invoice {number} from {vendor}, dated {date}, has already been entered. Recording it again would double both the cost and the goods.',
       duplicateDiscard: 'Alright, discard',
@@ -7094,6 +7171,8 @@ export const translations = {
     },
     // "Needs you" inbox (app/dashboard/components/InboxPanel.tsx)
     inbox: {
+      paymentCards: 'How they were paid',
+      lineCards: 'Products to explain',
       title: 'Needs you',
       lead: '{count} decisions waiting, most urgent first.',
       leadWithMoney: '{count} decisions waiting · {amount} at stake.',
@@ -7141,6 +7220,11 @@ export const translations = {
           one: '1 credit note to match',
           other: '{count} credit notes to match',
           body: 'They do not count as a cost. They are waiting for the invoice of the same value they cancel.',
+        },
+        paymentsToConfirm: {
+          one: '1 invoice to say how it was paid',
+          other: '{count} invoices to say how they were paid',
+          body: 'They are saved and proved. All that is left is whether they were paid, and how.',
         },
         linesToSetup: {
           one: '1 invoice product to set up',

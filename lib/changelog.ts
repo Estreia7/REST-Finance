@@ -35,9 +35,30 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.04.11';
+export const CHANGELOG_VERSION = '2026.11.04.12';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.04.12',
+    date: '2026-11-04',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'As faturas conferidas com o QR guardam-se sozinhas',
+        detail: 'Quando o QR prova que a leitura está certa, a fatura entra logo, sem ficar à espera com a fotografia no ecrã. As outras continuam a passar pela sua revisão.',
+      },
+      {
+        kind: 'new',
+        title: 'Trate de tudo em Precisa de ti, um cartão de cada vez',
+        detail: 'Como foi paga a fatura e o que é cada produto novo, com a opção de criar logo o ingrediente, agora respondem-se na própria página, com calma.',
+      },
+      {
+        kind: 'improvement',
+        title: 'A leitura aprende com as correções',
+        detail: 'O que se corrige nas faturas de um fornecedor ajuda a ler melhor as próximas desse fornecedor.',
+      },
+    ],
+  },
   {
     version: '2026.11.04.11',
     date: '2026-11-04',

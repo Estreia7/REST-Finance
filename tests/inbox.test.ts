@@ -10,6 +10,7 @@ const none: InboxCounts = {
   invoicesToConfirm: { count: 0, total: 0 },
   creditNotes: { count: 0, total: 0 },
   linesToSetup: { count: 0, total: 0 },
+  paymentsToConfirm: { count: 0, total: 0 },
   uncategorisedLines: { count: 0, total: 0 },
   uncategorisedCosts: { count: 0, total: 0 },
   complianceExpired: 0,

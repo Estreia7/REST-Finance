@@ -15,7 +15,7 @@ import {
   correctedLine,
   groupWordings,
   unusualPrice,
-  ingredientUnitFor,
+  newIngredientUnit,
   printedQuantity,
   restateLine,
   toPack,
@@ -372,7 +372,7 @@ export async function saveLineSetup(input: {
           restaurantId,
           name: newName,
           normalizedName: normalizeProductName(newName),
-          unit: ingredientUnitFor(input.pack.unit),
+          unit: newIngredientUnit(items.map((i) => i.unit), input.pack.unit),
         },
         select: { id: true },
       });

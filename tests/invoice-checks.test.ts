@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { checkReading, betterProof, rereadHint, type CheckedReading } from '@/lib/invoice-checks';
+import { checkReading,
+  canSaveUnseen, betterProof, rereadHint, type CheckedReading } from '@/lib/invoice-checks';
 import { parseInvoiceQr } from '@/lib/pt-invoice-qr';
 
 // A wholesale invoice with fictional identifiers: 0,905 kg of mushrooms at 3,69 the kilo.
@@ -122,5 +123,27 @@ describe('rereadHint', () => {
     expect(hint).toContain('6% VAT: base 8.03');
     expect(hint).toContain('line 1 read as 1 x 0.905 = 3.69');
     expect(hint).toContain('Never adjust a figure');
+  });
+});
+
+describe('canSaveUnseen', () => {
+  const proved = { vendor: 'Recheio', lines: 3, checks: { proof: { status: 'proved' as const }, doubt: null } };
+
+  it('lets in only what the QR proved', () => {
+    expect(canSaveUnseen(proved)).toBe(true);
+    expect(canSaveUnseen({ ...proved, checks: { proof: { status: 'partial' } } })).toBe(false);
+    expect(canSaveUnseen({ ...proved, checks: { proof: { status: 'failed' } } })).toBe(false);
+    expect(canSaveUnseen({ ...proved, checks: undefined })).toBe(false);
+  });
+
+  it('stops for any doubt about who the supplier is', () => {
+    expect(canSaveUnseen({ ...proved, checks: { ...proved.checks, doubt: 'customerNif' } })).toBe(false);
+    expect(canSaveUnseen({ ...proved, checks: { ...proved.checks, knownVendorIsCustomer: true } })).toBe(false);
+    expect(canSaveUnseen({ ...proved, vendor: '  ' })).toBe(false);
+  });
+
+  it('stops for a credit note, and for an invoice with no lines', () => {
+    expect(canSaveUnseen({ ...proved, checks: { ...proved.checks, creditNote: true } })).toBe(false);
+    expect(canSaveUnseen({ ...proved, lines: 0 })).toBe(false);
   });
 });

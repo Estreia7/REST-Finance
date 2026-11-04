@@ -9,6 +9,7 @@ import {
   unusualPrice,
   followFigures,
   correctedLine,
+  newIngredientUnit,
   type SavedLine,
 } from '@/lib/line-setup';
 import { rememberedPack, packColumns, packConversion } from '@/lib/invoice-matching';
@@ -205,5 +206,17 @@ describe('correctedLine', () => {
     expect(correctedLine({ quantity: 0, unit: 'kg', unitPrice: 3.69, total: 3.34 })).toBeNull();
     expect(correctedLine({ quantity: 1, unit: 'cx', unitPrice: 3, total: 3 })).toBeNull();
     expect(correctedLine({ quantity: Number.NaN, unit: 'kg', unitPrice: 3, total: 3 })).toBeNull();
+  });
+});
+
+describe('newIngredientUnit', () => {
+  it('follows the invoice when it weighs the product', () => {
+    expect(newIngredientUnit(['kg'], 'un')).toBe('kg');
+    expect(newIngredientUnit([null, 'L'], 'un')).toBe('L');
+  });
+
+  it('follows what one package holds otherwise', () => {
+    expect(newIngredientUnit(['un'], 'g')).toBe('kg');
+    expect(newIngredientUnit([null], 'un')).toBe('un');
   });
 });

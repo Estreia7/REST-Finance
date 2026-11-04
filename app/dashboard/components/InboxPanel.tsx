@@ -6,6 +6,8 @@ import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
 import { inboxTotals, type InboxItem, type InboxSeverity } from '@/lib/inbox';
 import { getInbox, type RestaurantInbox } from '../inbox-actions';
+import LineSetupPanel from './LineSetupPanel';
+import PaymentAnswerPanel from './PaymentAnswerPanel';
 
 /**
  * "Precisa de ti": every decision the app is waiting on, worst first.
@@ -31,6 +33,7 @@ export default function InboxPanel({
   const { t } = useLanguage();
   const [groups, setGroups] = useState<RestaurantInbox[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [answered, setAnswered] = useState(0);
 
   useEffect(() => {
     let stale = false;
@@ -40,7 +43,7 @@ export default function InboxPanel({
       else setFailed(true);
     });
     return () => { stale = true; };
-  }, [refreshKey]);
+  }, [refreshKey, answered]);
 
   if (failed) return <p className="text-sm text-muted-foreground">{t('inbox.failed')}</p>;
   if (!groups) {
@@ -56,6 +59,15 @@ export default function InboxPanel({
   const totals = inboxTotals(all);
   const several = groups.length > 1;
   const money = (n: number) => formatMoney(n);
+
+  // Answered here, a card at a time, rather than on a screen of their own.
+  // Only for the restaurant in use: the cards read the active one.
+  const onCard = (g: RestaurantInbox, item: InboxItem) =>
+    g.active && (item.kind === 'linesToSetup' || item.kind === 'paymentsToConfirm');
+  const activeItems = groups.find((g) => g.active)?.items ?? [];
+  const paymentCards = activeItems.some((i) => i.kind === 'paymentsToConfirm');
+  const lineCards = activeItems.some((i) => i.kind === 'linesToSetup');
+  const changed = () => setAnswered((n) => n + 1);
 
   const titleFor = (item: InboxItem) =>
     t(`inbox.kinds.${item.kind}.${item.count === 1 ? 'one' : 'other'}`).replace('{count}', String(item.count));
@@ -80,7 +92,7 @@ export default function InboxPanel({
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">{t('inbox.emptyBody')}</p>
         </div>
       ) : (
-        groups.filter((g) => g.items.length > 0).map((g) => (
+        groups.filter((g) => g.items.some((i) => !onCard(g, i))).map((g) => (
           <section key={g.restaurantId} aria-labelledby={several ? `inbox-${g.restaurantId}` : undefined}>
             {several && (
               <h2 id={`inbox-${g.restaurantId}`} className="section-label mb-2 px-1">
@@ -88,7 +100,7 @@ export default function InboxPanel({
               </h2>
             )}
             <ul className="card-glass divide-y divide-border overflow-hidden">
-              {g.items.map((item) => (
+              {g.items.filter((item) => !onCard(g, item)).map((item) => (
                 <li key={item.kind}>
                   <button
                     type="button"
@@ -116,6 +128,20 @@ export default function InboxPanel({
             </ul>
           </section>
         ))
+      )}
+
+      {paymentCards && (
+        <section aria-labelledby="inbox-payments" className="space-y-2">
+          <h2 id="inbox-payments" className="section-label px-1">{t('inbox.paymentCards')}</h2>
+          <PaymentAnswerPanel onChanged={changed} />
+        </section>
+      )}
+
+      {lineCards && (
+        <section aria-labelledby="inbox-lines" className="space-y-2">
+          <h2 id="inbox-lines" className="section-label px-1">{t('inbox.lineCards')}</h2>
+          <LineSetupPanel embedded onChanged={changed} />
+        </section>
       )}
     </div>
   );

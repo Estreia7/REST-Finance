@@ -8,6 +8,7 @@ import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
 import { saveInvoiceLines } from '../reconcile-actions';
 import { saveCreditNote } from '../credit-note-actions';
+import { canSaveUnseen } from '@/lib/invoice-checks';
 import { measureImage, type QualityCheck } from '@/lib/image-quality';
 import { findExistingInvoice } from '../reconcile-actions';
 import DocumentCamera from './DocumentCamera';
@@ -395,10 +396,23 @@ export default function ReceiptScanner({
 
       const result = await res.json();
       if (result.success) {
-        setExtracted(result.data);
-        setScanId(typeof result.scanId === 'string' ? result.scanId : null);
-        setEditData(result.data);
-        toast.success(t('scanner.extracted'));
+        const reading = result.data as ExtractionResult;
+        const readId = typeof result.scanId === 'string' ? result.scanId : null;
+        setScanId(readId);
+
+        // Proved by the invoice's own QR: nobody needs to sit here beside the
+        // photograph. It goes in, and what is left waits in "Precisa de ti".
+        const unseen = reading.type === 'cost_receipt' && !attachTarget && canSaveUnseen({
+          vendor: reading.vendor,
+          lines: reading.items.length,
+          checks: reading.checks,
+        });
+        if (unseen) {
+          await handleConfirmSave(undefined, { data: reading as CostReceiptData, scanId: readId });
+        } else {
+          showReading(reading);
+          toast.success(t('scanner.extracted'));
+        }
       } else {
         // The route answers with a key (`scanner.refused`…), resolved here.
         toast.error(result.error ? translateError(language, result.error) : t('scanner.scanFailed'));
@@ -410,22 +424,37 @@ export default function ReceiptScanner({
     setScanning(false);
   };
 
-  const handleConfirmSave = async (targetOverride?: AttachTarget) => {
-    if (!editData) return;
+  const showReading = (reading: ExtractionResult) => {
+    setExtracted(reading);
+    setEditData(reading);
+  };
+
+  /**
+   * `unseen` is a proved invoice going in with nobody looking, which is why it
+   * carries its own reading: nothing has reached the screen. Anything that
+   * stops it shows the reading after all.
+   */
+  const handleConfirmSave = async (
+    targetOverride?: AttachTarget,
+    unseen?: { data: CostReceiptData; scanId: string | null },
+  ) => {
+    const draft = unseen?.data ?? editData;
+    if (!draft) return;
+    const usedScanId = unseen ? unseen.scanId : scanId;
     const target = targetOverride ?? attachTarget;
     // Asked, never assumed — except when attaching, where the cost already
     // has its answer.
     // Money coming back: recorded as a credit note and matched to its invoice,
     // never as a cost.
-    if (editData.type === 'cost_receipt' && editData.checks?.creditNote) {
+    if (draft.type === 'cost_receipt' && draft.checks?.creditNote) {
       setSaving(true);
       const credit = await saveCreditNote({
-        vendorName: editData.vendor,
-        vendorTaxId: editData.vendorTaxId ?? null,
-        number: editData.invoiceNumber ?? '',
-        date: editData.date,
-        amount: editData.grandTotal,
-        scanId,
+        vendorName: draft.vendor,
+        vendorTaxId: draft.vendorTaxId ?? null,
+        number: draft.invoiceNumber ?? '',
+        date: draft.date,
+        amount: draft.grandTotal,
+        scanId: usedScanId,
       });
       setSaving(false);
       if ('error' in credit) {
@@ -442,15 +471,15 @@ export default function ReceiptScanner({
       return;
     }
     const answer = paymentFromDraft(payment);
-    if (editData.type === 'cost_receipt' && !target && 'error' in answer) {
+    if (draft.type === 'cost_receipt' && !target && !unseen && 'error' in answer) {
       toast.error(t(answer.error));
       return;
     }
     setSaving(true);
 
     try {
-      if (editData.type === 'daily_report') {
-        const d = editData as DailyReportData;
+      if (draft.type === 'daily_report') {
+        const d = draft as DailyReportData;
         const result = await createDailySummary({
           date: new Date(d.date),
           dineInRevenue: d.dineInRevenue,
@@ -466,7 +495,7 @@ export default function ReceiptScanner({
           toast.error(result.error || t('scanner.saveFailed'));
         }
       } else {
-        const d = editData as CostReceiptData;
+        const d = draft as CostReceiptData;
         // Find matching category
         const cats = await getCategories(d.suggestedType as any);
         const matchedCat = cats.data
@@ -486,6 +515,7 @@ export default function ReceiptScanner({
         const found = 'data' in existing ? existing.data : null;
         const joiningTyped = !!found?.attachable && found.attachable.costEntryId === target?.costEntryId;
         if (found && !joiningTyped) {
+          if (unseen) showReading(d);
           setDuplicate(found);
           setSaving(false);
           return;
@@ -509,16 +539,17 @@ export default function ReceiptScanner({
               vendorName: d.vendor,
               vendorTaxId: d.vendorTaxId ?? null,
               invoiceNumber: d.invoiceNumber ?? null,
-              payment: 'error' in answer ? undefined : answer,
+              payment: unseen || 'error' in answer ? undefined : answer,
+              paymentToConfirm: !!unseen,
             });
         if (result.success) {
           const entryId = (result as { data?: { id?: string } }).data?.id;
           // The reading is now a cost: filed against it, which also takes an
           // emailed invoice off the waiting list.
           const linkTo = entryId ?? target?.costEntryId;
-          if (scanId && linkTo) linkScanToCost({ scanId, costEntryId: linkTo }).catch(() => undefined);
+          if (usedScanId && linkTo) linkScanToCost({ scanId: usedScanId, costEntryId: linkTo }).catch(() => undefined);
 
-          toast.success(target ? t('payments.attached') : t('scanner.costSaved'));
+          toast.success(unseen ? t('scanner.savedUnseen') : target ? t('payments.attached') : t('scanner.costSaved'));
 
           // The lines go in with the money. What nobody has explained yet
           // waits in "Precisa de ti": no one is held up at the door.
@@ -531,7 +562,7 @@ export default function ReceiptScanner({
               vendorTaxId: d.vendorTaxId ?? null,
               invoiceDate: d.date,
               invoiceNumber: d.invoiceNumber ?? null,
-              scanId,
+              scanId: usedScanId,
               lines: d.items.map((item) => ({
                 productName: item.product,
                 quantity: item.quantity,
@@ -563,10 +594,12 @@ export default function ReceiptScanner({
           resetState();
           onSaved?.();
         } else {
+          if (unseen) showReading(d);
           toast.error(result.error ? t(result.error) : t('scanner.saveFailed'));
         }
       }
     } catch {
+      if (unseen) showReading(unseen.data);
       toast.error(t('scanner.saveFailed'));
     }
 

@@ -67,6 +67,17 @@ export function ingredientUnitFor(unit: PackUnit): 'un' | 'kg' | 'L' {
   return 'un';
 }
 
+/**
+ * The unit a new ingredient is measured in: what the invoice weighs it in, or
+ * failing that what one package holds. A line printed in kilos answers "how
+ * does it come" with nothing, and that must not make it an ingredient by the unit.
+ */
+export function newIngredientUnit(lineUnits: Array<string | null>, pack: PackUnit): 'un' | 'kg' | 'L' {
+  const measured = lineUnits.find((u) => isMeasured(u))?.trim().toLowerCase();
+  if (measured) return measured === 'kg' ? 'kg' : 'L';
+  return ingredientUnitFor(pack);
+}
+
 /** Priced or weighed already, so what a package holds does not apply. */
 export function isMeasured(unit: string | null | undefined): boolean {
   const u = (unit ?? '').trim().toLowerCase();
