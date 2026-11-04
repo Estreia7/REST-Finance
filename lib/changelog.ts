@@ -35,9 +35,20 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.04.2';
+export const CHANGELOG_VERSION = '2026.11.04.3';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.04.3',
+    date: '2026-11-04',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Descarregue o horário do mês inteiro',
+        detail: 'Em Horários, na vista Mês, «Descarregar mês» guarda uma só imagem com todas as semanas que têm turnos.',
+      },
+    ],
+  },
   {
     version: '2026.11.04.2',
     date: '2026-11-04',

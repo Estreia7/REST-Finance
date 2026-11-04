@@ -21,6 +21,7 @@ import {
   monthWeekStarts,
   formatMonthTitle,
   formatWeekShort,
+  weeksWithShifts,
 } from '@/lib/schedule';
 
 describe('startOfWeek', () => {
@@ -317,5 +318,21 @@ describe('leaveColors', () => {
   };
   it.each([...LEAVE_COLORS])('%s carries white text at 4.5:1', (hex) => {
     expect(1.05 / (lum(hex) + 0.05)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe('weeksWithShifts', () => {
+  const weeks = ['2026-10-26', '2026-11-02', '2026-11-09'];
+
+  it('keeps only the weeks that hold a shift, in order', () => {
+    expect(weeksWithShifts(weeks, ['2026-11-15', '2026-11-03'])).toEqual(['2026-11-02', '2026-11-09']);
+  });
+
+  it('counts the Sunday as part of its week', () => {
+    expect(weeksWithShifts(weeks, ['2026-11-01'])).toEqual(['2026-10-26']);
+  });
+
+  it('is empty for a month without shifts', () => {
+    expect(weeksWithShifts(weeks, [])).toEqual([]);
   });
 });

@@ -19,6 +19,7 @@ import {
   WEEKDAYS_PT_SHORT, EMPLOYEE_COLORS, employeeColor,
 } from '@/lib/schedule';
 import { useLanguage } from '@/lib/language-context';
+import { downloadFile } from '@/lib/download-file';
 import Dialog from './Dialog';
 
 /**
@@ -199,6 +200,7 @@ export default function SchedulePanel() {
   const [repeatFrom, setRepeatFrom] = useState<string | null>(null);
   const [copyingWeek, setCopyingWeek] = useState<string | null>(null);
   const [downloadingWeek, setDownloadingWeek] = useState<string | null>(null);
+  const [downloadingMonth, setDownloadingMonth] = useState(false);
 
   useEffect(() => {
     try {
@@ -485,6 +487,23 @@ export default function SchedulePanel() {
   };
 
   /**
+   * Saves the whole month as one image. Only the month view offers it, and the
+   * phone never has that view, so there is no share sheet to consider here.
+   */
+  const downloadMonth = async () => {
+    setDownloadingMonth(true);
+    const key = `${month.year}-${String(month.month + 1).padStart(2, '0')}`;
+    try {
+      await downloadFile(`/api/export/schedule?month=${key}`, `horario-${key}.jpg`);
+      toast.success(`${t('schedule.downloadedPrefix')} ${formatMonthTitle(month.year, month.month, language)}`);
+    } catch {
+      toast.error(t('schedule.downloadFailed'));
+    } finally {
+      setDownloadingMonth(false);
+    }
+  };
+
+  /**
    * Puts the week's image on the clipboard, ready to paste straight into a
    * WhatsApp conversation.
    *
@@ -620,6 +639,20 @@ export default function SchedulePanel() {
           </div>
 
           <div className="flex items-center gap-2">
+            {isMonth && employees.length > 0 && (
+              <button
+                type="button"
+                onClick={downloadMonth}
+                disabled={loading || downloadingMonth || shifts.length === 0}
+                className="cta-button-secondary !h-11 !py-0 !px-3.5 !text-xs disabled:opacity-50"
+              >
+                {downloadingMonth
+                  ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                  : <Download className="w-4 h-4" aria-hidden="true" />}
+                {t('schedule.downloadMonth')}
+              </button>
+            )}
+
             {/* Always there, never a link that comes and goes: getting back
                 to today is the most common move on a rota. In the month view
                 it opens this month and brings this week into sight. */}
@@ -675,8 +708,8 @@ export default function SchedulePanel() {
         <EmptyState onAdd={() => setShowAddPerson(true)} />
       ) : isMonth ? (
         /* ── Month: the weeks stacked, each sendable on its own ──────────
-           The team is sent one week at a time, so each week keeps its own
-           copy and download rather than the month going out as one image. */
+           The team is usually sent one week at a time, so each week keeps its
+           own copy and download; the whole month is a button in the header. */
         <div className={`space-y-4 transition-opacity ${loading ? 'opacity-60' : ''}`} aria-busy={loading}>
           {weekStarts.map((wk, i) => (
             <section

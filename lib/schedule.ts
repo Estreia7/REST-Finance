@@ -80,6 +80,12 @@ export function monthWeekStarts(year: number, month: number): string[] {
   return starts;
 }
 
+/** The weeks holding at least one of these dates, which are `dateKey`s. */
+export function weeksWithShifts(weeks: string[], shiftDates: string[]): string[] {
+  const dates = new Set(shiftDates);
+  return weeks.filter((week) => weekDates(parseDateKey(week)).some((day) => dates.has(dateKey(day))));
+}
+
 /** "Outubro 2026" / "October 2026". */
 export function formatMonthTitle(year: number, month: number, language: 'pt' | 'en' = 'pt'): string {
   const name = new Date(Date.UTC(year, month, 1)).toLocaleDateString(
