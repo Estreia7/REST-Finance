@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Check, Loader2, Plus, X } from 'lucide-react';
+import { AlertTriangle, Check, FileSearch, Loader2, Plus, X } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
 import { translateError } from '@/lib/error-messages';
@@ -16,6 +16,8 @@ import {
 } from '@/lib/line-setup';
 import { saveLineSetup, type LineSetupData, type SetupLine } from '../line-setup-actions';
 import CategoryPicker from './CategoryPicker';
+import Dialog from './Dialog';
+import InvoiceProofEditor from './InvoiceProofEditor';
 import IngredientSearch from './IngredientSearch';
 
 /**
@@ -50,6 +52,7 @@ export default function LineSetupCard({
   const [unit, setUnit] = useState<PackUnit>(line.pack?.unit ?? 'un');
   const [categoryId, setCategoryId] = useState<string | null>(line.categoryId);
   const [saving, setSaving] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   const runningCost = categories.find((c) => c.id === categoryId)?.type === 'OPEX';
   const skipIngredient = notIngredient || runningCost;
@@ -126,7 +129,32 @@ export default function LineSetupCard({
             .replace('{quantity}', `${line.quantity.toLocaleString(locale)}${line.unit ? ` ${line.unit}` : ''}`)
             .replace('{total}', formatMoney(line.total))}
         </p>
+        {line.usualPrice !== null && (
+          <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
+            <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
+            {t('lineSetup.unusualPrice').replace('{amount}', formatMoney(line.usualPrice))}
+          </p>
+        )}
+        {line.invoiceNumber && (
+          <button
+            type="button"
+            onClick={() => setChecking(true)}
+            className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary-ink hover:underline"
+          >
+            <FileSearch className="w-3.5 h-3.5" aria-hidden="true" />
+            {t('lineSetup.checkInvoice')}
+          </button>
+        )}
       </header>
+
+      {checking && line.invoiceNumber && (
+        <Dialog wide onClose={() => setChecking(false)} title={t('lineSetup.checkInvoice')}>
+          <InvoiceProofEditor
+            invoiceNumber={line.invoiceNumber}
+            onDone={() => { setChecking(false); onSaved(); }}
+          />
+        </Dialog>
+      )}
 
       <section aria-labelledby={`what-${line.key}`}>
         <h3 id={`what-${line.key}`} className="text-sm font-semibold text-foreground">{t('lineSetup.whatIsIt')}</h3>
@@ -253,7 +281,7 @@ export default function LineSetupCard({
                 </p>
               )}
               {!pack && <p className="mt-2 text-xs text-danger">{t('lineSetup.errors.pack')}</p>}
-              {mismatched && <p className="mt-2 text-xs text-warning-ink">{t('lineSetup.unitMismatch')}</p>}
+              {mismatched && <p className="mt-2 text-xs text-warning">{t('lineSetup.unitMismatch')}</p>}
             </>
           )}
         </section>

@@ -209,6 +209,9 @@ export interface InvoiceLine {
    * did not say is not a reader that said "no package".
    */
   packSize?: PackSize | null;
+  /** The line's VAT percentage, and its value with VAT, as read. */
+  vatRate?: number | null;
+  grossTotal?: number | null;
 }
 
 export interface ReconciledLine extends InvoiceLine {

@@ -35,9 +35,35 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.04.7';
+export const CHANGELOG_VERSION = '2026.11.04.8';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.04.8',
+    date: '2026-11-04',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'Faturas conferidas com o QR',
+        detail: 'Cada fatura lida é comparada com os valores do QR, taxa de IVA a taxa de IVA. Quando a leitura não bate certo, a app volta a ler sozinha com mais cuidado.',
+      },
+      {
+        kind: 'new',
+        title: 'Confirme as faturas que não batem certo',
+        detail: 'Em Precisa de ti vê a imagem da fatura ao lado das linhas e quanto falta para a conta bater. Pode corrigir à mão ou reler a fatura. Também está disponível em qualquer fatura, em Contabilidade.',
+      },
+      {
+        kind: 'fix',
+        title: 'Produtos a peso lidos corretamente',
+        detail: 'A quantidade, o preço por kg e o valor sem IVA passam a ser lidos cada um da sua coluna, e cada linha guarda a sua taxa de IVA.',
+      },
+      {
+        kind: 'fix',
+        title: 'Notas de crédito deixam de entrar como despesa',
+        detail: 'Ao ler uma nota de crédito, a app avisa e não a guarda como despesa.',
+      },
+    ],
+  },
   {
     version: '2026.11.04.7',
     date: '2026-11-04',

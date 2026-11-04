@@ -16,6 +16,7 @@ export const INBOX_KINDS = [
   'complianceExpired',
   'emailInvoices',
   'bankOpen',
+  'invoicesToConfirm',
   'linesToSetup',
   'uncategorisedLines',
   'uncategorisedCosts',
@@ -29,7 +30,7 @@ export type InboxSeverity = 'high' | 'medium' | 'low';
 /** Where each item is fixed: a dashboard tab, and the view inside it. */
 export interface InboxTarget {
   tab: 'accounting' | 'costs' | 'compliance';
-  view?: 'payments' | 'bank' | 'tidy' | 'lines' | 'setup' | 'history' | 'scan';
+  view?: 'payments' | 'bank' | 'tidy' | 'lines' | 'setup' | 'confirm' | 'history' | 'scan';
   filter?: 'overdue';
 }
 
@@ -41,6 +42,8 @@ export interface InboxCounts {
   bankOpen: { count: number; total: number };
   /** Invoices that arrived by email and are waiting to be checked. */
   emailInvoices: { count: number; total: number };
+  /** Invoices whose lines did not add up, even after a second reading. */
+  invoicesToConfirm: { count: number; total: number };
   /** Wordings on saved invoices that nobody has explained yet. */
   linesToSetup: { count: number; total: number };
   uncategorisedLines: { count: number; total: number };
@@ -67,6 +70,7 @@ const SEVERITY: Record<InboxKind, InboxSeverity> = {
   // The numbers are incomplete until these are sorted.
   emailInvoices: 'medium',
   bankOpen: 'medium',
+  invoicesToConfirm: 'medium',
   linesToSetup: 'medium',
   uncategorisedLines: 'medium',
   uncategorisedCosts: 'medium',
@@ -81,6 +85,7 @@ const TARGET: Record<InboxKind, InboxTarget> = {
   duplicateVendors: { tab: 'accounting', view: 'tidy' },
   emailInvoices: { tab: 'costs', view: 'scan' },
   bankOpen: { tab: 'accounting', view: 'bank' },
+  invoicesToConfirm: { tab: 'accounting', view: 'confirm' },
   linesToSetup: { tab: 'accounting', view: 'setup' },
   uncategorisedLines: { tab: 'accounting', view: 'lines' },
   uncategorisedCosts: { tab: 'costs', view: 'history' },
@@ -98,6 +103,7 @@ export function buildInbox(c: InboxCounts): InboxItem[] {
     { kind: 'duplicateVendors', count: c.duplicateVendors, amount: null },
     { kind: 'emailInvoices', count: c.emailInvoices.count, amount: c.emailInvoices.total },
     { kind: 'bankOpen', count: c.bankOpen.count, amount: c.bankOpen.total },
+    { kind: 'invoicesToConfirm', count: c.invoicesToConfirm.count, amount: c.invoicesToConfirm.total },
     { kind: 'linesToSetup', count: c.linesToSetup.count, amount: c.linesToSetup.total },
     { kind: 'uncategorisedLines', count: c.uncategorisedLines.count, amount: c.uncategorisedLines.total },
     { kind: 'uncategorisedCosts', count: c.uncategorisedCosts.count, amount: c.uncategorisedCosts.total },

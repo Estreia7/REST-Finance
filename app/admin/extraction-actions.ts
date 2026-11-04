@@ -14,6 +14,8 @@ import { subjectOf } from '@/lib/ai-usage';
 import { checkExtraction } from '@/lib/pt-validation';
 import { readInvoiceQr, compareWithQr, applyQrTruth } from '@/lib/pt-invoice-qr';
 import type { MediaType, ScanType } from '@/lib/document-scanner';
+import { rereadStoredDocument } from '@/lib/scan-core';
+import { checkReading, type CheckedReading, type ProofStatus } from '@/lib/invoice-checks';
 
 /**
  * The extraction bench.
@@ -404,5 +406,75 @@ export async function getExtractionSummary() {
     };
   } catch (error: unknown) {
     return { error: toClientError('Failed to summarise', error, 'read') };
+  }
+}
+
+export interface ProofBenchItem {
+  scanId: string;
+  label: string;
+}
+
+export interface ProofBenchRow extends ProofBenchItem {
+  before: ProofStatus;
+  after: ProofStatus;
+  gap: number;
+}
+
+/** The stored invoices worth measuring: one reading per document. */
+export async function getProofBenchQueue() {
+  try {
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
+
+    const scans = await prisma.receiptScan.findMany({
+      where: { scanType: 'COST_RECEIPT', NOT: { imageUrl: '' } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, extractedData: true },
+      take: 100,
+    });
+    const seen = new Set<string>();
+    const data: ProofBenchItem[] = [];
+    for (const scan of scans) {
+      const read = scan.extractedData as { vendor?: string; invoiceNumber?: string } | null;
+      const key = read?.invoiceNumber?.trim() || scan.id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      data.push({ scanId: scan.id, label: [read?.vendor, read?.invoiceNumber].filter(Boolean).join(' · ') });
+    }
+    return { success: true as const, data };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to list stored invoices', error, 'read') };
+  }
+}
+
+/**
+ * Reads one stored invoice with today's reader and proves both readings.
+ *
+ * Touches no books: the only thing written is the usage log of the call.
+ */
+export async function runProofBench(item: ProofBenchItem) {
+  try {
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
+
+    const scan = await prisma.receiptScan.findUnique({
+      where: { id: item.scanId },
+      select: { restaurantId: true, userId: true, imageUrl: true, extractedData: true },
+    });
+    if (!scan) return { error: 'accounting.lineNotFound' };
+
+    const { proof } = await rereadStoredDocument({
+      restaurantId: scan.restaurantId,
+      userId: scan.userId,
+      storedPath: scan.imageUrl,
+    });
+    if (!proof) return { error: 'proof.errors.reread' };
+
+    // The old reading, held to the same record as the new one.
+    const before = checkReading(scan.extractedData as unknown as CheckedReading, { taxes: proof.truth });
+    const data: ProofBenchRow = { ...item, before: before.status, after: proof.status, gap: proof.gap };
+    return { success: true as const, data };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to read the stored invoice', error, 'read') };
   }
 }

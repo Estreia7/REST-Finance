@@ -136,6 +136,20 @@ export function lineNeedsSetup(line: {
   return !line.ingredientUnits.every((u) => u === 'un');
 }
 
+/**
+ * The usual price, when this one looks wrong against it.
+ *
+ * Compared with the middle of past prices in the same unit, so one old mistake
+ * does not set the bar. Null with too little history, or within 30%.
+ */
+export function unusualPrice(price: number, history: number[]): number | null {
+  if (history.length < 2 || !(price > 0)) return null;
+  const sorted = [...history].sort((a, b) => a - b);
+  const middle = sorted[Math.floor(sorted.length / 2)];
+  if (!(middle > 0)) return null;
+  return Math.abs(price - middle) / middle > 0.3 ? middle : null;
+}
+
 export interface SavedLine extends StoredLine {
   productName: string;
   vendorId: string | null;
@@ -143,6 +157,7 @@ export interface SavedLine extends StoredLine {
   categoryId: string | null;
   /** The invoice date, newest wins as the example shown. */
   date: string;
+  invoiceNumber?: string | null;
 }
 
 /** One wording from one supplier, however many invoices carry it. */
@@ -152,6 +167,8 @@ export interface WordingGroup {
   vendorId: string | null;
   vendorName: string | null;
   productName: string;
+  /** The latest invoice carrying it, to open beside the card. */
+  invoiceNumber: string | null;
   /** The latest purchase, as printed. */
   quantity: number;
   unit: string | null;
@@ -172,6 +189,7 @@ export function groupWordings(lines: SavedLine[]): WordingGroup[] {
     const newer = !seen || line.date >= seen.latest;
     const example = {
       productName: line.productName,
+      invoiceNumber: line.invoiceNumber ?? null,
       quantity: printedQuantity(line),
       unit: line.packFactor ? 'un' : line.unit,
       total: line.total,
@@ -186,7 +204,7 @@ export function groupWordings(lines: SavedLine[]): WordingGroup[] {
       spent: (seen?.spent ?? 0) + line.total,
       lines: (seen?.lines ?? 0) + 1,
       ...(newer ? example : {
-        productName: seen.productName, quantity: seen.quantity, unit: seen.unit,
+        productName: seen.productName, invoiceNumber: seen.invoiceNumber, quantity: seen.quantity, unit: seen.unit,
         total: seen.total, categoryId: seen.categoryId, latest: seen.latest,
       }),
     });

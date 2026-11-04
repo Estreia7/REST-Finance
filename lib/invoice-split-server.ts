@@ -41,14 +41,16 @@ export async function rebalanceInvoice(
 
   const items = await tx.invoiceItem.findMany({
     where: { costEntryId: { in: entries.map((e) => e.id) }, restaurantId: input.restaurantId },
-    select: { id: true, categoryId: true, totalPrice: true },
+    select: { id: true, categoryId: true, totalPrice: true, grossTotal: true },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   });
   if (items.length === 0) return { parts: entries.length };
 
   const grandTotal = entries.reduce((s, e) => s + Number(e.amount), 0);
   const parts = splitInvoiceTotal(
-    items.map((i) => ({ categoryId: i.categoryId, total: Number(i.totalPrice) })),
+    // With VAT where known: the total shared out includes it, and a 23% line
+    // carries more of it than a 6% one.
+    items.map((i) => ({ categoryId: i.categoryId, total: Number(i.grossTotal ?? i.totalPrice) })),
     grandTotal,
   );
 

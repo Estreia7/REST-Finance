@@ -36,6 +36,7 @@ interface CostReceiptData {
   /** `category` is the reader's guess, from the restaurant's own list. */
   items: Array<{
     product: string; quantity: number; unit?: string; unitPrice: number; total: number; category?: string;
+    vatRate?: number; grossTotal?: number;
     /** What one billed unit holds, as the reader read the description. */
     packAmount?: number; packUnit?: 'kg' | 'L';
   }>;
@@ -413,6 +414,10 @@ export default function ReceiptScanner({
     const target = targetOverride ?? attachTarget;
     // Asked, never assumed — except when attaching, where the cost already
     // has its answer.
+    if (editData.type === 'cost_receipt' && editData.checks?.creditNote) {
+      toast.error(t('proof.creditNote'));
+      return;
+    }
     const answer = paymentFromDraft(payment);
     if (editData.type === 'cost_receipt' && !target && 'error' in answer) {
       toast.error(t(answer.error));
@@ -510,6 +515,8 @@ export default function ReceiptScanner({
                 unit: item.unit,
                 unitPrice: item.unitPrice,
                 total: item.total,
+                vatRate: item.vatRate ?? null,
+                grossTotal: item.grossTotal ?? null,
                 category: item.category,
                 packSize: item.packAmount && item.packUnit
                   ? { amount: item.packAmount, unit: item.packUnit }
@@ -850,6 +857,22 @@ export default function ReceiptScanner({
                 })()}
                 {/* Items list */}
                 <div className="space-y-2">
+                  {(editData as CostReceiptData).checks?.creditNote ? (
+                    <p role="alert" className="flex items-start gap-2 rounded-lg bg-danger/10 px-3 py-2 text-xs font-medium text-danger">
+                      <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
+                      {t('proof.creditNote')}
+                    </p>
+                  ) : (editData as CostReceiptData).checks?.proof?.status === 'proved' ? (
+                    <p className="flex items-center gap-2 rounded-lg bg-success/10 px-3 py-2 text-xs font-medium text-success">
+                      <Check className="w-4 h-4 shrink-0" aria-hidden="true" />
+                      {t('proof.provedByQr')}
+                    </p>
+                  ) : (editData as CostReceiptData).checks?.proof?.status === 'failed' ? (
+                    <p className="flex items-start gap-2 rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
+                      <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
+                      {t('proof.willConfirm')}
+                    </p>
+                  ) : null}
                   <div className="text-xs text-muted-foreground">{t('scanner.items')}</div>
                   {(editData as CostReceiptData).items.map((item, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs bg-muted rounded-lg p-2">

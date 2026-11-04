@@ -80,6 +80,12 @@ export async function readInboxCounts(restaurantId: string): Promise<InboxCounts
   });
   const wordings = new Set(waiting.map((w) => `${w.vendorId ?? ''}|${w.productName.trim().toLowerCase()}`));
 
+  const unproved = await prisma.receiptScan.findMany({
+    where: { restaurantId, proofStatus: 'failed', proofResolvedAt: null, linkedEntryId: { not: null } },
+    select: { extractedData: true },
+    take: 200,
+  });
+
   let overdueCount = 0;
   let overdueTotal = 0;
   for (const e of unpaid) {
@@ -110,6 +116,13 @@ export async function readInboxCounts(restaurantId: string): Promise<InboxCounts
       total: cents(emailed.reduce((s, e) => {
         const total = (e.extractedData as { grandTotal?: unknown } | null)?.grandTotal;
         return s + (typeof total === 'number' ? total : 0);
+      }, 0)),
+    },
+    invoicesToConfirm: {
+      count: unproved.length,
+      total: cents(unproved.reduce((sum, s) => {
+        const gap = (s.extractedData as { checks?: { proof?: { gap?: number } } } | null)?.checks?.proof?.gap;
+        return sum + Math.abs(gap ?? 0);
       }, 0)),
     },
     linesToSetup: {

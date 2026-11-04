@@ -63,3 +63,15 @@ owner saw a few shifts and concluded the app was limited to three.
 
 **Rule:** a list of choices wraps. Never rely on a hidden horizontal scroll for
 something the owner has to find.
+
+## A reading is not trusted until it adds up
+
+**What happened:** the owner saw mushrooms at €3,69 and blamed the setup screen.
+The invoice said 0,905 kg at €3,69 the kilo, €3,34 before VAT. The reader had
+shifted every column one place, and only 3 of 14 stored readings added up. No
+check existed, and the QR's VAT bases were being thrown away.
+
+**Rule:** prove what a model reads against something it did not read. An invoice
+line must multiply out, and lines must reach the QR's base per VAT rate. When an
+owner reports a wrong figure, open the real document and do the sum before
+changing the screen they are looking at.

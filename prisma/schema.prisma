@@ -560,10 +560,16 @@ model ReceiptScan {
   fromEmail String?    @map("from_email")
   fileName  String?    @map("file_name")
 
+  /// Whether the lines add up to the invoice: proved, partial or failed, or
+  /// accepted when the owner kept them as they are. See lib/invoice-checks.ts.
+  proofStatus     String?   @map("proof_status")
+  proofResolvedAt DateTime? @map("proof_resolved_at")
+
   invoiceItems InvoiceItem[]
   corrections  ScanCorrection[]
 
   @@index([restaurantId, source, reviewedAt])
+  @@index([restaurantId, proofStatus])
   @@map("receipt_scans")
 }
 
@@ -700,6 +706,11 @@ model InvoiceItem {
   /// with 4 in each is 24 at a factor of 4. Null when it was left as printed.
   /// Kept so a corrected answer starts from the print, never from a result.
   packFactor Decimal? @map("pack_factor") @db.Decimal(10, 3)
+
+  /// The line's VAT percentage, and its value with VAT. `totalPrice` is the
+  /// value before VAT, which is what a cost is worked out from.
+  vatRate    Decimal? @map("vat_rate") @db.Decimal(5, 2)
+  grossTotal Decimal? @map("gross_total") @db.Decimal(12, 2)
 
   /// Saved before anyone said what this wording is. Waits in "Precisa de ti".
   needsSetup Boolean @default(false) @map("needs_setup")

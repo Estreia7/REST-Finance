@@ -2,7 +2,9 @@ import { prisma } from '@/lib/prisma';
 import { scanDocument, type ScanResult, type MediaType, type ScanType } from '@/lib/document-scanner';
 import { readInvoiceQr, applyQrTruth, type InvoiceQrData } from '@/lib/pt-invoice-qr';
 import { checkVendorReading, looksLikeCustomer, type CustomerIdentity } from '@/lib/vendor-reading';
-import { saveImage, saveDocument } from '@/lib/uploads';
+import { saveImage, saveDocument, resolveStoredPath } from '@/lib/uploads';
+import { betterProof, checkReading, rereadHint, type CheckedReading, type Proof } from '@/lib/invoice-checks';
+import { readFile } from 'node:fs/promises';
 
 /**
  * Reads one document for one restaurant and records the reading.
@@ -25,40 +27,7 @@ export async function processScan(input: {
   fileName?: string | null;
 }): Promise<{ data: ScanResult; scanId: string }> {
   const { restaurantId, userId, base64, mediaType, scanType } = input;
-
-  // The restaurant's own cost categories, so the reader places each line
-  // in one that exists rather than inventing a name nothing matches.
-  const categories = scanType === 'COST_RECEIPT'
-    ? await prisma.category.findMany({
-        where: { restaurantId, isActive: true, type: { in: ['COGS', 'OPEX'] } },
-        select: { name: true, type: true },
-        orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }],
-      })
-    : [];
-
-  // Who the invoice is addressed to: the restaurant and its owners. Told
-  // to the reader, and checked against after, because an invoice made out
-  // to the owner by name was read with the owner as the supplier.
-  const customer = scanType === 'COST_RECEIPT' ? await customerOf(restaurantId) : null;
-
-  const rawData = await scanDocument(base64, mediaType, scanType, {
-    categories: categories.map((c) => ({ name: c.name, type: c.type as 'COGS' | 'OPEX' })),
-    // So the administrator can see which restaurant this reading was for.
-    usage: { restaurantId, userId },
-    ...(customer ? { customer } : {}),
-  });
-
-  // A Portuguese certified invoice carries a QR code holding the date, the
-  // document number, the issuer NIF and the totals — signed by the till, not
-  // read off a photograph. Where there is one it overrides the model, which
-  // on a blurred photo gets exactly these fields wrong. A PDF is the
-  // supplier's own file, read as text, so there is no photograph to doubt.
-  const corrected = mediaType === 'application/pdf'
-    ? { data: rawData, qr: null, changed: [] as string[] }
-    : await applyQrCorrections(base64, mediaType, rawData);
-  const data = customer
-    ? await checkSupplier(restaurantId, corrected.data, corrected.qr, corrected.changed, customer)
-    : corrected.data;
+  const { data, proof } = await readDocument({ restaurantId, userId, base64, mediaType, scanType });
 
   // The document itself, kept so the owner can look at what is behind a
   // figure. A failure here does not fail the scan: the reading is the
@@ -91,6 +60,7 @@ export async function processScan(input: {
       source: input.source ?? 'APP',
       fromEmail: input.fromEmail?.slice(0, 320) ?? null,
       fileName: input.fileName?.slice(0, 255) ?? null,
+      proofStatus: proof?.status ?? null,
     },
     select: { id: true },
   });
@@ -99,29 +69,144 @@ export async function processScan(input: {
 }
 
 /**
- * Corrects a reading against the invoice's own QR code.
+ * Reads a document, proves it, and reads it again if it does not add up.
  *
- * Never throws and never blocks: a document with no QR, an unreadable one, or
- * a decoder that fails leaves the model's reading exactly as it was.
+ * The cheap reader goes first because most pages are fine. A page that fails
+ * goes to a stronger one, told what went wrong and what the document's own
+ * record says, and the better of the two stands. Saves nothing.
  */
-async function applyQrCorrections(
-  imageBase64: string,
-  mediaType: string,
-  data: ScanResult,
-): Promise<{ data: ScanResult; qr: InvoiceQrData | null; changed: string[] }> {
-  if (data.type !== 'cost_receipt') return { data, qr: null, changed: [] };
+async function readDocument(input: {
+  restaurantId: string;
+  userId: string;
+  base64: string;
+  mediaType: MediaType;
+  scanType: ScanType;
+}): Promise<{ data: ScanResult; proof: Proof | null }> {
+  const { restaurantId, userId, base64, mediaType, scanType } = input;
 
+  // The restaurant's own cost categories, so the reader places each line
+  // in one that exists rather than inventing a name nothing matches.
+  const categories = scanType === 'COST_RECEIPT'
+    ? await prisma.category.findMany({
+        where: { restaurantId, isActive: true, type: { in: ['COGS', 'OPEX'] } },
+        select: { name: true, type: true },
+        orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }],
+      })
+    : [];
+
+  // Who the invoice is addressed to: the restaurant and its owners. Told
+  // to the reader, and checked against after, because an invoice made out
+  // to the owner by name was read with the owner as the supplier.
+  const customer = scanType === 'COST_RECEIPT' ? await customerOf(restaurantId) : null;
+
+  const options = {
+    categories: categories.map((c) => ({ name: c.name, type: c.type as 'COGS' | 'OPEX' })),
+    // So the administrator can see which restaurant this reading was for.
+    usage: { restaurantId, userId },
+    ...(customer ? { customer } : {}),
+  };
+
+  // A Portuguese certified invoice carries a QR code holding the date, the
+  // document number, the issuer NIF, the totals and the base of each VAT rate
+  // — written by the till, not read off a photograph. Where there is one it
+  // overrides the model. A PDF is the supplier's own file, read as text and
+  // proved against its printed VAT table instead: there is no decoder for it.
+  const qr = scanType === 'COST_RECEIPT' && mediaType !== 'application/pdf'
+    ? await decodeQr(base64, mediaType)
+    : null;
+
+  let reading = withQrTruth(await scanDocument(base64, mediaType, scanType, options), qr);
+  let proof = proofOf(reading.data, qr);
+
+  if (proof?.status === 'failed') {
+    try {
+      const { SCANNER_RETRY_MODEL } = await import('@/lib/scanners/claude-scanner');
+      const again = withQrTruth(
+        await scanDocument(base64, mediaType, scanType, {
+          ...options,
+          model: SCANNER_RETRY_MODEL,
+          hint: rereadHint(proof, reading.data as unknown as CheckedReading),
+        }),
+        qr,
+      );
+      const second = proofOf(again.data, qr);
+      if (second && betterProof(proof, second) === 'second') {
+        reading = again;
+        proof = second;
+      }
+    } catch {
+      // The first reading stands, and goes to the owner to confirm.
+    }
+  }
+
+  const checked = customer
+    ? await checkSupplier(restaurantId, reading.data, qr, reading.changed, customer)
+    : reading.data;
+  if (checked.type !== 'cost_receipt') return { data: checked, proof: null };
+
+  const number = checked.invoiceNumber?.trim() ?? '';
+  return {
+    proof,
+    data: {
+      ...checked,
+      checks: {
+        qrRead: !!qr,
+        qrChanged: reading.changed,
+        qrBuyerNif: qr?.buyerNif ?? null,
+        doubt: null,
+        knownVendor: null,
+        knownVendorId: null,
+        knownVendorIsCustomer: false,
+        ...checked.checks,
+        ...(proof ? { proof } : {}),
+        creditNote: !!qr?.isCreditNote || /^NC\b/i.test(number),
+      },
+    },
+  };
+}
+
+/** Reads a stored document again with today's reader. Saves nothing. */
+export async function rereadStoredDocument(input: {
+  restaurantId: string;
+  userId: string;
+  storedPath: string;
+}): Promise<{ data: ScanResult; proof: Proof | null }> {
+  const file = resolveStoredPath(input.storedPath);
+  if (!file) throw new Error('Stored document not found');
+  const bytes = await readFile(file);
+  const lower = input.storedPath.toLowerCase();
+  const mediaType: MediaType = lower.endsWith('.pdf')
+    ? 'application/pdf'
+    : lower.endsWith('.png') ? 'image/png' : lower.endsWith('.webp') ? 'image/webp' : 'image/jpeg';
+  return readDocument({
+    restaurantId: input.restaurantId,
+    userId: input.userId,
+    base64: bytes.toString('base64'),
+    mediaType,
+    scanType: 'COST_RECEIPT',
+  });
+}
+
+/** The QR on a photograph, or null. Never throws: a failed decode changes nothing. */
+async function decodeQr(imageBase64: string, mediaType: string): Promise<InvoiceQrData | null> {
   try {
     const bytes = Buffer.from(imageBase64, 'base64');
-    const blob = new Blob([new Uint8Array(bytes)], { type: mediaType });
-    const qr = await readInvoiceQr(blob);
-    if (!qr) return { data, qr: null, changed: [] };
-
-    const { corrected, changed } = applyQrTruth(data as unknown as Record<string, unknown>, qr);
-    return { data: corrected as unknown as ScanResult, qr, changed };
+    return await readInvoiceQr(new Blob([new Uint8Array(bytes)], { type: mediaType }));
   } catch {
-    return { data, qr: null, changed: [] };
+    return null;
   }
+}
+
+/** A reading with the QR's fields taking the place of what was read. */
+function withQrTruth(data: ScanResult, qr: InvoiceQrData | null): { data: ScanResult; changed: string[] } {
+  if (!qr || data.type !== 'cost_receipt') return { data, changed: [] };
+  const { corrected, changed } = applyQrTruth(data as unknown as Record<string, unknown>, qr);
+  return { data: corrected as unknown as ScanResult, changed };
+}
+
+function proofOf(data: ScanResult, qr: InvoiceQrData | null): Proof | null {
+  if (data.type !== 'cost_receipt') return null;
+  return checkReading(data, qr);
 }
 
 /** The restaurant's name and NIF, and the names of its owners. */

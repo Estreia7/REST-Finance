@@ -13,6 +13,7 @@ import { repriceIngredients } from '@/lib/ingredient-costs-server';
 import {
   PACK_UNITS,
   groupWordings,
+  unusualPrice,
   ingredientUnitFor,
   restateLine,
   toPack,
@@ -37,6 +38,8 @@ export interface SetupLine extends WordingGroup {
   notIngredient: boolean;
   /** What one purchased unit holds: answered, or read from the wording. */
   pack: PackInput | null;
+  /** The usual price, when the latest one is far from it. */
+  usualPrice: number | null;
 }
 
 export interface LineSetupData {
@@ -49,7 +52,8 @@ const notDeleted = { OR: [{ costEntryId: null }, { costEntry: { deletedAt: null 
 
 const lineSelect = {
   productName: true, quantity: true, unit: true, totalPrice: true, packFactor: true, categoryId: true,
-  invoiceDate: true, createdAt: true, vendorId: true, vendor: { select: { name: true } },
+  invoiceDate: true, createdAt: true, vendorId: true, vendor: { select: { name: true } }, invoiceNumber: true,
+  normalizedName: true, unitPrice: true,
 } as const;
 
 type LineRow = {
@@ -63,6 +67,9 @@ type LineRow = {
   createdAt: Date;
   vendorId: string | null;
   vendor: { name: string } | null;
+  invoiceNumber: string | null;
+  normalizedName: string;
+  unitPrice: { toString(): string };
 };
 
 /** Everything a card needs about these lines, grouped per wording. */
@@ -77,10 +84,11 @@ async function describe(restaurantId: string, rows: LineRow[]): Promise<LineSetu
     total: Number(r.totalPrice),
     packFactor: r.packFactor === null ? null : Number(r.packFactor),
     date: toDayKey(r.invoiceDate ?? r.createdAt),
+    invoiceNumber: r.invoiceNumber,
   })));
 
   const sourceNames = groups.map((g) => g.sourceName);
-  const [ingredients, categoryRows, links, memories] = await Promise.all([
+  const [ingredients, categoryRows, links, memories, history] = await Promise.all([
     prisma.ingredient.findMany({
       where: { restaurantId, deletedAt: null },
       select: { id: true, name: true, unit: true },
@@ -98,6 +106,13 @@ async function describe(restaurantId: string, rows: LineRow[]): Promise<LineSetu
     prisma.invoiceLineMemory.findMany({
       where: { restaurantId, sourceName: { in: sourceNames } },
       select: { sourceName: true, vendorId: true, notIngredient: true, packAmount: true, packUnit: true },
+    }),
+    // Past prices of the same products, whichever supplier sold them.
+    prisma.invoiceItem.findMany({
+      where: { restaurantId, normalizedName: { in: [...new Set(rows.map((r) => r.normalizedName))] } },
+      select: { normalizedName: true, unit: true, unitPrice: true },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
     }),
   ]);
 
@@ -125,12 +140,23 @@ async function describe(restaurantId: string, rows: LineRow[]): Promise<LineSetu
     const suggestions = [...new Map(guessed.map((s) => [s.id, { id: s.id, name: s.name }])).values()].slice(0, 6);
 
     const answered = memory?.packUnit ? rememberedPack(memory) : null;
+
+    const row = rows.find((r) => r.invoiceNumber === group.invoiceNumber && lineKey(r.productName) === group.sourceName);
+    const usualPrice = row
+      ? unusualPrice(
+          Number(row.unitPrice),
+          history
+            .filter((h) => h.normalizedName === row.normalizedName && h.unit === row.unit)
+            .map((h) => Number(h.unitPrice)),
+        )
+      : null;
     return {
       ...group,
       ingredientIds: linked,
       suggestions,
       notIngredient: memory?.notIngredient ?? false,
       pack: toPackInput(answered ?? packSizeOf(group.productName)),
+      usualPrice,
     };
   });
 

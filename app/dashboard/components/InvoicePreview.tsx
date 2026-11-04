@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { X, Loader2, Trash2, FileText, AlertTriangle, Building2 } from 'lucide-react';
+import { X, Loader2, Trash2, FileText, AlertTriangle, Building2, FileSearch } from 'lucide-react';
 import { getInvoiceImage, deleteInvoice } from '../accounting-actions';
 import { useLanguage } from '@/lib/language-context';
 import VendorFixDialog from './VendorFixDialog';
+import Dialog from './Dialog';
+import InvoiceProofEditor from './InvoiceProofEditor';
 
 /**
  * The photograph behind a figure.
@@ -46,6 +48,8 @@ export default function InvoicePreview({
   const [busy, setBusy] = useState(false);
   // Correcting who the invoice is from, over the page itself.
   const [fixing, setFixing] = useState(false);
+  // Checking its lines against the page, and correcting them.
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,6 +190,16 @@ export default function InvoicePreview({
               </button>
               <button
                 type="button"
+                onClick={() => setChecking(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground
+                           hover:underline underline-offset-2 focus-visible:outline-none
+                           focus-visible:ring-2 focus-visible:ring-ring rounded"
+              >
+                <FileSearch className="w-3.5 h-3.5" aria-hidden="true" />
+                {t('lineSetup.checkInvoice')}
+              </button>
+              <button
+                type="button"
                 onClick={() => setConfirming(true)}
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-danger
                            hover:underline underline-offset-2 focus-visible:outline-none
@@ -206,6 +220,14 @@ export default function InvoicePreview({
         onClose={() => setFixing(false)}
         onDone={() => onChanged?.()}
       />
+    )}
+    {checking && (
+      <Dialog wide onClose={() => setChecking(false)} title={t('lineSetup.checkInvoice')}>
+        <InvoiceProofEditor
+          invoiceNumber={invoiceNumber}
+          onDone={() => { setChecking(false); onChanged?.(); }}
+        />
+      </Dialog>
     )}
     </>
   );

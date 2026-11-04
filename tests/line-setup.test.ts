@@ -6,6 +6,7 @@ import {
   printedQuantity,
   lineNeedsSetup,
   groupWordings,
+  unusualPrice,
   type SavedLine,
 } from '@/lib/line-setup';
 import { rememberedPack, packColumns, packConversion } from '@/lib/invoice-matching';
@@ -125,6 +126,17 @@ describe('lineNeedsSetup', () => {
 
   it('asks when a unit bought feeds something measured by weight', () => {
     expect(lineNeedsSetup({ ...base, ingredientUnits: ['kg'] })).toBe(true);
+  });
+});
+
+describe('unusualPrice', () => {
+  it('names the usual price when this one is far from it', () => {
+    expect(unusualPrice(9, [4, 4.1, 3.9])).toBe(4);
+  });
+
+  it('stays quiet within 30%, and with too little history', () => {
+    expect(unusualPrice(4.5, [4, 4.1, 3.9])).toBeNull();
+    expect(unusualPrice(9, [4])).toBeNull();
   });
 });
 

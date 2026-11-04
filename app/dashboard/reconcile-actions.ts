@@ -279,6 +279,9 @@ export interface LineResolution {
   packFactor?: number | null;
   /** Nobody has said what this is yet: it waits in "Precisa de ti". */
   needsSetup?: boolean;
+  /** The VAT percentage, and the value with VAT. `total` is before VAT. */
+  vatRate?: number | null;
+  grossTotal?: number | null;
 }
 
 /**
@@ -451,6 +454,9 @@ export async function commitReconciliation(input: {
               receiptScanId: scan?.id ?? null,
               packFactor: line.packFactor ?? null,
               needsSetup: !!line.needsSetup,
+              vatRate: line.vatRate ?? null,
+              grossTotal: line.grossTotal
+                ?? (line.vatRate != null ? Math.round(line.total * (100 + line.vatRate)) / 100 : null),
               // Nobody said: it stays with the invoice's category, and is
               // marked so that nothing is learned from it.
               categoryId: chosen ?? costEntry.categoryId,
@@ -592,6 +598,8 @@ export async function saveInvoiceLines(input: {
       // and quantity are the figures least likely to be misread.
       unitPrice: !settled && line.suspect && line.impliedUnitPrice ? line.impliedUnitPrice : measured.unitPrice,
       total: line.total,
+      vatRate: line.vatRate ?? null,
+      grossTotal: line.grossTotal ?? null,
       categoryId: line.category.id,
       categorySource: !line.category.id ? undefined : line.category.origin === 'memory' ? 'MEMORY' : 'SUGGESTED',
       ...(settled

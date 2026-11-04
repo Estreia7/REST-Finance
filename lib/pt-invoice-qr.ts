@@ -31,7 +31,7 @@ export const QR_FIELDS = {
   F: 'date',
   G: 'documentNumber',
   H: 'atcud',
-  /** I1 names the tax region; I2..I8 are mainland bases and amounts. */
+  /** I1 names the tax region; I2..I8 are its bases and amounts, see taxesOf. */
   I1: 'taxRegion',
   N: 'totalTaxes',
   O: 'grandTotal',
@@ -49,6 +49,46 @@ export const QR_FIELDS = {
  */
 const INVOICE_TYPES = new Set(['FT', 'FS', 'FR', 'ND']);
 
+/**
+ * The VAT rates of each tax region, lowest band to highest.
+ *
+ * The QR states each band's base and tax but never its rate. Letters I, J and K
+ * are the mainland, the Azores and Madeira. Each region's fields run the same:
+ * 2 is the exempt base, then 3/4, 5/6 and 7/8 are base and tax for the reduced,
+ * intermediate and normal rates. Read off real invoices: the AT's own PDF has
+ * moved, and a Makro invoice carrying all three bands confirms the order.
+ */
+const REGION_RATES: Record<'I' | 'J' | 'K', [number, number, number]> = {
+  I: [6, 13, 23],
+  J: [4, 9, 16],
+  K: [4, 12, 22],
+};
+
+/** Every VAT band the QR declares, as a rate, a base and a tax. */
+function taxesOf(raw: Record<string, string>): Array<{ rate: number; base: number; tax: number }> {
+  const bands = new Map<number, { rate: number; base: number; tax: number }>();
+  const add = (rate: number, base: number | undefined, tax: number | undefined) => {
+    if (base === undefined) return;
+    const seen = bands.get(rate);
+    bands.set(rate, {
+      rate,
+      base: Math.round(((seen?.base ?? 0) + base) * 100) / 100,
+      tax: Math.round(((seen?.tax ?? 0) + (tax ?? 0)) * 100) / 100,
+    });
+  };
+
+  for (const region of ['I', 'J', 'K'] as const) {
+    add(0, parseQrNumber(raw[`${region}2`]), 0);
+    REGION_RATES[region].forEach((rate, i) => {
+      const at = 3 + i * 2;
+      add(rate, parseQrNumber(raw[`${region}${at}`]), parseQrNumber(raw[`${region}${at + 1}`]));
+    });
+  }
+  // Outside VAT altogether, such as a deposit.
+  add(0, parseQrNumber(raw.L), 0);
+  return [...bands.values()].sort((a, b) => a.rate - b.rate);
+}
+
 export interface InvoiceQrData {
   issuerNif?: string;
   buyerNif?: string;
@@ -60,6 +100,8 @@ export interface InvoiceQrData {
   documentNumber?: string;
   atcud?: string;
   taxRegion?: string;
+  /** What each VAT rate's lines must add up to, as the till recorded it. */
+  taxes: Array<{ rate: number; base: number; tax: number }>;
   totalTaxes?: number;
   grandTotal?: number;
   hash?: string;
@@ -105,6 +147,7 @@ export function parseInvoiceQr(text: string): InvoiceQrData | null {
     documentNumber: raw.G,
     atcud: raw.H,
     taxRegion: raw.I1,
+    taxes: taxesOf(raw),
     totalTaxes: parseQrNumber(raw.N),
     grandTotal: parseQrNumber(raw.O),
     hash: raw.Q,

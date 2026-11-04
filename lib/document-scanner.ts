@@ -18,6 +18,8 @@
  * database, and cannot be answered synchronously.
  */
 
+import type { Proof } from './invoice-checks';
+
 // ─── Shared Types (the contract both this app and the external API follow) ───
 
 export interface ScanItem {
@@ -25,7 +27,12 @@ export interface ScanItem {
   quantity: number;
   unit?: string;
   unitPrice: number;
+  /** The line's value before VAT. */
   total: number;
+  /** The line's VAT rate, as a percentage: 6, 13, 23. */
+  vatRate?: number;
+  /** The line's value with VAT, where the invoice prints it. */
+  grossTotal?: number;
   /**
    * Which of the restaurant's cost categories the reader thinks this line
    * belongs to, by name. Only a suggestion: the restaurant's own memory of
@@ -54,6 +61,8 @@ export interface CostReceiptResult {
   invoiceNumber?: string;
   items: ScanItem[];
   grandTotal: number;
+  /** The VAT table printed on the document. */
+  vatSummary?: Array<{ rate: number; base: number; tax: number }>;
   suggestedType: 'COGS' | 'OPEX';
   suggestedCategory: string;
   /** What the app checked after reading. Added by the scan route. */
@@ -76,6 +85,10 @@ export interface ScanChecks {
   knownVendorId: string | null;
   /** That saved name is the customer's: an earlier invoice was misread. */
   knownVendorIsCustomer: boolean;
+  /** Whether the lines add up to the document. See lib/invoice-checks.ts. */
+  proof?: Proof;
+  /** A credit note is money coming back, and must not be booked as a cost. */
+  creditNote?: boolean;
 }
 
 export interface DailyReportResult {
@@ -106,6 +119,10 @@ export async function scanDocument(
     usage?: { restaurantId: string; userId: string };
     /** Who the invoice is addressed to, so it is never read as the supplier. */
     customer?: { names: string[]; taxIds: string[] };
+    /** A stronger reader, for a page the first one could not make add up. */
+    model?: string;
+    /** What the first reading got wrong, told to the second. */
+    hint?: string;
   } = {},
 ): Promise<ScanResult> {
   const apiUrl = process.env.DOCUMENT_SCANNER_API_URL;
@@ -127,7 +144,7 @@ export async function scanDocument(
       userId: options.usage?.userId ?? null,
       source: 'scan' as const,
       scanType,
-      model: SCANNER_MODEL,
+      model: options.model ?? SCANNER_MODEL,
     };
 
     try {

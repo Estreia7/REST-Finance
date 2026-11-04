@@ -28,6 +28,7 @@ import DuplicateCosts from './DuplicateCosts';
 import PurchasedProducts from './PurchasedProducts';
 import PurchasedProductDialog from './PurchasedProductDialog';
 import LineSetupPanel from './LineSetupPanel';
+import InvoiceProofPanel from './InvoiceProofPanel';
 import LineSetupDialog from './LineSetupDialog';
 import type { PayablesFilter } from '../payment-actions';
 
@@ -44,7 +45,7 @@ import type { PayablesFilter } from '../payment-actions';
  * that quietly stop the costing from being true.
  */
 
-type View = 'invoices' | 'payments' | 'bank' | 'lines' | 'setup' | 'products' | 'vendors' | 'tidy';
+type View = 'invoices' | 'payments' | 'bank' | 'lines' | 'setup' | 'confirm' | 'products' | 'vendors' | 'tidy';
 export type AccountingOpen = { view: View; filter?: PayablesFilter };
 
 /**
@@ -91,6 +92,7 @@ export default function AccountingPanel({
           { value: 'bank', label: t('accounting.tabBank') },
           { value: 'lines', label: t('accounting.tabLines') },
           { value: 'setup', label: t('accounting.tabSetup') },
+          { value: 'confirm', label: t('accounting.tabConfirm') },
           { value: 'products', label: t('accounting.tabProducts') },
           { value: 'vendors', label: t('accounting.tabVendors') },
           { value: 'tidy', label: t('accounting.tabTidy') },
@@ -102,6 +104,7 @@ export default function AccountingPanel({
       {view === 'bank' && <BankPanel />}
       {view === 'lines' && <Invoices initialSearch={initialSearch} onSearchConsumed={onSearchConsumed} />}
       {view === 'setup' && <LineSetupPanel />}
+      {view === 'confirm' && <InvoiceProofPanel />}
       {view === 'products' && <PurchasedProducts />}
       {view === 'vendors' && <Vendors />}
       {view === 'tidy' && <Tidy />}

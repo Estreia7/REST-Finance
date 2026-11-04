@@ -6,6 +6,7 @@ import {
   Loader2, Upload, Trash2, KeyRound, FlaskConical, CheckCircle2, XCircle,
   AlertTriangle, QrCode, ChevronDown, ChevronRight, Save, Eye,
 } from 'lucide-react';
+import ProofBench from './ProofBench';
 import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
 import SourcePickerSheet, { type PhotoSource } from '@/app/dashboard/components/SourcePickerSheet';
@@ -180,6 +181,8 @@ export default function ExtractionLabPanel() {
 
   return (
     <div className="space-y-5">
+      <ProofBench />
+
       {pickingSource && (
         <SourcePickerSheet onChoose={handleSource} onClose={() => setPickingSource(false)} />
       )}
