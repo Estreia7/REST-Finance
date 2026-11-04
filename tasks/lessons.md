@@ -34,3 +34,14 @@ assigns it from a fixed palette of strong, distinct hues (no greys, no
 pastels), checked for contrast against every background it sits on. A user's
 own colour choice is for the screen where they made it, not a constraint on
 every other view.
+
+## The owner lives in the admin console too
+
+**What happened:** the dock went into the client dashboard only, and I said so
+in a line of the report. The owner signs in with the admin account, opened the
+console, and could not find it.
+
+**Rule:** when a feature changes the app's frame (navigation, layout, theme),
+build it for both shells, `app/dashboard` and `app/admin`, unless told
+otherwise. Ask which screen the requester actually uses before leaving one out,
+and tell them how to reach the feature from the account they sign in with.

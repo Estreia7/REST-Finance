@@ -34,9 +34,8 @@ import { Plus, ChevronDown, ChevronUp, PlayCircle } from 'lucide-react';
 // Components
 import Sidebar          from './components/Sidebar';
 import dynamic from 'next/dynamic';
-import { saveNavPreferences } from './nav-actions';
+import { useNavPreferences } from '@/lib/use-nav-preferences';
 import { translateError } from '@/lib/error-messages';
-import { isDockTheme, isNavMode, type DockTheme, type NavMode } from '@/lib/nav-preferences';
 import TopBar           from './components/TopBar';
 import MobileBottomNav  from './components/MobileBottomNav';
 import KPICards         from './components/KPICards';
@@ -110,6 +109,7 @@ function DashboardPageInner() {
   // ── Auth
   const [user, setUser]             = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const { docked, dockTheme, changeNav } = useNavPreferences(currentUser);
   const [isLoading, setIsLoading]   = useState(true);
 
   // ── Welcome splash
@@ -130,34 +130,6 @@ function DashboardPageInner() {
   // ── UI state
   const [activeTab, setActiveTab]       = useState<Tab>('dashboard');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
-  const [navMode, setNavMode] = useState<NavMode>('sidebar');
-  const [dockTheme, setDockTheme] = useState<DockTheme>('light');
-  const docked = navMode === 'dock';
-
-  // The account's choice, once it has loaded.
-  useEffect(() => {
-    if (isNavMode(currentUser?.navMode)) setNavMode(currentUser.navMode);
-    if (isDockTheme(currentUser?.dockTheme)) setDockTheme(currentUser.dockTheme);
-  }, [currentUser]);
-
-  // The assistant's button moves up out of the dock's way by this attribute.
-  // See the dock rules in globals.css.
-  useEffect(() => {
-    document.documentElement.toggleAttribute('data-docked', docked);
-    return () => document.documentElement.removeAttribute('data-docked');
-  }, [docked]);
-
-  /** Shown at once, then saved; a failed save puts the old value back. */
-  const changeNav = async (key: 'navMode' | 'dockTheme', value: NavMode | DockTheme) => {
-    const undo = key === 'navMode' ? navMode : dockTheme;
-    const apply = (v: NavMode | DockTheme) => (key === 'navMode' ? setNavMode(v as NavMode) : setDockTheme(v as DockTheme));
-    apply(value);
-    const result = await saveNavPreferences({ [key]: value });
-    if (!result.success) {
-      apply(undo);
-      toast.error(translateError(language, result.error));
-    }
-  };
 
   // ── Data
   const [restaurant, setRestaurant]       = useState<any>(null);

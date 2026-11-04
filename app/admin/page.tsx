@@ -2,12 +2,14 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { signOut } from 'next-auth/react';
 import { getClientStats, getClients, getMonthlyRevenue, getCurrentUser, bulkUpdateRestaurants } from './actions';
 import { getAllTickets } from '@/app/dashboard/support-actions';
 import { useLanguage } from '@/lib/language-context';
 import type { Language } from '@/lib/translations';
 import { greetingName } from '@/lib/welcome-quotes';
+import { useNavPreferences } from '@/lib/use-nav-preferences';
 import { consumeJustSignedIn } from '@/lib/welcome-signal';
 import WelcomeSplash from '@/app/components/WelcomeSplash';
 import DashboardLoading from '@/app/components/DashboardLoading';
@@ -17,7 +19,7 @@ import {
   Building2, TrendingUp, TrendingDown, CreditCard,
   Search, ChevronRight, Activity, DollarSign,
   BarChart2, ArrowUpRight, ArrowDownRight, Shield,
-  ClipboardList, Settings, Presentation, LifeBuoy, FlaskConical, Cpu,
+  ClipboardList, Settings, Presentation, LifeBuoy, FlaskConical, Cpu, PanelBottom,
 } from 'lucide-react';
 import UserManagementPanel from './components/UserManagementPanel';
 import RestaurantDetailPanel from './components/RestaurantDetailPanel';
@@ -36,6 +38,9 @@ import {
 import { Plan } from '@prisma/client';
 import Logo from '@/app/components/Logo';
 import { formatMoney } from '@/lib/format';
+
+// Its own chunk: only someone who turned the dock on downloads the animation.
+const AdminDock = dynamic(() => import('./components/AdminDock'), { ssr: false }) as typeof import('./components/AdminDock').default;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type Tab = 'dashboard' | 'clientes' | 'users' | 'activity' | 'suporte' | 'apresentacao' | 'extracao' | 'ia' | 'settings';
@@ -102,6 +107,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab]     = useState<Tab>('dashboard');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const { docked, dockTheme, changeNav } = useNavPreferences(currentUser);
 
   // ── Welcome splash
   // Raised by the sign-in form and consumed once, so only an actual sign-in
@@ -290,6 +296,7 @@ export default function AdminPage() {
           transition-transform duration-300
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           md:translate-x-0
+          ${docked ? 'lg:hidden' : ''}
         `}>
           {/* Logo */}
           <div className="h-14 flex items-center gap-2.5 px-4 border-b border-border-subtle shrink-0">
@@ -336,6 +343,21 @@ export default function AdminPage() {
             ))}
           </nav>
 
+          {/* The dock is for a desktop only, so narrower screens never see this. */}
+          <div className="hidden lg:block px-3 pb-3 shrink-0">
+            <button
+              type="button"
+              onClick={() => changeNav('navMode', 'dock')}
+              className="flex w-full items-center gap-2.5 rounded-xl border border-dashed border-border px-3 py-2 text-left
+                         text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <PanelBottom className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span className="flex-1">{t('nav.useDock')}</span>
+              <span className="text-[10px] font-normal opacity-70">{t('nav.useDockHint')}</span>
+            </button>
+          </div>
+
           {/* User */}
           <div className="p-3 border-t border-border-subtle shrink-0">
             <div className="flex items-center gap-2.5 px-2 py-2 rounded-xl">
@@ -362,7 +384,7 @@ export default function AdminPage() {
       </>
 
       {/* ── Main ───────────────────────────────────────────────────────────── */}
-      <div className="md:ml-60 flex flex-col min-h-dvh">
+      <div className={`md:ml-60 flex flex-col min-h-dvh ${docked ? 'lg:ml-0 lg:pb-32' : ''}`}>
         {/* Top bar */}
         <header className="sticky top-0 z-20 h-14 flex items-center gap-3 px-4 md:px-6 bg-background/80 backdrop-blur-xl border-b border-border-subtle">
           <button
@@ -756,6 +778,19 @@ export default function AdminPage() {
         {/* Mobile bottom padding for nav */}
         <div className="h-20 md:hidden" />
       </div>
+
+      {/* The desktop dock. Below lg it does not draw, and the sidebar stays. */}
+      {docked && (
+        <AdminDock
+          items={navItems}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          theme={dockTheme}
+          onToggleTheme={() => changeNav('dockTheme', dockTheme === 'dark' ? 'light' : 'dark')}
+          onUseSidebar={() => changeNav('navMode', 'sidebar')}
+          onLogout={handleLogout}
+        />
+      )}
 
       {/* Mobile bottom nav */}
       <AdminMobileBottomNav activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setSidebarOpen(false); }} />
