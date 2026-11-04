@@ -76,6 +76,16 @@ line must multiply out, and lines must reach the QR's base per VAT rate. When an
 owner reports a wrong figure, open the real document and do the sum before
 changing the screen they are looking at.
 
+## A credit note cancels an invoice
+
+**What happened:** I blocked credit notes from being saved and stopped there. The
+owner wanted them reconciled: matched to the invoice of the same value, and
+neither counts.
+
+**Rule:** refusing a document is not handling it. When something must not enter
+the books, ask what it does to what is already there, and give it a place to
+wait when the other half is missing.
+
 ## An answer per wording cannot fix a fact about one purchase
 
 **What happened:** the owner could not say a mushroom line was 0,905 kg at 3,69

@@ -8,6 +8,7 @@ const none: InboxCounts = {
   bankOpen: { count: 0, total: 0 },
   emailInvoices: { count: 0, total: 0 },
   invoicesToConfirm: { count: 0, total: 0 },
+  creditNotes: { count: 0, total: 0 },
   linesToSetup: { count: 0, total: 0 },
   uncategorisedLines: { count: 0, total: 0 },
   uncategorisedCosts: { count: 0, total: 0 },

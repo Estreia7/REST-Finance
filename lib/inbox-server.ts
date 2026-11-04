@@ -86,6 +86,12 @@ export async function readInboxCounts(restaurantId: string): Promise<InboxCounts
     take: 200,
   });
 
+  const credits = await prisma.creditNote.aggregate({
+    where: { restaurantId, status: 'open' },
+    _count: { _all: true },
+    _sum: { amount: true },
+  });
+
   let overdueCount = 0;
   let overdueTotal = 0;
   for (const e of unpaid) {
@@ -125,6 +131,7 @@ export async function readInboxCounts(restaurantId: string): Promise<InboxCounts
         return sum + Math.abs(gap ?? 0);
       }, 0)),
     },
+    creditNotes: { count: credits._count._all, total: cents(Number(credits._sum.amount ?? 0)) },
     linesToSetup: {
       count: wordings.size,
       total: cents(waiting.reduce((s, w) => s + Number(w.totalPrice), 0)),

@@ -17,6 +17,7 @@ export const INBOX_KINDS = [
   'emailInvoices',
   'bankOpen',
   'invoicesToConfirm',
+  'creditNotes',
   'linesToSetup',
   'uncategorisedLines',
   'uncategorisedCosts',
@@ -30,7 +31,7 @@ export type InboxSeverity = 'high' | 'medium' | 'low';
 /** Where each item is fixed: a dashboard tab, and the view inside it. */
 export interface InboxTarget {
   tab: 'accounting' | 'costs' | 'compliance';
-  view?: 'payments' | 'bank' | 'tidy' | 'lines' | 'setup' | 'confirm' | 'history' | 'scan';
+  view?: 'payments' | 'bank' | 'tidy' | 'lines' | 'setup' | 'confirm' | 'credits' | 'history' | 'scan';
   filter?: 'overdue';
 }
 
@@ -44,6 +45,8 @@ export interface InboxCounts {
   emailInvoices: { count: number; total: number };
   /** Invoices whose lines did not add up, even after a second reading. */
   invoicesToConfirm: { count: number; total: number };
+  /** Credit notes waiting for the invoice they cancel. */
+  creditNotes: { count: number; total: number };
   /** Wordings on saved invoices that nobody has explained yet. */
   linesToSetup: { count: number; total: number };
   uncategorisedLines: { count: number; total: number };
@@ -71,6 +74,7 @@ const SEVERITY: Record<InboxKind, InboxSeverity> = {
   emailInvoices: 'medium',
   bankOpen: 'medium',
   invoicesToConfirm: 'medium',
+  creditNotes: 'medium',
   linesToSetup: 'medium',
   uncategorisedLines: 'medium',
   uncategorisedCosts: 'medium',
@@ -86,6 +90,7 @@ const TARGET: Record<InboxKind, InboxTarget> = {
   emailInvoices: { tab: 'costs', view: 'scan' },
   bankOpen: { tab: 'accounting', view: 'bank' },
   invoicesToConfirm: { tab: 'accounting', view: 'confirm' },
+  creditNotes: { tab: 'accounting', view: 'credits' },
   linesToSetup: { tab: 'accounting', view: 'setup' },
   uncategorisedLines: { tab: 'accounting', view: 'lines' },
   uncategorisedCosts: { tab: 'costs', view: 'history' },
@@ -104,6 +109,7 @@ export function buildInbox(c: InboxCounts): InboxItem[] {
     { kind: 'emailInvoices', count: c.emailInvoices.count, amount: c.emailInvoices.total },
     { kind: 'bankOpen', count: c.bankOpen.count, amount: c.bankOpen.total },
     { kind: 'invoicesToConfirm', count: c.invoicesToConfirm.count, amount: c.invoicesToConfirm.total },
+    { kind: 'creditNotes', count: c.creditNotes.count, amount: c.creditNotes.total },
     { kind: 'linesToSetup', count: c.linesToSetup.count, amount: c.linesToSetup.total },
     { kind: 'uncategorisedLines', count: c.uncategorisedLines.count, amount: c.uncategorisedLines.total },
     { kind: 'uncategorisedCosts', count: c.uncategorisedCosts.count, amount: c.uncategorisedCosts.total },

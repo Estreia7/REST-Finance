@@ -7,6 +7,7 @@ import { createDailySummary, createCostEntry, getCategories } from '../actions';
 import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
 import { saveInvoiceLines } from '../reconcile-actions';
+import { saveCreditNote } from '../credit-note-actions';
 import { measureImage, type QualityCheck } from '@/lib/image-quality';
 import { findExistingInvoice } from '../reconcile-actions';
 import DocumentCamera from './DocumentCamera';
@@ -414,8 +415,30 @@ export default function ReceiptScanner({
     const target = targetOverride ?? attachTarget;
     // Asked, never assumed — except when attaching, where the cost already
     // has its answer.
+    // Money coming back: recorded as a credit note and matched to its invoice,
+    // never as a cost.
     if (editData.type === 'cost_receipt' && editData.checks?.creditNote) {
-      toast.error(t('proof.creditNote'));
+      setSaving(true);
+      const credit = await saveCreditNote({
+        vendorName: editData.vendor,
+        vendorTaxId: editData.vendorTaxId ?? null,
+        number: editData.invoiceNumber ?? '',
+        date: editData.date,
+        amount: editData.grandTotal,
+        scanId,
+      });
+      setSaving(false);
+      if ('error' in credit) {
+        toast.error(translateError(language, credit.error ?? 'credit.errors.save'));
+        return;
+      }
+      toast.success(
+        credit.data.matched
+          ? t('credit.savedMatched').replace('{invoice}', credit.data.matchedInvoice ?? t('credit.noNumber'))
+          : t('credit.savedWaiting'),
+      );
+      resetState();
+      onSaved?.();
       return;
     }
     const answer = paymentFromDraft(payment);
@@ -525,6 +548,8 @@ export default function ReceiptScanner({
             });
             if ('error' in lines) {
               toast.error(t('scanner.saveFailed'));
+            } else if (lines.data.settledCredit) {
+              toast.info(t('credit.settledByInvoice').replace('{note}', lines.data.settledCredit));
             } else if (lines.data.pending > 0) {
               toast.info(
                 t(lines.data.pending === 1 ? 'lineSetup.pendingOne' : 'lineSetup.pendingMany')
@@ -858,7 +883,7 @@ export default function ReceiptScanner({
                 {/* Items list */}
                 <div className="space-y-2">
                   {(editData as CostReceiptData).checks?.creditNote ? (
-                    <p role="alert" className="flex items-start gap-2 rounded-lg bg-danger/10 px-3 py-2 text-xs font-medium text-danger">
+                    <p role="status" className="flex items-start gap-2 rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
                       <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
                       {t('proof.creditNote')}
                     </p>

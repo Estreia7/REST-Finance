@@ -30,6 +30,7 @@ import { rememberLine } from '@/lib/invoice-memory-server';
 import { repriceIngredients } from '@/lib/ingredient-costs-server';
 import { diffReading, type FixedBy, type Reading } from '@/lib/scan-corrections';
 import { lineNeedsSetup } from '@/lib/line-setup';
+import { settleWaitingCredits } from '@/lib/credit-notes-server';
 
 /**
  * Turning a scanned invoice into facts the rest of the app can use.
@@ -628,7 +629,17 @@ export async function saveInvoiceLines(input: {
   if ('error' in saved) return { error: saved.error };
 
   const pending = new Set(resolved.filter((l) => l.needsSetup).map((l) => lineKey(l.productName)));
-  return { success: true as const, data: { pending: pending.size } };
+
+  // A credit note may have got here first, waiting for this very invoice.
+  const owner = await requireOwner();
+  const settledCredit = isAuthError(owner)
+    ? null
+    : await settleWaitingCredits(
+        owner.restaurantId,
+        (await ensureVendor(owner.restaurantId, input.vendorName, input.vendorTaxId)).id,
+      );
+
+  return { success: true as const, data: { pending: pending.size, settledCredit } };
 }
 
 /**

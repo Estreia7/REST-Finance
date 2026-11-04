@@ -4,6 +4,7 @@ import { readInvoiceQr, applyQrTruth, type InvoiceQrData } from '@/lib/pt-invoic
 import { checkVendorReading, looksLikeCustomer, type CustomerIdentity } from '@/lib/vendor-reading';
 import { saveImage, saveDocument, resolveStoredPath } from '@/lib/uploads';
 import { betterProof, checkReading, rereadHint, type CheckedReading, type Proof } from '@/lib/invoice-checks';
+import { isCreditNoteNumber } from '@/lib/credit-notes';
 import { readFile } from 'node:fs/promises';
 
 /**
@@ -159,7 +160,7 @@ async function readDocument(input: {
         knownVendorIsCustomer: false,
         ...checked.checks,
         ...(proof ? { proof } : {}),
-        creditNote: !!qr?.isCreditNote || /^NC\b/i.test(number),
+        creditNote: !!qr?.isCreditNote || isCreditNoteNumber(number),
       },
     },
   };

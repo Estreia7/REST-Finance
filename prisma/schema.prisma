@@ -114,6 +114,7 @@ model Restaurant {
   categories        Category[]
   dailySummaries    DailySummary[]
   costEntries       CostEntry[]
+  creditNotes       CreditNote[]
   auditLogs         AuditLog[]
   stripeEvents      StripeEvent[]
   notifications     Notification[]
@@ -568,6 +569,8 @@ model ReceiptScan {
   invoiceItems InvoiceItem[]
   corrections  ScanCorrection[]
 
+  creditNotes CreditNote[]
+
   @@index([restaurantId, source, reviewedAt])
   @@index([restaurantId, proofStatus])
   @@map("receipt_scans")
@@ -676,6 +679,8 @@ model Vendor {
   lineMemories   InvoiceLineMemory[]
   corrections    ScanCorrection[]
   stockItems     StockItem[]
+
+  creditNotes CreditNote[]
 
   @@unique([restaurantId, name])
   @@map("vendors")
@@ -895,6 +900,44 @@ model Shift {
   @@unique([employeeId, date])
   @@index([restaurantId, date])
   @@map("shifts")
+}
+
+/// A supplier's credit note: money coming back, never a cost.
+///
+/// Kept apart from CostEntry so it cannot reach a total by accident. Matched to
+/// the invoice of the same value, whose cost entries are then soft-deleted, so
+/// the two leave the books together. See lib/credit-notes.ts.
+model CreditNote {
+  id           String     @id @default(uuid())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurantId String     @map("restaurant_id")
+
+  vendor   Vendor? @relation(fields: [vendorId], references: [id])
+  vendorId String? @map("vendor_id")
+
+  receiptScan   ReceiptScan? @relation(fields: [receiptScanId], references: [id])
+  receiptScanId String?      @map("receipt_scan_id")
+
+  number String
+  date   DateTime @db.Date
+  /// What it gives back, with VAT, as a positive number.
+  amount Decimal  @db.Decimal(12, 2)
+
+  /// open, matched, or dismissed when its invoice will never be on file.
+  status String @default("open")
+
+  /// The root cost entry it cancelled. `matchedAt` is the `deletedAt` it set,
+  /// which is how undoing restores only what this note took away.
+  matchedEntryId String?   @map("matched_entry_id")
+  matchedAt      DateTime? @map("matched_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([restaurantId, number])
+  @@index([restaurantId, status])
+  @@index([restaurantId, vendorId, status])
+  @@map("credit_notes")
 }
 
 /// A person's day off, on a day the restaurant is open.

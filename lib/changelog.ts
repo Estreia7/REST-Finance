@@ -35,9 +35,20 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.04.10';
+export const CHANGELOG_VERSION = '2026.11.04.11';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.04.11',
+    date: '2026-11-04',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Notas de crédito conciliadas com a fatura',
+        detail: 'Uma nota de crédito já não entra como despesa: é ligada à fatura do mesmo valor e do mesmo fornecedor, e as duas saem das contas. Se a fatura ainda não estiver na app, a nota fica à espera em Contabilidade › Notas de crédito. Pode sempre desfazer.',
+      },
+    ],
+  },
   {
     version: '2026.11.04.10',
     date: '2026-11-04',
