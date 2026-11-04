@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLanguage } from '@/lib/language-context';
@@ -19,10 +19,15 @@ export default function LineSetupDialog({
 }) {
   const { t, language } = useLanguage();
   const [data, setData] = useState<LineSetupData | null>(null);
+  // A corrected purchase changes the list behind this, however it is closed.
+  const corrected = useRef(false);
+  const close = () => (corrected.current ? onSaved() : onClose());
+
+  const load = useCallback(() => getLineSetup(itemId), [itemId]);
 
   useEffect(() => {
     let stale = false;
-    getLineSetup(itemId).then((result) => {
+    load().then((result) => {
       if (stale) return;
       if ('error' in result) {
         toast.error(translateError(language, result.error ?? 'lineSetup.failed'));
@@ -32,19 +37,23 @@ export default function LineSetupDialog({
       }
     });
     return () => { stale = true; };
-  }, [itemId, language, onClose]);
+  }, [load, language, onClose]);
 
   const line = data?.lines[0];
 
   return (
-    <Dialog onClose={onClose} title={t('lineSetup.configure')}>
+    <Dialog onClose={close} title={t('lineSetup.configure')}>
       {data && line ? (
         <LineSetupCard
           line={line}
           ingredients={data.ingredients}
           categories={data.categories}
           onSaved={onSaved}
-          onLater={onClose}
+          onCorrected={() => {
+            corrected.current = true;
+            load().then((result) => { if (!('error' in result)) setData(result.data); });
+          }}
+          onLater={close}
           laterLabel={t('lineSetup.cancel')}
         />
       ) : (

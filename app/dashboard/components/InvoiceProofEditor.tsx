@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AlertTriangle, Check, CheckCircle2, Loader2, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
 import { translateError } from '@/lib/error-messages';
 import { checkReading, type TaxTruth } from '@/lib/invoice-checks';
+import { followFigures } from '@/lib/line-setup';
 import {
   getInvoiceForProof,
   rereadInvoice,
@@ -69,6 +70,11 @@ export default function InvoiceProofEditor({
   const [saving, setSaving] = useState(false);
   const [rereading, setRereading] = useState(false);
 
+  // Read through a ref: a parent's new function must not reload the invoice
+  // and throw away what is being typed.
+  const done = useRef(onDone);
+  done.current = onDone;
+
   useEffect(() => {
     let stale = false;
     setInvoice(null);
@@ -76,7 +82,7 @@ export default function InvoiceProofEditor({
       if (stale) return;
       if ('error' in result) {
         toast.error(translateError(language, result.error ?? 'proof.errors.save'));
-        onDone();
+        done.current();
         return;
       }
       setInvoice(result.data);
@@ -84,7 +90,7 @@ export default function InvoiceProofEditor({
       setRows(result.data.lines.map(toRow));
     });
     return () => { stale = true; };
-  }, [invoiceNumber, language, onDone]);
+  }, [invoiceNumber, language]);
 
   const proof = useMemo(
     () => checkReading({ items: rows.map(toLine), grandTotal: invoice?.grandTotal ?? 0, vatSummary: truth }, null),
@@ -96,7 +102,14 @@ export default function InvoiceProofEditor({
   );
 
   const change = useCallback((key: string, field: keyof Row, value: string) => {
-    setRows((was) => was.map((r) => (r.key === key ? { ...r, [field]: value } : r)));
+    setRows((was) => was.map((r) => {
+      if (r.key !== key) return r;
+      const next = { ...r, [field]: value };
+      if (field !== 'quantity' && field !== 'unitPrice') return next;
+      // A new quantity or price changes the line's value: 0,905 kg at 3,69 is 3,34.
+      const { total } = followFigures(num(next.quantity), num(next.unitPrice), num(next.total), 'unitPrice');
+      return Number.isFinite(total) ? { ...next, total: String(total) } : next;
+    }));
   }, []);
 
   const reread = async () => {

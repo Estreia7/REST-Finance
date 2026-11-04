@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, Check, FileSearch, Loader2, Plus, X } from 'lucide-react';
+import { AlertTriangle, Check, FileSearch, Loader2, PencilLine, Plus, X } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
 import { translateError } from '@/lib/error-messages';
@@ -19,6 +19,7 @@ import CategoryPicker from './CategoryPicker';
 import Dialog from './Dialog';
 import InvoiceProofEditor from './InvoiceProofEditor';
 import IngredientSearch from './IngredientSearch';
+import LinePurchaseFix from './LinePurchaseFix';
 
 /**
  * One wording, explained once: what it is, how it comes, what cost it is.
@@ -33,12 +34,14 @@ const UNIT_KEYS: Record<PackUnit, string> = {
 };
 
 export default function LineSetupCard({
-  line, ingredients, categories, onSaved, onLater, laterLabel,
+  line, ingredients, categories, onSaved, onCorrected, onLater, laterLabel,
 }: {
   line: SetupLine;
   ingredients: LineSetupData['ingredients'];
   categories: LineSetupData['categories'];
   onSaved: () => void;
+  /** One purchase's figures changed, so the card needs them again. */
+  onCorrected: () => void;
   onLater?: () => void;
   laterLabel?: string;
 }) {
@@ -53,6 +56,7 @@ export default function LineSetupCard({
   const [categoryId, setCategoryId] = useState<string | null>(line.categoryId);
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [fixing, setFixing] = useState(false);
 
   const runningCost = categories.find((c) => c.id === categoryId)?.type === 'OPEX';
   const skipIngredient = notIngredient || runningCost;
@@ -125,7 +129,7 @@ export default function LineSetupCard({
           ].filter(Boolean).join(' · ')}
         </p>
         <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-          {t('lineSetup.lastBought')
+          {t(line.fromLine ? 'lineSetup.thisPurchase' : 'lineSetup.lastBought')
             .replace('{quantity}', `${line.quantity.toLocaleString(locale)}${line.unit ? ` ${line.unit}` : ''}`)
             .replace('{total}', formatMoney(line.total))}
         </p>
@@ -135,15 +139,38 @@ export default function LineSetupCard({
             {t('lineSetup.unusualPrice').replace('{amount}', formatMoney(line.usualPrice))}
           </p>
         )}
-        {line.invoiceNumber && (
-          <button
-            type="button"
-            onClick={() => setChecking(true)}
-            className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary-ink hover:underline"
-          >
-            <FileSearch className="w-3.5 h-3.5" aria-hidden="true" />
-            {t('lineSetup.checkInvoice')}
-          </button>
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+          {line.itemId && (
+            <button
+              type="button"
+              onClick={() => setFixing((v) => !v)}
+              aria-expanded={fixing}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-ink hover:underline"
+            >
+              <PencilLine className="w-3.5 h-3.5" aria-hidden="true" />
+              {t('lineSetup.fixPurchase')}
+            </button>
+          )}
+          {line.invoiceNumber && (
+            <button
+              type="button"
+              onClick={() => setChecking(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-ink hover:underline"
+            >
+              <FileSearch className="w-3.5 h-3.5" aria-hidden="true" />
+              {t('lineSetup.checkInvoice')}
+            </button>
+          )}
+        </div>
+        {fixing && line.itemId && (
+          <LinePurchaseFix
+            itemId={line.itemId}
+            quantity={line.quantity}
+            unit={line.unit}
+            total={line.total}
+            onCancel={() => setFixing(false)}
+            onDone={() => { setFixing(false); onCorrected(); }}
+          />
         )}
       </header>
 

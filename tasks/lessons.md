@@ -75,3 +75,16 @@ check existed, and the QR's VAT bases were being thrown away.
 line must multiply out, and lines must reach the QR's base per VAT rate. When an
 owner reports a wrong figure, open the real document and do the sum before
 changing the screen they are looking at.
+
+## An answer per wording cannot fix a fact about one purchase
+
+**What happened:** the owner could not say a mushroom line was 0,905 kg at 3,69
+the kilo. "Configurar" only speaks per wording and supplier, and a weight is
+different on every invoice, so typing it there would have given a wrong price
+on all of them. The real path was a link to a separate invoice editor, where
+changing the quantity left the value behind and refused to confirm.
+
+**Rule:** when the owner is looking at a wrong number, the way to correct that
+number belongs on that screen. Decide for every answer whether it is about the
+product (remembered) or about this purchase (one line), and offer both. Linked
+figures follow each other: never make someone do the multiplication.

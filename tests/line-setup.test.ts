@@ -7,6 +7,8 @@ import {
   lineNeedsSetup,
   groupWordings,
   unusualPrice,
+  followFigures,
+  correctedLine,
   type SavedLine,
 } from '@/lib/line-setup';
 import { rememberedPack, packColumns, packConversion } from '@/lib/invoice-matching';
@@ -167,5 +169,41 @@ describe('groupWordings', () => {
   it('shows what was printed, not what it was restated to', () => {
     const [group] = groupWordings([line({ quantity: 24, packFactor: 4 })]);
     expect(group.quantity).toBe(6);
+  });
+});
+
+describe('followFigures', () => {
+  it('works out the value from the price of a kilo', () => {
+    expect(followFigures(0.905, 3.69, 3.69, 'unitPrice')).toEqual({ unitPrice: 3.69, total: 3.34 });
+  });
+
+  it('works out the price from what the line cost', () => {
+    expect(followFigures(2.5, 1, 10, 'total')).toEqual({ unitPrice: 4, total: 10 });
+  });
+
+  it('leaves the figures alone without a quantity', () => {
+    expect(followFigures(0, 3.69, 3.69, 'unitPrice')).toEqual({ unitPrice: 3.69, total: 3.69 });
+  });
+});
+
+describe('correctedLine', () => {
+  it('takes a weighed purchase as what was bought, not a print to multiply', () => {
+    expect(correctedLine({ quantity: 0.905, unit: 'kg', unitPrice: 3.69, total: 3.34 })).toEqual({
+      quantity: 0.905, unit: 'kg', unitPrice: 3.69, totalPrice: 3.34, packFactor: null,
+    });
+  });
+
+  it('accepts a price rounded to the cent on a large quantity', () => {
+    expect(correctedLine({ quantity: 24, unit: 'un', unitPrice: 0.38, total: 9 })).not.toBeNull();
+  });
+
+  it('refuses figures that do not multiply out', () => {
+    expect(correctedLine({ quantity: 0.905, unit: 'kg', unitPrice: 3.69, total: 3.69 })).toBeNull();
+  });
+
+  it('refuses an empty quantity, a unit it does not know, and figures that are not numbers', () => {
+    expect(correctedLine({ quantity: 0, unit: 'kg', unitPrice: 3.69, total: 3.34 })).toBeNull();
+    expect(correctedLine({ quantity: 1, unit: 'cx', unitPrice: 3, total: 3 })).toBeNull();
+    expect(correctedLine({ quantity: Number.NaN, unit: 'kg', unitPrice: 3, total: 3 })).toBeNull();
   });
 });

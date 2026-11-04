@@ -12,9 +12,11 @@ import { rebalanceInvoice } from '@/lib/invoice-split-server';
 import { repriceIngredients } from '@/lib/ingredient-costs-server';
 import {
   PACK_UNITS,
+  correctedLine,
   groupWordings,
   unusualPrice,
   ingredientUnitFor,
+  printedQuantity,
   restateLine,
   toPack,
   toPackInput,
@@ -40,6 +42,8 @@ export interface SetupLine extends WordingGroup {
   pack: PackInput | null;
   /** The usual price, when the latest one is far from it. */
   usualPrice: number | null;
+  /** Opened from one saved line: the purchase shown is that one, not the latest. */
+  fromLine?: boolean;
 }
 
 export interface LineSetupData {
@@ -51,12 +55,13 @@ export interface LineSetupData {
 const notDeleted = { OR: [{ costEntryId: null }, { costEntry: { deletedAt: null } }] };
 
 const lineSelect = {
-  productName: true, quantity: true, unit: true, totalPrice: true, packFactor: true, categoryId: true,
+  id: true, productName: true, quantity: true, unit: true, totalPrice: true, packFactor: true, categoryId: true,
   invoiceDate: true, createdAt: true, vendorId: true, vendor: { select: { name: true } }, invoiceNumber: true,
   normalizedName: true, unitPrice: true,
 } as const;
 
 type LineRow = {
+  id: string;
   productName: string;
   quantity: { toString(): string };
   unit: string | null;
@@ -75,6 +80,7 @@ type LineRow = {
 /** Everything a card needs about these lines, grouped per wording. */
 async function describe(restaurantId: string, rows: LineRow[]): Promise<LineSetupData> {
   const groups = groupWordings(rows.map((r) => ({
+    id: r.id,
     productName: r.productName,
     vendorId: r.vendorId,
     vendorName: r.vendor?.name ?? null,
@@ -206,9 +212,96 @@ export async function getLineSetup(itemId: string) {
       select: lineSelect,
       take: 2000,
     });
-    return { success: true as const, data: await describe(owner.restaurantId, rows) };
+    const data = await describe(owner.restaurantId, rows);
+
+    // The owner opened this purchase, so this is the one they would correct.
+    const opened = rows.find((r) => r.id === itemId);
+    if (opened && data.lines[0]) {
+      const factor = opened.packFactor === null ? null : Number(opened.packFactor);
+      data.lines[0] = {
+        ...data.lines[0],
+        fromLine: true,
+        itemId,
+        invoiceNumber: opened.invoiceNumber,
+        quantity: printedQuantity({ quantity: Number(opened.quantity), packFactor: factor }),
+        unit: factor ? 'un' : opened.unit,
+        total: Number(opened.totalPrice),
+      };
+    }
+    return { success: true as const, data };
   } catch (error: unknown) {
     return { error: toClientError('Failed to read the line', error, 'read') };
+  }
+}
+
+/**
+ * Says what one purchase really was: this much, for this money.
+ *
+ * Invoices differ too much for every reading to come out right, and a line
+ * that went in wrong must not stay wrong. Only this line changes, since the
+ * weight of the next purchase will be another. The invoice's total does not
+ * move: it came from the document, and this only restates how it was made up.
+ *
+ * Kept as a correction, because what the reader got wrong on this supplier's
+ * invoices is what it has to learn.
+ */
+export async function correctLine(input: {
+  itemId: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  total: number;
+}) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+    const { restaurantId, userId } = owner;
+
+    const fixed = correctedLine(input);
+    if (!fixed) return { error: 'lineSetup.errors.figures' };
+
+    const item = await prisma.invoiceItem.findFirst({
+      where: { id: input.itemId, restaurantId },
+      select: {
+        id: true, productName: true, quantity: true, unit: true, unitPrice: true, totalPrice: true,
+        vatRate: true, costEntryId: true, vendorId: true, receiptScanId: true,
+      },
+    });
+    if (!item) return { error: 'accounting.lineNotFound' };
+
+    const vat = item.vatRate === null ? null : Number(item.vatRate);
+    const figures = (quantity: unknown, unit: string | null, price: unknown, total: unknown) =>
+      `${Number(quantity)}${unit ? ` ${unit}` : ''} x ${Number(price)} = ${Number(total)}`;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.invoiceItem.update({
+        where: { id: item.id },
+        data: {
+          ...fixed,
+          ...(vat === null ? {} : { grossTotal: Math.round(fixed.totalPrice * (100 + vat)) / 100 }),
+        },
+      });
+      if (item.costEntryId) {
+        await rebalanceInvoice(tx, { restaurantId, costEntryId: item.costEntryId, userId });
+      }
+      await tx.scanCorrection.create({
+        data: {
+          restaurantId,
+          receiptScanId: item.receiptScanId,
+          vendorId: item.vendorId,
+          productName: item.productName,
+          field: 'line',
+          readValue: figures(item.quantity, item.unit, item.unitPrice, item.totalPrice),
+          savedValue: figures(fixed.quantity, fixed.unit, fixed.unitPrice, fixed.totalPrice),
+          fixedBy: 'owner',
+        },
+      });
+    }, { timeout: 30_000 });
+
+    await repriceIngredients(restaurantId);
+    return { success: true as const };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to correct the line', error, 'write') };
   }
 }
 

@@ -35,9 +35,25 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.04.8';
+export const CHANGELOG_VERSION = '2026.11.04.10';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.04.10',
+    date: '2026-11-04',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Corrija uma compra já guardada',
+        detail: 'Quando uma linha ficou mal lida, diga o que foi mesmo comprado: em Contabilidade › Linhas, em Configurar, «Corrigir esta compra» aceita a quantidade em kg, litros ou unidades, e o preço ou o valor. O outro calcula-se sozinho e o custo do ingrediente acompanha.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Corrigir uma fatura faz as contas por si',
+        detail: 'Ao mudar a quantidade ou o preço de uma linha, o valor sem IVA atualiza-se logo.',
+      },
+    ],
+  },
   {
     version: '2026.11.04.8',
     date: '2026-11-04',

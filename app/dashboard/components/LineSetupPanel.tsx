@@ -72,6 +72,7 @@ export default function LineSetupPanel() {
           ingredients={data.ingredients}
           categories={data.categories}
           onSaved={load}
+          onCorrected={load}
           onLater={total > 1 ? () => setIndex((current + 1) % total) : undefined}
         />
       </div>

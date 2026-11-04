@@ -16,6 +16,7 @@ const FIELD_KEY: Record<string, string> = {
   category: 'admin.brain.fieldCategory',
   pack: 'admin.brain.fieldPack',
   unitPrice: 'admin.brain.fieldUnitPrice',
+  line: 'admin.brain.fieldLine',
   vendor: 'admin.brain.fieldVendor',
   date: 'admin.brain.fieldDate',
   total: 'admin.brain.fieldTotal',

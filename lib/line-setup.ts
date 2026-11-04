@@ -32,6 +32,10 @@ function round4(n: number): number {
   return Math.round(n * 10000) / 10000;
 }
 
+function cents(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
 /**
  * The answer as the app stores it, in kilos, litres or units.
  *
@@ -150,7 +154,52 @@ export function unusualPrice(price: number, history: number[]): number | null {
   return Math.abs(price - middle) / middle > 0.3 ? middle : null;
 }
 
+/** The units a purchase can be corrected to. */
+export const LINE_UNITS = ['kg', 'L', 'un'] as const;
+export type LineUnit = (typeof LINE_UNITS)[number];
+
+/**
+ * The other figure, once one has been typed.
+ *
+ * The owner knows either what a kilo cost or what the line cost, depending on
+ * the invoice. Whichever they typed last stands and the other follows it.
+ */
+export function followFigures(
+  quantity: number,
+  unitPrice: number,
+  total: number,
+  stands: 'unitPrice' | 'total',
+): { unitPrice: number; total: number } {
+  if (!(quantity > 0)) return { unitPrice, total };
+  return stands === 'unitPrice'
+    ? { unitPrice, total: cents(quantity * unitPrice) }
+    : { unitPrice: round4(total / quantity), total };
+}
+
+/**
+ * What a saved line becomes when the owner says what was really bought, or
+ * null when the figures cannot be right.
+ *
+ * Typed by hand, so it is the purchase itself and not a print to multiply.
+ */
+export function correctedLine(input: {
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  total: number;
+}): { quantity: number; unit: LineUnit; unitPrice: number; totalPrice: number; packFactor: null } | null {
+  const unit = LINE_UNITS.find((u) => u === input.unit);
+  const quantity = round3(input.quantity);
+  const unitPrice = round4(input.unitPrice);
+  const totalPrice = cents(input.total);
+  if (!unit || !(quantity > 0) || !(unitPrice > 0) || !(totalPrice > 0)) return null;
+  // A price is printed to the cent, so a big quantity drifts a little from its total.
+  if (Math.abs(quantity * unitPrice - totalPrice) > 0.02 + quantity * 0.005) return null;
+  return { quantity, unit, unitPrice, totalPrice, packFactor: null };
+}
+
 export interface SavedLine extends StoredLine {
+  id?: string;
   productName: string;
   vendorId: string | null;
   vendorName: string | null;
@@ -167,6 +216,8 @@ export interface WordingGroup {
   vendorId: string | null;
   vendorName: string | null;
   productName: string;
+  /** The latest purchase's line, which is the one a correction changes. */
+  itemId: string | null;
   /** The latest invoice carrying it, to open beside the card. */
   invoiceNumber: string | null;
   /** The latest purchase, as printed. */
@@ -189,6 +240,7 @@ export function groupWordings(lines: SavedLine[]): WordingGroup[] {
     const newer = !seen || line.date >= seen.latest;
     const example = {
       productName: line.productName,
+      itemId: line.id ?? null,
       invoiceNumber: line.invoiceNumber ?? null,
       quantity: printedQuantity(line),
       unit: line.packFactor ? 'un' : line.unit,
@@ -204,7 +256,7 @@ export function groupWordings(lines: SavedLine[]): WordingGroup[] {
       spent: (seen?.spent ?? 0) + line.total,
       lines: (seen?.lines ?? 0) + 1,
       ...(newer ? example : {
-        productName: seen.productName, invoiceNumber: seen.invoiceNumber, quantity: seen.quantity, unit: seen.unit,
+        productName: seen.productName, itemId: seen.itemId, invoiceNumber: seen.invoiceNumber, quantity: seen.quantity, unit: seen.unit,
         total: seen.total, categoryId: seen.categoryId, latest: seen.latest,
       }),
     });
