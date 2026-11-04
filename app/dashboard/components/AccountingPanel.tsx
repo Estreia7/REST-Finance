@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useDeferredValue } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Search, FileText, Link2, Check, AlertTriangle, Eye, Trash2, Building2, Pencil } from 'lucide-react';
+import { Loader2, Search, FileText, Link2, Check, AlertTriangle, Eye, Trash2, Building2, Pencil, SlidersHorizontal } from 'lucide-react';
 import {
   getInvoiceLines,
   getInvoices,
@@ -27,6 +27,8 @@ import VendorFixDialog from './VendorFixDialog';
 import DuplicateCosts from './DuplicateCosts';
 import PurchasedProducts from './PurchasedProducts';
 import PurchasedProductDialog from './PurchasedProductDialog';
+import LineSetupPanel from './LineSetupPanel';
+import LineSetupDialog from './LineSetupDialog';
 import type { PayablesFilter } from '../payment-actions';
 
 /**
@@ -42,7 +44,7 @@ import type { PayablesFilter } from '../payment-actions';
  * that quietly stop the costing from being true.
  */
 
-type View = 'invoices' | 'payments' | 'bank' | 'lines' | 'products' | 'vendors' | 'tidy';
+type View = 'invoices' | 'payments' | 'bank' | 'lines' | 'setup' | 'products' | 'vendors' | 'tidy';
 export type AccountingOpen = { view: View; filter?: PayablesFilter };
 
 /**
@@ -88,6 +90,7 @@ export default function AccountingPanel({
           { value: 'payments', label: t('accounting.tabPayments') },
           { value: 'bank', label: t('accounting.tabBank') },
           { value: 'lines', label: t('accounting.tabLines') },
+          { value: 'setup', label: t('accounting.tabSetup') },
           { value: 'products', label: t('accounting.tabProducts') },
           { value: 'vendors', label: t('accounting.tabVendors') },
           { value: 'tidy', label: t('accounting.tabTidy') },
@@ -98,6 +101,7 @@ export default function AccountingPanel({
       {view === 'payments' && <PaymentsPanel initialFilter={paymentsFilter} />}
       {view === 'bank' && <BankPanel />}
       {view === 'lines' && <Invoices initialSearch={initialSearch} onSearchConsumed={onSearchConsumed} />}
+      {view === 'setup' && <LineSetupPanel />}
       {view === 'products' && <PurchasedProducts />}
       {view === 'vendors' && <Vendors />}
       {view === 'tidy' && <Tidy />}
@@ -125,6 +129,7 @@ function Invoices({ initialSearch = '', onSearchConsumed }: {
   const [page, setPage] = useState(0);
   /** The document whose photograph is on screen. */
   const [previewing, setPreviewing] = useState<string | null>(null);
+  const [configuring, setConfiguring] = useState<string | null>(null);
   const [categories, setCategories] = useState<CostCategory[]>([]);
   /** The line whose category is being saved. */
   const [savingCategory, setSavingCategory] = useState<string | null>(null);
@@ -329,7 +334,21 @@ function Invoices({ initialSearch = '', onSearchConsumed }: {
                   <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-foreground whitespace-nowrap">
                     {formatMoney(row.totalPrice)}
                   </td>
-                  <td className="px-2 py-2.5 text-right">
+                  <td className="px-2 py-2.5 text-right whitespace-nowrap">
+                    {/* How this wording is counted, for this and every line like it. */}
+                    {row.vendorId && (
+                      <button
+                        type="button"
+                        onClick={() => setConfiguring(row.id)}
+                        title={t('lineSetup.configure')}
+                        aria-label={`${t('lineSetup.configure')}: ${row.productName}`}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground
+                                   hover:bg-muted transition-colors focus-visible:outline-none
+                                   focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
+                      </button>
+                    )}
                     {/* The page behind the figure. Only where there is a
                         document number to find it by. */}
                     {row.invoiceNumber && (
@@ -366,6 +385,14 @@ function Invoices({ initialSearch = '', onSearchConsumed }: {
         >
           {t('accounting.showMore')}
         </button>
+      )}
+
+      {configuring && (
+        <LineSetupDialog
+          itemId={configuring}
+          onClose={() => setConfiguring(null)}
+          onSaved={() => { setConfiguring(null); load(); }}
+        />
       )}
 
       {previewing && (
@@ -834,6 +861,7 @@ function InvoiceList() {
           {t('accounting.showMore')}
         </button>
       )}
+
 
       {previewing && (
         <InvoicePreview

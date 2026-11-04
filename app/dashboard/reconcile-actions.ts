@@ -14,6 +14,7 @@ import {
   rememberedPack,
   type InvoiceLine,
   type PackOrigin,
+  type PackSize,
   type RememberedPack,
   findAliasCandidates,
   type ReconciledLine,
@@ -28,6 +29,7 @@ import { rebalanceInvoice } from '@/lib/invoice-split-server';
 import { rememberLine } from '@/lib/invoice-memory-server';
 import { repriceIngredients } from '@/lib/ingredient-costs-server';
 import { diffReading, type FixedBy, type Reading } from '@/lib/scan-corrections';
+import { lineNeedsSetup } from '@/lib/line-setup';
 
 /**
  * Turning a scanned invoice into facts the rest of the app can use.
@@ -40,8 +42,8 @@ import { diffReading, type FixedBy, type Reading } from '@/lib/scan-corrections'
  *
  * Now each line is kept: the product, what was bought, what it cost per kilo,
  * and who sold it. Lines are matched to the ingredients the kitchen already
- * has, and the owner is asked only where the guess is not safe — once per
- * wording, never again.
+ * has. Nothing waits for the owner: what is known applies by itself, and the
+ * rest goes to "Precisa de ti", once per wording, never again.
  */
 
 export interface ReconcilePreview {
@@ -59,7 +61,7 @@ export interface ReconcilePreview {
      */
     packChoice: {
       packAmount: number;
-      packUnit: 'kg' | 'L';
+      packUnit: PackSize['unit'];
       asWeight: InvoiceLine;
       /** Where the size came from: the owner before, the reader, the label. */
       origin: PackOrigin;
@@ -71,6 +73,10 @@ export interface ReconcilePreview {
       /** The reading to start from when the owner is asked. */
       suggested: 'packages' | 'weight';
     } | null;
+    /** The owner already said how this wording is counted. */
+    packAnswered: boolean;
+    /** The units of the ingredients this line feeds. */
+    ingredientUnits: Array<string | undefined>;
     /**
      * The cost category this line most likely is, and how that was decided.
      * Only 'memory' is known; everything else is a suggestion.
@@ -221,6 +227,8 @@ export async function previewReconciliation(input: {
                   suggested,
                 }
               : null,
+            packAnswered: packFor(line.productName) !== null,
+            ingredientUnits: linkedUnits,
             category: { id: guess.categoryId, origin: guess.origin },
             // A line already linked to an ingredient is one, whatever was
             // remembered before the link was made.
@@ -267,6 +275,10 @@ export interface LineResolution {
   pack?: RememberedPack;
   /** Who settled the package: the owner, the memory, or agreeing labels. */
   packDecidedBy?: FixedBy;
+  /** What the printed quantity was multiplied by, where it was restated. */
+  packFactor?: number | null;
+  /** Nobody has said what this is yet: it waits in "Precisa de ti". */
+  needsSetup?: boolean;
 }
 
 /**
@@ -437,6 +449,8 @@ export async function commitReconciliation(input: {
               invoiceDate,
               invoiceNumber: input.invoiceNumber,
               receiptScanId: scan?.id ?? null,
+              packFactor: line.packFactor ?? null,
+              needsSetup: !!line.needsSetup,
               // Nobody said: it stays with the invoice's category, and is
               // marked so that nothing is learned from it.
               categoryId: chosen ?? costEntry.categoryId,
@@ -461,7 +475,9 @@ export async function commitReconciliation(input: {
     const learned = await rememberLines(
       owner.restaurantId,
       vendor.id,
-      input.lines.map((line) => ({
+      // A guess nobody has confirmed teaches nothing: it is learned when the
+      // owner answers.
+      input.lines.filter((line) => !line.needsSetup).map((line) => ({
         productName: line.productName,
         categoryId: categoryOf(line),
         notIngredient: !!line.skip || isRunningCost(line),
@@ -524,6 +540,87 @@ export async function commitReconciliation(input: {
   } catch (error: unknown) {
     return { error: toClientError('Failed to save the invoice lines', error, 'write') };
   }
+}
+
+/**
+ * Saves an invoice's lines straight away, with whatever is already known.
+ *
+ * Answers given before apply by themselves. A line nobody has explained is
+ * stored as printed, with its suggested category so the books are right, and
+ * no ingredient is invented for it. Returns how many wordings are waiting.
+ */
+export async function saveInvoiceLines(input: {
+  costEntryId: string;
+  vendorName: string;
+  vendorTaxId?: string | null;
+  invoiceDate: string;
+  invoiceNumber: string | null;
+  scanId?: string | null;
+  lines: ScannedLine[];
+}) {
+  const preview = await previewReconciliation({
+    vendorName: input.vendorName,
+    vendorTaxId: input.vendorTaxId,
+    lines: input.lines,
+  });
+  if (!('data' in preview) || !preview.data) {
+    return { error: ('error' in preview && preview.error) || 'reconcile.noLines' };
+  }
+  const { lines, categories } = preview.data;
+  const opex = new Set(categories.filter((c) => c.type === 'OPEX').map((c) => c.id));
+
+  const resolved = lines.map((line): LineResolution => {
+    const pack = line.packChoice;
+    const settled = !!pack?.settled;
+    const runningCost = !!line.category.id && opex.has(line.category.id);
+    const linked = line.decision.kind === 'linked';
+    const needsSetup = lineNeedsSetup({
+      linked,
+      notIngredient: line.notIngredient,
+      runningCost,
+      unit: line.unit,
+      packAnswered: line.packAnswered,
+      packSettled: pack ? settled : null,
+      ingredientUnits: line.ingredientUnits,
+    });
+    const measured = settled ? pack!.asWeight : line;
+    return {
+      productName: line.productName,
+      quantity: measured.quantity,
+      unit: measured.unit,
+      // Recovered where the printed price does not multiply out: the total
+      // and quantity are the figures least likely to be misread.
+      unitPrice: !settled && line.suspect && line.impliedUnitPrice ? line.impliedUnitPrice : measured.unitPrice,
+      total: line.total,
+      categoryId: line.category.id,
+      categorySource: !line.category.id ? undefined : line.category.origin === 'memory' ? 'MEMORY' : 'SUGGESTED',
+      ...(settled
+        ? {
+            pack: { amount: pack!.packAmount, unit: pack!.packUnit },
+            packDecidedBy: pack!.origin === 'memory' ? 'memory' as const : 'check' as const,
+            packFactor: pack!.packAmount,
+          }
+        : {}),
+      needsSetup,
+      ...(linked && line.decision.kind === 'linked' && !runningCost
+        ? { ingredientIds: line.decision.ingredients.map((i) => i.id) }
+        : { skip: !needsSetup }),
+    };
+  });
+
+  const saved = await commitReconciliation({
+    costEntryId: input.costEntryId,
+    vendorName: input.vendorName,
+    vendorTaxId: input.vendorTaxId,
+    invoiceDate: input.invoiceDate,
+    invoiceNumber: input.invoiceNumber,
+    scanId: input.scanId,
+    lines: resolved,
+  });
+  if ('error' in saved) return { error: saved.error };
+
+  const pending = new Set(resolved.filter((l) => l.needsSetup).map((l) => lineKey(l.productName)));
+  return { success: true as const, data: { pending: pending.size } };
 }
 
 /**

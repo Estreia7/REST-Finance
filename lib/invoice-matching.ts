@@ -372,7 +372,8 @@ export function findAliasCandidates(
 export interface PackSize {
   /** How much, in the unit below. */
   amount: number;
-  unit: 'kg' | 'L';
+  /** 'un' is the owner's answer alone: a label never says how many are inside. */
+  unit: 'kg' | 'L' | 'un';
 }
 
 /**
@@ -504,17 +505,19 @@ export type RememberedPack = PackSize | 'packages';
 /**
  * A memory row's pack answer, or null where it holds none.
  *
- * Stored as an amount and a unit, with "un" meaning "count it in packages":
- * one column pair, so a wording either has an answer or does not.
+ * Stored as an amount and a unit. "un" with an amount is so many units in each
+ * package; "un" alone means "count it in packages": one column pair, so a
+ * wording either has an answer or does not.
  */
 export function rememberedPack(row: {
   packAmount: { toString(): string } | number | null;
   packUnit: string | null;
 }): RememberedPack | null {
-  if (row.packUnit === 'un') return 'packages';
-  if (row.packUnit !== 'kg' && row.packUnit !== 'L') return null;
   const amount = Number(row.packAmount?.toString());
-  if (!Number.isFinite(amount) || amount <= 0) return null;
+  const usable = Number.isFinite(amount) && amount > 0;
+  if (row.packUnit === 'un') return usable ? { amount, unit: 'un' } : 'packages';
+  if (row.packUnit !== 'kg' && row.packUnit !== 'L') return null;
+  if (!usable) return null;
   return { amount, unit: row.packUnit };
 }
 

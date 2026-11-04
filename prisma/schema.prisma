@@ -696,6 +696,14 @@ model InvoiceItem {
   unitPrice      Decimal @map("unit_price") @db.Decimal(10, 4)
   totalPrice     Decimal @map("total_price") @db.Decimal(12, 2)
 
+  /// What the printed quantity was multiplied by to get `quantity`: 6 bought
+  /// with 4 in each is 24 at a factor of 4. Null when it was left as printed.
+  /// Kept so a corrected answer starts from the print, never from a result.
+  packFactor Decimal? @map("pack_factor") @db.Decimal(10, 3)
+
+  /// Saved before anyone said what this wording is. Waits in "Precisa de ti".
+  needsSetup Boolean @default(false) @map("needs_setup")
+
   invoiceDate   DateTime? @map("invoice_date")
   invoiceNumber String?   @map("invoice_number")
 
@@ -710,6 +718,7 @@ model InvoiceItem {
 
   @@index([restaurantId, normalizedName, vendorId, invoiceDate])
   @@index([restaurantId, invoiceDate])
+  @@index([restaurantId, needsSetup])
   @@map("invoice_items")
 }
 

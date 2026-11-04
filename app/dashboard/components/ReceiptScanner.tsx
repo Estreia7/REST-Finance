@@ -1,16 +1,14 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Camera, Loader2, Check, X, RotateCcw, Receipt, FileText , AlertTriangle } from 'lucide-react';
 import { createDailySummary, createCostEntry, getCategories } from '../actions';
 import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
-import { commitReconciliation } from '../reconcile-actions';
-import InvoiceReconcile from './InvoiceReconcile';
+import { saveInvoiceLines } from '../reconcile-actions';
 import { measureImage, type QualityCheck } from '@/lib/image-quality';
 import { findExistingInvoice } from '../reconcile-actions';
-import type { LineResolution } from '../reconcile-actions';
 import DocumentCamera from './DocumentCamera';
 import ScanPageEditor, { type ScannedPage } from './ScanPageEditor';
 import ScanTray, { type ScannedDocument, newDocumentId } from './ScanTray';
@@ -108,7 +106,6 @@ export interface AttachTarget {
 
 /** A PDF under 7 MB stays under the scan route's 10 million base64 characters. */
 const MAX_PDF_BYTES = 7 * 1024 * 1024;
-
 export default function ReceiptScanner({
   onSaved,
   defaultScanType = 'DAILY_REPORT',
@@ -159,39 +156,6 @@ export default function ReceiptScanner({
   /** The owner retyped the NIF, so who it belongs to is no longer known. */
   const [nifEdited, setNifEdited] = useState(false);
   const [saving, setSaving] = useState(false);
-  /**
-   * The invoice whose lines are being identified.
-   *
-   * Set once the cost entry is written, because the money should be
-   * recorded whether or not the owner finishes saying what each line is.
-   */
-  const [reconciling, setReconciling] = useState<{
-    costEntryId: string;
-    data: CostReceiptData;
-    /** The reading this invoice came from, so what was read can be compared with what was saved. */
-    scanId: string | null;
-  } | null>(null);
-  /**
-   * The lines handed to the reconcile screen, built once per invoice.
-   *
-   * Inline, a new array on every render made that screen fetch its preview
-   * again and reset every answer the owner had given so far.
-   */
-  const reconcileLines = useMemo(
-    () =>
-      reconciling?.data.items.map((item) => ({
-        productName: item.product,
-        quantity: item.quantity,
-        unit: item.unit,
-        unitPrice: item.unitPrice,
-        total: item.total,
-        category: item.category,
-        packSize: item.packAmount && item.packUnit
-          ? { amount: item.packAmount, unit: item.packUnit }
-          : null,
-      })) ?? [],
-    [reconciling],
-  );
   const [extracted, setExtracted] = useState<ExtractionResult | null>(null);
   /** The stored reading behind `extracted`, kept to the end of the review. */
   const [scanId, setScanId] = useState<string | null>(null);
@@ -526,21 +490,44 @@ export default function ReceiptScanner({
           const linkTo = entryId ?? target?.costEntryId;
           if (scanId && linkTo) linkScanToCost({ scanId, costEntryId: linkTo }).catch(() => undefined);
 
-          // The money is recorded; what the lines are is a separate
-          // question, and one only the owner can answer. Asking it here
-          // rather than guessing is the difference between an invoice
-          // that prices their Carne Smash and one that invents a second
-          // ingredient beside it.
+          toast.success(target ? t('payments.attached') : t('scanner.costSaved'));
+
+          // The lines go in with the money. What nobody has explained yet
+          // waits in "Precisa de ti": no one is held up at the door.
           if (entryId && d.items.length > 0) {
-            toast.success(target ? t('payments.attached') : t('scanner.costSaved'));
-            setReconciling({ costEntryId: entryId, data: d, scanId });
-            // Attaching, the caller waits for the lines: it closes on onSaved.
-            if (!target) onSaved?.();
-            setSaving(false);
-            return;
+            const lines = await saveInvoiceLines({
+              costEntryId: entryId,
+              vendorName: d.vendor,
+              // The NIF identifies the company; the name is however the
+              // reader happened to read the letterhead that day.
+              vendorTaxId: d.vendorTaxId ?? null,
+              invoiceDate: d.date,
+              invoiceNumber: d.invoiceNumber ?? null,
+              scanId,
+              lines: d.items.map((item) => ({
+                productName: item.product,
+                quantity: item.quantity,
+                unit: item.unit,
+                unitPrice: item.unitPrice,
+                total: item.total,
+                category: item.category,
+                packSize: item.packAmount && item.packUnit
+                  ? { amount: item.packAmount, unit: item.packUnit }
+                  : null,
+              })),
+            });
+            if ('error' in lines) {
+              toast.error(t('scanner.saveFailed'));
+            } else if (lines.data.pending > 0) {
+              toast.info(
+                t(lines.data.pending === 1 ? 'lineSetup.pendingOne' : 'lineSetup.pendingMany')
+                  .replace('{count}', String(lines.data.pending)),
+              );
+            }
+            // An invoice joined to a cost typed by hand is done with that cost.
+            if (attachTarget && !attachTo) setAttachTarget(null);
           }
 
-          toast.success(target ? t('payments.attached') : t('scanner.costSaved'));
           resetState();
           onSaved?.();
         } else {
@@ -655,48 +642,6 @@ export default function ReceiptScanner({
         </div>
       )}
 
-      {/* Identifying the lines. Everything else stands down: the invoice
-          is saved, and this is the one thing left to do. */}
-      {reconciling ? (
-        <InvoiceReconcile
-          vendorName={reconciling.data.vendor}
-          vendorTaxId={reconciling.data.vendorTaxId ?? null}
-          lines={reconcileLines}
-          busy={saving}
-          onResolved={async (lines: LineResolution[]) => {
-            setSaving(true);
-            const saved = await commitReconciliation({
-              costEntryId: reconciling.costEntryId,
-              vendorName: reconciling.data.vendor,
-              // The NIF identifies the company; the name is however the
-              // reader happened to read the letterhead that day.
-              vendorTaxId: reconciling.data.vendorTaxId ?? null,
-              invoiceDate: reconciling.data.date,
-              invoiceNumber: reconciling.data.invoiceNumber ?? null,
-              scanId: reconciling.scanId,
-              lines,
-            });
-            setSaving(false);
-
-            if ('error' in saved) {
-              toast.error(t('scanner.saveFailed'));
-              return;
-            }
-
-            const { itemsWritten, linked } = saved.data;
-            toast.success(
-              t('reconcile.saved')
-                .replace('{items}', String(itemsWritten))
-                .replace('{linked}', String(linked)),
-            );
-            setReconciling(null);
-            // An invoice joined to a cost typed by hand is done with that cost.
-            if (attachTarget && !attachTo) setAttachTarget(null);
-            resetState();
-            onSaved?.();
-          }}
-        />
-      ) : (<>
 
       {/* Scan type selector, only where the tab has not already settled it. */}
       {allowTypeChange && (
@@ -997,7 +942,7 @@ export default function ReceiptScanner({
       )}
 
       {/* ── Capture: camera, page editor, tray ─────────────────────────── */}
-      </>)}
+      
 
       {stage === 'camera' && (
         <DocumentCamera

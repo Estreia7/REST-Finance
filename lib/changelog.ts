@@ -35,9 +35,25 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.04.5';
+export const CHANGELOG_VERSION = '2026.11.04.6';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.04.6',
+    date: '2026-11-04',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'As faturas entram logo, sem perguntas pelo meio',
+        detail: 'Ao guardar uma fatura, os valores ficam registados de imediato. Os produtos novos ficam em Precisa de ti, para explicar quando puder e só uma vez.',
+      },
+      {
+        kind: 'new',
+        title: 'Diga quanto traz cada unidade comprada',
+        detail: 'Compra 6 embalagens com 4 pães, ou 4 alfaces de 500 g? Indique-o uma vez e as quantidades e o custo do ingrediente ficam certos em todas as faturas, antigas e novas. Para corrigir, use o botão de configurar em Contabilidade › Linhas.',
+      },
+    ],
+  },
   {
     version: '2026.11.04.5',
     date: '2026-11-04',

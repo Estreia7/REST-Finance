@@ -16,6 +16,7 @@ export const INBOX_KINDS = [
   'complianceExpired',
   'emailInvoices',
   'bankOpen',
+  'linesToSetup',
   'uncategorisedLines',
   'uncategorisedCosts',
   'duplicateVendors',
@@ -28,7 +29,7 @@ export type InboxSeverity = 'high' | 'medium' | 'low';
 /** Where each item is fixed: a dashboard tab, and the view inside it. */
 export interface InboxTarget {
   tab: 'accounting' | 'costs' | 'compliance';
-  view?: 'payments' | 'bank' | 'tidy' | 'lines' | 'history' | 'scan';
+  view?: 'payments' | 'bank' | 'tidy' | 'lines' | 'setup' | 'history' | 'scan';
   filter?: 'overdue';
 }
 
@@ -40,6 +41,8 @@ export interface InboxCounts {
   bankOpen: { count: number; total: number };
   /** Invoices that arrived by email and are waiting to be checked. */
   emailInvoices: { count: number; total: number };
+  /** Wordings on saved invoices that nobody has explained yet. */
+  linesToSetup: { count: number; total: number };
   uncategorisedLines: { count: number; total: number };
   uncategorisedCosts: { count: number; total: number };
   complianceExpired: number;
@@ -64,6 +67,7 @@ const SEVERITY: Record<InboxKind, InboxSeverity> = {
   // The numbers are incomplete until these are sorted.
   emailInvoices: 'medium',
   bankOpen: 'medium',
+  linesToSetup: 'medium',
   uncategorisedLines: 'medium',
   uncategorisedCosts: 'medium',
   // Worth doing, not urgent.
@@ -77,6 +81,7 @@ const TARGET: Record<InboxKind, InboxTarget> = {
   duplicateVendors: { tab: 'accounting', view: 'tidy' },
   emailInvoices: { tab: 'costs', view: 'scan' },
   bankOpen: { tab: 'accounting', view: 'bank' },
+  linesToSetup: { tab: 'accounting', view: 'setup' },
   uncategorisedLines: { tab: 'accounting', view: 'lines' },
   uncategorisedCosts: { tab: 'costs', view: 'history' },
   complianceExpired: { tab: 'compliance' },
@@ -93,6 +98,7 @@ export function buildInbox(c: InboxCounts): InboxItem[] {
     { kind: 'duplicateVendors', count: c.duplicateVendors, amount: null },
     { kind: 'emailInvoices', count: c.emailInvoices.count, amount: c.emailInvoices.total },
     { kind: 'bankOpen', count: c.bankOpen.count, amount: c.bankOpen.total },
+    { kind: 'linesToSetup', count: c.linesToSetup.count, amount: c.linesToSetup.total },
     { kind: 'uncategorisedLines', count: c.uncategorisedLines.count, amount: c.uncategorisedLines.total },
     { kind: 'uncategorisedCosts', count: c.uncategorisedCosts.count, amount: c.uncategorisedCosts.total },
     { kind: 'complianceExpired', count: c.complianceExpired, amount: null },
