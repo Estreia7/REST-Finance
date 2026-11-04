@@ -525,7 +525,9 @@ export default function MenuCalculatorPanel() {
 
       {(addingIngredient || editingIngredient) && (
         <IngredientDialog
-          ingredient={editingIngredient}
+          // The fresh row, not the one clicked: linking an invoice name reprices
+          // it while the dialog is open.
+          ingredient={ingredients.find((i) => i.id === editingIngredient?.id) ?? editingIngredient}
           initialName={newIngredientName}
           onLinked={load}
           onClose={() => { setAddingIngredient(false); setEditingIngredient(null); setNewIngredientName(''); }}
@@ -1899,143 +1901,165 @@ function IngredientDialog({
     <Dialog
       onClose={onClose}
       title={ingredient ? t('menuCalc.editIngredient') : t('menuCalc.newIngredient')}
+      wide={ingredient !== null}
     >
-      <label className="block">
-        <span className="text-xs text-muted-foreground block mb-1.5">{t('menuCalc.name')}</span>
-        <input
-          type="text" value={name} onChange={(e) => setName(e.target.value)}
-          maxLength={60} autoFocus placeholder={t('menuCalc.ingredientNamePlaceholder')}
-          className="input-field !py-2"
-        />
-        <span className="block text-[10px] text-muted-foreground mt-1">
-          {t('menuCalc.ingredientNameHint')}
-        </span>
-      </label>
-
-      <label className="block mt-3">
-        <span className="text-xs text-muted-foreground block mb-1.5">{t('menuCalc.howBought')}</span>
-        <select value={unit} onChange={(e) => setUnit(e.target.value)} className="input-field !py-2 w-32">
-          {PURCHASE_UNITS.map((u) => (
-            <option key={u} value={u}>{t('menuCalc.per')} {u}</option>
-          ))}
-        </select>
-      </label>
-
-      <div className="mt-4 rounded-xl bg-muted/60 p-3">
-        <span className="text-xs text-muted-foreground block mb-2">{t('menuCalc.price')}</span>
-
-        <label className="flex items-start gap-2.5 cursor-pointer">
-          <input
-            type="radio" checked={useInvoice} onChange={() => setUseInvoice(true)}
-            className="mt-0.5" name="costSource"
-          />
-          <span className="min-w-0">
-            <span className="block text-sm text-foreground">{t('menuCalc.useInvoicePrice')}</span>
-            <span className="block text-[11px] text-muted-foreground">
-              {ingredient?.invoiceUnitCost != null
-                ? `${t('menuCalc.currently')} ${formatMoneyExact(ingredient.invoiceUnitCost)}/${ingredient.unit}. ${t('menuCalc.updatesItself')}`
-                : t('menuCalc.noInvoiceYet')}
+      {/* On a computer the invoice names get a column of their own: they are
+          a long list, and below the form they had a few rows to scroll in. */}
+      <div
+        className={ingredient
+          ? 'lg:flex-1 lg:min-h-0 lg:grid lg:grid-cols-[22rem_minmax(0,1fr)] lg:grid-rows-[auto_minmax(3rem,1fr)]'
+          : undefined}
+      >
+        <div className="lg:col-start-1 lg:row-start-1">
+          <label className="block">
+            <span className="text-xs text-muted-foreground block mb-1.5">{t('menuCalc.name')}</span>
+            <input
+              type="text" value={name} onChange={(e) => setName(e.target.value)}
+              maxLength={60} autoFocus placeholder={t('menuCalc.ingredientNamePlaceholder')}
+              className="input-field !py-2"
+            />
+            <span className="block text-[10px] text-muted-foreground mt-1">
+              {t('menuCalc.ingredientNameHint')}
             </span>
-          </span>
-        </label>
+          </label>
 
-        <label className="flex items-start gap-2.5 cursor-pointer mt-3">
-          <input
-            type="radio" checked={!useInvoice} onChange={() => setUseInvoice(false)}
-            className="mt-0.5" name="costSource"
-          />
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm text-foreground">{t('menuCalc.typeThePrice')}</span>
-            <span className="block text-[11px] text-muted-foreground mb-2">
-              {t('menuCalc.typeThePriceHint')}
-            </span>
-            {!useInvoice && (
-              <span className="flex items-center gap-2">
-                <input
-                  type="text" inputMode="decimal" value={cost}
-                  onChange={(e) => setCost(e.target.value)}
-                  placeholder="12,50" className="input-field !py-1.5 !text-sm w-28"
-                />
-                <span className="text-xs text-muted-foreground">€ {t('menuCalc.per')} {unit}</span>
+          <label className="block mt-3">
+            <span className="text-xs text-muted-foreground block mb-1.5">{t('menuCalc.howBought')}</span>
+            <select value={unit} onChange={(e) => setUnit(e.target.value)} className="input-field !py-2 w-32">
+              {PURCHASE_UNITS.map((u) => (
+                <option key={u} value={u}>{t('menuCalc.per')} {u}</option>
+              ))}
+            </select>
+          </label>
+
+          <div className="mt-4 rounded-xl bg-muted/60 p-3">
+            <span className="text-xs text-muted-foreground block mb-2">{t('menuCalc.price')}</span>
+
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="radio" checked={useInvoice} onChange={() => setUseInvoice(true)}
+                className="mt-0.5" name="costSource"
+              />
+              <span className="min-w-0">
+                <span className="block text-sm text-foreground">{t('menuCalc.useInvoicePrice')}</span>
+                <span className="block text-[11px] text-muted-foreground">
+                  {ingredient?.invoiceUnitCost != null
+                    ? `${t('menuCalc.currently')} ${formatMoneyExact(ingredient.invoiceUnitCost)}/${ingredient.unit}. ${t('menuCalc.updatesItself')}`
+                    : t('menuCalc.noInvoiceYet')}
+                </span>
               </span>
+            </label>
+
+            <label className="flex items-start gap-2.5 cursor-pointer mt-3">
+              <input
+                type="radio" checked={!useInvoice} onChange={() => setUseInvoice(false)}
+                className="mt-0.5" name="costSource"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm text-foreground">{t('menuCalc.typeThePrice')}</span>
+                <span className="block text-[11px] text-muted-foreground mb-2">
+                  {t('menuCalc.typeThePriceHint')}
+                </span>
+                {!useInvoice && (
+                  <span className="flex items-center gap-2">
+                    <input
+                      type="text" inputMode="decimal" value={cost}
+                      onChange={(e) => setCost(e.target.value)}
+                      placeholder="12,50" className="input-field !py-1.5 !text-sm w-28"
+                    />
+                    <span className="text-xs text-muted-foreground">€ {t('menuCalc.per')} {unit}</span>
+                  </span>
+                )}
+              </span>
+            </label>
+          </div>
+
+          <label className="block mt-3">
+            <span className="text-xs text-muted-foreground block mb-1.5">
+              {t('menuCalc.waste')}
+              <span className="block text-[10px] opacity-70">
+                {t('menuCalc.wasteHint')}
+              </span>
+            </span>
+            <span className="flex items-center gap-2">
+              <input
+                type="number" min={0} max={99} value={waste}
+                onChange={(e) => setWaste(e.target.value)}
+                className="input-field !py-1.5 !text-sm w-24"
+              />
+              <span className="text-xs text-muted-foreground">%</span>
+            </span>
+          </label>
+
+          <div className="mt-5 flex gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                valid && onSave({
+                  name: name.trim(),
+                  unit,
+                  manualUnitCost: useInvoice ? null : costValue,
+                  wastePercent: Number(waste) || 0,
+                })
+              }
+              disabled={!valid}
+              className="cta-button flex-1 !py-2.5 !text-sm disabled:opacity-40"
+            >
+              <Check className="w-4 h-4" aria-hidden="true" />
+              {t('menuCalc.save')}
+            </button>
+            {onDelete && (
+              <button
+                type="button" onClick={onDelete}
+                className="cta-button-secondary !py-2.5 !px-3 !text-sm text-danger"
+                aria-label={t('menuCalc.removeIngredient')}
+              >
+                <Trash2 className="w-4 h-4" aria-hidden="true" />
+              </button>
             )}
-          </span>
-        </label>
-      </div>
+          </div>
 
-      <label className="block mt-3">
-        <span className="text-xs text-muted-foreground block mb-1.5">
-          {t('menuCalc.waste')}
-          <span className="block text-[10px] opacity-70">
-            {t('menuCalc.wasteHint')}
-          </span>
-        </span>
-        <span className="flex items-center gap-2">
-          <input
-            type="number" min={0} max={99} value={waste}
-            onChange={(e) => setWaste(e.target.value)}
-            className="input-field !py-1.5 !text-sm w-24"
-          />
-          <span className="text-xs text-muted-foreground">%</span>
-        </span>
-      </label>
+        </div>
 
-      <div className="mt-5 flex gap-2">
-        <button
-          type="button"
-          onClick={() =>
-            valid && onSave({
-              name: name.trim(),
-              unit,
-              manualUnitCost: useInvoice ? null : costValue,
-              wastePercent: Number(waste) || 0,
-            })
-          }
-          disabled={!valid}
-          className="cta-button flex-1 !py-2.5 !text-sm disabled:opacity-40"
-        >
-          <Check className="w-4 h-4" aria-hidden="true" />
-          {t('menuCalc.save')}
-        </button>
-        {onDelete && (
-          <button
-            type="button" onClick={onDelete}
-            className="cta-button-secondary !py-2.5 !px-3 !text-sm text-danger"
-            aria-label={t('menuCalc.removeIngredient')}
-          >
-            <Trash2 className="w-4 h-4" aria-hidden="true" />
-          </button>
+        {/* Only for an ingredient that exists: there is no history behind
+            one being created. */}
+        {ingredient && (
+          <>
+            {/* Above the history, because an ingredient with no price has
+                nothing to show below and this is how it gets one. */}
+            <div
+              className="lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:min-h-0 lg:flex lg:flex-col
+                         lg:ml-6 lg:pl-6 lg:border-l lg:border-border-subtle"
+            >
+              <IngredientSources
+                ingredientId={ingredient.id}
+                ingredientName={ingredient.name}
+                onChanged={onLinked}
+              />
+            </div>
+            {/* The negative margin keeps the rows' hover inside the scroll box. */}
+            <div className="lg:col-start-1 lg:row-start-2 lg:min-h-0 lg:overflow-y-auto lg:-mx-2 lg:px-2 lg:mt-3">
+              <IngredientPriceHistory
+                ingredientId={ingredient.id}
+                unit={ingredient.unit}
+              />
+            </div>
+          </>
         )}
       </div>
-
-      {/* Only for an ingredient that exists: there is no history behind
-          one being created. */}
-      {ingredient && (
-        <>
-          {/* Above the history, because an ingredient with no price has
-              nothing to show below and this is how it gets one. */}
-          <IngredientSources
-            ingredientId={ingredient.id}
-            ingredientName={ingredient.name}
-            onChanged={onLinked}
-          />
-          <IngredientPriceHistory
-            ingredientId={ingredient.id}
-            unit={ingredient.unit}
-          />
-        </>
-      )}
     </Dialog>
   );
 }
 
 /** Same shape as the schedule's dialog: bottom sheet on a phone, centred above. */
 function Dialog({
-  title, onClose, children,
+  title, onClose, children, wide = false,
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  /** Takes most of a computer's screen, at a fixed height its columns can fill. */
+  wide?: boolean;
 }) {
   const { t } = useLanguage();
   useEffect(() => {
@@ -2051,11 +2075,12 @@ function Dialog({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-full sm:max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl
+        className={`relative w-full sm:max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl
                    p-5 shadow-modal max-h-[90dvh] overflow-y-auto overscroll-contain
-                   pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-5"
+                   pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-5
+                   ${wide ? 'lg:max-w-5xl lg:w-[calc(100%-3rem)] lg:h-[min(90dvh,52rem)] lg:flex lg:flex-col' : ''}`}
       >
-        <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="flex items-start justify-between gap-3 mb-4 shrink-0">
           <h4 className="font-bold text-foreground">{title}</h4>
           <button
             type="button" onClick={onClose}

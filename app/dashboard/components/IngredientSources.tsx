@@ -51,6 +51,9 @@ export default function IngredientSources({
 }) {
   const { t, language } = useLanguage();
   const [open, setOpen] = useState(false);
+  // On a computer this has a column to itself, so there is nothing to fold
+  // away. Must match the `lg` breakpoint the ingredient dialog splits at.
+  const [wide, setWide] = useState(false);
   const [sources, setSources] = useState<Source[] | null>(null);
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -64,11 +67,21 @@ export default function IngredientSources({
     });
   }, [deferredSearch]);
 
-  // Fetched when opened, not before: a dialog that loads every invoice name
-  // nobody asked for is a query per ingredient edited.
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    const media = window.matchMedia('(min-width: 1024px)');
+    const sync = () => setWide(media.matches);
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
+
+  const shown = open || wide;
+
+  // On a phone, fetched when opened and not before: a dialog that loads every
+  // invoice name nobody asked for is a query per ingredient edited.
+  useEffect(() => {
+    if (shown) load();
+  }, [shown, load]);
 
   const linkedHere = (source: Source) => source.linkedTo.includes(ingredientName);
 
@@ -118,28 +131,38 @@ export default function IngredientSources({
   };
 
   return (
-    <div className="border-t border-border-subtle pt-3 mt-1">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="w-full flex items-center justify-between gap-2 py-1 text-left
-                   text-xs font-semibold text-muted-foreground hover:text-foreground
-                   transition-colors focus-visible:outline-none focus-visible:ring-2
-                   focus-visible:ring-ring rounded"
-      >
-        <span className="flex items-center gap-1.5">
+    <div
+      className="border-t border-border-subtle pt-3 mt-4
+                 lg:border-t-0 lg:pt-0 lg:mt-0 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col"
+    >
+      {wide ? (
+        <h5 className="flex items-center gap-1.5 py-1 text-xs font-semibold text-muted-foreground">
           <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
           {t('menuCalc.sourcesTitle')}
-        </span>
-        <ChevronDown
-          className={`w-4 h-4 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
-          aria-hidden="true"
-        />
-      </button>
+        </h5>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="w-full flex items-center justify-between gap-2 py-1 text-left
+                     text-xs font-semibold text-muted-foreground hover:text-foreground
+                     transition-colors focus-visible:outline-none focus-visible:ring-2
+                     focus-visible:ring-ring rounded"
+        >
+          <span className="flex items-center gap-1.5">
+            <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
+            {t('menuCalc.sourcesTitle')}
+          </span>
+          <ChevronDown
+            className={`w-4 h-4 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+          />
+        </button>
+      )}
 
-      {open && (
-        <div className="mt-2">
+      {shown && (
+        <div className="mt-2 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
           <p className="text-[11px] text-muted-foreground mb-2">
             {t('menuCalc.sourcesHint')}
           </p>
@@ -179,7 +202,7 @@ export default function IngredientSources({
               {search ? t('menuCalc.sourcesNoMatches') : t('menuCalc.sourcesEmpty')}
             </p>
           ) : (
-            <ul className="max-h-56 overflow-y-auto divide-y divide-border-subtle">
+            <ul className="max-h-56 lg:max-h-none lg:flex-1 lg:min-h-0 overflow-y-auto divide-y divide-border-subtle">
               {sources.map((source) => {
                 const on = linkedHere(source);
                 // Linked to something else: worth saying, because picking it
@@ -192,7 +215,7 @@ export default function IngredientSources({
                       onClick={() => toggle(source)}
                       disabled={busy !== null}
                       aria-pressed={on}
-                      className={`w-full flex items-center gap-2.5 py-2 text-left -mx-2 px-2 rounded-lg
+                      className={`w-full flex items-center gap-2.5 py-2 text-left px-2 rounded-lg
                                   transition-colors disabled:opacity-60
                                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset
                                   focus-visible:ring-ring ${on ? 'bg-primary/10' : 'hover:bg-muted/50'}`}

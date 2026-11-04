@@ -35,9 +35,25 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.04.6';
+export const CHANGELOG_VERSION = '2026.11.04.7';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.04.7',
+    date: '2026-11-04',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'Ligar ingredientes às facturas com o ecrã todo',
+        detail: 'No computador, ao editar um ingrediente, os nomes nas facturas aparecem ao lado do formulário, sempre abertos e com muito mais linhas à vista.',
+      },
+      {
+        kind: 'fix',
+        title: 'O preço do ingrediente muda logo ao ligar uma factura',
+        detail: 'Antes continuava a mostrar o preço antigo até fechar e voltar a abrir o ingrediente.',
+      },
+    ],
+  },
   {
     version: '2026.11.04.6',
     date: '2026-11-04',
