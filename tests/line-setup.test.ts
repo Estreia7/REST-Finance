@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  invoiceUnit,
   toPack,
   toPackInput,
   restateLine,
@@ -280,5 +281,20 @@ describe('newIngredientUnit', () => {
   it('follows what one package holds otherwise', () => {
     expect(newIngredientUnit(['un'], 'g')).toBe('kg');
     expect(newIngredientUnit([null], 'un')).toBe('un');
+  });
+});
+
+describe('invoiceUnit', () => {
+  it('reads every way suppliers write a unit', () => {
+    expect(invoiceUnit('Uni')).toBe('un');
+    expect(invoiceUnit('UN.')).toBe('un');
+    expect(invoiceUnit('KG')).toBe('kg');
+    expect(invoiceUnit(' lt ')).toBe('L');
+    expect(invoiceUnit('Caixa')).toBe('cx');
+  });
+
+  it('keeps one it does not know, and leaves an empty one empty', () => {
+    expect(invoiceUnit('Fardo')).toBe('Fardo');
+    expect(invoiceUnit(null)).toBe('');
   });
 });

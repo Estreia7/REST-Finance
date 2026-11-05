@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, Check, CheckCircle2, Loader2, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, Loader2, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
 import { translateError } from '@/lib/error-messages';
 import { checkReading, type TaxTruth } from '@/lib/invoice-checks';
-import {
+import { INVOICE_UNITS, invoiceUnit,
   PACK_UNITS,
   PACK_UNIT_KEYS,
   followFigures,
@@ -46,9 +46,15 @@ type Row = Omit<ProofLine, 'quantity' | 'unitPrice' | 'total' | 'vatRate' | 'pac
   packUnit: PackUnit;
   /** As it came, to tell an answer from what was already known. */
   packWas: string;
+  /** Most lines come as printed, so the question stays out of the way until asked for. */
+  packOpen: boolean;
 };
 
 const num = (value: string) => Number(value.replace(',', '.'));
+
+const INVOICE_UNIT_KEYS: Record<(typeof INVOICE_UNITS)[number], string> = {
+  un: 'lineSetup.unitUn', kg: 'lineSetup.unitKg', L: 'lineSetup.unitL', cx: 'lineSetup.unitCx',
+};
 
 const packText = (amount: string, unit: PackUnit) => `${num(amount)} ${unit}`;
 const NO_PACK = packText('1', 'un');
@@ -58,9 +64,11 @@ function toRow(line: ProofLine, i: number): Row {
   const packUnit = line.pack?.unit ?? 'un';
   return {
     ...line,
+    unit: invoiceUnit(line.unit),
     packAmount,
     packUnit,
     packWas: packText(packAmount, packUnit),
+    packOpen: packText(packAmount, packUnit) !== NO_PACK,
     key: line.id ?? `new-${i}-${line.productName}`,
     quantity: String(line.quantity),
     unitPrice: String(line.unitPrice),
@@ -279,18 +287,44 @@ export default function InvoiceProofEditor({
                 ] as const).map(([name, label]) => (
                   <label key={name} className="block min-w-0">
                     <span className="block text-[10px] text-muted-foreground mb-0.5 truncate">{t(label)}</span>
-                    <input
-                      type="text"
-                      inputMode={name === 'unit' ? 'text' : 'decimal'}
-                      value={row[name] ?? ''}
-                      onChange={(e) => change(row.key, name, e.target.value)}
-                      className={field}
-                    />
+                    {name === 'unit' ? (
+                      <select
+                        value={row.unit ?? ''}
+                        onChange={(e) => change(row.key, 'unit', e.target.value)}
+                        className={field}
+                      >
+                        {!row.unit && <option value="">—</option>}
+                        {INVOICE_UNITS.map((u) => <option key={u} value={u}>{t(INVOICE_UNIT_KEYS[u])}</option>)}
+                        {/* Printed in a way the list does not know: kept, not lost. */}
+                        {row.unit && !INVOICE_UNITS.some((u) => u === row.unit) && (
+                          <option value={row.unit}>{row.unit}</option>
+                        )}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={row[name] ?? ''}
+                        onChange={(e) => change(row.key, name, e.target.value)}
+                        className={field}
+                      />
+                    )}
                   </label>
                 ))}
               </div>
 
-              {takesPack(line.quantity, row.unit) && (
+              {takesPack(line.quantity, row.unit) && !row.packOpen && (
+                <button
+                  type="button"
+                  onClick={() => setRows((was) => was.map((r) => (r.key === row.key ? { ...r, packOpen: true } : r)))}
+                  className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-primary-ink"
+                >
+                  <Plus className="w-3 h-3" aria-hidden="true" />
+                  {t('proof.packAdd')}
+                </button>
+              )}
+
+              {takesPack(line.quantity, row.unit) && row.packOpen && (
                 <div className="mt-2 border-t border-border-subtle pt-2">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="text-[11px] text-muted-foreground">{t('proof.packEach')}</span>
@@ -318,6 +352,16 @@ export default function InvoiceProofEditor({
                           .replace('{price}', formatMoney(inside.unitPrice))}
                       </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => setRows((was) => was.map((r) => (
+                        r.key === row.key ? { ...r, packAmount: '1', packUnit: 'un', packOpen: false } : r
+                      )))}
+                      aria-label={`${t('proof.packRemove')}: ${row.productName}`}
+                      className="ml-auto shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-danger hover:bg-muted transition-colors"
+                    >
+                      <X className="w-4 h-4" aria-hidden="true" />
+                    </button>
                   </div>
                   {line.packChanged && (
                     <p className="mt-1 text-[11px] text-muted-foreground">{t('proof.packTaught')}</p>

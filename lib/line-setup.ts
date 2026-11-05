@@ -136,6 +136,27 @@ export function asPrinted(line: StoredLine & { unitPrice: number }): {
   };
 }
 
+/** The units a line of an invoice is chosen from. */
+export const INVOICE_UNITS = ['un', 'kg', 'L', 'cx'] as const;
+
+const UNIT_SPELLINGS: Record<string, (typeof INVOICE_UNITS)[number]> = {
+  u: 'un', un: 'un', uni: 'un', und: 'un', unid: 'un', unidade: 'un', unidades: 'un',
+  k: 'kg', kg: 'kg', kgs: 'kg', quilo: 'kg', quilos: 'kg',
+  l: 'L', lt: 'L', lts: 'L', litro: 'L', litros: 'L',
+  cx: 'cx', cxs: 'cx', caixa: 'cx', caixas: 'cx',
+};
+
+/**
+ * A unit as printed, in the list's own spelling.
+ *
+ * Every supplier writes it differently: Uni, UN, Und. One it does not know is
+ * kept as printed, so opening an invoice never changes what it says.
+ */
+export function invoiceUnit(printed: string | null | undefined): string {
+  const text = (printed ?? '').trim();
+  return UNIT_SPELLINGS[text.toLowerCase().replace(/\.$/, '')] ?? text;
+}
+
 /** Whether "how much does each one hold" means anything for what was printed. */
 export function takesPack(quantity: number, unit: string | null | undefined): boolean {
   return !isMeasured(unit) && Number.isInteger(quantity) && quantity > 0;

@@ -35,9 +35,20 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.05.02';
+export const CHANGELOG_VERSION = '2026.11.05.03';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.05.03',
+    date: '2026-11-05',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'Corrigir uma fatura ficou mais simples',
+        detail: 'A unidade escolhe-se de uma lista, e «Cada um traz» só aparece quando faz falta: nas linhas que já vêm certas fica escondido, e tira-se com o X.',
+      },
+    ],
+  },
   {
     version: '2026.11.05.02',
     date: '2026-11-05',
