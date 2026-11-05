@@ -314,7 +314,7 @@ export default function InvoiceProofEditor({
                       <span className="text-[11px] font-medium text-foreground tabular-nums">
                         {t('proof.packResult')
                           .replace('{quantity}', String(inside.quantity).replace('.', language === 'pt' ? ',' : '.'))
-                          .replace('{unit}', inside.unit === 'un' ? t('lineSetup.unitsShort') : inside.unit ?? '')
+                          .replaceAll('{unit}', inside.unit === 'un' ? t('lineSetup.unitsShort') : inside.unit ?? '')
                           .replace('{price}', formatMoney(inside.unitPrice))}
                       </span>
                     )}

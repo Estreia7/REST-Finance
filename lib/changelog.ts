@@ -35,9 +35,20 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.05.01';
+export const CHANGELOG_VERSION = '2026.11.05.02';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.05.02',
+    date: '2026-11-05',
+    entries: [
+      {
+        kind: 'fix',
+        title: 'O preço por quilo já não parece o preço de tudo',
+        detail: 'Ao corrigir uma fatura, o resultado diz agora «2 kg · €8,88 por kg» em vez de «2 kg a €8,88».',
+      },
+    ],
+  },
   {
     version: '2026.11.05.01',
     date: '2026-11-05',
