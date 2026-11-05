@@ -40,7 +40,7 @@ export const SCANNER_RETRY_MODEL = 'claude-opus-5-5';
  * prompt change rather than guessed at. Date-stamped rather than numbered:
  * the question asked later is always "what were we sending in September?".
  */
-export const PROMPT_VERSION = '2026-11-04.1';
+export const PROMPT_VERSION = '2026-11-05.1';
 
 /**
  * Room for the answer. A long cash-and-carry invoice runs to forty lines, and
@@ -98,8 +98,10 @@ Rules that matter for Portuguese documents:
 - Every line must satisfy quantity x unitPrice = total. If yours does not, you have shifted a column: read the row again against its headings. Never take the price for the total or the weight for the price.
 - "total" is the value BEFORE VAT ("Valor Mercadoria", "Valor Líquido", "Valor s/ IVA", "Incidência"). Report the VAT-inclusive value, where printed, in grossTotal. If a line prints only a VAT-inclusive value, compute the value before VAT from it and its rate, and use the unit price before VAT.
 - Every line has a VAT rate: a "%IVA" column, or a letter or code explained in a legend at the foot. Report it as a number: 6, 13, 23 on the mainland; 4, 12, 22 in Madeira; 4, 9, 16 in the Azores; 0 if exempt.
+- On Makro invoices the last columns of each line hold a VAT code ("IvaCD"), not a percentage: code 2 is 23%, code 4 is 6%, code 5 is 13%. Read it from that line, never from the lines around it.
 - Copy the VAT table at the foot of the invoice into vatSummary, one entry per rate with its base ("Incidência") and tax ("Imposto"/"Valor IVA").
-- Do not skip lines. A line with a discount, a deposit ("tara", "vasilhame"), an eco-tax or a delivery fee is still a line.
+- Do not skip lines. A deposit ("tara", "vasilhame"), an eco-tax, a delivery fee, or a discount printed as its own row among the products, is still a line.
+- "Desconto total", "Total descontos" and the like in the totals block at the foot are NOT lines. They only tell the customer what was saved, and the line values already include it. Never report them as a line.
 - EVERY Portuguese invoice carries a document number, by law. Find it. It sits near the top, after a label like "Fatura", "Fatura Simplificada", "FT", "FS", "FR", "Documento n." or "Nº", and usually looks like PREFIX SERIES/NUMBER — for example "FS 4055TPV2/260014357" or "FR U005/267376". Copy the whole thing, exactly as printed. Do not drop the prefix, do not drop the series in the middle, and do not return only the digits after the slash. If the label and the number are on different lines, they still belong together.
 
 Read only what is printed. If a field is not on the page, omit it rather than inferring it — a missing invoice number is useful information, an invented one is not. If the photograph is too unclear to read a figure, omit that figure instead of guessing at it.`;

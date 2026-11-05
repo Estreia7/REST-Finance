@@ -148,6 +148,135 @@ export function checkReading(reading: CheckedReading, qr: Pick<InvoiceQrData, 't
 }
 
 /**
+ * Whether a line is the invoice's discount note rather than something bought.
+ *
+ * "Desconto total 0,25" in the totals block tells the customer what they saved:
+ * the line values already include it, so as a line it counts it twice. Only ever
+ * dropped when the figures come out better without it, because a discount
+ * printed among the products can be a real line.
+ */
+export function isDiscountNote(productName: string): boolean {
+  return /^\s*(total\s+(de\s+)?)?descontos?\b/i.test(productName);
+}
+
+/** Largest number of partial answers kept per line, so a long invoice stays quick. */
+const MAX_STATES = 6_000;
+
+interface SettleState {
+  changes: number;
+  from: string;
+  rate: number;
+}
+
+/** The rates that bring the lines to the bases within `tolerance`, changing as few as possible. */
+function settleWithin(
+  lines: Array<Pick<CheckedLine, 'total' | 'vatRate'>>,
+  truth: TaxTruth[],
+  tolerance: number,
+): number[] | null {
+  const toCents = (n: number) => Math.round(n * 100);
+  const totals = lines.map((l) => toCents(l.total));
+  const bases = truth.map((b) => toCents(b.base));
+  const slack = toCents(tolerance);
+
+  // What the lines still to come can add or take away, for ruling out dead ends.
+  const addable = new Array<number>(lines.length + 1).fill(0);
+  const removable = new Array<number>(lines.length + 1).fill(0);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    addable[i] = addable[i + 1] + Math.max(0, totals[i]);
+    removable[i] = removable[i + 1] + Math.max(0, -totals[i]);
+  }
+
+  const start = truth.map(() => 0).join(',');
+  const layers: Array<Map<string, SettleState>> = [new Map([[start, { changes: 0, from: '', rate: 0 }]])];
+
+  for (let i = 0; i < lines.length; i++) {
+    const next = new Map<string, SettleState>();
+    for (const [key, state] of layers[i]) {
+      const sums = key.split(',').map(Number);
+      truth.forEach((band, b) => {
+        const moved = [...sums];
+        moved[b] += totals[i];
+        const reachable = moved.every((sum, k) =>
+          sum - removable[i + 1] <= bases[k] + slack && sum + addable[i + 1] >= bases[k] - slack);
+        if (!reachable) return;
+        const nextKey = moved.join(',');
+        const changes = state.changes + (lines[i].vatRate === band.rate ? 0 : 1);
+        const seen = next.get(nextKey);
+        if (!seen || changes < seen.changes) next.set(nextKey, { changes, from: key, rate: band.rate });
+      });
+    }
+    if (next.size === 0) return null;
+    layers.push(next.size <= MAX_STATES
+      ? next
+      : new Map([...next.entries()].sort((a, b) => a[1].changes - b[1].changes).slice(0, MAX_STATES)));
+  }
+
+  let best: [string, SettleState] | null = null;
+  for (const entry of layers[lines.length]) {
+    const fits = entry[0].split(',').every((sum, b) => Math.abs(Number(sum) - bases[b]) <= slack);
+    if (fits && (!best || entry[1].changes < best[1].changes)) best = entry;
+  }
+  if (!best) return null;
+
+  const rates = new Array<number>(lines.length);
+  let key = best[0];
+  for (let i = lines.length; i > 0; i--) {
+    const state = layers[i].get(key);
+    if (!state) return null;
+    rates[i - 1] = state.rate;
+    key = state.from;
+  }
+  return rates;
+}
+
+/**
+ * Which VAT rate each line must have for the invoice to add up.
+ *
+ * The document states what each rate adds up to, and every line's value is
+ * known, so the rates are a sum that can be worked out instead of guessed line
+ * by line: a Makro invoice prints a code, not a percentage. Changes as few lines
+ * as it can, tightest fit first. Two lines of the same value can still swap, so
+ * this proposes and the owner looks.
+ *
+ * Null when no choice of rates fits, which means a value is wrong or a line is
+ * missing. A discount note is left out if that is what it takes.
+ */
+export function settleVat(
+  lines: Array<CheckedLine & { productName: string }>,
+  truth: TaxTruth[],
+): { rates: number[]; changed: number; drop: number[] } | null {
+  if (truth.length === 0 || lines.length === 0) return null;
+
+  const attempt = (kept: number[]) => {
+    const chosen = kept.map((i) => lines[i]);
+    for (const tolerance of [0.01, 0.05, sumTolerance(chosen.length)]) {
+      const rates = settleWithin(chosen, truth, tolerance);
+      if (rates) return rates;
+    }
+    return null;
+  };
+
+  const all = lines.map((_, i) => i);
+  const notes = all.filter((i) => isDiscountNote(lines[i].productName));
+  const kept = all.filter((i) => !notes.includes(i));
+  const plans = notes.length > 0 ? [all, kept] : [all];
+
+  for (const plan of plans) {
+    const rates = attempt(plan);
+    if (!rates) continue;
+    const full = lines.map((l) => l.vatRate ?? 0);
+    plan.forEach((lineIndex, k) => { full[lineIndex] = rates[k]; });
+    return {
+      rates: full,
+      changed: plan.filter((i) => lines[i].vatRate !== full[i]).length,
+      drop: all.filter((i) => !plan.includes(i)),
+    };
+  }
+  return null;
+}
+
+/**
  * Whether an invoice can go in without anyone looking at it.
  *
  * Only one proved against its QR: the till's own figures, not a reading of

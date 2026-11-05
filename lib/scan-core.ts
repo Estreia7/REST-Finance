@@ -3,7 +3,7 @@ import { scanDocument, type ScanResult, type MediaType, type ScanType } from '@/
 import { readInvoiceQr, applyQrTruth, type InvoiceQrData } from '@/lib/pt-invoice-qr';
 import { checkVendorReading, looksLikeCustomer, type CustomerIdentity } from '@/lib/vendor-reading';
 import { saveImage, saveDocument, resolveStoredPath } from '@/lib/uploads';
-import { betterProof, checkReading, rereadHint, type CheckedReading, type Proof } from '@/lib/invoice-checks';
+import { betterProof, checkReading, isDiscountNote, rereadHint, settleVat, type CheckedReading, type Proof } from '@/lib/invoice-checks';
 import { isCreditNoteNumber } from '@/lib/credit-notes';
 import { cleanTaxId, readerNote, rulesFor } from '@/lib/supplier-knowledge';
 import { readFile } from 'node:fs/promises';
@@ -124,6 +124,8 @@ async function readDocument(input: {
   let reading = withQrTruth(await scanDocument(base64, mediaType, scanType, { ...options, hint: known }), qr);
   let proof = proofOf(reading.data, qr);
 
+  ({ reading, proof } = tidied(reading, proof, qr));
+
   if (proof?.status === 'failed') {
     try {
       // Without a QR, the first reading is what says who the supplier is.
@@ -143,6 +145,7 @@ async function readDocument(input: {
         reading = again;
         proof = second;
       }
+      ({ reading, proof } = tidied(reading, proof, qr));
     } catch {
       // The first reading stands, and goes to the owner to confirm.
     }
@@ -227,6 +230,52 @@ function withQrTruth(data: ScanResult, qr: InvoiceQrData | null): { data: ScanRe
   if (!qr || data.type !== 'cost_receipt') return { data, changed: [] };
   const { corrected, changed } = applyQrTruth(data as unknown as Record<string, unknown>, qr);
   return { data: corrected as unknown as ScanResult, changed };
+}
+
+/**
+ * Puts right what the document's own figures can settle, with nobody asked.
+ *
+ * A discount note read as a line goes, and a line with the wrong VAT rate gets
+ * the one its value must have for each rate to reach what the invoice states.
+ * Kept only if the figures come out better for it.
+ */
+function tidied(
+  reading: { data: ScanResult; changed: string[] },
+  proof: Proof | null,
+  qr: InvoiceQrData | null,
+): { reading: { data: ScanResult; changed: string[] }; proof: Proof | null } {
+  if (!proof || reading.data.type !== 'cost_receipt') return { reading, proof };
+  let best = { reading, proof };
+
+  const keep = (items: typeof reading.data.items) => {
+    if (best.reading.data.type !== 'cost_receipt' || items.length === 0) return;
+    const data = { ...best.reading.data, items };
+    const next = proofOf(data, qr);
+    if (next && betterProof(best.proof, next) === 'second') best = { reading: { ...best.reading, data }, proof: next };
+  };
+
+  const plain = reading.data.items.filter((item) => !isDiscountNote(item.product));
+  if (plain.length < reading.data.items.length) keep(plain);
+
+  const lines = best.reading.data.type === 'cost_receipt' ? best.reading.data.items : [];
+  const shifted = best.proof.problems.some((p) => p.kind === 'line');
+  if (best.proof.status === 'failed' && !shifted && best.proof.truth.length > 0) {
+    const settled = settleVat(lines.map((item) => ({ ...item, productName: item.product })), best.proof.truth);
+    if (settled) {
+      keep(lines.flatMap((item, i) => {
+        if (settled.drop.includes(i)) return [];
+        const vatRate = settled.rates[i];
+        return [{
+          ...item,
+          vatRate,
+          grossTotal: vatRate === item.vatRate || item.grossTotal == null
+            ? item.grossTotal
+            : Math.round(item.total * (100 + vatRate)) / 100,
+        }];
+      }));
+    }
+  }
+  return best;
 }
 
 function proofOf(data: ScanResult, qr: InvoiceQrData | null): Proof | null {

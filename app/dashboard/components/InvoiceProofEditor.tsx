@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, Check, CheckCircle2, Loader2, Plus, RotateCcw, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, Loader2, Plus, RotateCcw, Trash2, Wand2, X } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
 import { translateError } from '@/lib/error-messages';
-import { checkReading, type TaxTruth } from '@/lib/invoice-checks';
+import { checkReading, settleVat, type TaxTruth } from '@/lib/invoice-checks';
 import { INVOICE_UNITS, invoiceUnit,
   PACK_UNITS,
   PACK_UNIT_KEYS,
@@ -46,11 +46,28 @@ type Row = Omit<ProofLine, 'quantity' | 'unitPrice' | 'total' | 'vatRate' | 'pac
   packUnit: PackUnit;
   /** As it came, to tell an answer from what was already known. */
   packWas: string;
+  /** Its rate was worked out for the owner, who should look at it. */
+  settled?: boolean;
   /** Most lines come as printed, so the question stays out of the way until asked for. */
   packOpen: boolean;
 };
 
 const num = (value: string) => Number(value.replace(',', '.'));
+
+/** The rates the invoice's own figures call for, or null when none fit. */
+function settledRows(rows: Row[], truth: TaxTruth[]) {
+  const result = settleVat(rows.map(toLine), truth);
+  if (!result) return null;
+  return {
+    changed: result.changed,
+    dropped: result.drop.length > 0,
+    rows: rows.flatMap((r, i) => {
+      if (result.drop.includes(i)) return [];
+      const rate = result.rates[i];
+      return [{ ...r, vatRate: String(rate), settled: r.settled || r.vatRate === '' || num(r.vatRate) !== rate }];
+    }),
+  };
+}
 
 const INVOICE_UNIT_KEYS: Record<(typeof INVOICE_UNITS)[number], string> = {
   un: 'lineSetup.unitUn', kg: 'lineSetup.unitKg', L: 'lineSetup.unitL', cx: 'lineSetup.unitCx',
@@ -108,6 +125,23 @@ export default function InvoiceProofEditor({
   const [saving, setSaving] = useState(false);
   const [rereading, setRereading] = useState(false);
 
+  const tell = (result: { changed: number; dropped: boolean }) => {
+    if (result.changed > 0) toast.info(t('proof.settled').replace('{count}', String(result.changed)));
+    if (result.dropped) toast.info(t('proof.discountDropped'));
+  };
+
+  /** Rows as they should open: nobody corrects by hand what the figures settle. */
+  const openSettled = (loaded: Row[], figures: TaxTruth[]) => {
+    const lines = loaded.map(toLine);
+    const check = checkReading({ items: lines, grandTotal: 0, vatSummary: figures }, null);
+    const onlyRates = check.problems.some((p) => p.kind === 'band' || p.kind === 'noRate')
+      && !check.problems.some((p) => p.kind === 'line');
+    const result = onlyRates ? settledRows(loaded, figures) : null;
+    if (!result) return loaded;
+    tell(result);
+    return result.rows;
+  };
+
   // Read through a ref: a parent's new function must not reload the invoice
   // and throw away what is being typed.
   const done = useRef(onDone);
@@ -125,7 +159,7 @@ export default function InvoiceProofEditor({
       }
       setInvoice(result.data);
       setTruth(result.data.truth);
-      setRows(result.data.lines.map(toRow));
+      setRows(openSettled(result.data.lines.map(toRow), result.data.truth));
     });
     return () => { stale = true; };
   }, [invoiceNumber, language]);
@@ -150,6 +184,17 @@ export default function InvoiceProofEditor({
     }));
   }, []);
 
+  /** Works the rates out again, after a value has been corrected by hand. */
+  const settle = () => {
+    const result = settledRows(rows, truth);
+    if (!result) {
+      toast.error(t('proof.settleFailed'));
+      return;
+    }
+    setRows(result.rows);
+    tell(result);
+  };
+
   const reread = async () => {
     setRereading(true);
     const result = await rereadInvoice(invoiceNumber);
@@ -158,7 +203,8 @@ export default function InvoiceProofEditor({
       toast.error(translateError(language, result.error ?? 'proof.errors.reread'));
       return;
     }
-    setRows(result.data.lines.map(toRow));
+    const figures = result.data.truth.length ? result.data.truth : truth;
+    setRows(openSettled(result.data.lines.map(toRow), figures));
     if (result.data.truth.length) setTruth(result.data.truth);
     toast.info(t('proof.rereadDone'));
   };
@@ -189,6 +235,15 @@ export default function InvoiceProofEditor({
   const band = proof.problems.find((p) => p.kind === 'band');
   const noRate = proof.problems.some((p) => p.kind === 'noRate');
   const offBy = Math.abs(proof.gap) > 0.05;
+  const rates = [...new Set([...truth.map((b) => b.rate), 6, 13, 23, 0])];
+  const bands = truth.map((b) => ({
+    ...b,
+    found: rows.map(toLine).filter((l) => l.vatRate === b.rate).reduce((sum, l) => sum + l.total, 0),
+  }));
+  const allBands = bands.reduce(
+    (sum, b) => ({ base: sum.base + b.base, tax: sum.tax + b.tax, found: sum.found + b.found }),
+    { base: 0, tax: 0, found: 0 },
+  );
 
   // Says what is really wrong: a VAT rate off by a line is not a bad multiplication.
   const adriftMessage = () => {
@@ -248,6 +303,59 @@ export default function InvoiceProofEditor({
           </span>
         </div>
 
+        {canCheck && (
+          <div className="space-y-2">
+            <div className="overflow-x-auto rounded-xl border border-border-subtle">
+              <table className="w-full text-xs tabular-nums">
+                <caption className="sr-only">{t('proof.tableCaption')}</caption>
+                <thead>
+                  <tr className="text-[11px] text-muted-foreground">
+                    <th scope="col" className="px-3 py-1.5 text-left font-medium">{t('proof.tableRate')}</th>
+                    <th scope="col" className="px-3 py-1.5 text-right font-medium">{t('proof.net')}</th>
+                    <th scope="col" className="px-3 py-1.5 text-right font-medium">{t('proof.tableTax')}</th>
+                    <th scope="col" className="px-3 py-1.5 text-right font-medium">{t('proof.tableGross')}</th>
+                    <th scope="col" className="px-3 py-1.5 text-right font-medium">{t('proof.tableLines')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bands.map((b) => {
+                    const right = Math.abs(b.found - b.base) < 0.05;
+                    return (
+                      <tr key={b.rate} className="border-t border-border-subtle">
+                        <th scope="row" className="px-3 py-1.5 text-left font-semibold text-foreground">{b.rate}%</th>
+                        <td className="px-3 py-1.5 text-right text-foreground">{formatMoney(b.base)}</td>
+                        <td className="px-3 py-1.5 text-right text-foreground">{formatMoney(b.tax)}</td>
+                        <td className="px-3 py-1.5 text-right text-foreground">{formatMoney(b.base + b.tax)}</td>
+                        <td className={`px-3 py-1.5 text-right font-semibold ${right ? 'text-success' : 'text-warning'}`}>
+                          {right && <Check className="w-3 h-3 inline mr-1 -mt-0.5" aria-hidden="true" />}
+                          {formatMoney(b.found)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="border-t border-border-subtle font-semibold text-foreground">
+                    <th scope="row" className="px-3 py-1.5 text-left">{t('proof.tableTotal')}</th>
+                    <td className="px-3 py-1.5 text-right">{formatMoney(allBands.base)}</td>
+                    <td className="px-3 py-1.5 text-right">{formatMoney(allBands.tax)}</td>
+                    <td className="px-3 py-1.5 text-right">{formatMoney(allBands.base + allBands.tax)}</td>
+                    <td className="px-3 py-1.5 text-right">{formatMoney(allBands.found)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            {(band || noRate) && (
+              <button
+                type="button"
+                onClick={settle}
+                className="cta-button !py-1.5 !px-3 !text-xs"
+              >
+                <Wand2 className="w-3.5 h-3.5" aria-hidden="true" />
+                {t('proof.settle')}
+              </button>
+            )}
+          </div>
+        )}
+
         <p className="text-xs text-muted-foreground">{t('proof.asPrinted')}</p>
 
         <ul className="space-y-2">
@@ -258,7 +366,7 @@ export default function InvoiceProofEditor({
             return (
             <li
               key={row.key}
-              className={`rounded-xl border p-3 ${adrift.has(i) ? 'border-warning' : 'border-border-subtle'}`}
+              className={`rounded-xl border p-3 ${adrift.has(i) ? 'border-warning' : row.settled ? 'border-primary' : 'border-border-subtle'}`}
             >
               <div className="flex items-center gap-2">
                 <input
@@ -298,6 +406,18 @@ export default function InvoiceProofEditor({
                         {/* Printed in a way the list does not know: kept, not lost. */}
                         {row.unit && !INVOICE_UNITS.some((u) => u === row.unit) && (
                           <option value={row.unit}>{row.unit}</option>
+                        )}
+                      </select>
+                    ) : name === 'vatRate' ? (
+                      <select
+                        value={row.vatRate}
+                        onChange={(e) => change(row.key, 'vatRate', e.target.value)}
+                        className={field}
+                      >
+                        {row.vatRate === '' && <option value="">—</option>}
+                        {rates.map((rate) => <option key={rate} value={String(rate)}>{rate}%</option>)}
+                        {row.vatRate !== '' && !rates.includes(num(row.vatRate)) && (
+                          <option value={row.vatRate}>{row.vatRate}%</option>
                         )}
                       </select>
                     ) : (

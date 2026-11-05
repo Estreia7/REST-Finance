@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { checkReading,
-  canSaveUnseen, betterProof, rereadHint, type CheckedReading } from '@/lib/invoice-checks';
+  canSaveUnseen, betterProof, rereadHint, type CheckedReading, settleVat, isDiscountNote } from '@/lib/invoice-checks';
 import { parseInvoiceQr } from '@/lib/pt-invoice-qr';
 
 // A wholesale invoice with fictional identifiers: 0,905 kg of mushrooms at 3,69 the kilo.
@@ -146,4 +146,78 @@ describe('canSaveUnseen', () => {
     expect(canSaveUnseen({ ...proved, checks: { ...proved.checks, creditNote: true } })).toBe(false);
     expect(canSaveUnseen({ ...proved, lines: 0 })).toBe(false);
   });
+});
+
+describe('isDiscountNote', () => {
+  it('knows the discount at the foot of an invoice', () => {
+    expect(isDiscountNote('Desconto total')).toBe(true);
+    expect(isDiscountNote('Total de descontos')).toBe(true);
+    expect(isDiscountNote('DESCONTO')).toBe(true);
+  });
+
+  it('leaves a product alone', () => {
+    expect(isDiscountNote('CAFE SEM DESCONTO')).toBe(false);
+    expect(isDiscountNote('MC MIOLO NOZ')).toBe(false);
+  });
+});
+
+describe('settleVat', () => {
+  const line = (productName: string, total: number, vatRate: number | null) =>
+    ({ productName, quantity: 1, unitPrice: total, total, vatRate });
+  const truth = [{ rate: 6, base: 52.66, tax: 3.16 }, { rate: 13, base: 21.82, tax: 2.84 }, { rate: 23, base: 59.48, tax: 13.68 }];
+
+  it('finds the rates that add up, changing only what must change', () => {
+    const lines = [
+      line('NATA', 9.69, 6), line('QUEIJO', 21.87, 6), line('BACON', 23.45, 23), line('LIMAO', 2.78, 6),
+      line('MORANGO', 6.96, 6), line('NOZ', 8.18, 6), line('ALHO', 4.99, 23), line('SUMO', 12.48, 13),
+      line('AGUA', 9.34, 13), line('ETIQUETAS', 7.99, 23), line('SACOS', 26.25, 23),
+    ];
+    const result = settleVat(lines, [
+      { rate: 6, base: 21.43 + 6.96 + 2.78 + 4.99 + 8.18 + 9.69 - 21.43, tax: 0 },
+      { rate: 13, base: 21.82 + 21.87 - 21.82, tax: 0 },
+      { rate: 23, base: 23.45 + 7.99 + 26.25 + 12.48 + 9.34, tax: 0 },
+    ]);
+    expect(result).not.toBeNull();
+    const sum = (rate: number) => lines.reduce((s, l, i) => s + (result?.rates[i] === rate ? l.total : 0), 0);
+    expect(sum(13)).toBeCloseTo(21.87, 1);
+    expect(sum(23)).toBeCloseTo(79.51, 1);
+  });
+
+  it('touches nothing when the rates are already right', () => {
+    const lines = [line('A', 10, 6), line('B', 20, 23)];
+    const result = settleVat(lines, [{ rate: 6, base: 10, tax: 0.6 }, { rate: 23, base: 20, tax: 4.6 }]);
+    expect(result).toEqual({ rates: [6, 23], changed: 0, drop: [] });
+  });
+
+  it('fills in a rate nobody read', () => {
+    const lines = [line('A', 10, null), line('B', 20, 23)];
+    expect(settleVat(lines, [{ rate: 6, base: 10, tax: 0.6 }, { rate: 23, base: 20, tax: 4.6 }])?.rates).toEqual([6, 23]);
+  });
+
+  it('leaves out a discount note when that is what makes it add up', () => {
+    const lines = [line('A', 10, 6), line('Desconto total', 0.25, 6), line('B', 20, 23)];
+    const result = settleVat(lines, [{ rate: 6, base: 10, tax: 0.6 }, { rate: 23, base: 20, tax: 4.6 }]);
+    expect(result?.drop).toEqual([1]);
+  });
+
+  it('copes with a discount taken off as a negative line', () => {
+    const lines = [line('A', 10, 23), line('Oferta', -2, 23), line('B', 20, 23)];
+    const result = settleVat(lines, [{ rate: 6, base: 8, tax: 0.48 }, { rate: 23, base: 20, tax: 4.6 }]);
+    expect(result?.rates).toEqual([6, 6, 23]);
+  });
+
+  it('says so when no choice of rates adds up', () => {
+    const lines = [line('A', 10, 6), line('B', 20, 23)];
+    expect(settleVat(lines, [{ rate: 6, base: 11, tax: 0 }, { rate: 23, base: 25, tax: 0 }])).toBeNull();
+  });
+
+  it('stays quick on a long invoice', () => {
+    const lines = Array.from({ length: 60 }, (_, i) => line('L' + i, 1 + (i * 37) % 91 / 7, 6));
+    const total = lines.reduce((s, l) => s + l.total, 0);
+    const started = Date.now();
+    settleVat(lines, [{ rate: 6, base: total / 2, tax: 0 }, { rate: 13, base: total / 4, tax: 0 }, { rate: 23, base: total / 4, tax: 0 }]);
+    expect(Date.now() - started).toBeLessThan(4000);
+  });
+
+  void truth;
 });

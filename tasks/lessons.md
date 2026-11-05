@@ -122,3 +122,14 @@ meant redoing the sum by hand.
 **Rule:** keep what the document says and what we know about the product as two
 things on screen, not only in the database. The owner copies the print; the
 answer about the product sits apart, is taught once and is applied by the app.
+
+## If the document holds the answer, do not ask the owner
+
+**What happened:** I built a screen for correcting VAT line by line, then a
+button to work it out. The owner's answer: this should be automatic, it makes no
+sense to be here correcting VAT. The invoice states what each rate adds up to,
+so the rates were a sum, not a question.
+
+**Rule:** before building a screen where someone corrects data, ask whether the
+data already in hand determines the answer. If it does, do it at read time and
+keep the screen for what is really unknown.

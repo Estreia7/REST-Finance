@@ -12,7 +12,7 @@ import { repriceIngredients } from '@/lib/ingredient-costs-server';
 import { rereadStoredDocument } from '@/lib/scan-core';
 import { PACK_UNITS, asPrinted, fromPrinted, lineFigures, packOfLine, takesPack, toPack, toPackInput, type PackInput } from '@/lib/line-setup';
 import { formatPack } from '@/lib/scan-corrections';
-import { checkReading, type Proof, type TaxTruth } from '@/lib/invoice-checks';
+import { checkReading, settleVat, type Proof, type TaxTruth } from '@/lib/invoice-checks';
 
 /**
  * Confirming an invoice whose lines do not add up.
@@ -55,6 +55,59 @@ function cents(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+/**
+ * Settles a saved invoice whose only trouble is its VAT rates, or leaves it.
+ *
+ * Nobody should be sent to fix what the invoice's own figures answer. Only the
+ * rates change: every line must already multiply out, and neither the money nor
+ * the categories move, so an invoice with anything else wrong still waits.
+ */
+async function settleSavedRates(
+  restaurantId: string,
+  scanId: string,
+  invoiceNumber: string,
+  truth: TaxTruth[],
+): Promise<boolean> {
+  if (truth.length === 0) return false;
+  try {
+    const items = await prisma.invoiceItem.findMany({
+      where: { restaurantId, invoiceNumber },
+      select: { id: true, productName: true, quantity: true, unitPrice: true, totalPrice: true, vatRate: true },
+    });
+    const lines = items.map((i) => ({
+      productName: i.productName,
+      quantity: Number(i.quantity),
+      unitPrice: Number(i.unitPrice),
+      total: Number(i.totalPrice),
+      vatRate: i.vatRate === null ? null : Number(i.vatRate),
+    }));
+    const proof = checkReading({ items: lines, grandTotal: 0, vatSummary: truth }, null);
+    if (proof.problems.some((p) => p.kind === 'line')) return false;
+
+    const settled = settleVat(lines, truth);
+    if (!settled || settled.drop.length > 0) return false;
+
+    await prisma.$transaction(async (tx) => {
+      for (const [i, item] of items.entries()) {
+        const vatRate = settled.rates[i];
+        if (lines[i].vatRate === vatRate) continue;
+        await tx.invoiceItem.update({
+          where: { id: item.id },
+          data: { vatRate, grossTotal: cents(lines[i].total * (1 + vatRate / 100)) },
+        });
+      }
+      await tx.receiptScan.update({
+        where: { id: scanId },
+        data: { proofStatus: 'proved', proofResolvedAt: new Date() },
+      });
+    });
+    return true;
+  } catch {
+    // It stays on the list, where the owner can still settle it.
+    return false;
+  }
+}
+
 /** The invoices waiting for the owner, most money adrift first. */
 export async function getInvoicesToConfirm() {
   try {
@@ -68,15 +121,18 @@ export async function getInvoicesToConfirm() {
         proofResolvedAt: null,
         linkedEntryId: { not: null },
       },
-      select: { extractedData: true, linkedEntry: { select: { invoiceNumber: true } } },
+      select: { id: true, extractedData: true, linkedEntry: { select: { invoiceNumber: true } } },
       take: 200,
     });
-    const numbers = scans.flatMap((s) => {
+    const numbers = [];
+    for (const s of scans) {
       const number = s.linkedEntry?.invoiceNumber;
-      if (!number) return [];
+      if (!number) continue;
       const data = s.extractedData as { vendor?: string; checks?: { proof?: Proof } } | null;
-      return [{ invoiceNumber: number, vendorName: data?.vendor ?? null, gap: data?.checks?.proof?.gap ?? 0 }];
-    });
+      const truth = data?.checks?.proof?.truth ?? [];
+      if (await settleSavedRates(owner.restaurantId, s.id, number, truth)) continue;
+      numbers.push({ invoiceNumber: number, vendorName: data?.vendor ?? null, gap: data?.checks?.proof?.gap ?? 0 });
+    }
     numbers.sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap));
     return { success: true as const, data: numbers };
   } catch (error: unknown) {

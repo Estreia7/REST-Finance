@@ -35,9 +35,25 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.05.03';
+export const CHANGELOG_VERSION = '2026.11.05.04';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.05.04',
+    date: '2026-11-05',
+    entries: [
+      {
+        kind: 'new',
+        title: 'O IVA das faturas acerta-se sozinho',
+        detail: 'A taxa de cada linha é calculada a partir do que a fatura diz para cada taxa, e as faturas que batem certo saem de Por confirmar. As que ficam mostram no topo a base, o IVA e o total de cada taxa, e o IVA escolhe-se de uma lista.',
+      },
+      {
+        kind: 'fix',
+        title: 'O «Desconto total» do rodapé já não entra como linha',
+        detail: 'É só informação: o valor das linhas já o inclui.',
+      },
+    ],
+  },
   {
     version: '2026.11.05.03',
     date: '2026-11-05',
