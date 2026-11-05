@@ -110,3 +110,15 @@ advanced, so nobody questioned the picture behind it.
 **Rule:** when the output's quality is the whole point, measure it against the
 plain native path before adding anything clever on top. On phones, use the
 device's camera (`capture`) and start from its photograph.
+
+## A screen that shows a result as if it were the source teaches the wrong thing
+
+**What happened:** the app stored 2 bags with 4 buns in each, and the next
+invoice came out right by itself. But "Ver e corrigir a fatura" showed 8 at
+0,4225 under the invoice's own columns, so the owner took it for the print,
+and retyping it wiped the 4 from that line. A small change to the quantity then
+meant redoing the sum by hand.
+
+**Rule:** keep what the document says and what we know about the product as two
+things on screen, not only in the database. The owner copies the print; the
+answer about the product sits apart, is taught once and is applied by the app.

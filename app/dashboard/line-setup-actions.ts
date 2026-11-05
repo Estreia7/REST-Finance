@@ -12,8 +12,12 @@ import { rebalanceInvoice } from '@/lib/invoice-split-server';
 import { repriceIngredients } from '@/lib/ingredient-costs-server';
 import {
   PACK_UNITS,
+  asPrinted,
   correctedLine,
+  fromPrinted,
   groupWordings,
+  lineFigures,
+  packOfLine,
   unusualPrice,
   newIngredientUnit,
   printedQuantity,
@@ -235,12 +239,13 @@ export async function getLineSetup(itemId: string) {
 }
 
 /**
- * Says what one purchase really was: this much, for this money.
+ * Says what the invoice printed for one purchase: this much, for this money.
  *
  * Invoices differ too much for every reading to come out right, and a line
  * that went in wrong must not stay wrong. Only this line changes, since the
  * weight of the next purchase will be another. The invoice's total does not
  * move: it came from the document, and this only restates how it was made up.
+ * What each one holds is not touched: it was answered for the product.
  *
  * Kept as a correction, because what the reader got wrong on this supplier's
  * invoices is what it has to learn.
@@ -264,20 +269,27 @@ export async function correctLine(input: {
       where: { id: input.itemId, restaurantId },
       select: {
         id: true, productName: true, quantity: true, unit: true, unitPrice: true, totalPrice: true,
-        vatRate: true, costEntryId: true, vendorId: true, receiptScanId: true,
+        vatRate: true, costEntryId: true, vendorId: true, receiptScanId: true, packFactor: true,
       },
     });
     if (!item) return { error: 'accounting.lineNotFound' };
 
     const vat = item.vatRate === null ? null : Number(item.vatRate);
-    const figures = (quantity: unknown, unit: string | null, price: unknown, total: unknown) =>
-      `${Number(quantity)}${unit ? ` ${unit}` : ''} x ${Number(price)} = ${Number(total)}`;
+    const was = {
+      quantity: Number(item.quantity),
+      unit: item.unit,
+      unitPrice: Number(item.unitPrice),
+      total: Number(item.totalPrice),
+      packFactor: item.packFactor === null ? null : Number(item.packFactor),
+    };
+    const stored = fromPrinted({ ...fixed, total: fixed.totalPrice }, packOfLine(was));
 
     await prisma.$transaction(async (tx) => {
       await tx.invoiceItem.update({
         where: { id: item.id },
         data: {
-          ...fixed,
+          ...stored,
+          totalPrice: fixed.totalPrice,
           ...(vat === null ? {} : { grossTotal: Math.round(fixed.totalPrice * (100 + vat)) / 100 }),
         },
       });
@@ -291,8 +303,8 @@ export async function correctLine(input: {
           vendorId: item.vendorId,
           productName: item.productName,
           field: 'line',
-          readValue: figures(item.quantity, item.unit, item.unitPrice, item.totalPrice),
-          savedValue: figures(fixed.quantity, fixed.unit, fixed.unitPrice, fixed.totalPrice),
+          readValue: lineFigures({ ...was, ...asPrinted(was) }),
+          savedValue: lineFigures({ ...fixed, total: fixed.totalPrice }),
           fixedBy: 'owner',
         },
       });

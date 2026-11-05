@@ -7,7 +7,15 @@ import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
 import { translateError } from '@/lib/error-messages';
 import { checkReading, type TaxTruth } from '@/lib/invoice-checks';
-import { followFigures } from '@/lib/line-setup';
+import {
+  PACK_UNITS,
+  PACK_UNIT_KEYS,
+  followFigures,
+  fromPrinted,
+  takesPack,
+  toPack,
+  type PackUnit,
+} from '@/lib/line-setup';
 import ZoomableImage from './ZoomableImage';
 import {
   getInvoiceForProof,
@@ -22,21 +30,37 @@ import {
  *
  * The bar is the point of the screen: it says how far the lines are from the
  * document as each figure is typed, so the owner knows when they are done.
+ *
+ * The figures are the invoice's own, copied as printed. What each one holds sits
+ * under them as a separate answer: it belongs to the product, so it is taught
+ * once and the next invoice works it out whatever quantity it brings.
  */
 
-type Row = Omit<ProofLine, 'quantity' | 'unitPrice' | 'total' | 'vatRate'> & {
+type Row = Omit<ProofLine, 'quantity' | 'unitPrice' | 'total' | 'vatRate' | 'pack' | 'packChanged'> & {
   key: string;
   quantity: string;
   unitPrice: string;
   total: string;
   vatRate: string;
+  packAmount: string;
+  packUnit: PackUnit;
+  /** As it came, to tell an answer from what was already known. */
+  packWas: string;
 };
 
 const num = (value: string) => Number(value.replace(',', '.'));
 
+const packText = (amount: string, unit: PackUnit) => `${num(amount)} ${unit}`;
+const NO_PACK = packText('1', 'un');
+
 function toRow(line: ProofLine, i: number): Row {
+  const packAmount = String(line.pack?.amount ?? 1);
+  const packUnit = line.pack?.unit ?? 'un';
   return {
     ...line,
+    packAmount,
+    packUnit,
+    packWas: packText(packAmount, packUnit),
     key: line.id ?? `new-${i}-${line.productName}`,
     quantity: String(line.quantity),
     unitPrice: String(line.unitPrice),
@@ -46,14 +70,19 @@ function toRow(line: ProofLine, i: number): Row {
 }
 
 function toLine(row: Row): ProofLine {
+  const quantity = num(row.quantity);
+  const pack = packText(row.packAmount, row.packUnit);
+  const applies = takesPack(quantity, row.unit);
   return {
     id: row.id,
     productName: row.productName,
     unit: row.unit,
-    quantity: num(row.quantity),
+    quantity,
     unitPrice: num(row.unitPrice),
     total: num(row.total),
     vatRate: row.vatRate.trim() === '' ? null : num(row.vatRate),
+    pack: applies && pack !== NO_PACK ? { amount: num(row.packAmount), unit: row.packUnit } : null,
+    packChanged: applies && pack !== row.packWas,
   };
 }
 
@@ -149,6 +178,23 @@ export default function InvoiceProofEditor({
 
   const ok = proof.status !== 'failed';
   const canCheck = truth.length > 0;
+  const band = proof.problems.find((p) => p.kind === 'band');
+  const noRate = proof.problems.some((p) => p.kind === 'noRate');
+  const offBy = Math.abs(proof.gap) > 0.05;
+
+  // Says what is really wrong: a VAT rate off by a line is not a bad multiplication.
+  const adriftMessage = () => {
+    if (offBy) {
+      return t(proof.gap > 0 ? 'proof.short' : 'proof.over').replace('{amount}', formatMoney(Math.abs(proof.gap)));
+    }
+    if (adrift.size === 0 && band?.kind === 'band') {
+      return t('proof.bandOff')
+        .replace('{rate}', String(band.rate))
+        .replace('{found}', formatMoney(band.found))
+        .replace('{expected}', formatMoney(band.expected));
+    }
+    return t(adrift.size === 0 && noRate ? 'proof.noRate' : 'proof.linesOff');
+  };
   const field = 'input-field !py-1.5 !px-2 !text-xs tabular-nums w-full';
 
   return (
@@ -190,16 +236,18 @@ export default function InvoiceProofEditor({
               ? t('proof.noFigures')
               : ok
                 ? t('proof.adds')
-                : proof.gap > 0
-                  ? t('proof.short').replace('{amount}', formatMoney(proof.gap))
-                  : proof.gap < 0
-                    ? t('proof.over').replace('{amount}', formatMoney(-proof.gap))
-                    : t('proof.linesOff')}
+                : adriftMessage()}
           </span>
         </div>
 
+        <p className="text-xs text-muted-foreground">{t('proof.asPrinted')}</p>
+
         <ul className="space-y-2">
-          {rows.map((row, i) => (
+          {rows.map((row, i) => {
+            const line = toLine(row);
+            const pack = toPack({ amount: num(row.packAmount), unit: row.packUnit });
+            const inside = line.pack && pack ? fromPrinted(line, pack) : null;
+            return (
             <li
               key={row.key}
               className={`rounded-xl border p-3 ${adrift.has(i) ? 'border-warning' : 'border-border-subtle'}`}
@@ -223,7 +271,7 @@ export default function InvoiceProofEditor({
               </div>
               <div className="mt-2 grid grid-cols-3 sm:grid-cols-5 gap-1.5">
                 {([
-                  ['quantity', 'proof.quantity'],
+                  ['quantity', 'proof.quantityPrinted'],
                   ['unit', 'proof.unit'],
                   ['unitPrice', 'proof.unitPrice'],
                   ['total', 'proof.net'],
@@ -241,14 +289,50 @@ export default function InvoiceProofEditor({
                   </label>
                 ))}
               </div>
+
+              {takesPack(line.quantity, row.unit) && (
+                <div className="mt-2 border-t border-border-subtle pt-2">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-[11px] text-muted-foreground">{t('proof.packEach')}</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={row.packAmount}
+                      onChange={(e) => change(row.key, 'packAmount', e.target.value)}
+                      aria-label={`${t('proof.packEach')}: ${row.productName}`}
+                      className="input-field !py-1 !px-2 !text-xs tabular-nums !w-16"
+                    />
+                    <select
+                      value={row.packUnit}
+                      onChange={(e) => change(row.key, 'packUnit', e.target.value)}
+                      aria-label={`${t('lineSetup.unitLabel')}: ${row.productName}`}
+                      className="input-field !py-1 !px-2 !text-xs !w-auto"
+                    >
+                      {PACK_UNITS.map((u) => <option key={u} value={u}>{t(PACK_UNIT_KEYS[u])}</option>)}
+                    </select>
+                    {inside && (
+                      <span className="text-[11px] font-medium text-foreground tabular-nums">
+                        {t('proof.packResult')
+                          .replace('{quantity}', String(inside.quantity).replace('.', language === 'pt' ? ',' : '.'))
+                          .replace('{unit}', inside.unit === 'un' ? t('lineSetup.unitsShort') : inside.unit ?? '')
+                          .replace('{price}', formatMoney(inside.unitPrice))}
+                      </span>
+                    )}
+                  </div>
+                  {line.packChanged && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">{t('proof.packTaught')}</p>
+                  )}
+                </div>
+              )}
             </li>
-          ))}
+            );
+          })}
         </ul>
 
         <button
           type="button"
           onClick={() => setRows((was) => [...was, toRow({
-            productName: '', quantity: 1, unit: 'un', unitPrice: 0, total: 0, vatRate: null,
+            productName: '', quantity: 1, unit: 'un', unitPrice: 0, total: 0, vatRate: null, pack: null,
           }, was.length)])}
           className="inline-flex items-center gap-1 text-xs font-semibold text-primary-ink hover:underline"
         >

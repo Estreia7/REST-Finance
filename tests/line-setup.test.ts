@@ -4,6 +4,11 @@ import {
   toPackInput,
   restateLine,
   printedQuantity,
+  asPrinted,
+  fromPrinted,
+  lineFigures,
+  packOfLine,
+  takesPack,
   lineNeedsSetup,
   groupWordings,
   unusualPrice,
@@ -56,6 +61,63 @@ describe('units per package in the memory', () => {
     expect(conversion?.certain?.quantity).toBe(24);
     expect(conversion?.certain?.unit).toBe('un');
     expect(conversion?.certain?.unitPrice).toBe(0.375);
+  });
+});
+
+describe('what the invoice prints, apart from what each one holds', () => {
+  const buns = { quantity: 8, unit: 'un', unitPrice: 0.4225, total: 3.38, packFactor: 4 };
+
+  it('gives back the print and the answer separately', () => {
+    expect(asPrinted(buns)).toEqual({
+      quantity: 2, unit: 'un', unitPrice: 1.69, pack: { amount: 4, unit: 'un' },
+    });
+  });
+
+  it('says a weight as a person would', () => {
+    expect(asPrinted({ quantity: 2, unit: 'kg', unitPrice: 9.38, total: 18.76, packFactor: 0.5 })).toEqual({
+      quantity: 4, unit: 'un', unitPrice: 4.69, pack: { amount: 500, unit: 'g' },
+    });
+  });
+
+  it('keeps the printed price of a line left as it came', () => {
+    const mushrooms = { quantity: 0.905, unit: 'kg', unitPrice: 3.69, total: 3.34, packFactor: null };
+    expect(asPrinted(mushrooms)).toEqual({ quantity: 0.905, unit: 'kg', unitPrice: 3.69, pack: null });
+  });
+
+  it('survives the round trip', () => {
+    const printed = asPrinted(buns);
+    expect(fromPrinted({ ...printed, total: 3.38 }, packOfLine(buns))).toEqual({
+      quantity: 8, unit: 'un', unitPrice: 0.4225, packFactor: 4,
+    });
+  });
+
+  it('keeps the answer when the printed quantity changes', () => {
+    const three = { quantity: 3, unit: 'un', unitPrice: 1.69, total: 5.07 };
+    expect(fromPrinted(three, packOfLine(buns))).toEqual({
+      quantity: 12, unit: 'un', unitPrice: 0.4225, packFactor: 4,
+    });
+  });
+
+  it('stores a line with no answer as printed', () => {
+    const line = { quantity: 2, unit: ' un ', unitPrice: 1.69, total: 3.38 };
+    expect(fromPrinted(line, null)).toEqual({ quantity: 2, unit: 'un', unitPrice: 1.69, packFactor: null });
+  });
+
+  it('never multiplies a weight', () => {
+    expect(fromPrinted({ quantity: 0.905, unit: 'kg', unitPrice: 3.69, total: 3.34 }, { amount: 4, unit: 'un' }).packFactor)
+      .toBeNull();
+  });
+
+  it('asks what each one holds only of what is counted', () => {
+    expect(takesPack(2, 'un')).toBe(true);
+    expect(takesPack(2, null)).toBe(true);
+    expect(takesPack(2, 'kg')).toBe(false);
+    expect(takesPack(2.5, 'un')).toBe(false);
+    expect(takesPack(0, 'un')).toBe(false);
+  });
+
+  it('records figures a correction can compare', () => {
+    expect(lineFigures({ quantity: 2, unit: 'un', unitPrice: 1.69, total: 3.38 })).toBe('2 un x 1.69 = 3.38');
   });
 });
 

@@ -18,6 +18,11 @@ import { lineKey } from './invoice-categories';
 export const PACK_UNITS = ['un', 'kg', 'g', 'L', 'ml'] as const;
 export type PackUnit = (typeof PACK_UNITS)[number];
 
+/** How each unit is named in a list to choose from. */
+export const PACK_UNIT_KEYS: Record<PackUnit, string> = {
+  un: 'lineSetup.unitUn', kg: 'lineSetup.unitKg', g: 'lineSetup.unitG', L: 'lineSetup.unitL', ml: 'lineSetup.unitMl',
+};
+
 /** What one purchased unit holds, as the owner typed it. */
 export interface PackInput {
   amount: number;
@@ -95,6 +100,71 @@ export interface StoredLine {
 /** How many were bought, as printed on the invoice. */
 export function printedQuantity(line: Pick<StoredLine, 'quantity' | 'packFactor'>): number {
   return line.packFactor ? round3(line.quantity / line.packFactor) : line.quantity;
+}
+
+/** What a saved line's multiplier says one printed unit holds. */
+export function packOfLine(line: Pick<StoredLine, 'unit' | 'packFactor'>): RememberedPack | null {
+  if (!line.packFactor) return null;
+  const unit = (line.unit ?? '').trim();
+  if (unit !== 'un' && unit !== 'kg' && unit !== 'L') return null;
+  return { amount: line.packFactor, unit };
+}
+
+/**
+ * A saved line as the invoice prints it, and apart from it what each one holds.
+ *
+ * These are two facts. "2 bags at 1,69" is the document, and is what the
+ * invoice is proved against; "4 buns in each" belongs to the product and is
+ * what makes the next invoice right by itself, whatever quantity it brings.
+ * A screen that shows "8 at 0,4225" as the invoice has merged them, and typing
+ * over it loses the second.
+ */
+export function asPrinted(line: StoredLine & { unitPrice: number }): {
+  quantity: number;
+  unit: string | null;
+  unitPrice: number;
+  pack: PackInput | null;
+} {
+  const quantity = printedQuantity(line);
+  const pack = packOfLine(line);
+  return {
+    quantity,
+    unit: pack ? 'un' : line.unit,
+    // Left alone, the price stays the printed one: 3,34 / 0,905 is not 3,69.
+    unitPrice: pack && quantity > 0 ? round4(line.total / quantity) : line.unitPrice,
+    pack: pack ? toPackInput(pack) : null,
+  };
+}
+
+/** Whether "how much does each one hold" means anything for what was printed. */
+export function takesPack(quantity: number, unit: string | null | undefined): boolean {
+  return !isMeasured(unit) && Number.isInteger(quantity) && quantity > 0;
+}
+
+/**
+ * What is stored for a line, from what the invoice prints and what each holds.
+ *
+ * The other way round from `asPrinted`. A new printed quantity keeps its answer:
+ * three bags of four are twelve, with nothing to work out by hand.
+ */
+export function fromPrinted(
+  printed: { quantity: number; unit: string | null; unitPrice: number; total: number },
+  pack: RememberedPack | null,
+): { quantity: number; unit: string | null; unitPrice: number; packFactor: number | null } {
+  const restated = pack
+    ? restateLine({ quantity: printed.quantity, unit: printed.unit, total: printed.total, packFactor: null }, pack)
+    : null;
+  return restated ?? {
+    quantity: printed.quantity,
+    unit: printed.unit?.trim() || null,
+    unitPrice: printed.unitPrice,
+    packFactor: null,
+  };
+}
+
+/** A line's figures as a correction records them. */
+export function lineFigures(line: { quantity: number; unit: string | null; unitPrice: number; total: number }): string {
+  return `${line.quantity}${line.unit ? ` ${line.unit}` : ''} x ${line.unitPrice} = ${line.total}`;
 }
 
 /**
@@ -191,7 +261,7 @@ export function followFigures(
  * What a saved line becomes when the owner says what was really bought, or
  * null when the figures cannot be right.
  *
- * Typed by hand, so it is the purchase itself and not a print to multiply.
+ * Typed as the invoice prints it. What each one holds is a separate answer.
  */
 export function correctedLine(input: {
   quantity: number;

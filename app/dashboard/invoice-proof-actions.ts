@@ -5,11 +5,13 @@ import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { toClientError } from '@/lib/errors';
 import { normalizeProductName } from '@/lib/price-tracking';
 import { lineKey } from '@/lib/invoice-categories';
-import { rememberedPack } from '@/lib/invoice-matching';
+import { rememberedPack, type RememberedPack } from '@/lib/invoice-matching';
+import { teachPack } from '@/lib/invoice-memory-server';
 import { rebalanceInvoice } from '@/lib/invoice-split-server';
 import { repriceIngredients } from '@/lib/ingredient-costs-server';
 import { rereadStoredDocument } from '@/lib/scan-core';
-import { restateLine } from '@/lib/line-setup';
+import { PACK_UNITS, asPrinted, fromPrinted, lineFigures, packOfLine, takesPack, toPack, toPackInput, type PackInput } from '@/lib/line-setup';
+import { formatPack } from '@/lib/scan-corrections';
 import { checkReading, type Proof, type TaxTruth } from '@/lib/invoice-checks';
 
 /**
@@ -18,17 +20,25 @@ import { checkReading, type Proof, type TaxTruth } from '@/lib/invoice-checks';
  * Most invoices prove themselves against their QR and nobody sees this. What
  * is left is shown beside its photograph, with what is still missing, and the
  * owner settles it. The money was already right: the total came from the QR.
+ *
+ * Lines travel here as the invoice prints them. What each one holds comes apart
+ * from that, and only the stored line is the two put together.
  */
 
 export interface ProofLine {
   /** Absent on a line that is not saved yet. */
   id?: string;
   productName: string;
+  /** As printed: two bags, not the eight buns inside them. */
   quantity: number;
   unit: string | null;
   unitPrice: number;
   total: number;
   vatRate: number | null;
+  /** What each printed unit holds; null when it is counted as printed. */
+  pack: PackInput | null;
+  /** The owner answered it here, so it is taught for every purchase. */
+  packChanged?: boolean;
 }
 
 export interface InvoiceForProof {
@@ -119,6 +129,18 @@ async function loadInvoice(restaurantId: string, invoiceNumber: string) {
   return { items, entryId, grandTotal, scan };
 }
 
+function storedLine(item: {
+  quantity: unknown; unit: string | null; unitPrice: unknown; totalPrice: unknown; packFactor: unknown;
+}) {
+  return {
+    quantity: Number(item.quantity),
+    unit: item.unit,
+    unitPrice: Number(item.unitPrice),
+    total: Number(item.totalPrice),
+    packFactor: item.packFactor === null ? null : Number(item.packFactor),
+  };
+}
+
 /** One invoice's lines, photograph and figures, for checking by eye. */
 export async function getInvoiceForProof(invoiceNumber: string) {
   try {
@@ -140,9 +162,7 @@ export async function getInvoiceForProof(invoiceNumber: string) {
       lines: invoice.items.map((i) => ({
         id: i.id,
         productName: i.productName,
-        quantity: Number(i.quantity),
-        unit: i.unit,
-        unitPrice: Number(i.unitPrice),
+        ...asPrinted(storedLine(i)),
         total: Number(i.totalPrice),
         vatRate: i.vatRate === null ? null : Number(i.vatRate),
       })),
@@ -175,14 +195,34 @@ export async function rereadInvoice(invoiceNumber: string) {
     });
     if (data.type !== 'cost_receipt') return { error: 'proof.errors.reread' };
 
-    const lines: ProofLine[] = data.items.map((item) => ({
-      productName: item.product,
-      quantity: item.quantity,
-      unit: item.unit ?? null,
-      unitPrice: item.unitPrice,
-      total: item.total,
-      vatRate: item.vatRate ?? null,
-    }));
+    // A new reading of the print knows nothing of what was already answered.
+    const keys = [...new Set(data.items.map((item) => lineKey(item.product)))];
+    const memories = await prisma.invoiceLineMemory.findMany({
+      where: { restaurantId: owner.restaurantId, sourceName: { in: keys }, packUnit: { not: null } },
+      select: { sourceName: true, vendorId: true, packAmount: true, packUnit: true },
+    });
+    const vendorId = invoice.items[0].vendorId;
+    const answered = (key: string): RememberedPack | null => {
+      const memory = memories.find((m) => m.sourceName === key && m.vendorId === vendorId)
+        ?? memories.find((m) => m.sourceName === key);
+      if (memory) return rememberedPack(memory);
+      const saved = invoice.items.find((i) => lineKey(i.productName) === key);
+      return saved ? packOfLine(storedLine(saved)) : null;
+    };
+
+    const lines: ProofLine[] = data.items.map((item) => {
+      const pack = answered(lineKey(item.product));
+      const unit = item.unit ?? null;
+      return {
+        productName: item.product,
+        quantity: item.quantity,
+        unit,
+        unitPrice: item.unitPrice,
+        total: item.total,
+        vatRate: item.vatRate ?? null,
+        pack: pack && pack !== 'packages' && takesPack(item.quantity, unit) ? toPackInput(pack) : null,
+      };
+    });
     return { success: true as const, data: { lines, truth: proof?.truth ?? [] } };
   } catch (error: unknown) {
     return { error: toClientError('Failed to read the invoice again', error, 'read') };
@@ -213,6 +253,10 @@ export async function saveInvoiceProof(input: {
     const usable = input.lines.every((l) =>
       l.productName.trim() && Number.isFinite(l.quantity) && Number.isFinite(l.unitPrice) && Number.isFinite(l.total));
     if (!usable) return { error: 'proof.errors.badLine' };
+    const answers = new Map(input.lines.map((l) => [l, l.pack ? toPack(l.pack) : null]));
+    if (input.lines.some((l) => l.pack && (!PACK_UNITS.includes(l.pack.unit) || !answers.get(l)))) {
+      return { error: 'lineSetup.errors.pack' };
+    }
 
     // Held to the QR's figures when that is where they came from.
     const stored = invoice.scan?.extractedData as { checks?: { proof?: Proof } } | null | undefined;
@@ -253,30 +297,41 @@ export async function saveInvoiceProof(input: {
       for (const line of input.lines) {
         const before = line.id ? known.get(line.id) : undefined;
         if (!before) continue;
-        const sameCount = Number(before.quantity) === line.quantity;
         await tx.invoiceItem.update({
           where: { id: before.id },
           data: {
-            quantity: line.quantity,
-            unit: line.unit?.trim() || null,
-            unitPrice: line.unitPrice,
+            ...fromPrinted(line, answers.get(line) ?? null),
             totalPrice: line.total,
             vatRate: line.vatRate,
             grossTotal: gross(line),
-            // A quantity typed by hand is what was bought, not a print to multiply.
-            ...(sameCount ? {} : { packFactor: null }),
           },
         });
+
+        // What the reader or an earlier hand got wrong is what it has to learn.
+        const was = storedLine(before);
+        const read = lineFigures({ ...was, ...asPrinted(was) });
+        const saved = lineFigures({ ...line, unit: line.unit?.trim() || null });
+        if (read !== saved) {
+          await tx.scanCorrection.create({
+            data: {
+              restaurantId,
+              receiptScanId: before.receiptScanId,
+              vendorId: before.vendorId,
+              productName: before.productName,
+              field: 'line',
+              readValue: read,
+              savedValue: saved,
+              fixedBy: 'owner',
+            },
+          });
+        }
       }
 
       for (const line of added) {
         const key = lineKey(line.productName);
         const memory = memories.find((m) => m.sourceName === key && m.vendorId === first.vendorId)
           ?? memories.find((m) => m.sourceName === key);
-        const pack = memory ? rememberedPack(memory) : null;
-        const restated = pack
-          ? restateLine({ quantity: line.quantity, unit: line.unit, total: line.total, packFactor: null }, pack)
-          : null;
+        const stored = fromPrinted(line, answers.get(line) ?? (memory ? rememberedPack(memory) : null));
         await tx.invoiceItem.create({
           data: {
             restaurantId,
@@ -285,11 +340,8 @@ export async function saveInvoiceProof(input: {
             receiptScanId: invoice.scan?.id ?? null,
             productName: line.productName.trim(),
             normalizedName: normalizeProductName(line.productName),
-            quantity: restated?.quantity ?? line.quantity,
-            unit: restated?.unit ?? (line.unit?.trim() || null),
-            unitPrice: restated?.unitPrice ?? line.unitPrice,
+            ...stored,
             totalPrice: line.total,
-            packFactor: restated?.packFactor ?? null,
             vatRate: line.vatRate,
             grossTotal: gross(line),
             invoiceDate: first.invoiceDate,
@@ -311,6 +363,35 @@ export async function saveInvoiceProof(input: {
         });
       }
     }, { timeout: 30_000 });
+
+    // One answer per wording, for every purchase of it and the ones to come.
+    const taught = new Map(input.lines.filter((l) => l.packChanged).map((l) => [
+      lineKey(l.productName),
+      { line: l, pack: answers.get(l) ?? ('packages' as const) },
+    ]));
+    if (first.vendorId) {
+      for (const [sourceName, { line, pack }] of taught) {
+        const before = line.id ? known.get(line.id) : undefined;
+        await teachPack({
+          restaurantId,
+          vendorId: first.vendorId,
+          sourceName,
+          pack,
+        });
+        await prisma.scanCorrection.create({
+          data: {
+            restaurantId,
+            receiptScanId: invoice.scan?.id ?? null,
+            vendorId: first.vendorId,
+            productName: line.productName.trim(),
+            field: 'pack',
+            readValue: before ? formatPack(packOfLine(storedLine(before))) : null,
+            savedValue: formatPack(pack),
+            fixedBy: 'owner',
+          },
+        });
+      }
+    }
 
     await repriceIngredients(restaurantId);
     return { success: true as const };

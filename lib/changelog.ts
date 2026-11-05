@@ -35,9 +35,25 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.04.13';
+export const CHANGELOG_VERSION = '2026.11.05.01';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.05.01',
+    date: '2026-11-05',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'Ao corrigir uma fatura, o que ela diz e o que cada unidade traz ficam separados',
+        detail: 'Em "Ver e corrigir a fatura" copia as linhas tal como estão impressas: 2 sacos a €1,69. Por baixo indica que cada saco traz 4 pães, uma só vez, e as próximas compras desse artigo são contadas sozinhas, seja qual for a quantidade.',
+      },
+      {
+        kind: 'fix',
+        title: 'A conferência diz onde está a diferença',
+        detail: 'Quando as linhas somam o valor certo mas o IVA de alguma está errado, a mensagem indica a taxa em causa, em vez de falar da quantidade e do preço.',
+      },
+    ],
+  },
   {
     version: '2026.11.04.13',
     date: '2026-11-04',

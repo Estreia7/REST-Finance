@@ -8,6 +8,7 @@ import { formatMoney } from '@/lib/format';
 import { translateError } from '@/lib/error-messages';
 import {
   PACK_UNITS,
+  PACK_UNIT_KEYS,
   ingredientUnitFor,
   isMeasured,
   restateLine,
@@ -28,10 +29,6 @@ import LinePurchaseFix from './LinePurchaseFix';
  * unidades · €0,38 cada" is what lets the owner check the answer before
  * saving it, in the words they would use at the counter.
  */
-
-const UNIT_KEYS: Record<PackUnit, string> = {
-  un: 'lineSetup.unitUn', kg: 'lineSetup.unitKg', g: 'lineSetup.unitG', L: 'lineSetup.unitL', ml: 'lineSetup.unitMl',
-};
 
 export default function LineSetupCard({
   line, ingredients, categories, onSaved, onCorrected, onLater, laterLabel,
@@ -295,7 +292,7 @@ export default function LineSetupCard({
                   aria-label={t('lineSetup.unitLabel')}
                   className="input-field !py-1.5 !text-sm !w-auto"
                 >
-                  {PACK_UNITS.map((u) => <option key={u} value={u}>{t(UNIT_KEYS[u])}</option>)}
+                  {PACK_UNITS.map((u) => <option key={u} value={u}>{t(PACK_UNIT_KEYS[u])}</option>)}
                 </select>
               </div>
               {sum && (
