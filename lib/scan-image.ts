@@ -12,6 +12,39 @@
  * phone. Prettiness is not the goal — the extraction reading it correctly is.
  */
 
+/**
+ * Whether photographs should come from the phone's own camera app.
+ *
+ * A browser can only reach a phone's camera as a video stream: a frame of it is
+ * about 1080 pixels across, softened by video processing, and on an iPhone it
+ * comes through the main lens, which cannot focus as close as a page is held.
+ * The owner's invoices came out blurred where the iPhone's own camera, with its
+ * full resolution and macro lens, is sharp. Quality decides whether an invoice
+ * can be read at all, so phones use their camera and we start from its photo.
+ *
+ * An iPad reports itself as a Mac, which the touch points give away.
+ */
+export function usesPhoneCamera(userAgent: string, touchPoints: number): boolean {
+  return /Mobi|Android|iPhone|iPad|iPod|HarmonyOS/i.test(userAgent) || (/Macintosh/.test(userAgent) && touchPoints > 1);
+}
+
+/**
+ * The largest picture a canvas can safely hold.
+ *
+ * Above about 16.7 million pixels Safari gives back a blank canvas with no
+ * error, and a phone photograph can exceed it. Twelve million is a full iPhone
+ * photo, and well past what the reader can use.
+ */
+export const MAX_FRAME_PIXELS = 12_600_000;
+
+/** The size to decode a picture at: its own, unless that is too much. */
+export function frameSize(width: number, height: number, maxPixels = MAX_FRAME_PIXELS): { width: number; height: number } {
+  const pixels = width * height;
+  if (pixels <= maxPixels) return { width, height };
+  const scale = Math.sqrt(maxPixels / pixels);
+  return { width: Math.floor(width * scale), height: Math.floor(height * scale) };
+}
+
 export type ScanFilter = 'original' | 'enhanced' | 'grayscale' | 'blackwhite';
 
 export const SCAN_FILTERS: ScanFilter[] = ['original', 'enhanced', 'grayscale', 'blackwhite'];

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { X, Loader2, Trash2, FileText, AlertTriangle, Building2, FileSearch } from 'lucide-react';
 import { getInvoiceImage, deleteInvoice } from '../accounting-actions';
 import { useLanguage } from '@/lib/language-context';
+import ZoomableImage from './ZoomableImage';
 import VendorFixDialog from './VendorFixDialog';
 import Dialog from './Dialog';
 import InvoiceProofEditor from './InvoiceProofEditor';
@@ -137,9 +138,7 @@ export default function InvoicePreview({
               </p>
             </div>
           ) : (
-            // eslint-disable-next-line @next/next/no-img-element -- served by
-            // an authenticated route, which next/image cannot fetch.
-            <img
+            <ZoomableImage
               src={`/api/images/${image.imagePath}`}
               alt={t('accounting.previewTitle')}
               className="w-full rounded-xl border border-border-subtle bg-black/20"

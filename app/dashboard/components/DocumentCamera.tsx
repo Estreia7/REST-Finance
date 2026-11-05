@@ -8,6 +8,9 @@ import { stabilityStep, isTrustworthy, type Corners, type StabilityState } from 
 /**
  * The live camera, with the document outlined as you point at it.
  *
+ * For computers only. A phone uses its own camera app, which takes a far sharper
+ * picture than a browser can get from it: see `usesPhoneCamera`.
+ *
  * Detection runs on a small copy of the frame rather than the full sensor
  * image: finding a sheet of paper needs shape, not detail, and a phone at the
  * end of service should not be asked to process four thousand pixels a side
@@ -250,8 +253,9 @@ export default function DocumentCamera({ onCapture, onClose, onPickFile }: Docum
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: 'environment' },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
+            // As much as the camera has: this frame is the photograph.
+            width: { ideal: 3840 },
+            height: { ideal: 2160 },
           },
           audio: false,
         });

@@ -14,6 +14,7 @@
  */
 
 import { isTrustworthy, type Corners } from '@/lib/scan-stability';
+import { frameSize } from '@/lib/scan-image';
 
 /** Width the detector sees. Matching DocumentCamera: shape, not detail. */
 const DETECT_WIDTH = 480;
@@ -95,7 +96,7 @@ export async function loadFrameFromFile(file: File): Promise<LoadedFrame> {
   return { frame, corners };
 }
 
-/** Decodes an image file to a canvas at its own resolution. */
+/** Decodes an image file to a canvas at its own resolution, within what a canvas can hold. */
 function fileToCanvas(file: File): Promise<HTMLCanvasElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -104,14 +105,16 @@ function fileToCanvas(file: File): Promise<HTMLCanvasElement> {
     image.onload = () => {
       URL.revokeObjectURL(url);
       const canvas = document.createElement('canvas');
-      canvas.width = image.naturalWidth;
-      canvas.height = image.naturalHeight;
+      const size = frameSize(image.naturalWidth, image.naturalHeight);
+      canvas.width = size.width;
+      canvas.height = size.height;
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         reject(new Error('canvas unavailable'));
         return;
       }
-      ctx.drawImage(image, 0, 0);
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(image, 0, 0, size.width, size.height);
       resolve(canvas);
     };
 

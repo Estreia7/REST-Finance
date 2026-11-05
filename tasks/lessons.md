@@ -98,3 +98,15 @@ changing the quantity left the value behind and refused to confirm.
 number belongs on that screen. Decide for every answer whether it is about the
 product (remembered) or about this purchase (one line), and offer both. Linked
 figures follow each other: never make someone do the multiplication.
+
+## A browser's camera is a video stream, not a camera
+
+**What happened:** invoices photographed inside the app came out blurred while
+the iPhone's own camera was sharp. The app froze a 1080p video frame, through a
+lens that cannot focus as close as a page is held, and the auto shutter fired
+on a still outline whatever the focus was doing. The live outline looked
+advanced, so nobody questioned the picture behind it.
+
+**Rule:** when the output's quality is the whole point, measure it against the
+plain native path before adding anything clever on top. On phones, use the
+device's camera (`capture`) and start from its photograph.

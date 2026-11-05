@@ -8,6 +8,7 @@ import { formatMoney } from '@/lib/format';
 import { translateError } from '@/lib/error-messages';
 import { checkReading, type TaxTruth } from '@/lib/invoice-checks';
 import { followFigures } from '@/lib/line-setup';
+import ZoomableImage from './ZoomableImage';
 import {
   getInvoiceForProof,
   rereadInvoice,
@@ -154,11 +155,10 @@ export default function InvoiceProofEditor({
     <div className="grid gap-5 lg:grid-cols-2">
       <div className="min-w-0">
         {invoice.imagePath && !invoice.imagePath.endsWith('.pdf') ? (
-          // eslint-disable-next-line @next/next/no-img-element -- an authenticated file, not a static asset
-          <img
+          <ZoomableImage
             src={`/api/images/${invoice.imagePath}`}
             alt={t('proof.imageAlt').replace('{number}', invoice.invoiceNumber)}
-            className="w-full rounded-xl border border-border-subtle lg:max-h-[75vh] lg:object-contain lg:sticky lg:top-20"
+            className="w-full rounded-xl border border-border-subtle lg:max-h-[75vh] lg:object-contain"
           />
         ) : invoice.imagePath ? (
           <a href={`/api/images/${invoice.imagePath}`} target="_blank" rel="noreferrer" className="text-sm font-semibold text-primary-ink underline">

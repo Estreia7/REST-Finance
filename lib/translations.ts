@@ -3220,6 +3220,13 @@ export const translations = {
       photo: 'Fotografar',
       photoHint: 'A câmara lê os valores',
     },
+    zoom: {
+      open: 'Ampliar a fatura',
+      hint: 'Ampliar',
+      in: 'Aproximar',
+      out: 'Afastar',
+      close: 'Fechar a fatura',
+    },
     camera: {
       title: 'Digitalizar documento',
       starting: 'A abrir a câmara...',
@@ -7115,6 +7122,13 @@ export const translations = {
       manualHint: 'Fill in the figures by hand',
       photo: 'Photograph it',
       photoHint: 'The camera reads the figures',
+    },
+    zoom: {
+      open: 'Enlarge the invoice',
+      hint: 'Enlarge',
+      in: 'Zoom in',
+      out: 'Zoom out',
+      close: 'Close the invoice',
     },
     camera: {
       title: 'Scan document',

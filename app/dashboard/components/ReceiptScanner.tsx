@@ -16,6 +16,7 @@ import ScanPageEditor, { type ScannedPage } from './ScanPageEditor';
 import ScanTray, { type ScannedDocument, newDocumentId } from './ScanTray';
 import SourcePickerSheet, { type PhotoSource } from './SourcePickerSheet';
 import { loadFrameFromFile } from '@/lib/detect-in-file';
+import { usesPhoneCamera } from '@/lib/scan-image';
 import PaymentFields, { emptyPaymentDraft, paymentFromDraft, type PaymentDraft } from './PaymentFields';
 import { attachScannedInvoice, getPaymentVendors } from '../payment-actions';
 import { formatMoney } from '@/lib/format';
@@ -164,6 +165,7 @@ export default function ReceiptScanner({
   const [scanId, setScanId] = useState<string | null>(null);
   const [editData, setEditData] = useState<ExtractionResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+const cameraRef = useRef<HTMLInputElement>(null);
 
   // An earlier reading opens on its review. Keyed on the id, so a parent
   // re-render does not throw away what the owner has already corrected.
@@ -225,23 +227,38 @@ export default function ReceiptScanner({
     onAutoStarted?.();
     setCurrentPages([]);
     setDocuments([]);
-    setStage('camera');
+    // Possibly no longer inside the tap that brought us here, in which case
+    // the phone refuses to open its camera without a word. The choice stays
+    // underneath so the owner is never left looking at nothing.
+    if (phoneCamera()) setPickingSource(true);
+    openCamera();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart, onAutoStarted]);
+
+  const phoneCamera = () => usesPhoneCamera(navigator.userAgent, navigator.maxTouchPoints);
+
+  /**
+   * Takes the next photograph: the phone's own camera, or ours on a computer.
+   * Must run inside a tap, because a phone will not open its camera otherwise.
+   */
+  const openCamera = () => {
+    if (phoneCamera()) cameraRef.current?.click();
+    else setStage('camera');
+  };
 
   /**
    * Acts on the three-way choice.
    *
-   * Only the camera is ours. Reaching the gallery or the files app is
-   * something only the browser can do, so those still go through a file
-   * input — but without `capture`, which is what makes iOS offer its own
-   * camera instead of the picker that was asked for.
+   * The gallery and the files app go through a file input without `capture`,
+   * which is what would make iOS offer its camera instead of the picker that
+   * was asked for. The camera has an input of its own, with it.
    */
   const handleSource = (source: PhotoSource) => {
     setPickingSource(false);
     if (source === 'camera') {
       setCurrentPages([]);
       setDocuments([]);
-      setStage('camera');
+      openCamera();
       return;
     }
     const input = fileRef.current;
@@ -286,7 +303,10 @@ export default function ReceiptScanner({
       return;
     }
     setPdfName(null);
+    await readPhoto(file);
+  };
 
+  const readPhoto = async (file: File) => {
     setReadingFile(true);
     try {
       const { frame, corners } = await loadFrameFromFile(file);
@@ -297,6 +317,23 @@ export default function ReceiptScanner({
     } finally {
       setReadingFile(false);
     }
+  };
+
+  /** A photograph from the phone's camera: the next page, so nothing is cleared. */
+  const handleTakenPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setPickingSource(false);
+    setPdfName(null);
+    await readPhoto(file);
+  };
+
+  /** Back from the editor to take the page again. */
+  const retake = () => {
+    setCaptured(null);
+    if (phoneCamera()) setStage(currentPages.length || documents.length ? 'tray' : 'idle');
+    openCamera();
   };
 
   /** A frame arrived from the camera; hand it to the editor. */
@@ -321,7 +358,7 @@ export default function ReceiptScanner({
   const startNewDocument = () => {
     setDocuments((docs) => foldCurrent(docs, currentPages));
     setCurrentPages([]);
-    setStage('camera');
+    openCamera();
   };
 
   /**
@@ -763,6 +800,14 @@ export default function ReceiptScanner({
         onChange={handlePickedFile}
         className="hidden"
       />
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleTakenPhoto}
+        className="hidden"
+      />
 
 
       {/* Image preview */}
@@ -1038,7 +1083,7 @@ export default function ReceiptScanner({
           frame={captured.frame}
           detectedCorners={captured.corners}
           onDone={handlePageDone}
-          onCancel={() => { setCaptured(null); setStage('camera'); }}
+          onCancel={retake}
         />
       )}
 
@@ -1067,7 +1112,7 @@ export default function ReceiptScanner({
         <ScanTray
           currentPages={currentPages}
           documents={documents}
-          onAddPageToCurrent={() => setStage('camera')}
+          onAddPageToCurrent={openCamera}
           onStartNewDocument={startNewDocument}
           onRemovePage={(i) => setCurrentPages((pages) => pages.filter((_, idx) => idx !== i))}
           onRemoveDocument={(id) => setDocuments((docs) => docs.filter((d) => d.id !== id))}

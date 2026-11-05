@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyFilter, nextRotation, MAX_UPLOAD_EDGE, type ScanFilter } from '@/lib/scan-image';
+import { applyFilter, nextRotation, frameSize, usesPhoneCamera, MAX_FRAME_PIXELS, MAX_UPLOAD_EDGE, type ScanFilter } from '@/lib/scan-image';
 
 /**
  * The pixel maths, tested without a browser.
@@ -196,5 +196,34 @@ describe('upload size', () => {
   it('stays large enough for small print on an invoice', () => {
     expect(MAX_UPLOAD_EDGE).toBeGreaterThanOrEqual(1600);
     expect(MAX_UPLOAD_EDGE).toBeLessThanOrEqual(3000);
+  });
+});
+
+describe('usesPhoneCamera', () => {
+  it('sends phones to their own camera', () => {
+    expect(usesPhoneCamera('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', 5)).toBe(true);
+    expect(usesPhoneCamera('Mozilla/5.0 (Linux; Android 14; Pixel 8)', 5)).toBe(true);
+    expect(usesPhoneCamera('Mozilla/5.0 (Phone; OpenHarmony 4.0) Mobile', 5)).toBe(true);
+  });
+
+  it('sees through an iPad calling itself a Mac', () => {
+    expect(usesPhoneCamera('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 5)).toBe(true);
+  });
+
+  it('leaves computers on the live camera', () => {
+    expect(usesPhoneCamera('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 0)).toBe(false);
+    expect(usesPhoneCamera('Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 0)).toBe(false);
+  });
+});
+
+describe('frameSize', () => {
+  it('keeps a full iPhone photograph at its own resolution', () => {
+    expect(frameSize(4032, 3024)).toEqual({ width: 4032, height: 3024 });
+  });
+
+  it('brings a larger one under what a canvas can hold, in proportion', () => {
+    const size = frameSize(5712, 4284);
+    expect(size.width * size.height).toBeLessThanOrEqual(MAX_FRAME_PIXELS);
+    expect(size.width / size.height).toBeCloseTo(5712 / 4284, 2);
   });
 });

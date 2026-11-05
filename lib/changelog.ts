@@ -35,9 +35,25 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.04.12';
+export const CHANGELOG_VERSION = '2026.11.04.13';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.04.13',
+    date: '2026-11-04',
+    entries: [
+      {
+        kind: 'fix',
+        title: 'Fotografias das faturas muito mais nítidas no telemóvel',
+        detail: 'Ao fotografar uma fatura, abre-se agora a câmara do próprio telemóvel, com foco e resolução totais. Depois, o recorte e o filtro continuam a ser feitos por si.',
+      },
+      {
+        kind: 'new',
+        title: 'Faça zoom nas faturas',
+        detail: 'Toque na imagem de uma fatura para a abrir em ecrã inteiro e aproximar com os dedos, com a roda do rato ou com os botões.',
+      },
+    ],
+  },
   {
     version: '2026.11.04.12',
     date: '2026-11-04',
