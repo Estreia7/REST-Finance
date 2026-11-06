@@ -12,7 +12,7 @@ import { repriceIngredients } from '@/lib/ingredient-costs-server';
 import { rereadStoredDocument } from '@/lib/scan-core';
 import { PACK_UNITS, asPrinted, fromPrinted, lineFigures, packOfLine, takesPack, toPack, toPackInput, type PackInput } from '@/lib/line-setup';
 import { formatPack } from '@/lib/scan-corrections';
-import { checkReading, settleVat, type Proof, type TaxTruth } from '@/lib/invoice-checks';
+import { checkReading, settleFigures, type Proof, type TaxTruth } from '@/lib/invoice-checks';
 
 /**
  * Confirming an invoice whose lines do not add up.
@@ -56,14 +56,14 @@ function cents(n: number): number {
 }
 
 /**
- * Settles a saved invoice whose only trouble is its VAT rates, or leaves it.
+ * Settles a saved invoice the document's own figures can put right, or leaves it.
  *
- * Nobody should be sent to fix what the invoice's own figures answer. Only the
- * rates change: every line must already multiply out, and neither the money nor
- * the categories move, so an invoice with anything else wrong still waits.
+ * Nobody should be sent to fix what the figures answer: wrong VAT rates, or
+ * values saved with VAT in them. Every line must already multiply out, and the
+ * invoice's total does not move, so one with anything else wrong still waits.
  */
-async function settleSavedRates(
-  restaurantId: string,
+async function settleSavedFigures(
+  { restaurantId, userId }: { restaurantId: string; userId: string },
   scanId: string,
   invoiceNumber: string,
   truth: TaxTruth[],
@@ -72,7 +72,9 @@ async function settleSavedRates(
   try {
     const items = await prisma.invoiceItem.findMany({
       where: { restaurantId, invoiceNumber },
-      select: { id: true, productName: true, quantity: true, unitPrice: true, totalPrice: true, vatRate: true },
+      select: {
+        id: true, productName: true, quantity: true, unitPrice: true, totalPrice: true, vatRate: true, costEntryId: true,
+      },
     });
     const lines = items.map((i) => ({
       productName: i.productName,
@@ -84,23 +86,35 @@ async function settleSavedRates(
     const proof = checkReading({ items: lines, grandTotal: 0, vatSummary: truth }, null);
     if (proof.problems.some((p) => p.kind === 'line')) return false;
 
-    const settled = settleVat(lines, truth);
+    const settled = settleFigures(lines, truth);
     if (!settled || settled.drop.length > 0) return false;
 
     await prisma.$transaction(async (tx) => {
       for (const [i, item] of items.entries()) {
         const vatRate = settled.rates[i];
-        if (lines[i].vatRate === vatRate) continue;
+        const total = settled.totals[i];
+        if (lines[i].vatRate === vatRate && lines[i].total === total) continue;
         await tx.invoiceItem.update({
           where: { id: item.id },
-          data: { vatRate, grossTotal: cents(lines[i].total * (1 + vatRate / 100)) },
+          data: {
+            vatRate,
+            totalPrice: total,
+            unitPrice: settled.unitPrices[i],
+            grossTotal: settled.grossTotals[i] ?? cents(total * (1 + vatRate / 100)),
+          },
         });
+      }
+      if (settled.vatIncluded) {
+        const entries = new Set(items.flatMap((i) => (i.costEntryId ? [i.costEntryId] : [])));
+        for (const costEntryId of entries) await rebalanceInvoice(tx, { restaurantId, costEntryId, userId });
       }
       await tx.receiptScan.update({
         where: { id: scanId },
         data: { proofStatus: 'proved', proofResolvedAt: new Date() },
       });
-    });
+    }, { timeout: 30_000 });
+    // What a kilo really cost has changed, and so has the ingredient.
+    if (settled.vatIncluded) await repriceIngredients(restaurantId);
     return true;
   } catch {
     // It stays on the list, where the owner can still settle it.
@@ -130,7 +144,7 @@ export async function getInvoicesToConfirm() {
       if (!number) continue;
       const data = s.extractedData as { vendor?: string; checks?: { proof?: Proof } } | null;
       const truth = data?.checks?.proof?.truth ?? [];
-      if (await settleSavedRates(owner.restaurantId, s.id, number, truth)) continue;
+      if (await settleSavedFigures(owner, s.id, number, truth)) continue;
       numbers.push({ invoiceNumber: number, vendorName: data?.vendor ?? null, gap: data?.checks?.proof?.gap ?? 0 });
     }
     numbers.sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap));

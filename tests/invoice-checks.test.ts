@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { checkReading,
-  canSaveUnseen, betterProof, rereadHint, type CheckedReading, settleVat, isDiscountNote } from '@/lib/invoice-checks';
+  canSaveUnseen, betterProof, rereadHint, type CheckedReading, settleVat, settleFigures, isDiscountNote } from '@/lib/invoice-checks';
 import { parseInvoiceQr } from '@/lib/pt-invoice-qr';
 
 // A wholesale invoice with fictional identifiers: 0,905 kg of mushrooms at 3,69 the kilo.
@@ -220,4 +220,54 @@ describe('settleVat', () => {
   });
 
   void truth;
+});
+
+describe('settleFigures', () => {
+  const line = (productName: string, quantity: number, unitPrice: number, total: number, vatRate: number | null) =>
+    ({ productName, quantity, unitPrice, total, vatRate });
+
+  it('takes out the VAT of a till receipt that prints its values with it', () => {
+    const lines = [line('Asas Frango', 3.497, 3.5, 12.24, 6), line('Carne Picada Novilho', 10.545, 9.9, 104.4, 6)];
+    const truth = [{ rate: 6, base: 110.04, tax: 6.6 }];
+    const result = settleFigures(lines, truth);
+    expect(result?.vatIncluded).toBe(true);
+    expect(result?.totals).toEqual([11.55, 98.49]);
+    expect(result?.grossTotals).toEqual([12.24, 104.4]);
+    expect(result?.unitPrices[1]).toBeCloseTo(9.34, 2);
+
+    const fixed = lines.map((l, i) => ({
+      ...l, total: result!.totals[i], unitPrice: result!.unitPrices[i], grossTotal: result!.grossTotals[i],
+    }));
+    expect(checkReading({ items: fixed, grandTotal: 116.64 }, { taxes: truth }).status).toBe('proved');
+  });
+
+  it('lands every rate exactly on the invoice, with several rates', () => {
+    const lines = [line('A', 1, 10.6, 10.6, 23), line('B', 1, 12.3, 12.3, 6), line('C', 1, 11.3, 11.3, 13)];
+    const truth = [{ rate: 6, base: 10, tax: 0.6 }, { rate: 13, base: 10, tax: 1.3 }, { rate: 23, base: 10, tax: 2.3 }];
+    const result = settleFigures(lines, truth);
+    expect(result?.rates).toEqual([6, 23, 13]);
+    expect(result?.totals).toEqual([10, 10, 10]);
+  });
+
+  it('leaves alone an invoice whose values are already before VAT', () => {
+    const lines = [line('A', 2, 5, 10, 13), line('B', 1, 20, 20, 23)];
+    const truth = [{ rate: 6, base: 10, tax: 0.6 }, { rate: 23, base: 20, tax: 4.6 }];
+    const result = settleFigures(lines, truth);
+    expect(result?.vatIncluded).toBe(false);
+    expect(result?.totals).toEqual([10, 20]);
+    expect(result?.rates).toEqual([6, 23]);
+  });
+
+  it('gives up when the lines reach neither total', () => {
+    expect(settleFigures([line('A', 1, 50, 50, 6)], [{ rate: 6, base: 110.04, tax: 6.6 }])).toBeNull();
+  });
+});
+
+describe('checkReading', () => {
+  it('does not prove lines that fit the rates but not what was paid', () => {
+    const items = [{ quantity: 1, unitPrice: 10, total: 10, vatRate: 6 }];
+    const proof = checkReading({ items, grandTotal: 99 }, { taxes: [{ rate: 6, base: 10, tax: 0.6 }] });
+    expect(proof.status).toBe('failed');
+    expect(proof.problems.some((p) => p.kind === 'total')).toBe(true);
+  });
 });

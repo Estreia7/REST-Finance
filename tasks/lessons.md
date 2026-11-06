@@ -133,3 +133,14 @@ so the rates were a sum, not a question.
 **Rule:** before building a screen where someone corrects data, ask whether the
 data already in hand determines the answer. If it does, do it at read time and
 keep the screen for what is really unknown.
+
+## Never assume how a supplier prints a figure: prove it against the totals
+
+**What happened:** a till receipt marked "IVA incluído" printed its line values
+with VAT. They were stored as before VAT, and the only sign was a gap equal to
+the VAT itself. The owner's rule: invoices differ from supplier to supplier, but
+the numbers must always match.
+
+**Rule:** treat each supplier's layout as unknown and let the document's totals
+decide. A gap equal to a known figure (the VAT, a discount) is a diagnosis, not a
+mismatch. "Proved" means every total matches, not the ones that were convenient.

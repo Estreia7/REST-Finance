@@ -40,7 +40,7 @@ export const SCANNER_RETRY_MODEL = 'claude-opus-5-5';
  * prompt change rather than guessed at. Date-stamped rather than numbered:
  * the question asked later is always "what were we sending in September?".
  */
-export const PROMPT_VERSION = '2026-11-05.1';
+export const PROMPT_VERSION = '2026-11-06.1';
 
 /**
  * Room for the answer. A long cash-and-carry invoice runs to forty lines, and
@@ -96,7 +96,7 @@ Rules that matter for Portuguese documents:
 - Report that pack size separately, in packAmount and packUnit: what ONE billed unit contains, in kg or L. "2,5K" and "2,5KG" are 2.5 kg; "500G" is 0.5 kg; "1,5L" is 1.5 L; "33CL" is 0.33 L; a multipack "6X33CL" is one pack of 1.98 L, "12X1L" is 12 L. A bare "K" after a number means kilos. Leave both out when the description states no size, when the line is already billed by weight (unit kg or L), or when the number is not a size — a strength ("40%"), a model ("2.0"), a count of pieces ("CX 6" alone).
 - Before reading any line, find the row of column headings and work out which column is which. On a cash-and-carry invoice the headings can sit far above the lines, with a QR code or a stamp between them, and they can be faint. A Recheio invoice reads: Vol. | Qt./Vol. | Qt.Total | Preço Uni. | Valor Mercadoria | %IVA | Preço c/IVA. So the line "1 | 1 | 0,905 | 3,69 | 3,34 | 6,0 | 3,54" is quantity 0,905 (Qt.Total), unit kg, unitPrice 3,69, total 3,34 before VAT, vatRate 6, grossTotal 3,54. A quantity with three decimals is a weight, so the unit is kg. Vol. and Qt./Vol. are packing counts and are never the quantity.
 - Every line must satisfy quantity x unitPrice = total. If yours does not, you have shifted a column: read the row again against its headings. Never take the price for the total or the weight for the price.
-- "total" is the value BEFORE VAT ("Valor Mercadoria", "Valor Líquido", "Valor s/ IVA", "Incidência"). Report the VAT-inclusive value, where printed, in grossTotal. If a line prints only a VAT-inclusive value, compute the value before VAT from it and its rate, and use the unit price before VAT.
+- "total" is the value BEFORE VAT ("Valor Mercadoria", "Valor Líquido", "Valor s/ IVA", "Incidência"). Report the VAT-inclusive value, where printed, in grossTotal. If a line prints only a VAT-inclusive value, compute the value before VAT from it and its rate, and use the unit price before VAT. A note such as "IVA incluído" or "Iva Incluído à Taxa Indicada" means every price and line value on the page includes VAT.
 - Every line has a VAT rate: a "%IVA" column, or a letter or code explained in a legend at the foot. Report it as a number: 6, 13, 23 on the mainland; 4, 12, 22 in Madeira; 4, 9, 16 in the Azores; 0 if exempt.
 - On Makro invoices the last columns of each line hold a VAT code ("IvaCD"), not a percentage: code 2 is 23%, code 4 is 6%, code 5 is 13%. Read it from that line, never from the lines around it.
 - Copy the VAT table at the foot of the invoice into vatSummary, one entry per rate with its base ("Incidência") and tax ("Imposto"/"Valor IVA").

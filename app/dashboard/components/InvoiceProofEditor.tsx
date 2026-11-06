@@ -6,7 +6,7 @@ import { AlertTriangle, Check, CheckCircle2, Loader2, Plus, RotateCcw, Trash2, W
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
 import { translateError } from '@/lib/error-messages';
-import { checkReading, settleVat, type TaxTruth } from '@/lib/invoice-checks';
+import { checkReading, settleFigures, type TaxTruth } from '@/lib/invoice-checks';
 import { INVOICE_UNITS, invoiceUnit,
   PACK_UNITS,
   PACK_UNIT_KEYS,
@@ -56,15 +56,23 @@ const num = (value: string) => Number(value.replace(',', '.'));
 
 /** The rates the invoice's own figures call for, or null when none fit. */
 function settledRows(rows: Row[], truth: TaxTruth[]) {
-  const result = settleVat(rows.map(toLine), truth);
+  const result = settleFigures(rows.map(toLine), truth);
   if (!result) return null;
   return {
     changed: result.changed,
     dropped: result.drop.length > 0,
+    vatIncluded: result.vatIncluded,
     rows: rows.flatMap((r, i) => {
       if (result.drop.includes(i)) return [];
       const rate = result.rates[i];
-      return [{ ...r, vatRate: String(rate), settled: r.settled || r.vatRate === '' || num(r.vatRate) !== rate }];
+      const moved = r.vatRate === '' || num(r.vatRate) !== rate || num(r.total) !== result.totals[i];
+      return [{
+        ...r,
+        vatRate: String(rate),
+        total: String(result.totals[i]),
+        unitPrice: String(result.unitPrices[i]),
+        settled: r.settled || moved,
+      }];
     }),
   };
 }
@@ -125,8 +133,9 @@ export default function InvoiceProofEditor({
   const [saving, setSaving] = useState(false);
   const [rereading, setRereading] = useState(false);
 
-  const tell = (result: { changed: number; dropped: boolean }) => {
-    if (result.changed > 0) toast.info(t('proof.settled').replace('{count}', String(result.changed)));
+  const tell = (result: { changed: number; dropped: boolean; vatIncluded: boolean }) => {
+    if (result.vatIncluded) toast.info(t('proof.vatIncluded'));
+    else if (result.changed > 0) toast.info(t('proof.settled').replace('{count}', String(result.changed)));
     if (result.dropped) toast.info(t('proof.discountDropped'));
   };
 
@@ -247,6 +256,12 @@ export default function InvoiceProofEditor({
 
   // Says what is really wrong: a VAT rate off by a line is not a bad multiplication.
   const adriftMessage = () => {
+    const total = proof.problems.find((p) => p.kind === 'total');
+    if (total?.kind === 'total' && proof.problems.length === 1) {
+      return t('proof.totalOff')
+        .replace('{found}', formatMoney(total.found))
+        .replace('{expected}', formatMoney(total.expected));
+    }
     if (offBy) {
       return t(proof.gap > 0 ? 'proof.short' : 'proof.over').replace('{amount}', formatMoney(Math.abs(proof.gap)));
     }

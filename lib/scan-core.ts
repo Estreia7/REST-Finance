@@ -3,7 +3,7 @@ import { scanDocument, type ScanResult, type MediaType, type ScanType } from '@/
 import { readInvoiceQr, applyQrTruth, type InvoiceQrData } from '@/lib/pt-invoice-qr';
 import { checkVendorReading, looksLikeCustomer, type CustomerIdentity } from '@/lib/vendor-reading';
 import { saveImage, saveDocument, resolveStoredPath } from '@/lib/uploads';
-import { betterProof, checkReading, isDiscountNote, rereadHint, settleVat, type CheckedReading, type Proof } from '@/lib/invoice-checks';
+import { betterProof, checkReading, isDiscountNote, rereadHint, settleFigures, type CheckedReading, type Proof } from '@/lib/invoice-checks';
 import { isCreditNoteNumber } from '@/lib/credit-notes';
 import { cleanTaxId, readerNote, rulesFor } from '@/lib/supplier-knowledge';
 import { readFile } from 'node:fs/promises';
@@ -235,9 +235,10 @@ function withQrTruth(data: ScanResult, qr: InvoiceQrData | null): { data: ScanRe
 /**
  * Puts right what the document's own figures can settle, with nobody asked.
  *
- * A discount note read as a line goes, and a line with the wrong VAT rate gets
- * the one its value must have for each rate to reach what the invoice states.
- * Kept only if the figures come out better for it.
+ * A discount note read as a line goes, a line with the wrong VAT rate gets the
+ * one its value must have for each rate to reach what the invoice states, and
+ * values printed with VAT go back to before it. Kept only if the figures come out
+ * better for it.
  */
 function tidied(
   reading: { data: ScanResult; changed: string[] },
@@ -260,19 +261,15 @@ function tidied(
   const lines = best.reading.data.type === 'cost_receipt' ? best.reading.data.items : [];
   const shifted = best.proof.problems.some((p) => p.kind === 'line');
   if (best.proof.status === 'failed' && !shifted && best.proof.truth.length > 0) {
-    const settled = settleVat(lines.map((item) => ({ ...item, productName: item.product })), best.proof.truth);
+    const settled = settleFigures(lines.map((item) => ({ ...item, productName: item.product })), best.proof.truth);
     if (settled) {
-      keep(lines.flatMap((item, i) => {
-        if (settled.drop.includes(i)) return [];
-        const vatRate = settled.rates[i];
-        return [{
-          ...item,
-          vatRate,
-          grossTotal: vatRate === item.vatRate || item.grossTotal == null
-            ? item.grossTotal
-            : Math.round(item.total * (100 + vatRate)) / 100,
-        }];
-      }));
+      keep(lines.flatMap((item, i) => (settled.drop.includes(i) ? [] : [{
+        ...item,
+        vatRate: settled.rates[i],
+        total: settled.totals[i],
+        unitPrice: settled.unitPrices[i],
+        grossTotal: settled.grossTotals[i] ?? undefined,
+      }])));
     }
   }
   return best;

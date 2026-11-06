@@ -127,8 +127,8 @@ export function checkReading(reading: CheckedReading, qr: Pick<InvoiceQrData, 't
     }
   }
 
-  // Without any table, the VAT on the lines must still reach what was paid.
-  if (truth.length === 0 && reading.items.every((l) => l.vatRate != null)) {
+  // However the rates fell, the lines with their VAT must reach what was paid.
+  if (reading.items.every((l) => l.vatRate != null)) {
     const gross = cents(reading.items.reduce((sum, l) => sum + l.total * (1 + (l.vatRate ?? 0) / 100), 0));
     if (Math.abs(gross - reading.grandTotal) > allowed) {
       problems.push({ kind: 'total', expected: reading.grandTotal, found: gross });
@@ -274,6 +274,101 @@ export function settleVat(
     };
   }
   return null;
+}
+
+export interface SettledFigures {
+  /** Per line, in the order given. A dropped line keeps what it had. */
+  rates: number[];
+  totals: number[];
+  unitPrices: number[];
+  /** The line's value with VAT, where the invoice printed it that way. */
+  grossTotals: Array<number | null>;
+  changed: number;
+  drop: number[];
+  /** The lines were printed with VAT in them, and have been taken back to before it. */
+  vatIncluded: boolean;
+}
+
+/**
+ * Whether these lines are values WITH VAT.
+ *
+ * Suppliers differ: a till receipt saying "IVA incluído" prints every value with
+ * VAT in it. The invoice's own figures tell which it is: the lines reach the total
+ * with VAT and not the total before it.
+ */
+function linesIncludeVat(lines: Array<Pick<CheckedLine, 'total'>>, truth: TaxTruth[]): boolean {
+  const sum = lines.reduce((s, l) => s + l.total, 0);
+  const net = truth.reduce((s, b) => s + b.base, 0);
+  const gross = truth.reduce((s, b) => s + b.base + b.tax, 0);
+  const allowed = sumTolerance(lines.length);
+  return Math.abs(gross - net) > allowed && Math.abs(sum - gross) <= allowed && Math.abs(sum - net) > allowed;
+}
+
+/**
+ * Lines printed with VAT, back to what they are before it.
+ *
+ * Each line is worked out on its own, and the odd cent of rounding goes to the
+ * largest line of its rate, so every rate lands exactly on what the document says.
+ */
+function takeOutVat(
+  lines: Array<CheckedLine & { productName: string }>,
+  truth: TaxTruth[],
+): SettledFigures | null {
+  const settled = settleVat(lines, truth.map((b) => ({ ...b, base: cents(b.base + b.tax) })));
+  if (!settled) return null;
+
+  const kept = lines.map((_, i) => i).filter((i) => !settled.drop.includes(i));
+  const totals = lines.map((l, i) => (kept.includes(i) ? cents(l.total / (1 + settled.rates[i] / 100)) : l.total));
+
+  for (const band of truth) {
+    const own = kept.filter((i) => settled.rates[i] === band.rate);
+    if (own.length === 0) continue;
+    const off = cents(band.base - own.reduce((sum, i) => sum + totals[i], 0));
+    if (Math.abs(off) > sumTolerance(own.length)) return null;
+    const largest = own.reduce((a, b) => (totals[b] > totals[a] ? b : a));
+    totals[largest] = cents(totals[largest] + off);
+  }
+
+  return {
+    ...settled,
+    totals,
+    unitPrices: lines.map((l, i) => (
+      kept.includes(i) && l.quantity > 0 ? Math.round((totals[i] / l.quantity) * 10000) / 10000 : l.unitPrice
+    )),
+    grossTotals: lines.map((l, i) => (kept.includes(i) ? l.total : l.grossTotal ?? null)),
+    changed: kept.length,
+    vatIncluded: true,
+  };
+}
+
+/**
+ * Everything the invoice's own figures can settle about its lines: their VAT
+ * rates, and whether their values include VAT. Null when the figures fit no
+ * reading of the lines, which only a person can sort out.
+ */
+export function settleFigures(
+  lines: Array<CheckedLine & { productName: string }>,
+  truth: TaxTruth[],
+): SettledFigures | null {
+  if (truth.length === 0 || lines.length === 0) return null;
+  const kept = lines.filter((l) => !isDiscountNote(l.productName));
+  if (linesIncludeVat(lines, truth) || linesIncludeVat(kept, truth)) {
+    const net = takeOutVat(lines, truth);
+    if (net) return net;
+  }
+  const settled = settleVat(lines, truth);
+  if (!settled) return null;
+  return {
+    ...settled,
+    totals: lines.map((l) => l.total),
+    unitPrices: lines.map((l) => l.unitPrice),
+    grossTotals: lines.map((l, i) => (
+      l.vatRate === settled.rates[i] || l.grossTotal == null
+        ? l.grossTotal ?? null
+        : cents(l.total * (1 + settled.rates[i] / 100))
+    )),
+    vatIncluded: false,
+  };
 }
 
 /**

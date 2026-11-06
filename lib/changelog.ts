@@ -35,9 +35,20 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.05.04';
+export const CHANGELOG_VERSION = '2026.11.06.01';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.06.01',
+    date: '2026-11-06',
+    entries: [
+      {
+        kind: 'fix',
+        title: 'Faturas com «IVA incluído» já batem certo sozinhas',
+        detail: 'Quando os valores das linhas já trazem IVA, passam sozinhos para sem IVA, e o custo do ingrediente fica o certo. Uma fatura só conta como conferida quando as linhas chegam também ao total com IVA.',
+      },
+    ],
+  },
   {
     version: '2026.11.05.04',
     date: '2026-11-05',
