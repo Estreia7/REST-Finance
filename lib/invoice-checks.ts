@@ -25,6 +25,25 @@ export interface CheckedLine {
   grossTotal?: number | null;
 }
 
+/** Why a reading cannot be trusted as it stands. */
+export type IssueKind =
+  | 'totalVsQr'
+  | 'qrUnread'
+  | 'totalVsVatTable'
+  | 'missingPages'
+  | 'covered'
+  | 'cutOff'
+  | 'noTotal'
+  | 'doesNotAddUp'
+  | 'cannotVerify';
+
+export interface DocumentIssue {
+  kind: IssueKind;
+  /** What the document says, and what was found, where figures explain it. */
+  expected?: number;
+  found?: number;
+}
+
 export interface CheckedReading {
   items: CheckedLine[];
   grandTotal: number;
@@ -159,6 +178,75 @@ export function isDiscountNote(productName: string): boolean {
   return /^\s*(total\s+(de\s+)?)?descontos?\b/i.test(productName);
 }
 
+/**
+ * What is wrong with a reading, or nothing.
+ *
+ * A wrong invoice rarely looks wrong: a slip over the corner, a QR nobody could
+ * read, page one of two. Every way a photograph can fail to prove itself is named
+ * here, so it can be put right while the paper is still in hand. Empty is the only
+ * answer that lets an invoice in unseen.
+ *
+ * What the QR proved stays proved: a corner under a payment slip does not matter
+ * when the till's own figures match every line.
+ */
+export function documentIssues(input: {
+  reading: CheckedReading & {
+    qrVisible?: boolean;
+    pagesTotal?: number;
+    continuesOnNextPage?: boolean;
+    totalVisible?: boolean;
+    covered?: boolean;
+    cutOff?: boolean;
+  };
+  proof: Proof | null;
+  qrRead: boolean;
+  /** The QR's total, when it was read. */
+  qrTotal: number | null;
+  /** The total as printed, before the QR's took its place. */
+  printedTotal: number | null;
+  pages: number;
+  isPdf: boolean;
+}): DocumentIssue[] {
+  const { reading, proof, qrRead, qrTotal, printedTotal, pages, isPdf } = input;
+  const issues: DocumentIssue[] = [];
+  const proved = proof?.status === 'proved';
+  const table = reading.vatSummary ?? [];
+
+  // The owner's rule: the print and the QR must say the same thing.
+  if (qrRead && qrTotal !== null && printedTotal !== null && reading.totalVisible !== false
+    && Math.abs(printedTotal - qrTotal) > 0.01) {
+    issues.push({ kind: 'totalVsQr', expected: qrTotal, found: printedTotal });
+  }
+
+  if (!qrRead && reading.qrVisible && !isPdf) issues.push({ kind: 'qrUnread' });
+
+  if (!qrRead && table.length > 0) {
+    const stated = cents(table.reduce((sum, b) => sum + b.base + b.tax, 0));
+    if (Math.abs(stated - reading.grandTotal) > 0.05) {
+      issues.push({ kind: 'totalVsVatTable', expected: stated, found: reading.grandTotal });
+    }
+  }
+
+  if (!proved && (reading.continuesOnNextPage || (reading.pagesTotal ?? 0) > pages)) {
+    issues.push({ kind: 'missingPages' });
+  }
+  if (reading.totalVisible === false && !qrRead) issues.push({ kind: 'noTotal' });
+  if (!proved && reading.covered) issues.push({ kind: 'covered' });
+  if (!proved && reading.cutOff) issues.push({ kind: 'cutOff' });
+
+  const linesNet = cents(reading.items.reduce((sum, l) => sum + l.total, 0));
+  if (proof?.status === 'failed' || linesNet > reading.grandTotal + 0.05) {
+    issues.push({
+      kind: 'doesNotAddUp',
+      expected: proof?.expectedNet ?? reading.grandTotal,
+      found: linesNet,
+    });
+  } else if (!qrRead && table.length === 0 && reading.items.some((l) => l.vatRate == null)) {
+    issues.push({ kind: 'cannotVerify' });
+  }
+  return issues;
+}
+
 /** Largest number of partial answers kept per line, so a long invoice stays quick. */
 const MAX_STATES = 6_000;
 
@@ -287,6 +375,8 @@ export interface SettledFigures {
   drop: number[];
   /** The lines were printed with VAT in them, and have been taken back to before it. */
   vatIncluded: boolean;
+  /** The lines were before a discount on the whole invoice, and now carry their share. */
+  discounted?: boolean;
 }
 
 /**
@@ -342,15 +432,62 @@ function takeOutVat(
 }
 
 /**
+ * Lines read before a discount the document took off the whole invoice.
+ *
+ * Makro prints 219,94 of goods, "Desconto Total 14,68" and 205,26 before VAT. The
+ * document says what each rate came to, so each line takes its rate's share of
+ * the discount. Per line that is an estimate; per rate it lands on the document.
+ */
+function takeOutDiscount(
+  lines: Array<CheckedLine & { productName: string }>,
+  truth: TaxTruth[],
+  discount: number,
+): SettledFigures | null {
+  const sum = lines.reduce((s, l) => s + l.total, 0);
+  const net = truth.reduce((s, b) => s + b.base, 0);
+  if (Math.abs(sum - discount - net) > sumTolerance(lines.length)) return null;
+
+  const totals = lines.map((l) => l.total);
+  for (const band of truth) {
+    const own = lines.map((_, i) => i).filter((i) => lines[i].vatRate === band.rate);
+    const before = own.reduce((s, i) => s + lines[i].total, 0);
+    if (own.length === 0 || before <= 0 || before < band.base - sumTolerance(own.length)) return null;
+    for (const i of own) totals[i] = cents((lines[i].total * band.base) / before);
+    const largest = own.reduce((a, b) => (totals[b] > totals[a] ? b : a));
+    totals[largest] = cents(totals[largest] + band.base - own.reduce((s, i) => s + totals[i], 0));
+  }
+  if (lines.some((l) => !truth.some((b) => b.rate === l.vatRate))) return null;
+
+  return {
+    rates: lines.map((l) => l.vatRate ?? 0),
+    totals,
+    unitPrices: lines.map((l, i) => (
+      l.quantity > 0 ? Math.round((totals[i] / l.quantity) * 10000) / 10000 : l.unitPrice
+    )),
+    grossTotals: lines.map((l, i) => cents(totals[i] * (1 + (l.vatRate ?? 0) / 100))),
+    changed: lines.filter((l, i) => l.total !== totals[i]).length,
+    drop: [],
+    vatIncluded: false,
+    discounted: true,
+  };
+}
+
+/**
  * Everything the invoice's own figures can settle about its lines: their VAT
- * rates, and whether their values include VAT. Null when the figures fit no
- * reading of the lines, which only a person can sort out.
+ * rates, whether their values include VAT, and a discount taken off the whole
+ * invoice. Null when the figures fit no reading of the lines, which only a person
+ * can sort out.
  */
 export function settleFigures(
   lines: Array<CheckedLine & { productName: string }>,
   truth: TaxTruth[],
+  discount = 0,
 ): SettledFigures | null {
   if (truth.length === 0 || lines.length === 0) return null;
+  if (discount > 0) {
+    const plain = takeOutDiscount(lines, truth, discount);
+    if (plain) return plain;
+  }
   const kept = lines.filter((l) => !isDiscountNote(l.productName));
   if (linesIncludeVat(lines, truth) || linesIncludeVat(kept, truth)) {
     const net = takeOutVat(lines, truth);
@@ -386,10 +523,12 @@ export function canSaveUnseen(input: {
     doubt?: string | null;
     creditNote?: boolean;
     knownVendorIsCustomer?: boolean;
+    issues?: DocumentIssue[];
   };
 }): boolean {
   const { vendor, lines, checks } = input;
   return checks?.proof?.status === 'proved'
+    && (checks.issues ?? []).length === 0
     && !checks.doubt
     && !checks.creditNote
     && !checks.knownVendorIsCustomer

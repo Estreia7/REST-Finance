@@ -444,7 +444,7 @@ export async function getInvoiceImage(invoiceNumber: string) {
     // Newest first: an invoice photographed twice has the better picture last.
     const scans = await prisma.receiptScan.findMany({
       where: { restaurantId: owner.restaurantId, imageUrl: { not: '' } },
-      select: { id: true, imageUrl: true, extractedData: true, createdAt: true },
+      select: { id: true, imageUrl: true, pageUrls: true, extractedData: true, createdAt: true },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
@@ -458,7 +458,7 @@ export async function getInvoiceImage(invoiceNumber: string) {
 
     return {
       success: true,
-      data: { imagePath: match.imageUrl, scannedAt: match.createdAt.toISOString() },
+      data: { imagePath: match.imageUrl, pagePaths: match.pageUrls, scannedAt: match.createdAt.toISOString() },
     };
   } catch (error: unknown) {
     return { error: toClientError('Failed to read the invoice image', error, 'read') };
@@ -532,8 +532,16 @@ export interface InvoiceRow2 {
   vendorName: string | null;
   vendorId: string | null;
   date: string | null;
-  /** What the document came to. */
+  /** The lines, before VAT. */
   total: number;
+  /** What the invoice came to with VAT: the cost as saved. Null with no cost behind it. */
+  gross: number | null;
+  /** When it entered the system. */
+  insertedAt: string;
+  /** The numbers do not match, and nobody has said to keep them. */
+  mismatch: boolean;
+  /** Proved by its QR, and every figure still matches. */
+  certain: boolean;
   lineCount: number;
   /** Lines nobody has said what they are, on this invoice. */
   unidentified: number;
@@ -571,10 +579,13 @@ export async function getInvoices(filters: { search?: string; vendorId?: string;
       select: {
         productName: true,
         totalPrice: true,
+        vatRate: true,
+        createdAt: true,
         invoiceDate: true,
         invoiceNumber: true,
         vendor: { select: { id: true, name: true } },
         category: { select: { type: true } },
+        costEntry: { select: { id: true, splitFromId: true } },
       },
       orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }],
     });
@@ -597,6 +608,8 @@ export async function getInvoices(filters: { search?: string; vendorId?: string;
     ]);
 
     const byDocument = new Map<string, InvoiceRow2>();
+    /** Per document: the lines with their VAT, null once a rate is missing, and its cost. */
+    const figures = new Map<string, { withVat: number | null; root: string | null }>();
     for (const row of rows) {
       // A line with no document number is its own entry rather than being
       // lumped with every other unnumbered line into one phantom invoice.
@@ -606,10 +619,23 @@ export async function getInvoices(filters: { search?: string; vendorId?: string;
       const unidentified =
         row.category?.type === 'OPEX' || identified.has(row.productName.trim().toLowerCase()) ? 0 : 1;
 
+      const lineWithVat = row.vatRate === null
+        ? null
+        : Number(row.totalPrice) * (1 + Number(row.vatRate) / 100);
+      const root = row.costEntry ? row.costEntry.splitFromId ?? row.costEntry.id : null;
+      const seen = figures.get(key);
+      figures.set(key, {
+        withVat: seen === undefined
+          ? lineWithVat
+          : seen.withVat === null || lineWithVat === null ? null : seen.withVat + lineWithVat,
+        root: seen?.root ?? root,
+      });
+
       if (existing) {
         existing.total += Number(row.totalPrice);
         existing.lineCount += 1;
         existing.unidentified += unidentified;
+        if (row.createdAt.toISOString() > existing.insertedAt) existing.insertedAt = row.createdAt.toISOString();
       } else {
         byDocument.set(key, {
           invoiceNumber: row.invoiceNumber?.trim() || null,
@@ -617,6 +643,10 @@ export async function getInvoices(filters: { search?: string; vendorId?: string;
           vendorId: row.vendor?.id ?? null,
           date: row.invoiceDate ? row.invoiceDate.toISOString().slice(0, 10) : null,
           total: Number(row.totalPrice),
+          gross: null,
+          insertedAt: row.createdAt.toISOString(),
+          mismatch: false,
+          certain: false,
           lineCount: 1,
           unidentified,
           hasImage: false,
@@ -638,8 +668,10 @@ export async function getInvoices(filters: { search?: string; vendorId?: string;
         .filter(Boolean) as string[],
     );
 
+    const keyOf = new Map([...byDocument.entries()].map(([key, invoice]) => [invoice, key]));
     let invoices = [...byDocument.values()].map((invoice) => ({
       ...invoice,
+      key: keyOf.get(invoice) ?? '',
       total: Math.round((invoice.total + Number.EPSILON) * 100) / 100,
       hasImage: invoice.invoiceNumber ? photographed.has(invoice.invoiceNumber) : false,
     }));
@@ -652,13 +684,51 @@ export async function getInvoices(filters: { search?: string; vendorId?: string;
       );
     }
 
-    // Newest first: what arrived last week is what someone is looking for.
-    invoices.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+    // Newest in first: what was just added is what someone is looking for, and
+    // an old invoice photographed today should not sink to the bottom.
+    invoices.sort((a, b) => b.insertedAt.localeCompare(a.insertedAt));
+
+    const shown = invoices.slice(0, PAGE_SIZE * (page + 1));
+    const roots = [...new Set(shown.flatMap((i) => figures.get(i.key)?.root ?? []))];
+    const [entries, linked] = await Promise.all([
+      prisma.costEntry.findMany({
+        where: {
+          restaurantId: owner.restaurantId,
+          deletedAt: null,
+          OR: [{ id: { in: roots } }, { splitFromId: { in: roots } }],
+        },
+        select: { id: true, splitFromId: true, amount: true },
+      }),
+      prisma.receiptScan.findMany({
+        where: { restaurantId: owner.restaurantId, linkedEntryId: { in: roots } },
+        select: { linkedEntryId: true, proofStatus: true, proofResolvedAt: true, extractedData: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+    const costOf = new Map<string, number>();
+    for (const e of entries) {
+      const root = e.splitFromId ?? e.id;
+      costOf.set(root, (costOf.get(root) ?? 0) + Number(e.amount));
+    }
+    const scanOf = new Map(linked.map((s) => [s.linkedEntryId, s]));
 
     return {
       success: true,
       data: {
-        invoices: invoices.slice(0, PAGE_SIZE * (page + 1)),
+        invoices: shown.map(({ key, ...invoice }) => {
+          const { withVat, root } = figures.get(key) ?? { withVat: null, root: null };
+          const gross = root === null ? null : Math.round((costOf.get(root) ?? 0) * 100) / 100;
+          const scan = root === null ? undefined : scanOf.get(root);
+          const issues = (scan?.extractedData as { checks?: { issues?: unknown[] } } | null)?.checks?.issues ?? [];
+          // The owner said to keep it as it is: their answer stands.
+          const settled = scan?.proofStatus === 'accepted' || !!scan?.proofResolvedAt;
+          const linesOff = gross !== null && withVat !== null
+            && Math.abs(withVat - gross) > 0.02 + invoice.lineCount * 0.01;
+          const mismatch = scan?.proofStatus === 'accepted'
+            ? false
+            : linesOff || (!settled && (scan?.proofStatus === 'failed' || issues.length > 0));
+          return { ...invoice, gross, mismatch, certain: scan?.proofStatus === 'proved' && !mismatch && !linesOff };
+        }),
         total: invoices.length,
       },
     };

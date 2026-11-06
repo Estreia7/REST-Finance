@@ -8,7 +8,8 @@ import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
 import { saveInvoiceLines } from '../reconcile-actions';
 import { saveCreditNote } from '../credit-note-actions';
-import { canSaveUnseen } from '@/lib/invoice-checks';
+import { canSaveUnseen, type DocumentIssue } from '@/lib/invoice-checks';
+import ScanIssues, { IssueList } from './ScanIssues';
 import { measureImage, type QualityCheck } from '@/lib/image-quality';
 import { findExistingInvoice } from '../reconcile-actions';
 import DocumentCamera from './DocumentCamera';
@@ -193,6 +194,12 @@ const cameraRef = useRef<HTMLInputElement>(null);
   type Stage = 'idle' | 'camera' | 'editing' | 'tray';
   const [stage, setStage] = useState<Stage>('idle');
   const [captured, setCaptured] = useState<{ frame: HTMLCanvasElement; corners: any } | null>(null);
+  /** Every page of the document on screen, in order. Empty for a single file. */
+  const [docPages, setDocPages] = useState<Array<{ dataUrl: string; qrText: string | null }>>([]);
+  /** The next photograph is another page of the document just read. */
+  const [addingPage, setAddingPage] = useState(false);
+  /** A reading that cannot be trusted, waiting for the owner to decide. */
+  const [doubtful, setDoubtful] = useState<{ reading: ExtractionResult; issues: DocumentIssue[] } | null>(null);
   const [currentPages, setCurrentPages] = useState<ScannedPage[]>([]);
   const [documents, setDocuments] = useState<ScannedDocument[]>([]);
   const [queue, setQueue] = useState<ScannedDocument[]>([]);
@@ -344,6 +351,14 @@ const cameraRef = useRef<HTMLInputElement>(null);
 
   /** The owner accepted a page: it joins the document being built. */
   const handlePageDone = (page: ScannedPage) => {
+    // The next page of a document already read: it joins it, to be read together.
+    if (addingPage) {
+      setDocPages((pages) => [...pages, { dataUrl: page.dataUrl, qrText: page.qrText ?? null }]);
+      setAddingPage(false);
+      setCaptured(null);
+      setStage('idle');
+      return;
+    }
     setCurrentPages((pages) => [...pages, page]);
     setCaptured(null);
     setStage('tray');
@@ -353,7 +368,7 @@ const cameraRef = useRef<HTMLInputElement>(null);
   const foldCurrent = (docs: ScannedDocument[], pages: ScannedPage[]) =>
     pages.length === 0
       ? docs
-      : [...docs, { id: newDocumentId(), pages: pages.map((p) => p.dataUrl) }];
+      : [...docs, { id: newDocumentId(), pages: pages.map((p) => p.dataUrl), qrTexts: pages.map((p) => p.qrText ?? null) }];
 
   const startNewDocument = () => {
     setDocuments((docs) => foldCurrent(docs, currentPages));
@@ -363,8 +378,8 @@ const cameraRef = useRef<HTMLInputElement>(null);
 
   /**
    * Finished scanning. Each document is read on its own, one after another,
-   * because the extraction takes a single image: five invoices photographed in
-   * one sitting are five separate costs, not one.
+   * with all its pages together: five invoices photographed in one sitting are
+   * five separate costs, not one, and two pages of one invoice are one.
    */
   const handleTrayFinish = (docs: ScannedDocument[]) => {
     if (docs.length === 0) { resetCapture(); return; }
@@ -373,7 +388,13 @@ const cameraRef = useRef<HTMLInputElement>(null);
     setStage('idle');
     // The first document is read now; the rest wait their turn.
     setQueue(docs.slice(1));
-    setImagePreview(docs[0].pages[0]);
+    openDocument(docs[0]);
+  };
+
+  /** Brings a document up to be read, every page of it. */
+  const openDocument = (doc: ScannedDocument) => {
+    setDocPages(doc.pages.map((dataUrl, i) => ({ dataUrl, qrText: doc.qrTexts?.[i] ?? null })));
+    setImagePreview(doc.pages[0]);
   };
 
   const resetCapture = () => {
@@ -428,7 +449,13 @@ const cameraRef = useRef<HTMLInputElement>(null);
       const res = await fetch('/api/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64, mediaType, scanType }),
+        body: JSON.stringify({
+          imageBase64: base64,
+          mediaType,
+          scanType,
+          extraPages: docPages.slice(1).map((p) => ({ imageBase64: p.dataUrl.split(',')[1], mediaType: 'image/jpeg' })),
+          qrTexts: docPages.flatMap((p) => (p.qrText ? [p.qrText] : [])),
+        }),
       });
 
       const result = await res.json();
@@ -444,8 +471,12 @@ const cameraRef = useRef<HTMLInputElement>(null);
           lines: reading.items.length,
           checks: reading.checks,
         });
+        const issues = reading.type === 'cost_receipt' ? reading.checks?.issues ?? [] : [];
         if (unseen) {
           await handleConfirmSave(undefined, { data: reading as CostReceiptData, scanId: readId });
+        } else if (issues.length > 0) {
+          // Asked now, with the paper in hand and nothing saved.
+          setDoubtful({ reading, issues });
         } else {
           showReading(reading);
           toast.success(t('scanner.extracted'));
@@ -654,14 +685,16 @@ const cameraRef = useRef<HTMLInputElement>(null);
     setEditData(null);
     setPayment(emptyPaymentDraft());
     setNifEdited(false);
+    setAddingPage(false);
     if (fileRef.current) fileRef.current.value = '';
 
     if (queue.length > 0) {
       const [next, ...rest] = queue;
       setQueue(rest);
-      setImagePreview(next.pages[0]);
+      openDocument(next);
       return;
     }
+    setDocPages([]);
     setImagePreview(null);
     onFinished?.();
   };
@@ -810,8 +843,23 @@ const cameraRef = useRef<HTMLInputElement>(null);
       />
 
 
+      {doubtful && (
+        <ScanIssues
+          issues={doubtful.issues}
+          picture={imagePreview && !imagePreview.startsWith('data:application/pdf') ? imagePreview : null}
+          onRetake={() => { setDoubtful(null); resetState(); openCamera(); }}
+          onAddPage={() => {
+            setDocPages((pages) => (pages.length || !imagePreview ? pages : [{ dataUrl: imagePreview, qrText: null }]));
+            setDoubtful(null);
+            setAddingPage(true);
+            openCamera();
+          }}
+          onContinue={() => { showReading(doubtful.reading); setDoubtful(null); }}
+        />
+      )}
+
       {/* Image preview */}
-      {imagePreview && !extracted && (
+      {imagePreview && !extracted && !doubtful && (
         <div className="space-y-4">
           <div className="relative rounded-xl overflow-hidden border border-border">
             {imagePreview.startsWith('data:application/pdf') ? (
@@ -846,6 +894,12 @@ const cameraRef = useRef<HTMLInputElement>(null);
                 {t(`quality.${quality.reason ?? 'blurry'}`)}
               </span>
             </div>
+          )}
+
+          {docPages.length > 1 && (
+            <p className="text-xs font-medium text-muted-foreground">
+              {t('scanIssues.pages').replace('{n}', String(docPages.length))}
+            </p>
           )}
 
           <div className="flex gap-3">
@@ -976,6 +1030,11 @@ const cameraRef = useRef<HTMLInputElement>(null);
                       {t('proof.willConfirm')}
                     </p>
                   ) : null}
+                  {!!(editData as CostReceiptData).checks?.issues?.length && (
+                    <div className="rounded-lg bg-warning/10 px-3 py-2">
+                      <IssueList issues={(editData as CostReceiptData).checks?.issues ?? []} />
+                    </div>
+                  )}
                   <div className="text-xs text-muted-foreground">{t('scanner.items')}</div>
                   {(editData as CostReceiptData).items.map((item, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs bg-muted rounded-lg p-2">

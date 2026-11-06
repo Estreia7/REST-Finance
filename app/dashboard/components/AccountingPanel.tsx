@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useDeferredValue } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Search, FileText, Link2, Check, AlertTriangle, Eye, Trash2, Building2, Pencil, SlidersHorizontal } from 'lucide-react';
+import { Loader2, Search, FileText, Link2, Check, AlertTriangle, Eye, Trash2, Building2, Pencil, SlidersHorizontal, CheckCircle2 } from 'lucide-react';
 import {
   getInvoiceLines,
   getInvoices,
@@ -796,6 +796,8 @@ function InvoiceList() {
                       ? new Date(invoice.date).toLocaleDateString(locale)
                       : '—'}
                     {' · '}
+                    {t('accounting.insertedOn').replace('{date}', new Date(invoice.insertedAt).toLocaleDateString(locale))}
+                    {' · '}
                     {t('accounting.lineCount').replace('{n}', String(invoice.lineCount))}
                     {/* Only where there is work left: a count of zero is not
                         news, and every invoice would carry one. */}
@@ -806,12 +808,39 @@ function InvoiceList() {
                       </span>
                     )}
                   </p>
+                  {invoice.mismatch && invoice.invoiceNumber && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewing({ number: invoice.invoiceNumber!, deleting: false })}
+                      className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-danger/10 px-2 py-0.5 text-[11px] font-semibold text-danger hover:bg-danger/20 transition-colors"
+                    >
+                      <AlertTriangle className="w-3 h-3" aria-hidden="true" />
+                      {t('accounting.doesNotMatch')}
+                    </button>
+                  )}
+                  {invoice.certain && (
+                    <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
+                      <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
+                      {t('accounting.fullyProved')}
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-sm font-bold text-foreground tabular-nums">
-                    {formatMoney(invoice.total)}
-                  </span>
+                  <dl className="text-right tabular-nums">
+                    {invoice.gross !== null && (
+                      <div className="flex items-baseline justify-end gap-1.5">
+                        <dt className="text-[10px] text-muted-foreground">{t('accounting.withVat')}</dt>
+                        <dd className="text-sm font-bold text-foreground">{formatMoney(invoice.gross)}</dd>
+                      </div>
+                    )}
+                    <div className="flex items-baseline justify-end gap-1.5">
+                      <dt className="text-[10px] text-muted-foreground">{t('accounting.withoutVat')}</dt>
+                      <dd className={invoice.gross === null ? 'text-sm font-bold text-foreground' : 'text-xs text-muted-foreground'}>
+                        {formatMoney(invoice.total)}
+                      </dd>
+                    </div>
+                  </dl>
                   {invoice.invoiceNumber && (
                     <>
                       <button

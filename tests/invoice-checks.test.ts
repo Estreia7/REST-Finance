@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { checkReading,
-  canSaveUnseen, betterProof, rereadHint, type CheckedReading, settleVat, settleFigures, isDiscountNote } from '@/lib/invoice-checks';
+  canSaveUnseen, betterProof, rereadHint, type CheckedReading, settleVat, settleFigures, isDiscountNote, documentIssues } from '@/lib/invoice-checks';
 import { parseInvoiceQr } from '@/lib/pt-invoice-qr';
 
 // A wholesale invoice with fictional identifiers: 0,905 kg of mushrooms at 3,69 the kilo.
@@ -269,5 +269,110 @@ describe('checkReading', () => {
     const proof = checkReading({ items, grandTotal: 99 }, { taxes: [{ rate: 6, base: 10, tax: 0.6 }] });
     expect(proof.status).toBe('failed');
     expect(proof.problems.some((p) => p.kind === 'total')).toBe(true);
+  });
+});
+
+describe('documentIssues', () => {
+  const clean = {
+    reading: {
+      items: [{ quantity: 1, unitPrice: 10, total: 10, vatRate: 6 }],
+      grandTotal: 10.6,
+      vatSummary: [{ rate: 6, base: 10, tax: 0.6 }],
+      qrVisible: true,
+      pagesTotal: 0,
+      continuesOnNextPage: false,
+      totalVisible: true,
+      covered: false,
+      cutOff: false,
+    },
+    proof: checkReading({ items: [{ quantity: 1, unitPrice: 10, total: 10, vatRate: 6 }], grandTotal: 10.6 }, { taxes: [{ rate: 6, base: 10, tax: 0.6 }] }),
+    qrRead: true,
+    qrTotal: 10.6,
+    printedTotal: 10.6,
+    pages: 1,
+    isPdf: false,
+  };
+  const kinds = (input: Parameters<typeof documentIssues>[0]) => documentIssues(input).map((i) => i.kind);
+
+  it('finds nothing on an invoice the QR proves', () => {
+    expect(kinds(clean)).toEqual([]);
+  });
+
+  it('asks again when the print and the QR disagree, even if the lines fit', () => {
+    expect(kinds({ ...clean, printedTotal: 9.6 })).toEqual(['totalVsQr']);
+  });
+
+  it('does not compare a total nobody could see', () => {
+    expect(kinds({ ...clean, printedTotal: 9.6, reading: { ...clean.reading, totalVisible: false } })).toEqual([]);
+  });
+
+  it('forgives a covered corner when the QR proved everything', () => {
+    expect(kinds({ ...clean, reading: { ...clean.reading, covered: true, cutOff: true } })).toEqual([]);
+  });
+
+  it('asks for the QR when one is printed and could not be read', () => {
+    expect(kinds({ ...clean, qrRead: false, qrTotal: null, proof: null })).toEqual(['qrUnread']);
+  });
+
+  it('does not ask a PDF for a QR', () => {
+    expect(kinds({ ...clean, qrRead: false, qrTotal: null, proof: null, isPdf: true })).toEqual([]);
+  });
+
+  it('holds the total against the printed VAT table with no QR at all', () => {
+    const reading = { ...clean.reading, qrVisible: false, grandTotal: 219.94, vatSummary: [{ rate: 6, base: 205.26, tax: 26.15 }] };
+    const issues = documentIssues({ ...clean, reading, qrRead: false, qrTotal: null, proof: null });
+    expect(issues[0]).toEqual({ kind: 'totalVsVatTable', expected: 231.41, found: 219.94 });
+  });
+
+  it('sees a page that carries on to the next one, and lines over the total', () => {
+    const reading = {
+      ...clean.reading,
+      items: [{ quantity: 1, unitPrice: 54.96, total: 54.96, vatRate: 6 }],
+      grandTotal: 45.98,
+      vatSummary: [],
+      qrVisible: false,
+      continuesOnNextPage: true,
+      covered: true,
+    };
+    const found = kinds({ ...clean, reading, qrRead: false, qrTotal: null, printedTotal: 45.98, proof: null });
+    expect(found).toEqual(['missingPages', 'covered', 'doesNotAddUp']);
+  });
+
+  it('counts the pages it was given', () => {
+    const reading = { ...clean.reading, pagesTotal: 2, qrVisible: false };
+    const unproved = { ...clean, reading, qrRead: false, qrTotal: null, proof: null };
+    expect(kinds(unproved)).toContain('missingPages');
+    expect(kinds({ ...unproved, pages: 2 })).not.toContain('missingPages');
+  });
+
+  it('will not call anything verified with no figures to go on', () => {
+    const reading = { ...clean.reading, qrVisible: false, vatSummary: [], items: [{ quantity: 1, unitPrice: 10, total: 10, vatRate: null }] };
+    expect(kinds({ ...clean, reading, qrRead: false, qrTotal: null, proof: null })).toEqual(['cannotVerify']);
+  });
+});
+
+describe('settleFigures with a discount', () => {
+  const line = (productName: string, total: number, vatRate: number) =>
+    ({ productName, quantity: 2, unitPrice: total / 2, total, vatRate });
+  const truth = [{ rate: 6, base: 90, tax: 5.4 }, { rate: 23, base: 95, tax: 21.85 }];
+
+  it('shares it out so each rate lands on what the invoice states', () => {
+    const lines = [line('A', 60, 6), line('B', 40, 6), line('C', 100, 23)];
+    const result = settleFigures(lines, truth, 15);
+    expect(result?.discounted).toBe(true);
+    expect(result?.totals).toEqual([54, 36, 95]);
+    expect(result?.unitPrices[0]).toBe(27);
+  });
+
+  it('proves against the QR once shared out', () => {
+    const lines = [line('A', 60, 6), line('B', 40, 6), line('C', 100, 23)];
+    const result = settleFigures(lines, truth, 15)!;
+    const items = lines.map((l, i) => ({ ...l, total: result.totals[i], unitPrice: result.unitPrices[i], grossTotal: result.grossTotals[i] }));
+    expect(checkReading({ items, grandTotal: 212.25 }, { taxes: truth }).status).toBe('proved');
+  });
+
+  it('will not invent a discount the figures do not show', () => {
+    const lines = [line('A', 60, 6), line('C', 100, 23)];
+    expect(settleFigures(lines, truth, 15)?.discounted).toBeFalsy();
   });
 });

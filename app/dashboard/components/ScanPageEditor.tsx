@@ -14,6 +14,7 @@ import {
   type Rotation,
   type ScanFilter,
 } from '@/lib/scan-image';
+import { readQrText } from '@/lib/browser-qr';
 
 /**
  * What the owner does with a photograph once it has been taken: straighten the
@@ -45,6 +46,8 @@ interface Corners {
 export interface ScannedPage {
   dataUrl: string;
   thumbnail: string;
+  /** What the QR said, read off the original before any crop or filter. */
+  qrText?: string | null;
 }
 
 export interface ScanPageEditorProps {
@@ -110,6 +113,10 @@ export default function ScanPageEditor({
 
   const cropHostRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLImageElement>(null);
+  /** Started at once on the untouched photograph, so it is done by the time the page is. */
+  const qrRef = useRef<Promise<string | null>>(Promise.resolve(null));
+  useEffect(() => { qrRef.current = readQrText(frame); }, [frame]);
+
   /** The downscaled, unfiltered copy every preview is drawn from. */
   const previewSourceRef = useRef<HTMLCanvasElement | null>(null);
   /** The object URL currently in the preview, so it can be revoked. */
@@ -303,15 +310,16 @@ export default function ScanPageEditor({
   const handleConfirm = useCallback(() => {
     setBusy(true);
     setError(null);
+    const qr = qrRef.current;
 
     // Yielded to the browser so the spinner actually paints before the main
     // thread disappears into a multi-megapixel filter pass.
-    requestAnimationFrame(() => {
+    requestAnimationFrame(async () => {
       try {
         const dataUrl = finishPage(page, rotation, filter);
         const small = limitSize(rotateCanvas(page, rotation), THUMBNAIL_EDGE);
         const thumbnail = toDataUrl(filterCanvas(small, filter), 0.7);
-        onDone({ dataUrl, thumbnail });
+        onDone({ dataUrl, thumbnail, qrText: await qr });
       } catch {
         setError(t('scanEditor.saveFailed'));
         setBusy(false);

@@ -18,6 +18,7 @@
  * database, and cannot be answered synchronously.
  */
 
+import type { DocumentIssue } from '@/lib/invoice-checks';
 import type { Proof } from './invoice-checks';
 
 // ─── Shared Types (the contract both this app and the external API follow) ───
@@ -53,6 +54,12 @@ export interface ScanCategory {
   type: 'COGS' | 'OPEX';
 }
 
+/** One more page of a document, as sent to the reader. */
+export interface ScanPage {
+  base64: string;
+  mediaType: MediaType;
+}
+
 export interface CostReceiptResult {
   type: 'cost_receipt';
   date: string; // YYYY-MM-DD
@@ -63,6 +70,20 @@ export interface CostReceiptResult {
   grandTotal: number;
   /** The VAT table printed on the document. */
   vatSummary?: Array<{ rate: number; base: number; tax: number }>;
+  /** A QR code is printed on the document. */
+  qrVisible?: boolean;
+  /** "Pág. 1/2" says 2; zero when no count is printed. */
+  pagesTotal?: number;
+  /** Ends in "Transporte" or the like, with no final totals. */
+  continuesOnNextPage?: boolean;
+  /** The amount payable is printed and legible. */
+  totalVisible?: boolean;
+  /** Something lies over the document: a payment slip, a finger, a fold. */
+  covered?: boolean;
+  /** Part of the document is outside the photograph. */
+  cutOff?: boolean;
+  /** "Desconto total": what the document says was taken off. Zero when none. */
+  discountTotal?: number;
   suggestedType: 'COGS' | 'OPEX';
   suggestedCategory: string;
   /** What the app checked after reading. Added by the scan route. */
@@ -89,6 +110,10 @@ export interface ScanChecks {
   proof?: Proof;
   /** A credit note is money coming back, and must not be booked as a cost. */
   creditNote?: boolean;
+  /** The total as printed, before the QR's took its place. */
+  printedTotal?: number | null;
+  /** Why this reading cannot be trusted as it stands. See lib/invoice-checks.ts. */
+  issues?: DocumentIssue[];
 }
 
 export interface DailyReportResult {
@@ -123,6 +148,8 @@ export async function scanDocument(
     model?: string;
     /** What the first reading got wrong, told to the second. */
     hint?: string;
+    /** The pages after the first. */
+    extraPages?: ScanPage[];
   } = {},
 ): Promise<ScanResult> {
   const apiUrl = process.env.DOCUMENT_SCANNER_API_URL;

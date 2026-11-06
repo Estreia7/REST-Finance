@@ -44,7 +44,7 @@ export default function InvoicePreview({
   startConfirmingDelete?: boolean;
 }) {
   const { t } = useLanguage();
-  const [image, setImage] = useState<{ imagePath: string; scannedAt: string } | null | 'loading'>('loading');
+  const [image, setImage] = useState<{ imagePath: string; pagePaths: string[]; scannedAt: string } | null | 'loading'>('loading');
   const [confirming, setConfirming] = useState(startConfirmingDelete);
   const [busy, setBusy] = useState(false);
   // Correcting who the invoice is from, over the page itself.
@@ -138,11 +138,16 @@ export default function InvoicePreview({
               </p>
             </div>
           ) : (
-            <ZoomableImage
-              src={`/api/images/${image.imagePath}`}
-              alt={t('accounting.previewTitle')}
-              className="w-full rounded-xl border border-border-subtle bg-black/20"
-            />
+            <div className="space-y-3">
+              {[image.imagePath, ...image.pagePaths].map((path) => (
+                <ZoomableImage
+                  key={path}
+                  src={`/api/images/${path}`}
+                  alt={t('accounting.previewTitle')}
+                  className="w-full rounded-xl border border-border-subtle bg-black/20"
+                />
+              ))}
+            </div>
           )}
         </div>
 

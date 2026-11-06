@@ -40,7 +40,7 @@ export const SCANNER_RETRY_MODEL = 'claude-opus-5-5';
  * prompt change rather than guessed at. Date-stamped rather than numbered:
  * the question asked later is always "what were we sending in September?".
  */
-export const PROMPT_VERSION = '2026-11-06.1';
+export const PROMPT_VERSION = '2026-11-06.2';
 
 /**
  * Room for the answer. A long cash-and-carry invoice runs to forty lines, and
@@ -101,7 +101,9 @@ Rules that matter for Portuguese documents:
 - On Makro invoices the last columns of each line hold a VAT code ("IvaCD"), not a percentage: code 2 is 23%, code 4 is 6%, code 5 is 13%. Read it from that line, never from the lines around it.
 - Copy the VAT table at the foot of the invoice into vatSummary, one entry per rate with its base ("Incidência") and tax ("Imposto"/"Valor IVA").
 - Do not skip lines. A deposit ("tara", "vasilhame"), an eco-tax, a delivery fee, or a discount printed as its own row among the products, is still a line.
-- "Desconto total", "Total descontos" and the like in the totals block at the foot are NOT lines. They only tell the customer what was saved, and the line values already include it. Never report them as a line.
+- "Desconto total", "Total descontos" and the like in the totals block at the foot are NOT lines. Never report them as a line: report the figure in discountTotal.
+- When a line has a discount of its own printed beside or beneath it, the line's total is the value AFTER that discount, so the lines add up to "Total s/ IVA".
+- "Transporte", "A transportar" and "Saldo transportado" are a running subtotal carried to the next page, never the invoice's total. If the final total is not on what you were given, set totalVisible to false and do not work one out from the lines.
 - EVERY Portuguese invoice carries a document number, by law. Find it. It sits near the top, after a label like "Fatura", "Fatura Simplificada", "FT", "FS", "FR", "Documento n." or "Nº", and usually looks like PREFIX SERIES/NUMBER — for example "FS 4055TPV2/260014357" or "FR U005/267376". Copy the whole thing, exactly as printed. Do not drop the prefix, do not drop the series in the middle, and do not return only the digits after the slash. If the label and the number are on different lines, they still belong together.
 
 Read only what is printed. If a field is not on the page, omit it rather than inferring it — a missing invoice number is useful information, an invented one is not. If the photograph is too unclear to read a figure, omit that figure instead of guessing at it.`;
@@ -201,6 +203,25 @@ const COST_RECEIPT_SCHEMA = {
         additionalProperties: false,
       },
     },
+    qrVisible: { type: 'boolean', description: 'A QR code is printed on the document, even if it could not be read.' },
+    pagesTotal: {
+      type: 'number',
+      description: 'How many pages the document says it has ("Pág. 1/2" is 2). Zero when no page count is printed.',
+    },
+    continuesOnNextPage: {
+      type: 'boolean',
+      description: 'The last page shown ends in "Transporte", "A transportar" or similar with no final totals: pages are missing.',
+    },
+    totalVisible: { type: 'boolean', description: 'The amount payable is printed and legible on what you were given.' },
+    covered: {
+      type: 'boolean',
+      description: 'Something lies over the document and hides print: a payment slip, a finger, a fold.',
+    },
+    cutOff: { type: 'boolean', description: 'Part of the document is outside the photograph.' },
+    discountTotal: {
+      type: 'number',
+      description: 'The "Desconto total" in the totals block, as a positive number. Zero when none is printed.',
+    },
     suggestedType: {
       type: 'string',
       enum: ['COGS', 'OPEX'],
@@ -216,6 +237,7 @@ const COST_RECEIPT_SCHEMA = {
   // was optional here, and the model duly left it out.
   required: [
     'date', 'vendor', 'invoiceNumber', 'items', 'grandTotal',
+    'qrVisible', 'pagesTotal', 'continuesOnNextPage', 'totalVisible', 'covered', 'cutOff', 'discountTotal',
     'suggestedType', 'suggestedCategory',
   ],
   additionalProperties: false,
@@ -345,6 +367,8 @@ export async function claudeScan(
     model?: string;
     /** Added to the message: what a first reading got wrong. */
     hint?: string;
+    /** The pages after the first, all sent together as one document. */
+    extraPages?: Array<{ base64: string; mediaType: MediaType }>;
   } = {},
 ): Promise<ClaudeScanOutcome> {
   const client = new Anthropic({ apiKey });
@@ -380,7 +404,19 @@ export async function claudeScan(
           mediaType === 'application/pdf'
             ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: imageBase64 } }
             : { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
-          { type: 'text', text: USER_PROMPT[scanType] + customerNote(isReceipt ? options.customer : undefined) + (options.hint ?? '') },
+          ...(options.extraPages ?? []).map((page) => ({
+            type: 'image' as const,
+            source: { type: 'base64' as const, media_type: page.mediaType as 'image/jpeg', data: page.base64 },
+          })),
+          {
+            type: 'text',
+            text: USER_PROMPT[scanType]
+              + (options.extraPages?.length
+                ? ` These ${options.extraPages.length + 1} images are the pages of ONE document, in order: report it once, with the lines of every page.`
+                : '')
+              + customerNote(isReceipt ? options.customer : undefined)
+              + (options.hint ?? ''),
+          },
         ],
       },
     ],

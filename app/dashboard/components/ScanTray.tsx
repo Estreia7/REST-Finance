@@ -24,12 +24,15 @@ import { useLanguage } from '@/lib/language-context';
 export interface ScannedDocument {
   id: string;
   pages: string[];
+  /** What each page's QR said, where one was read off the original. */
+  qrTexts?: Array<string | null>;
 }
 
 /** A page as the editor hands it over. */
 export interface ScanTrayPage {
   dataUrl: string;
   thumbnail: string;
+  qrText?: string | null;
 }
 
 export interface ScanTrayProps {
@@ -78,7 +81,11 @@ export default function ScanTray({
     // The document in progress is a real document; it just has not been closed
     // off yet. Dropping it here would silently lose the last invoice scanned.
     const all = currentPages.length
-      ? [...documents, { id: newDocumentId(), pages: currentPages.map((page) => page.dataUrl) }]
+      ? [...documents, {
+          id: newDocumentId(),
+          pages: currentPages.map((page) => page.dataUrl),
+          qrTexts: currentPages.map((page) => page.qrText ?? null),
+        }]
       : documents;
     onFinish(all);
   }, [documents, currentPages, onFinish]);

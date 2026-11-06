@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, Check, CheckCircle2, Loader2, Plus, RotateCcw, Trash2, Wand2, X } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, FilePlus2, Loader2, Plus, RotateCcw, Trash2, Wand2, X } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
 import { translateError } from '@/lib/error-messages';
@@ -16,8 +16,13 @@ import { INVOICE_UNITS, invoiceUnit,
   toPack,
   type PackUnit,
 } from '@/lib/line-setup';
+import { limitSize, toDataUrl } from '@/lib/scan-image';
+import { readQrText } from '@/lib/browser-qr';
+import { loadFrameFromFile } from '@/lib/detect-in-file';
 import ZoomableImage from './ZoomableImage';
+import { IssueList } from './ScanIssues';
 import {
+  adoptDocumentTotal,
   getInvoiceForProof,
   rereadInvoice,
   saveInvoiceProof,
@@ -55,13 +60,14 @@ type Row = Omit<ProofLine, 'quantity' | 'unitPrice' | 'total' | 'vatRate' | 'pac
 const num = (value: string) => Number(value.replace(',', '.'));
 
 /** The rates the invoice's own figures call for, or null when none fit. */
-function settledRows(rows: Row[], truth: TaxTruth[]) {
-  const result = settleFigures(rows.map(toLine), truth);
+function settledRows(rows: Row[], truth: TaxTruth[], discount: number) {
+  const result = settleFigures(rows.map(toLine), truth, discount);
   if (!result) return null;
   return {
     changed: result.changed,
     dropped: result.drop.length > 0,
     vatIncluded: result.vatIncluded,
+    discounted: !!result.discounted,
     rows: rows.flatMap((r, i) => {
       if (result.drop.includes(i)) return [];
       const rate = result.rates[i];
@@ -133,19 +139,20 @@ export default function InvoiceProofEditor({
   const [saving, setSaving] = useState(false);
   const [rereading, setRereading] = useState(false);
 
-  const tell = (result: { changed: number; dropped: boolean; vatIncluded: boolean }) => {
+  const tell = (result: { changed: number; dropped: boolean; vatIncluded: boolean; discounted: boolean }) => {
     if (result.vatIncluded) toast.info(t('proof.vatIncluded'));
+    else if (result.discounted) toast.info(t('proof.discountShared'));
     else if (result.changed > 0) toast.info(t('proof.settled').replace('{count}', String(result.changed)));
     if (result.dropped) toast.info(t('proof.discountDropped'));
   };
 
   /** Rows as they should open: nobody corrects by hand what the figures settle. */
-  const openSettled = (loaded: Row[], figures: TaxTruth[]) => {
+  const openSettled = (loaded: Row[], figures: TaxTruth[], discount: number) => {
     const lines = loaded.map(toLine);
     const check = checkReading({ items: lines, grandTotal: 0, vatSummary: figures }, null);
     const onlyRates = check.problems.some((p) => p.kind === 'band' || p.kind === 'noRate')
       && !check.problems.some((p) => p.kind === 'line');
-    const result = onlyRates ? settledRows(loaded, figures) : null;
+    const result = onlyRates ? settledRows(loaded, figures, discount) : null;
     if (!result) return loaded;
     tell(result);
     return result.rows;
@@ -168,7 +175,7 @@ export default function InvoiceProofEditor({
       }
       setInvoice(result.data);
       setTruth(result.data.truth);
-      setRows(openSettled(result.data.lines.map(toRow), result.data.truth));
+      setRows(openSettled(result.data.lines.map(toRow), result.data.truth, result.data.discountTotal));
     });
     return () => { stale = true; };
   }, [invoiceNumber, language]);
@@ -195,7 +202,7 @@ export default function InvoiceProofEditor({
 
   /** Works the rates out again, after a value has been corrected by hand. */
   const settle = () => {
-    const result = settledRows(rows, truth);
+    const result = settledRows(rows, truth, invoice?.discountTotal ?? 0);
     if (!result) {
       toast.error(t('proof.settleFailed'));
       return;
@@ -204,18 +211,58 @@ export default function InvoiceProofEditor({
     tell(result);
   };
 
-  const reread = async () => {
+  const reread = async (qrText?: string | null) => {
     setRereading(true);
-    const result = await rereadInvoice(invoiceNumber);
+    const result = await rereadInvoice(invoiceNumber, qrText);
     setRereading(false);
     if ('error' in result) {
       toast.error(translateError(language, result.error ?? 'proof.errors.reread'));
       return;
     }
     const figures = result.data.truth.length ? result.data.truth : truth;
-    setRows(openSettled(result.data.lines.map(toRow), figures));
+    setRows(openSettled(result.data.lines.map(toRow), figures, result.data.discountTotal));
     if (result.data.truth.length) setTruth(result.data.truth);
+    setInvoice((was) => was && { ...was, issues: result.data.issues, discountTotal: result.data.discountTotal });
     toast.info(t('proof.rereadDone'));
+  };
+
+  /** Another page of this invoice: kept, then everything is read again. */
+  const addPage = async (file: File) => {
+    setRereading(true);
+    try {
+      const { frame } = await loadFrameFromFile(file);
+      const qrText = await readQrText(frame);
+      const dataUrl = toDataUrl(limitSize(frame));
+      const response = await fetch('/api/invoices/page', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceNumber, imageBase64: dataUrl.split(',')[1] }),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        toast.error(translateError(language, body.error ?? 'proof.errors.save'));
+        setRereading(false);
+        return;
+      }
+      setInvoice((was) => was && { ...was, pagePaths: [...was.pagePaths, body.path] });
+      await reread(qrText);
+    } catch {
+      toast.error(t('proof.errors.save'));
+      setRereading(false);
+    }
+  };
+
+  /** Takes the document's own total, on the owner's word. */
+  const adoptTotal = async () => {
+    setSaving(true);
+    const result = await adoptDocumentTotal({ invoiceNumber, truth });
+    setSaving(false);
+    if ('error' in result) {
+      toast.error(translateError(language, result.error ?? 'proof.errors.save'));
+      return;
+    }
+    setInvoice((was) => was && { ...was, grandTotal: result.data.total });
+    toast.success(t('proof.totalAdopted'));
   };
 
   const save = async (accept: boolean) => {
@@ -249,6 +296,7 @@ export default function InvoiceProofEditor({
     ...b,
     found: rows.map(toLine).filter((l) => l.vatRate === b.rate).reduce((sum, l) => sum + l.total, 0),
   }));
+  const documentTotal = Math.round(truth.reduce((sum, b) => sum + b.base + b.tax, 0) * 100) / 100;
   const allBands = bands.reduce(
     (sum, b) => ({ base: sum.base + b.base, tax: sum.tax + b.tax, found: sum.found + b.found }),
     { base: 0, tax: 0, found: 0 },
@@ -279,11 +327,16 @@ export default function InvoiceProofEditor({
     <div className="grid gap-5 lg:grid-cols-2">
       <div className="min-w-0">
         {invoice.imagePath && !invoice.imagePath.endsWith('.pdf') ? (
-          <ZoomableImage
-            src={`/api/images/${invoice.imagePath}`}
-            alt={t('proof.imageAlt').replace('{number}', invoice.invoiceNumber)}
-            className="w-full rounded-xl border border-border-subtle lg:max-h-[75vh] lg:object-contain"
-          />
+          <div className="space-y-3">
+            {[invoice.imagePath, ...invoice.pagePaths].map((path) => (
+              <ZoomableImage
+                key={path}
+                src={`/api/images/${path}`}
+                alt={t('proof.imageAlt').replace('{number}', invoice.invoiceNumber)}
+                className="w-full rounded-xl border border-border-subtle lg:max-h-[75vh] lg:object-contain"
+              />
+            ))}
+          </div>
         ) : invoice.imagePath ? (
           <a href={`/api/images/${invoice.imagePath}`} target="_blank" rel="noreferrer" className="text-sm font-semibold text-primary-ink underline">
             {t('proof.openPdf')}
@@ -317,6 +370,25 @@ export default function InvoiceProofEditor({
                 : adriftMessage()}
           </span>
         </div>
+
+        {invoice.issues.length > 0 && (
+          <div className="rounded-lg bg-warning/10 px-3 py-2">
+            <IssueList issues={invoice.issues} />
+          </div>
+        )}
+
+        {canCheck && Math.abs(documentTotal - invoice.grandTotal) > 0.01 && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-foreground">
+            <span>
+              {t('proof.totalDiffers')
+                .replace('{document}', formatMoney(documentTotal))
+                .replace('{saved}', formatMoney(invoice.grandTotal))}
+            </span>
+            <button type="button" onClick={adoptTotal} disabled={saving} className="cta-button !py-1.5 !px-3 !text-xs disabled:opacity-40">
+              {t('proof.adoptTotal').replace('{amount}', formatMoney(documentTotal))}
+            </button>
+          </div>
+        )}
 
         {canCheck && (
           <div className="space-y-2">
@@ -534,7 +606,7 @@ export default function InvoiceProofEditor({
           {invoice.imagePath && (
             <button
               type="button"
-              onClick={reread}
+              onClick={() => reread()}
               disabled={rereading}
               className="cta-button-secondary !py-2.5 !px-4 !text-sm disabled:opacity-40"
             >
@@ -543,6 +615,22 @@ export default function InvoiceProofEditor({
                 : <RotateCcw className="w-4 h-4" aria-hidden="true" />}
               {t('proof.reread')}
             </button>
+          )}
+          {invoice.imagePath && !invoice.imagePath.endsWith('.pdf') && (
+            <label className={`cta-button-secondary !py-2.5 !px-4 !text-sm cursor-pointer ${rereading ? 'opacity-40 pointer-events-none' : ''}`}>
+              <FilePlus2 className="w-4 h-4" aria-hidden="true" />
+              {t('scanIssues.addPage')}
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) void addPage(file);
+                }}
+              />
+            </label>
           )}
           {onLater && (
             <button type="button" onClick={onLater} className="cta-button-secondary !py-2.5 !px-4 !text-sm">

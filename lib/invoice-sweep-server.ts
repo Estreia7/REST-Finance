@@ -32,6 +32,7 @@ export async function settleSavedFigures(
   invoiceNumber: string,
   truth: TaxTruth[],
   vendorId?: string | null,
+  discount = 0,
 ): Promise<boolean> {
   if (truth.length === 0) return false;
   try {
@@ -51,7 +52,7 @@ export async function settleSavedFigures(
     const proof = checkReading({ items: lines, grandTotal: 0, vatSummary: truth }, null);
     if (proof.problems.some((p) => p.kind === 'line')) return false;
 
-    const settled = settleFigures(lines, truth);
+    const settled = settleFigures(lines, truth, discount);
     if (!settled || settled.drop.length > 0) return false;
 
     await prisma.$transaction(async (tx) => {
@@ -69,7 +70,7 @@ export async function settleSavedFigures(
           },
         });
       }
-      if (settled.vatIncluded) {
+      if (settled.vatIncluded || settled.discounted) {
         const entries = new Set(items.flatMap((i) => (i.costEntryId ? [i.costEntryId] : [])));
         for (const costEntryId of entries) await rebalanceInvoice(tx, { restaurantId, costEntryId, userId });
       }
@@ -79,7 +80,7 @@ export async function settleSavedFigures(
       });
     }, { timeout: 30_000 });
     // What a kilo really cost has changed, and so has the ingredient.
-    if (settled.vatIncluded) await repriceIngredients(restaurantId);
+    if (settled.vatIncluded || settled.discounted) await repriceIngredients(restaurantId);
     return true;
   } catch {
     // It stays as it was, where the owner can still settle it.
@@ -102,6 +103,7 @@ export async function sweepInvoice(scanId: string): Promise<SweepOutcome> {
 
   const data = (scan.extractedData ?? {}) as {
     vatSummary?: TaxTruth[] | null;
+    discountTotal?: number;
     checks?: { proof?: Proof; creditNote?: boolean } & Record<string, unknown>;
   } & Record<string, unknown>;
   if (data.checks?.creditNote) return 'noFigures';
@@ -111,8 +113,7 @@ export async function sweepInvoice(scanId: string): Promise<SweepOutcome> {
 
   const stored = data.checks?.proof?.truth?.length ? data.checks.proof.truth : null;
   const qr = stored ? null : await readStoredQr(scan.imageUrl);
-  const truth = stored ?? (qr?.taxes?.length ? qr.taxes : null) ?? (data.vatSummary?.length ? data.vatSummary : null);
-  if (!truth) return 'noFigures';
+  const truth = stored ?? (qr?.taxes?.length ? qr.taxes : null) ?? (data.vatSummary?.length ? data.vatSummary : null) ?? [];
   const fromRecord = data.checks?.proof?.source === 'qr' || !!qr?.taxes?.length;
 
   const { restaurantId, userId } = scan;
@@ -146,14 +147,18 @@ export async function sweepInvoice(scanId: string): Promise<SweepOutcome> {
   );
 
   if (proof.problems.length === 0) {
+    // Lines that reach the total prove arithmetic, not the document: with no
+    // figures of its own it stays uncounted either way.
+    if (truth.length === 0) return 'noFigures';
     await prisma.receiptScan.update({ where: { id: scan.id }, data: { proofStatus: proof.status } });
     return 'right';
   }
 
   // The cost itself disagrees with the document: no line can answer that.
   const documentTotal = truth.reduce((sum, b) => sum + b.base + b.tax, 0);
-  const costMatches = Math.abs(documentTotal - grandTotal) <= 0.05;
-  if (costMatches && await settleSavedFigures({ restaurantId, userId }, scan.id, number, truth, entry.vendorId)) {
+  const costMatches = truth.length > 0 && Math.abs(documentTotal - grandTotal) <= 0.05;
+  const discount = data.discountTotal ?? 0;
+  if (costMatches && await settleSavedFigures({ restaurantId, userId }, scan.id, number, truth, entry.vendorId, discount)) {
     return 'fixed';
   }
 

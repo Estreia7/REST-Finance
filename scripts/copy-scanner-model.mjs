@@ -42,6 +42,13 @@ const model = copyInto(
   /\.(ort|wasm|mjs)$/,
 );
 
+// The QR decoder's WebAssembly, for the same reason: its default is a public CDN.
+copyInto(
+  join(root, 'node_modules', 'zxing-wasm', 'dist', 'reader'),
+  join(root, 'public', 'scanner'),
+  /\.wasm$/,
+);
+
 if (model === null) {
   // Not an error: the app falls back to the classical detector, which needs
   // nothing extra. Failing the build here would block a deploy over an

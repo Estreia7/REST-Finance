@@ -90,6 +90,13 @@ export const scanRequestSchema = z.object({
   imageBase64: z.string().min(100, 'Imagem inválida').max(10_000_000, 'Imagem demasiado grande (max 7.5MB)'),
   mediaType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], { message: 'Formato de imagem inválido' }),
   scanType: z.enum(['COST_RECEIPT', 'DAILY_REPORT'], { message: 'Tipo de scan inválido' }),
+  /** The pages after the first, in order. */
+  extraPages: z.array(z.object({
+    imageBase64: z.string().min(100).max(10_000_000),
+    mediaType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  })).max(5).optional(),
+  /** What the QR said on the original photographs, read in the browser. */
+  qrTexts: z.array(z.string().max(4000)).max(6).optional(),
 });
 
 // === Helper to format Zod errors ===

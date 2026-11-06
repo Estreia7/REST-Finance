@@ -35,9 +35,35 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.06.03';
+export const CHANGELOG_VERSION = '2026.11.06.04';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.06.04',
+    date: '2026-11-06',
+    entries: [
+      {
+        kind: 'fix',
+        title: 'As faturas com várias páginas são lidas por inteiro',
+        detail: 'Antes só a primeira página era lida. Agora todas contam, e pode acrescentar uma página a uma fatura já guardada.',
+      },
+      {
+        kind: 'new',
+        title: 'A app pede outra foto quando a fatura não se pode confirmar',
+        detail: 'Se faltar uma página, houver algo a tapar, o QR não se ler ou o total não for o do QR, diz-lhe logo, com a fatura ainda na mão e antes de guardar.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Veja tudo na lista de faturas',
+        detail: 'Cada fatura mostra o total com IVA e sem IVA e a data em que foi inserida, as mais recentes primeiro. «100% certa» quando tudo bate com o QR, e «Não bate certo» quando não.',
+      },
+      {
+        kind: 'fix',
+        title: 'Os descontos da fatura entram nas contas',
+        detail: 'Quando as linhas vêm antes do «Desconto total», o desconto é repartido e cada taxa de IVA bate certo.',
+      },
+    ],
+  },
   {
     version: '2026.11.06.03',
     date: '2026-11-06',

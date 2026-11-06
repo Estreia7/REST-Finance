@@ -12,7 +12,7 @@ import { repriceIngredients } from '@/lib/ingredient-costs-server';
 import { rereadStoredDocument } from '@/lib/scan-core';
 import { PACK_UNITS, asPrinted, fromPrinted, lineFigures, packOfLine, takesPack, toPack, toPackInput, type PackInput } from '@/lib/line-setup';
 import { formatPack } from '@/lib/scan-corrections';
-import { checkReading, type Proof, type TaxTruth } from '@/lib/invoice-checks';
+import { checkReading, type DocumentIssue, type Proof, type TaxTruth } from '@/lib/invoice-checks';
 import { settleSavedFigures } from '@/lib/invoice-sweep-server';
 
 /**
@@ -47,6 +47,12 @@ export interface InvoiceForProof {
   vendorName: string | null;
   date: string | null;
   imagePath: string | null;
+  /** The pages after the first. */
+  pagePaths: string[];
+  /** Why this invoice is here. */
+  issues: DocumentIssue[];
+  /** What the document says was taken off the whole invoice. */
+  discountTotal: number;
   grandTotal: number;
   truth: TaxTruth[];
   lines: ProofLine[];
@@ -127,10 +133,10 @@ async function loadInvoice(restaurantId: string, invoiceNumber: string) {
       NOT: { imageUrl: '' },
     },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, imageUrl: true, extractedData: true },
+    select: { id: true, imageUrl: true, pageUrls: true, extractedData: true },
   });
 
-  return { items, entryId, grandTotal, scan };
+  return { items, entryId, rootId, grandTotal, scan };
 }
 
 function storedLine(item: {
@@ -154,13 +160,19 @@ export async function getInvoiceForProof(invoiceNumber: string) {
     const invoice = await loadInvoice(owner.restaurantId, invoiceNumber);
     if (!invoice) return { error: 'accounting.lineNotFound' };
 
-    const stored = invoice.scan?.extractedData as { checks?: { proof?: Proof } } | null | undefined;
+    const stored = invoice.scan?.extractedData as {
+      discountTotal?: number;
+      checks?: { proof?: Proof; issues?: DocumentIssue[] };
+    } | null | undefined;
     const first = invoice.items[0];
     const data: InvoiceForProof = {
       invoiceNumber,
       vendorName: first.vendor?.name ?? null,
       date: first.invoiceDate ? first.invoiceDate.toISOString().slice(0, 10) : null,
       imagePath: invoice.scan?.imageUrl ?? null,
+      pagePaths: invoice.scan?.pageUrls ?? [],
+      issues: stored?.checks?.issues ?? [],
+      discountTotal: stored?.discountTotal ?? 0,
       grandTotal: invoice.grandTotal,
       truth: stored?.checks?.proof?.truth ?? [],
       lines: invoice.items.map((i) => ({
@@ -184,7 +196,7 @@ export async function getInvoiceForProof(invoiceNumber: string) {
  * it beside the page and decides. This is how an invoice read badly in the
  * past gets put right.
  */
-export async function rereadInvoice(invoiceNumber: string) {
+export async function rereadInvoice(invoiceNumber: string, qrText?: string | null) {
   try {
     const owner = await requireOwner();
     if (isAuthError(owner)) return { error: owner.error };
@@ -196,6 +208,8 @@ export async function rereadInvoice(invoiceNumber: string) {
       restaurantId: owner.restaurantId,
       userId: owner.userId,
       storedPath: invoice.scan.imageUrl,
+      extraPaths: invoice.scan.pageUrls,
+      qrTexts: qrText ? [qrText] : [],
     });
     if (data.type !== 'cost_receipt') return { error: 'proof.errors.reread' };
 
@@ -227,9 +241,67 @@ export async function rereadInvoice(invoiceNumber: string) {
         pack: pack && pack !== 'packages' && takesPack(item.quantity, unit) ? toPackInput(pack) : null,
       };
     });
-    return { success: true as const, data: { lines, truth: proof?.truth ?? [] } };
+    return {
+      success: true as const,
+      data: {
+        lines,
+        truth: proof?.truth ?? [],
+        issues: data.checks?.issues ?? [],
+        discountTotal: data.discountTotal ?? 0,
+      },
+    };
   } catch (error: unknown) {
     return { error: toClientError('Failed to read the invoice again', error, 'read') };
+  }
+}
+
+/**
+ * Puts the invoice's cost right when the document says otherwise.
+ *
+ * Asked for, never automatic: this moves the owner's money. The amount comes from
+ * the document's own figures, not from anything typed, and is shared out across
+ * the invoice's categories the same way any other total is.
+ */
+export async function adoptDocumentTotal(input: { invoiceNumber: string; truth: TaxTruth[] }) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+    const { restaurantId, userId } = owner;
+
+    const invoice = await loadInvoice(restaurantId, input.invoiceNumber);
+    if (!invoice?.rootId) return { error: 'accounting.lineNotFound' };
+
+    const stored = invoice.scan?.extractedData as { checks?: { proof?: Proof } } | null | undefined;
+    const known = stored?.checks?.proof?.truth?.length ? stored.checks.proof.truth : input.truth;
+    if (known.length === 0) return { error: 'proof.errors.noFigures' };
+
+    const total = cents(known.reduce((sum, b) => sum + b.base + b.tax, 0));
+    const difference = cents(total - invoice.grandTotal);
+    if (Math.abs(difference) < 0.01) return { success: true as const, data: { total } };
+
+    await prisma.$transaction(async (tx) => {
+      const root = await tx.costEntry.findFirst({
+        where: { id: invoice.rootId!, restaurantId },
+        select: { amount: true },
+      });
+      if (!root) return;
+      await tx.costEntry.update({
+        where: { id: invoice.rootId! },
+        data: { amount: cents(Number(root.amount) + difference) },
+      });
+      await rebalanceInvoice(tx, { restaurantId, costEntryId: invoice.rootId!, userId });
+      await tx.auditLog.create({
+        data: {
+          restaurantId,
+          action: 'invoice.total.corrected',
+          actorUserId: userId,
+          metadata: { invoiceNumber: input.invoiceNumber, from: invoice.grandTotal, to: total },
+        },
+      });
+    }, { timeout: 30_000 });
+    return { success: true as const, data: { total } };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to correct the invoice total', error, 'write') };
   }
 }
 
