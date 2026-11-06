@@ -12,7 +12,8 @@ import { repriceIngredients } from '@/lib/ingredient-costs-server';
 import { rereadStoredDocument } from '@/lib/scan-core';
 import { PACK_UNITS, asPrinted, fromPrinted, lineFigures, packOfLine, takesPack, toPack, toPackInput, type PackInput } from '@/lib/line-setup';
 import { formatPack } from '@/lib/scan-corrections';
-import { checkReading, settleFigures, type Proof, type TaxTruth } from '@/lib/invoice-checks';
+import { checkReading, type Proof, type TaxTruth } from '@/lib/invoice-checks';
+import { settleSavedFigures } from '@/lib/invoice-sweep-server';
 
 /**
  * Confirming an invoice whose lines do not add up.
@@ -53,73 +54,6 @@ export interface InvoiceForProof {
 
 function cents(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
-}
-
-/**
- * Settles a saved invoice the document's own figures can put right, or leaves it.
- *
- * Nobody should be sent to fix what the figures answer: wrong VAT rates, or
- * values saved with VAT in them. Every line must already multiply out, and the
- * invoice's total does not move, so one with anything else wrong still waits.
- */
-async function settleSavedFigures(
-  { restaurantId, userId }: { restaurantId: string; userId: string },
-  scanId: string,
-  invoiceNumber: string,
-  truth: TaxTruth[],
-): Promise<boolean> {
-  if (truth.length === 0) return false;
-  try {
-    const items = await prisma.invoiceItem.findMany({
-      where: { restaurantId, invoiceNumber },
-      select: {
-        id: true, productName: true, quantity: true, unitPrice: true, totalPrice: true, vatRate: true, costEntryId: true,
-      },
-    });
-    const lines = items.map((i) => ({
-      productName: i.productName,
-      quantity: Number(i.quantity),
-      unitPrice: Number(i.unitPrice),
-      total: Number(i.totalPrice),
-      vatRate: i.vatRate === null ? null : Number(i.vatRate),
-    }));
-    const proof = checkReading({ items: lines, grandTotal: 0, vatSummary: truth }, null);
-    if (proof.problems.some((p) => p.kind === 'line')) return false;
-
-    const settled = settleFigures(lines, truth);
-    if (!settled || settled.drop.length > 0) return false;
-
-    await prisma.$transaction(async (tx) => {
-      for (const [i, item] of items.entries()) {
-        const vatRate = settled.rates[i];
-        const total = settled.totals[i];
-        if (lines[i].vatRate === vatRate && lines[i].total === total) continue;
-        await tx.invoiceItem.update({
-          where: { id: item.id },
-          data: {
-            vatRate,
-            totalPrice: total,
-            unitPrice: settled.unitPrices[i],
-            grossTotal: settled.grossTotals[i] ?? cents(total * (1 + vatRate / 100)),
-          },
-        });
-      }
-      if (settled.vatIncluded) {
-        const entries = new Set(items.flatMap((i) => (i.costEntryId ? [i.costEntryId] : [])));
-        for (const costEntryId of entries) await rebalanceInvoice(tx, { restaurantId, costEntryId, userId });
-      }
-      await tx.receiptScan.update({
-        where: { id: scanId },
-        data: { proofStatus: 'proved', proofResolvedAt: new Date() },
-      });
-    }, { timeout: 30_000 });
-    // What a kilo really cost has changed, and so has the ingredient.
-    if (settled.vatIncluded) await repriceIngredients(restaurantId);
-    return true;
-  } catch {
-    // It stays on the list, where the owner can still settle it.
-    return false;
-  }
 }
 
 /** The invoices waiting for the owner, most money adrift first. */

@@ -6,6 +6,7 @@ import {
   Loader2, Upload, Trash2, KeyRound, FlaskConical, CheckCircle2, XCircle,
   AlertTriangle, QrCode, ChevronDown, ChevronRight, Save, Eye,
 } from 'lucide-react';
+import InvoiceSweep from './InvoiceSweep';
 import ProofBench from './ProofBench';
 import SupplierKnowledgePanel from './SupplierKnowledgePanel';
 import { useLanguage } from '@/lib/language-context';
@@ -183,6 +184,8 @@ export default function ExtractionLabPanel() {
   return (
     <div className="space-y-5">
       <SupplierKnowledgePanel />
+
+      <InvoiceSweep />
 
       <ProofBench />
 

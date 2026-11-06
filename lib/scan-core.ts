@@ -215,6 +215,21 @@ export async function rereadStoredDocument(input: {
   });
 }
 
+/** The QR on a stored photograph, or null. Costs nothing: no model is involved. */
+export async function readStoredQr(storedPath: string): Promise<InvoiceQrData | null> {
+  const lower = storedPath.toLowerCase();
+  if (!storedPath || lower.endsWith('.pdf')) return null;
+  try {
+    const file = resolveStoredPath(storedPath);
+    if (!file) return null;
+    const bytes = await readFile(file);
+    const mediaType = lower.endsWith('.png') ? 'image/png' : lower.endsWith('.webp') ? 'image/webp' : 'image/jpeg';
+    return await decodeQr(bytes.toString('base64'), mediaType);
+  } catch {
+    return null;
+  }
+}
+
 /** The QR on a photograph, or null. Never throws: a failed decode changes nothing. */
 async function decodeQr(imageBase64: string, mediaType: string): Promise<InvoiceQrData | null> {
   try {

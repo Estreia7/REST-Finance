@@ -15,6 +15,7 @@ import { checkExtraction } from '@/lib/pt-validation';
 import { readInvoiceQr, compareWithQr, applyQrTruth } from '@/lib/pt-invoice-qr';
 import type { MediaType, ScanType } from '@/lib/document-scanner';
 import { rereadStoredDocument } from '@/lib/scan-core';
+import { sweepInvoice } from '@/lib/invoice-sweep-server';
 import { checkReading, type CheckedReading, type ProofStatus } from '@/lib/invoice-checks';
 
 /**
@@ -476,5 +477,46 @@ export async function runProofBench(item: ProofBenchItem) {
     return { success: true as const, data };
   } catch (error: unknown) {
     return { error: toClientError('Failed to read the stored invoice', error, 'read') };
+  }
+}
+
+export interface SweepItem {
+  scanId: string;
+  label: string;
+}
+
+/** Every saved invoice of every restaurant, for the sweep to go through. */
+export async function getSweepQueue() {
+  try {
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
+
+    const scans = await prisma.receiptScan.findMany({
+      where: { scanType: 'COST_RECEIPT', linkedEntryId: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, extractedData: true, linkedEntry: { select: { invoiceNumber: true } } },
+      take: 5000,
+    });
+    await prisma.auditLog.create({
+      data: { action: 'admin.invoices.sweep', actorUserId: admin.userId, metadata: { invoices: scans.length } },
+    });
+    const data: SweepItem[] = scans.map((scan) => {
+      const read = scan.extractedData as { vendor?: string } | null;
+      return { scanId: scan.id, label: [read?.vendor, scan.linkedEntry?.invoiceNumber].filter(Boolean).join(' · ') };
+    });
+    return { success: true as const, data };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to list saved invoices', error, 'read') };
+  }
+}
+
+/** Holds one saved invoice to its own figures. Changes the books where they settle it. */
+export async function runSweep(scanId: string) {
+  try {
+    const admin = await requireAdmin();
+    if (isAuthError(admin)) return { error: admin.error };
+    return { success: true as const, data: { outcome: await sweepInvoice(scanId) } };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to check the saved invoice', error, 'write') };
   }
 }
