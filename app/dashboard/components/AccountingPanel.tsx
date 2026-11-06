@@ -27,6 +27,7 @@ import VendorFixDialog from './VendorFixDialog';
 import DuplicateCosts from './DuplicateCosts';
 import PurchasedProducts from './PurchasedProducts';
 import PurchasedProductDialog from './PurchasedProductDialog';
+import VendorDialog from './VendorDialog';
 import LineSetupPanel from './LineSetupPanel';
 import InvoiceProofPanel from './InvoiceProofPanel';
 import CreditNotesPanel from './CreditNotesPanel';
@@ -428,6 +429,8 @@ function Vendors() {
   const [loading, setLoading] = useState(true);
   /** The supplier whose name or NIF is being corrected. */
   const [fixing, setFixing] = useState<string | null>(null);
+  /** The supplier open in its own window. */
+  const [opened, setOpened] = useState<{ id: string; name: string } | null>(null);
 
   const load = useCallback(() => {
     getInvoiceLines().then((result) => {
@@ -454,7 +457,14 @@ function Vendors() {
           <li key={vendor.id}>
             <div className="flex items-baseline justify-between gap-3 mb-1">
               <span className="flex items-center gap-1 min-w-0">
-                <span className="text-sm text-foreground truncate">{vendor.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setOpened({ id: vendor.id, name: vendor.name })}
+                  className="text-sm text-foreground truncate text-left hover:text-primary-ink hover:underline
+                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                >
+                  {vendor.name}
+                </button>
                 <button
                   type="button"
                   onClick={() => setFixing(vendor.id)}
@@ -489,6 +499,7 @@ function Vendors() {
       {fixing && (
         <VendorFixDialog vendorId={fixing} onClose={() => setFixing(null)} onDone={load} />
       )}
+      {opened && <VendorDialog vendorId={opened.id} vendorName={opened.name} onClose={() => setOpened(null)} />}
     </div>
   );
 }

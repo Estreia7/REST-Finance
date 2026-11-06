@@ -132,6 +132,14 @@ export function buildInbox(c: InboxCounts): InboxItem[] {
       || INBOX_KINDS.indexOf(a.kind) - INBOX_KINDS.indexOf(b.kind));
 }
 
+/**
+ * What the red number on the navigation counts: everything waiting on the owner.
+ * Credit notes are left out: they wait for an invoice, not for a person.
+ */
+export function attentionCount(items: InboxItem[]): number {
+  return items.filter((i) => i.kind !== 'creditNotes').reduce((sum, i) => sum + i.count, 0);
+}
+
 /** How many decisions, and how much money, across a list of items. */
 export function inboxTotals(items: InboxItem[]): { count: number; amount: number; urgent: number } {
   return {

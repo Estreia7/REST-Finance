@@ -26,8 +26,11 @@ const DOT: Record<InboxSeverity, string> = {
 export default function InboxPanel({
   refreshKey,
   onOpen,
+  onAnswered,
 }: {
   refreshKey: number;
+  /** A card was answered, so counts elsewhere are out of date. */
+  onAnswered?: () => void;
   onOpen: (item: InboxItem, restaurantId: string, isActive: boolean) => void;
 }) {
   const { t } = useLanguage();
@@ -67,7 +70,7 @@ export default function InboxPanel({
   const activeItems = groups.find((g) => g.active)?.items ?? [];
   const paymentCards = activeItems.some((i) => i.kind === 'paymentsToConfirm');
   const lineCards = activeItems.some((i) => i.kind === 'linesToSetup');
-  const changed = () => setAnswered((n) => n + 1);
+  const changed = () => { setAnswered((n) => n + 1); onAnswered?.(); };
 
   const titleFor = (item: InboxItem) =>
     t(`inbox.kinds.${item.kind}.${item.count === 1 ? 'one' : 'other'}`).replace('{count}', String(item.count));

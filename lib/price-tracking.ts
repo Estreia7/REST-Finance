@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { priceIncreases, type PriceIncrease } from '@/lib/price-increases';
 
 /**
  * Normalize a product name for price comparison.
@@ -13,79 +14,28 @@ export function normalizeProductName(name: string): string {
     .trim();
 }
 
-export interface PriceAlert {
-  productName: string;
-  normalizedName: string;
-  vendorName: string | null;
-  vendorId: string | null;
-  previousPrice: number;
-  currentPrice: number;
-  changePercent: number;
-  invoiceDate: Date | null;
-}
-
-/**
- * Detect price changes by comparing the latest invoice item unit price
- * to the average of all previous prices for the same product+vendor.
- */
-export async function detectPriceChanges(
-  restaurantId: string,
-  thresholdPercent: number = 5,
-  lookbackDays: number = 90
-): Promise<PriceAlert[]> {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - lookbackDays);
-
-  // Get all invoice items within the lookback period
+/** Every product that has ever gone up. See lib/price-increases.ts. */
+export async function detectPriceChanges(restaurantId: string): Promise<PriceIncrease[]> {
   const items = await prisma.invoiceItem.findMany({
     where: {
       restaurantId,
-      invoiceDate: { gte: cutoff },
+      // Lines whose cost was deleted are not purchases the owner made.
+      OR: [{ costEntryId: null }, { costEntry: { deletedAt: null } }],
     },
-    include: { vendor: { select: { name: true } } },
-    orderBy: { invoiceDate: 'asc' },
+    select: {
+      productName: true, normalizedName: true, vendorId: true, unit: true, unitPrice: true, invoiceDate: true,
+      vendor: { select: { name: true } },
+    },
   });
-
-  // Group by (normalizedName, vendorId)
-  const groups = new Map<string, typeof items>();
-  for (const item of items) {
-    const key = `${item.normalizedName}::${item.vendorId || 'unknown'}`;
-    const group = groups.get(key) || [];
-    group.push(item);
-    groups.set(key, group);
-  }
-
-  const alerts: PriceAlert[] = [];
-
-  for (const [, group] of groups) {
-    if (group.length < 2) continue;
-
-    const latest = group[group.length - 1];
-    const previous = group.slice(0, -1);
-
-    const avgPrevPrice = previous.reduce((sum, i) => sum + Number(i.unitPrice), 0) / previous.length;
-    const currentPrice = Number(latest.unitPrice);
-
-    if (avgPrevPrice === 0) continue;
-
-    const changePercent = ((currentPrice - avgPrevPrice) / avgPrevPrice) * 100;
-
-    if (Math.abs(changePercent) >= thresholdPercent) {
-      alerts.push({
-        productName: latest.productName,
-        normalizedName: latest.normalizedName,
-        vendorName: latest.vendor?.name || null,
-        vendorId: latest.vendorId,
-        previousPrice: avgPrevPrice,
-        currentPrice,
-        changePercent,
-        invoiceDate: latest.invoiceDate,
-      });
-    }
-  }
-
-  // Sort by absolute change (biggest changes first)
-  return alerts.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
+  return priceIncreases(items.map((i) => ({
+    productName: i.productName,
+    normalizedName: i.normalizedName,
+    vendorId: i.vendorId,
+    vendorName: i.vendor?.name ?? null,
+    unit: i.unit,
+    unitPrice: Number(i.unitPrice),
+    date: i.invoiceDate ? i.invoiceDate.toISOString().slice(0, 10) : null,
+  })));
 }
 
 /**

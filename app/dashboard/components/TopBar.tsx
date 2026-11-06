@@ -33,9 +33,11 @@ interface TopBarProps {
   onMenuClick:  () => void;
   /** The dock is showing, so the sidebar's restaurant switcher is not. */
   docked?:      boolean;
+  /** What is waiting on the owner: on a phone, the menu is the way there. */
+  attention?:   number;
 }
 
-export default function TopBar({ activeTab, restaurant, onMenuClick, docked = false }: TopBarProps) {
+export default function TopBar({ activeTab, restaurant, onMenuClick, docked = false, attention = 0 }: TopBarProps) {
   const { t } = useLanguage();
 
   return (
@@ -43,10 +45,15 @@ export default function TopBar({ activeTab, restaurant, onMenuClick, docked = fa
       {/* Mobile menu button */}
       <button
         onClick={onMenuClick}
-        className="md:hidden p-2 -ml-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+        className="relative md:hidden p-2 -ml-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
         aria-label={t('topBar.openMenu')}
       >
         <Menu className="w-5 h-5" />
+        {attention > 0 && (
+          <span className="absolute top-0 right-0 min-w-[1rem] rounded-full bg-danger px-1 text-center text-[9px] font-bold leading-4 text-white tabular-nums">
+            {attention > 99 ? '99+' : attention}
+          </span>
+        )}
       </button>
 
       {/* Breadcrumb. The logo stays on a phone, where the name does not fit,

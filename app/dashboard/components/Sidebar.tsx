@@ -62,13 +62,15 @@ function SidebarContent({ activeTab, onTabChange, restaurant, currentUser, onLog
       data-tour={`nav-${id}`}
       className={`nav-item w-full ${activeTab === id ? 'active' : ''}`}
     >
-      <Icon className="w-4 h-4 shrink-0" />
+      <span className="relative shrink-0">
+        <Icon className="w-4 h-4" />
+        {!!badges?.[id] && (
+          <span className="absolute -top-2 -right-2.5 min-w-[1rem] rounded-full bg-danger px-1 text-center text-[9px] font-bold leading-4 text-white tabular-nums">
+            {badges[id]! > 99 ? '99+' : badges[id]}
+          </span>
+        )}
+      </span>
       <span className="flex-1 text-left">{label}</span>
-      {!!badges?.[id] && (
-        <span className="min-w-[1.25rem] rounded-full bg-danger px-1.5 py-0.5 text-center text-[10px] font-bold leading-none text-white tabular-nums">
-          {badges[id]! > 99 ? '99+' : badges[id]}
-        </span>
-      )}
     </button>
   );
 

@@ -240,7 +240,7 @@ const pt: Record<GlossaryKey, GlossaryEntry> = {
   priceAlert: {
     term: 'Alertas de Preço',
     plain:
-      'Produtos que o seu fornecedor passou a cobrar mais caro. Compara o preço da última factura com o anterior, nos últimos 90 dias.',
+      'Todos os produtos que alguma vez subiram de preço, por pouco que seja, comparando cada compra com a anterior do mesmo fornecedor. Toque num para ver quem o vende mais barato.',
   },
   priceThreshold: {
     term: 'Limiar do Alerta',
@@ -425,7 +425,7 @@ const en: Record<GlossaryKey, GlossaryEntry> = {
   priceAlert: {
     term: 'Price Alerts',
     plain:
-      'Products your supplier started charging more for. It compares the price on the latest invoice with the one before, over the last 90 days.',
+      'Every product that has ever gone up, however little, comparing each purchase with the one before from the same supplier. Tap one to see who sells it cheapest.',
   },
   priceThreshold: {
     term: 'Alert Threshold',

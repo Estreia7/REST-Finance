@@ -46,7 +46,7 @@ import AccountingPanel, { type AccountingOpen } from './components/AccountingPan
 import InboxPanel       from './components/InboxPanel';
 import { getInbox }     from './inbox-actions';
 import { setActiveRestaurant } from './restaurant-actions';
-import { inboxTotals, type InboxItem } from '@/lib/inbox';
+import { attentionCount, inboxTotals, type InboxItem } from '@/lib/inbox';
 import { formatMoney } from '@/lib/format';
 import IngredientRanking from './components/IngredientRanking';
 import { getMonthProgress } from './product-actions';
@@ -164,6 +164,8 @@ function DashboardPageInner() {
   // year's costs is a question an owner asks, and moving one chart should
   // not move the others.
   const [dataVersion, setDataVersion] = useState(0);
+  /** Everything waiting on the owner, for the red number on the navigation. */
+  const [attention, setAttention] = useState(0);
   const [mixYear, setMixYear] = useState(new Date().getFullYear());
   const [costYear, setCostYear] = useState(new Date().getFullYear());
   const [categoryMix, setCategoryMix] = useState<{ series: string[]; data: Array<Record<string, number | string>> }>({ series: [], data: [] });
@@ -310,6 +312,7 @@ function DashboardPageInner() {
       const urgent = active ? active.items.filter((i) => i.severity === 'high') : [];
       const totals = inboxTotals(urgent);
       setInboxUrgent({ count: totals.count, amount: totals.amount });
+      setAttention(attentionCount(active?.items ?? []));
     });
     return () => { stale = true; };
   }, [dataVersion]);
@@ -568,7 +571,7 @@ function DashboardPageInner() {
         onLogout={handleLogout}
         isOpen={isSidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        badges={{ inbox: inboxUrgent.count }}
+        badges={{ inbox: attention }}
         modules={modules}
       />
 
@@ -580,6 +583,7 @@ function DashboardPageInner() {
           activeTab={activeTab}
           restaurant={restaurant}
           onMenuClick={() => setSidebarOpen(true)}
+          attention={attention}
         />
 
         {/* Trial banner */}
@@ -909,7 +913,7 @@ function DashboardPageInner() {
 
           {activeTab === 'stock' && hasModule(modules, 'stock') && <StockPanel />}
 
-          {activeTab === 'inbox' && <InboxPanel refreshKey={dataVersion} onOpen={openInboxItem} />}
+          {activeTab === 'inbox' && <InboxPanel refreshKey={dataVersion} onOpen={openInboxItem} onAnswered={() => setDataVersion((v) => v + 1)} />}
 
           {activeTab === 'compliance' && <ComplianceArea />}
 
@@ -991,7 +995,7 @@ function DashboardPageInner() {
           onToggleTheme={() => changeNav('dockTheme', dockTheme === 'dark' ? 'light' : 'dark')}
           onUseSidebar={() => changeNav('navMode', 'sidebar')}
           onLogout={handleLogout}
-          badges={{ inbox: inboxUrgent.count }}
+          badges={{ inbox: attention }}
           modules={modules}
         />
       )}

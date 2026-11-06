@@ -5,6 +5,7 @@ import { findDuplicateVendorGroups } from '@/lib/duplicate-vendors-server';
 import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { toClientError } from '@/lib/errors';
+import { vendorSummary } from '@/lib/vendor-summary';
 import { lineKey, type CostCategory } from '@/lib/invoice-categories';
 import { rebalanceInvoice } from '@/lib/invoice-split-server';
 import { rememberLine } from '@/lib/invoice-memory-server';
@@ -561,6 +562,33 @@ export interface InvoiceRow2 {
  * lines beside it, which is three joins to express in SQL and one pass here
  * over a few hundred rows.
  */
+/** One supplier at a glance, for its window. */
+export async function getVendorSummary(vendorId: string) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const entries = await prisma.costEntry.findMany({
+      where: { restaurantId: owner.restaurantId, vendorId, deletedAt: null },
+      select: { id: true, splitFromId: true, date: true, amount: true, paidAt: true, paymentMethod: true },
+    });
+    const summary = vendorSummary(
+      entries.map((e) => ({
+        id: e.id,
+        splitFromId: e.splitFromId,
+        date: e.date.toISOString().slice(0, 10),
+        amount: Number(e.amount),
+        // A direct debit pays itself: nobody has anything left to do.
+        paid: e.paidAt !== null || e.paymentMethod === 'DIRECT_DEBIT',
+      })),
+      new Date().toISOString().slice(0, 10),
+    );
+    return { success: true as const, data: summary };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to read the supplier', error, 'read') };
+  }
+}
+
 export async function getInvoices(filters: { search?: string; vendorId?: string; page?: number } = {}) {
   try {
     const owner = await requireOwner();

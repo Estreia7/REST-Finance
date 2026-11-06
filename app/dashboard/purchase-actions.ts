@@ -1,6 +1,8 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { cheapestToDate } from '@/lib/price-increases';
+import { normalizeProductName } from '@/lib/price-tracking';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { toClientError } from '@/lib/errors';
 import { summarizePurchases, productDetail, type PurchaseLine } from '@/lib/purchased-products';
@@ -98,7 +100,35 @@ export async function getPurchasedProduct(normalizedName: string) {
     });
     const ingredients = [...new Set(links.map((l) => l.ingredient.name))];
 
-    return { success: true as const, data: { ...detail, ingredients } };
+    // The same thing from anyone: two suppliers word it differently, and it is
+    // the ingredient they both feed that says they are the same.
+    const linkedIds = await prisma.invoiceItemLink.findMany({
+      where: { restaurantId: owner.restaurantId, sourceName: { in: wordings } },
+      select: { ingredientId: true },
+    });
+    const related = await prisma.invoiceItemLink.findMany({
+      where: { restaurantId: owner.restaurantId, ingredientId: { in: linkedIds.map((l) => l.ingredientId) } },
+      select: { sourceName: true },
+    });
+    const names = [...new Set([name, ...related.map((r) => normalizeProductName(r.sourceName))])];
+    const offers = await prisma.invoiceItem.findMany({
+      where: { restaurantId: owner.restaurantId, normalizedName: { in: names }, AND: [notDeleted] },
+      select: {
+        productName: true, normalizedName: true, vendorId: true, unit: true, unitPrice: true, invoiceDate: true,
+        vendor: { select: { name: true } },
+      },
+    });
+    const cheapest = cheapestToDate(offers.map((o) => ({
+      productName: o.productName,
+      normalizedName: o.normalizedName,
+      vendorId: o.vendorId,
+      vendorName: o.vendor?.name ?? null,
+      unit: o.unit,
+      unitPrice: Number(o.unitPrice),
+      date: o.invoiceDate ? o.invoiceDate.toISOString().slice(0, 10) : null,
+    })), detail.unit);
+
+    return { success: true as const, data: { ...detail, ingredients, cheapest } };
   } catch (error: unknown) {
     return { error: toClientError('Failed to read the product', error, 'read') };
   }

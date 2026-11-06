@@ -35,9 +35,35 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.06.04';
+export const CHANGELOG_VERSION = '2026.11.06.05';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.06.05',
+    date: '2026-11-06',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'Alertas de preço com todos os aumentos',
+        detail: 'Em Comidas e Bebidas › Alertas de preços aparecem todos os produtos que alguma vez subiram, por pouco que seja. Toque num para ver qual o fornecedor mais barato até hoje.',
+      },
+      {
+        kind: 'new',
+        title: 'Abra um fornecedor e veja tudo',
+        detail: 'Em Contabilidade › Fornecedores, toque no nome para ver quanto gastou este mês e este ano, o que falta pagar e todas as faturas dele.',
+      },
+      {
+        kind: 'improvement',
+        title: 'O número vermelho conta tudo o que precisa de si',
+        detail: 'Em Precisa de ti aparece agora tudo o que está à espera, menos as notas de crédito.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Vendas por produto com a percentagem certa',
+        detail: 'Ao escolher uma família, como Bebidas, cada produto mostra a parte que representa nessa família.',
+      },
+    ],
+  },
   {
     version: '2026.11.06.04',
     date: '2026-11-06',

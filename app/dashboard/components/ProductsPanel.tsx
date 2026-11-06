@@ -8,6 +8,7 @@ import { useChartTheme } from '@/lib/chart-theme';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
 import type { ProductTotals } from '@/lib/products';
+import { shareWithin } from '@/lib/products';
 import {
   ChartHeader,
   TooltipCard,
@@ -150,7 +151,7 @@ export default function ProductsPanel() {
   const filtered = useMemo(() => {
     if (!data) return [];
     const needle = deferredQuery.trim().toLowerCase();
-    return data.products.filter((p) => {
+    return shareWithin(data.products, familia).filter((p) => {
       if (familia && p.familia !== familia) return false;
       if (!needle) return true;
       // The family is searchable too: two rows can share a name, and
@@ -295,6 +296,7 @@ export default function ProductsPanel() {
           reads by scanning rather than by comparing numbers. */}
       <ProductTable
         products={filtered}
+        shareTitle={familia ? t('products.colShareOf').replace('{familia}', familia) : t('products.colShare')}
         limit={limit}
         onMore={() => setLimit((n) => n + PAGE)}
         selectedId={selected?.product.id ?? null}
@@ -433,9 +435,11 @@ function MonthlyUnits({
  * sometimes needs the figure.
  */
 function ProductTable({
-  products, limit, onMore, selectedId, onPick,
+  products, shareTitle, limit, onMore, selectedId, onPick,
 }: {
   products: ProductTotals[];
+  /** Says what the percentage is a share of. */
+  shareTitle: string;
   limit: number;
   onMore: () => void;
   selectedId: string | null;
@@ -477,7 +481,7 @@ function ProductTable({
                 {t('products.colRevenue')}
               </th>
               <th scope="col" className="text-right font-semibold text-[10px] uppercase tracking-wider text-muted-foreground px-4 py-2.5 w-28">
-                {t('products.colShare')}
+                {shareTitle}
               </th>
             </tr>
           </thead>

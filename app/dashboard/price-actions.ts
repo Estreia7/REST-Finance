@@ -3,11 +3,11 @@
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { detectPriceChanges, getProductPriceTimeline } from '@/lib/price-tracking';
 
-export async function getPriceAlerts(thresholdPercent: number = 5) {
+export async function getPriceAlerts() {
   const owner = await requireOwner();
   if (isAuthError(owner)) return { success: false as const, error: owner.error };
 
-  const alerts = await detectPriceChanges(owner.restaurantId, thresholdPercent);
+  const alerts = await detectPriceChanges(owner.restaurantId);
 
   return { success: true as const, data: alerts };
 }

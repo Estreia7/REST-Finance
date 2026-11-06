@@ -5,6 +5,7 @@ import { X, Loader2, Receipt, Link2, Check } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { getPurchasedProduct } from '../purchase-actions';
 import type { ProductDetail } from '@/lib/purchased-products';
+import type { CheapestOffer } from '@/lib/price-increases';
 import { useChartTheme } from '@/lib/chart-theme';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
@@ -23,7 +24,7 @@ import InvoicePreview from './InvoicePreview';
  * line, a price alert — so it lives in one component.
  */
 
-type Detail = ProductDetail & { ingredients: string[] };
+type Detail = ProductDetail & { ingredients: string[]; cheapest: CheapestOffer | null };
 
 export default function PurchasedProductDialog({
   normalizedName,
@@ -114,6 +115,28 @@ export default function PurchasedProductDialog({
               <p className="py-12 text-center text-sm text-muted-foreground">{t('purchases.notFound')}</p>
             ) : (
               <>
+                {detail.cheapest && (
+                  <div className="rounded-xl bg-success/10 px-4 py-3 mb-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-success">
+                      {t('purchases.cheapestTitle')}
+                    </p>
+                    <p className="mt-0.5 text-sm font-bold text-foreground tabular-nums">
+                      {detail.cheapest.vendorName ?? t('purchases.unknownSupplier')}
+                      {' · '}
+                      {formatMoney(detail.cheapest.unitPrice)}
+                      {detail.unit ? `/${detail.unit}` : ''}
+                    </p>
+                    <p className="text-xs text-muted-foreground tabular-nums">
+                      {new Date(`${detail.cheapest.date}T00:00:00Z`).toLocaleDateString(locale, { timeZone: 'UTC' })}
+                      {' · '}
+                      {detail.cheapest.suppliers === 1
+                        ? t('purchases.cheapestOnly')
+                        : detail.cheapest.saving > 0
+                          ? t('purchases.cheapestSaving').replace('{amount}', formatMoney(detail.cheapest.saving))
+                          : t('purchases.cheapestAlready').replace('{count}', String(detail.cheapest.suppliers))}
+                    </p>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <Stat
                     label={t('purchases.spent')}

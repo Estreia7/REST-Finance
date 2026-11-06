@@ -248,3 +248,18 @@ function round2(n: number): number {
 function round1(n: number): number {
   return Math.round((n + Number.EPSILON) * 10) / 10;
 }
+
+/**
+ * Each product's share of its family, when one is chosen.
+ *
+ * A soft drink that is a fifth of what the bar sells is 2% of the restaurant, and
+ * neither number means anything without saying which it is. With no family the
+ * shares of the whole stand. A search narrows the list, never the base.
+ */
+export function shareWithin(products: ProductTotals[], familia: string): ProductTotals[] {
+  if (!familia) return products;
+  const total = products.filter((p) => p.familia === familia).reduce((sum, p) => sum + p.revenue, 0);
+  return products.map((p) => (
+    p.familia === familia ? { ...p, share: total > 0 ? Math.round((p.revenue / total) * 1000) / 10 : null } : p
+  ));
+}
