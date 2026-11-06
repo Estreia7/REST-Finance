@@ -19,6 +19,7 @@ import {
   employeeColor,
   isWeekend,
   monthWeekStarts,
+  monthlyMinutes,
   formatMonthTitle,
   formatWeekShort,
   weeksWithShifts,
@@ -347,5 +348,41 @@ describe('weeksAhead', () => {
 
   it('crosses into the next month and year', () => {
     expect(weeksAhead(new Date('2026-12-27T12:00:00Z'), 2)).toEqual(['2026-12-21', '2026-12-28']);
+  });
+});
+
+describe('monthlyMinutes', () => {
+  const shift = (employeeId: string, date: string, startMin = 540, endMin = 1020) => ({ employeeId, date, startMin, endMin });
+
+  it('totals each person by calendar month', () => {
+    const totals = monthlyMinutes([
+      shift('ana', '2026-01-05'),
+      shift('ana', '2026-01-06'),
+      shift('ana', '2026-12-31'),
+      shift('rui', '2026-01-05', 600, 660),
+    ]);
+    expect(totals.get('ana')?.[0]).toBe(960);
+    expect(totals.get('ana')?.[11]).toBe(480);
+    expect(totals.get('rui')?.[0]).toBe(60);
+    expect(totals.get('ana')).toHaveLength(12);
+  });
+
+  it('splits a week that straddles two months by the day of each shift', () => {
+    const totals = monthlyMinutes([shift('ana', '2026-09-30'), shift('ana', '2026-10-01')]);
+    expect(totals.get('ana')?.[8]).toBe(480);
+    expect(totals.get('ana')?.[9]).toBe(480);
+  });
+
+  it('leaves out the break of a split shift', () => {
+    const totals = monthlyMinutes([
+      { employeeId: 'ana', date: '2026-03-02', startMin: 720, endMin: 1380, breakStartMin: 900, breakEndMin: 1140 },
+    ]);
+    expect(totals.get('ana')?.[2]).toBe(420);
+  });
+
+  it('keeps a close past midnight in the month it started', () => {
+    const totals = monthlyMinutes([shift('ana', '2026-03-31', 1140, 120)]);
+    expect(totals.get('ana')?.[2]).toBe(420);
+    expect(totals.get('ana')?.[3]).toBe(0);
   });
 });

@@ -63,7 +63,7 @@ import QuickAddSheet, { type QuickAddKind, type QuickAddMethod } from './compone
 import StaffPanel       from './components/StaffPanel';
 import TeamTab          from './components/TeamTab';
 import BillingPanel     from './components/BillingPanel';
-import SchedulePanel from './components/SchedulePanel';
+import ScheduleTab from './components/ScheduleTab';
 import MenuCalculatorPanel from './components/MenuCalculatorPanel';
 import EstadoPanel from './components/EstadoPanel';
 import SettingsPanel    from './components/SettingsPanel';
@@ -913,7 +913,7 @@ function DashboardPageInner() {
 
           {activeTab === 'compliance' && <ComplianceArea />}
 
-          {activeTab === 'schedule' && <SchedulePanel />}
+          {activeTab === 'schedule' && <ScheduleTab />}
 
           {activeTab === 'estado' && <EstadoPanel />}
 

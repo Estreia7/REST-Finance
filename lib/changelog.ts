@@ -35,9 +35,20 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.06.02';
+export const CHANGELOG_VERSION = '2026.11.06.03';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.06.03',
+    date: '2026-11-06',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Resumo das horas de cada colaborador, mês a mês',
+        detail: 'Em Horários › Resumo de horas vê o ano inteiro de uma vez. Carregue nas horas de um mês para ver os turnos que as fazem, semana a semana.',
+      },
+    ],
+  },
   {
     version: '2026.11.06.02',
     date: '2026-11-06',

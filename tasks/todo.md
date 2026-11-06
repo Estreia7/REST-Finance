@@ -550,3 +550,16 @@ Plan: ~/.claude/plans/https-app-mytinz-com-onboarding-regiao-o-nifty-leaf.md (Ti
 - Verified on PGlite + next dev: full flow (DB rows checked), skip on mobile, existing owner at 1920px, EN.
 - Not done yet (Phase 0b remainder): shared page header / toolbar / EmptyState pattern, tab by tab.
 - Open question: lib/tax-rules.ts has Madeira reduced VAT 5%; Tinz shows 4%. Verify the current rate.
+
+---
+
+# Resumo de horas em Horários (2026-11-06)
+
+- [x] Sub-aba `Resumo de horas`: colaborador × mês, com totais por pessoa e por equipa
+- [x] Cada número abre os turnos dessa pessoa nesse mês, semana a semana
+- [x] PT + EN, changelog; sem passo no tour (ecrã de segunda ordem); apresentação sem alteração (refinamento)
+
+## Review
+- Mês = mês de calendário, como em Equipa › Ponto. Abrem as 4 a 6 semanas que tocam o mês; os dias de meses vizinhos ficam mais claros e não contam, para os subtotais somarem o número.
+- Quem saiu continua a aparecer enquanto tiver horas no ano.
+- Verificado em PGlite + next dev: desktop, telemóvel, inglês, sem erros de consola; subtotais = número em 3 casos (mês partido, férias, pessoa que saiu).

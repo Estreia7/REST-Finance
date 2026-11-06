@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
-import { startOfWeek, addWeeks, addDays, dateKey, parseDateKey, breakLength, MAX_SAVED_SHIFTS } from '@/lib/schedule';
+import { startOfWeek, addWeeks, addDays, dateKey, parseDateKey, breakLength, monthlyMinutes, MAX_SAVED_SHIFTS } from '@/lib/schedule';
 import { EMPLOYEE_COLORS } from '@/lib/schedule';
 
 /**
@@ -150,6 +150,53 @@ export async function getScheduleWeeks(firstWeekStartKey?: string, weekCount = 1
         breakStartMin: t.breakStartMin,
         breakEndMin: t.breakEndMin,
       })),
+    },
+  };
+}
+
+/**
+ * Every person's hours on the rota, month by month, for one year.
+ *
+ * Totalled here so the screen receives twelve numbers a person rather than a
+ * year of shifts. People who have left stay while they have hours in the year:
+ * those months happened, and whoever does the payroll still needs them.
+ */
+export async function getHoursSummary(year: number) {
+  const owner = await requireOwner();
+  if (isAuthError(owner)) return fail(owner.error);
+
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) return fail('schedule.hours.loadFailed');
+
+  const [employees, shifts] = await Promise.all([
+    prisma.scheduleEmployee.findMany({
+      where: { restaurantId: owner.restaurantId },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, name: true, role: true, color: true, deletedAt: true },
+    }),
+    prisma.shift.findMany({
+      where: {
+        restaurantId: owner.restaurantId,
+        date: { gte: new Date(Date.UTC(year, 0, 1)), lte: new Date(Date.UTC(year, 11, 31)) },
+      },
+      select: { employeeId: true, date: true, startMin: true, endMin: true, breakStartMin: true, breakEndMin: true },
+    }),
+  ]);
+
+  const minutes = monthlyMinutes(shifts.map((s) => ({ ...s, date: dateKey(s.date) })));
+
+  return {
+    success: true as const,
+    data: {
+      people: employees
+        .filter((e) => !e.deletedAt || minutes.has(e.id))
+        .map((e) => ({
+          id: e.id,
+          name: e.name,
+          role: e.role,
+          color: e.color,
+          left: !!e.deletedAt,
+          months: minutes.get(e.id) ?? Array.from({ length: 12 }, () => 0),
+        })),
     },
   };
 }

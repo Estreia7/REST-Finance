@@ -284,6 +284,33 @@ export function weeklyMinutes(
 }
 
 /**
+ * A year's shifts, totalled per person and calendar month: twelve figures each.
+ *
+ * A shift counts in the month of the day it starts, so a close that runs past
+ * midnight on the 31st stays in that month. Whole calendar months rather than
+ * blocks of four weeks: a week that straddles two months would otherwise be
+ * counted in both, or the year would not add up.
+ */
+export function monthlyMinutes(
+  shifts: Array<{
+    employeeId: string;
+    date: string;
+    startMin: number;
+    endMin: number;
+    breakStartMin?: number | null;
+    breakEndMin?: number | null;
+  }>
+): Map<string, number[]> {
+  const totals = new Map<string, number[]>();
+  for (const s of shifts) {
+    const months = totals.get(s.employeeId) ?? Array.from({ length: 12 }, () => 0);
+    months[Number(s.date.slice(5, 7)) - 1] += shiftLength(s.startMin, s.endMin, s.breakStartMin, s.breakEndMin);
+    totals.set(s.employeeId, months);
+  }
+  return totals;
+}
+
+/**
  * The colours a person can be tagged with on the grid.
  *
  * Named rather than free hex, so every restaurant's schedule stays legible
