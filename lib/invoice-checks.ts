@@ -512,8 +512,9 @@ export function settleFigures(
  * Whether an invoice can go in without anyone looking at it.
  *
  * Only one proved against its QR: the till's own figures, not a reading of
- * paper. Anything else in doubt (who the supplier is, money coming back) still
- * goes past the owner first.
+ * paper, from a supplier already on file, with every line priced around what that
+ * product usually costs. Anything else in doubt (a new supplier, an odd price,
+ * money coming back) goes past the owner first.
  */
 export function canSaveUnseen(input: {
   vendor: string;
@@ -523,12 +524,16 @@ export function canSaveUnseen(input: {
     doubt?: string | null;
     creditNote?: boolean;
     knownVendorIsCustomer?: boolean;
+    knownVendorId?: string | null;
     issues?: DocumentIssue[];
+    oddPrices?: number;
   };
 }): boolean {
   const { vendor, lines, checks } = input;
   return checks?.proof?.status === 'proved'
     && (checks.issues ?? []).length === 0
+    && !!checks.knownVendorId
+    && !checks.oddPrices
     && !checks.doubt
     && !checks.creditNote
     && !checks.knownVendorIsCustomer

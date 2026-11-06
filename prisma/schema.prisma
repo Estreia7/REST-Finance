@@ -547,6 +547,8 @@ model ReceiptScan {
   imageUrl      String     @map("image_url")
   /// The pages after the first, in order. `imageUrl` stays page one.
   pageUrls      String[]   @default([]) @map("page_urls")
+  /// Photographed to deal with later: waits for review until saved or set aside.
+  queued        Boolean    @default(false)
   scanType      ScanType   @map("scan_type")
   extractedData Json?      @map("extracted_data")
   status        ScanStatus @default(PENDING)
@@ -579,6 +581,7 @@ model ReceiptScan {
 
   @@index([restaurantId, source, reviewedAt])
   @@index([restaurantId, proofStatus])
+  @@index([restaurantId, queued])
   @@map("receipt_scans")
 }
 

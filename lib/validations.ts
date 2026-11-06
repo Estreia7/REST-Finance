@@ -97,6 +97,8 @@ export const scanRequestSchema = z.object({
   })).max(5).optional(),
   /** What the QR said on the original photographs, read in the browser. */
   qrTexts: z.array(z.string().max(4000)).max(6).optional(),
+  /** Photographed to deal with later: waits for review unless it is saved. */
+  queued: z.boolean().optional(),
 });
 
 // === Helper to format Zod errors ===

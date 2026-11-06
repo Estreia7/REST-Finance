@@ -67,6 +67,52 @@ export interface EmailedInvoice {
 }
 
 /** Emailed invoices still waiting: not saved, not set aside. */
+export interface InvoiceToReview {
+  id: string;
+  /** Every page, in order. */
+  pages: string[];
+  data: unknown;
+}
+
+/** Invoices photographed to deal with later that the app would not vouch for. */
+export async function getInvoicesToReview() {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return fail(owner.error);
+    const scans = await prisma.receiptScan.findMany({
+      where: { restaurantId: owner.restaurantId, queued: true, reviewedAt: null, linkedEntryId: null },
+      orderBy: { createdAt: 'asc' },
+      take: 50,
+      select: { id: true, imageUrl: true, pageUrls: true, extractedData: true },
+    });
+    return {
+      success: true as const,
+      data: scans.map((s): InvoiceToReview => ({
+        id: s.id,
+        pages: [s.imageUrl, ...s.pageUrls].filter((path) => path && !path.endsWith('.pdf')),
+        data: s.extractedData,
+      })),
+    };
+  } catch (error: unknown) {
+    return fail(toClientError('Failed to list the invoices to review', error, 'read'));
+  }
+}
+
+/** Sets a photographed invoice aside, because a better photo is taking its place. */
+export async function dismissQueuedScan(scanId: string) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return fail(owner.error);
+    await prisma.receiptScan.updateMany({
+      where: { id: scanId, restaurantId: owner.restaurantId, queued: true, linkedEntryId: null },
+      data: { reviewedAt: new Date() },
+    });
+    return { success: true as const };
+  } catch (error: unknown) {
+    return fail(toClientError('Failed to set the invoice aside', error, 'write'));
+  }
+}
+
 export async function getEmailedInvoices() {
   try {
     const owner = await requireOwner();

@@ -144,3 +144,15 @@ the numbers must always match.
 **Rule:** treat each supplier's layout as unknown and let the document's totals
 decide. A gap equal to a known figure (the VAT, a discount) is a diagnosis, not a
 mismatch. "Proved" means every total matches, not the ones that were convenient.
+
+## Check what a number on screen actually is before reasoning from it
+
+**What happened:** I told the owner a Makro invoice's QR had not been read, because
+the list showed €219,94 while the page said €231,41. The list was showing the sum
+of the lines, labelled as nothing, and 219,94 minus the printed discount of 14,68
+is exactly the 205,26 before VAT. My conclusion was wrong, and I had written it
+into an approved plan.
+
+**Rule:** before explaining a figure, read the code that puts it on screen. A
+screen that shows one number without saying what it is will mislead the next
+reader too, so name it.

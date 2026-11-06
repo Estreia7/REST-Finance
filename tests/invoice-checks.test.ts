@@ -127,12 +127,12 @@ describe('rereadHint', () => {
 });
 
 describe('canSaveUnseen', () => {
-  const proved = { vendor: 'Recheio', lines: 3, checks: { proof: { status: 'proved' as const }, doubt: null } };
+  const proved = { vendor: 'Recheio', lines: 3, checks: { proof: { status: 'proved' as const }, doubt: null, knownVendorId: 'v1' } };
 
   it('lets in only what the QR proved', () => {
     expect(canSaveUnseen(proved)).toBe(true);
-    expect(canSaveUnseen({ ...proved, checks: { proof: { status: 'partial' } } })).toBe(false);
-    expect(canSaveUnseen({ ...proved, checks: { proof: { status: 'failed' } } })).toBe(false);
+    expect(canSaveUnseen({ ...proved, checks: { ...proved.checks, proof: { status: 'partial' } } })).toBe(false);
+    expect(canSaveUnseen({ ...proved, checks: { ...proved.checks, proof: { status: 'failed' } } })).toBe(false);
     expect(canSaveUnseen({ ...proved, checks: undefined })).toBe(false);
   });
 
@@ -140,6 +140,15 @@ describe('canSaveUnseen', () => {
     expect(canSaveUnseen({ ...proved, checks: { ...proved.checks, doubt: 'customerNif' } })).toBe(false);
     expect(canSaveUnseen({ ...proved, checks: { ...proved.checks, knownVendorIsCustomer: true } })).toBe(false);
     expect(canSaveUnseen({ ...proved, vendor: '  ' })).toBe(false);
+  });
+
+  it('keeps a new supplier and an odd price for a person', () => {
+    expect(canSaveUnseen({ ...proved, checks: { ...proved.checks, knownVendorId: null } })).toBe(false);
+    expect(canSaveUnseen({ ...proved, checks: { ...proved.checks, oddPrices: 1 } })).toBe(false);
+  });
+
+  it('never lets an invoice with an issue through', () => {
+    expect(canSaveUnseen({ ...proved, checks: { ...proved.checks, issues: [{ kind: 'totalVsQr' }] } })).toBe(false);
   });
 
   it('stops for a credit note, and for an invoice with no lines', () => {

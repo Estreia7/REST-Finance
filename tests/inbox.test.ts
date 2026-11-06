@@ -11,6 +11,7 @@ const none: InboxCounts = {
   creditNotes: { count: 0, total: 0 },
   linesToSetup: { count: 0, total: 0 },
   paymentsToConfirm: { count: 0, total: 0 },
+  scansToReview: { count: 0, total: 0 },
   uncategorisedLines: { count: 0, total: 0 },
   uncategorisedCosts: { count: 0, total: 0 },
   complianceExpired: 0,

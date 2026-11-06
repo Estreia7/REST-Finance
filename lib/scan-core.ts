@@ -6,6 +6,8 @@ import { saveImage, saveDocument, resolveStoredPath } from '@/lib/uploads';
 import { betterProof, checkReading, documentIssues, isDiscountNote, rereadHint, settleFigures, type CheckedReading, type Proof } from '@/lib/invoice-checks';
 import { isCreditNoteNumber } from '@/lib/credit-notes';
 import { cleanTaxId, readerNote, rulesFor } from '@/lib/supplier-knowledge';
+import { invoiceUnit, unusualPrice } from '@/lib/line-setup';
+import { normalizeProductName } from '@/lib/price-tracking';
 import { readFile } from 'node:fs/promises';
 
 /**
@@ -31,6 +33,8 @@ export async function processScan(input: {
   extraPages?: ScanPage[];
   /** What the QR said on the original photographs, read in the browser. */
   qrTexts?: string[];
+  /** Photographed to deal with later. */
+  queued?: boolean;
 }): Promise<{ data: ScanResult; scanId: string }> {
   const { restaurantId, userId, base64, mediaType, scanType, extraPages = [], qrTexts = [] } = input;
   const { data, proof } = await readDocument({ restaurantId, userId, base64, mediaType, scanType, extraPages, qrTexts });
@@ -73,6 +77,7 @@ export async function processScan(input: {
       userId,
       imageUrl: filePath,
       pageUrls,
+      queued: input.queued ?? false,
       scanType,
       extractedData: data as object,
       status: 'PROCESSED',
@@ -206,9 +211,34 @@ async function readDocument(input: {
         creditNote,
         printedTotal,
         issues,
+        oddPrices: await oddPrices(restaurantId, checked.items),
       },
     },
   };
+}
+
+/** How many lines are priced far from what the product usually costs. */
+async function oddPrices(
+  restaurantId: string,
+  items: Array<{ product: string; unit?: string; unitPrice: number }>,
+): Promise<number> {
+  try {
+    const names = items.map((item) => normalizeProductName(item.product));
+    const past = await prisma.invoiceItem.findMany({
+      where: { restaurantId, normalizedName: { in: names } },
+      select: { normalizedName: true, unit: true, unitPrice: true },
+      take: 2000,
+    });
+    return items.filter((item, i) => {
+      const history = past
+        .filter((p) => p.normalizedName === names[i] && invoiceUnit(p.unit) === invoiceUnit(item.unit))
+        .map((p) => Number(p.unitPrice));
+      return unusualPrice(item.unitPrice, history) !== null;
+    }).length;
+  } catch {
+    // Unknown is not the same as fine: a person looks.
+    return items.length;
+  }
 }
 
 /** What the reader should know about this supplier's invoices, or nothing. */

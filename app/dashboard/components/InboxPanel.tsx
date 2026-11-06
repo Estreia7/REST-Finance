@@ -8,6 +8,7 @@ import { inboxTotals, type InboxItem, type InboxSeverity } from '@/lib/inbox';
 import { getInbox, type RestaurantInbox } from '../inbox-actions';
 import LineSetupPanel from './LineSetupPanel';
 import PaymentAnswerPanel from './PaymentAnswerPanel';
+import ReviewQueuePanel from './ReviewQueuePanel';
 
 /**
  * "Precisa de ti": every decision the app is waiting on, worst first.
@@ -66,10 +67,11 @@ export default function InboxPanel({
   // Answered here, a card at a time, rather than on a screen of their own.
   // Only for the restaurant in use: the cards read the active one.
   const onCard = (g: RestaurantInbox, item: InboxItem) =>
-    g.active && (item.kind === 'linesToSetup' || item.kind === 'paymentsToConfirm');
+    g.active && (item.kind === 'linesToSetup' || item.kind === 'paymentsToConfirm' || item.kind === 'scansToReview');
   const activeItems = groups.find((g) => g.active)?.items ?? [];
   const paymentCards = activeItems.some((i) => i.kind === 'paymentsToConfirm');
   const lineCards = activeItems.some((i) => i.kind === 'linesToSetup');
+  const reviewCards = activeItems.some((i) => i.kind === 'scansToReview');
   const changed = () => { setAnswered((n) => n + 1); onAnswered?.(); };
 
   const titleFor = (item: InboxItem) =>
@@ -131,6 +133,13 @@ export default function InboxPanel({
             </ul>
           </section>
         ))
+      )}
+
+      {reviewCards && (
+        <section aria-labelledby="inbox-review" className="space-y-2">
+          <h2 id="inbox-review" className="section-label px-1">{t('inbox.reviewCards')}</h2>
+          <ReviewQueuePanel onChanged={changed} />
+        </section>
       )}
 
       {paymentCards && (

@@ -23,7 +23,7 @@ import { attachScannedInvoice, getPaymentVendors } from '../payment-actions';
 import { formatMoney } from '@/lib/format';
 import VendorFixDialog from './VendorFixDialog';
 import { getVendorFixContext } from '../vendor-fix-actions';
-import { linkScanToCost } from '../invoice-email-actions';
+import { linkScanToCost, dismissQueuedScan } from '../invoice-email-actions';
 import { normaliseName } from '@/lib/vendor-reading';
 import type { ScanChecks } from '@/lib/document-scanner';
 
@@ -98,9 +98,19 @@ interface ReceiptScannerProps {
    * A reading made earlier, such as an invoice that arrived by email: the
    * scanner opens straight on its review, as if it had just been read.
    */
-  initialScan?: { scanId: string; data: unknown } | null;
+  initialScan?: { scanId: string; data: unknown; pages?: string[] } | null;
   /** Called when the review is over (saved, line by line included, or cancelled). */
   onFinished?: () => void;
+}
+
+/** A document read in the background, and how it came out. */
+interface CaptureRun {
+  doc: ScannedDocument;
+  status: 'waiting' | 'reading' | 'saved' | 'review' | 'retake' | 'failed';
+  label?: string;
+  data?: CostReceiptData;
+  scanId?: string | null;
+  issues?: DocumentIssue[];
 }
 
 export interface AttachTarget {
@@ -166,15 +176,17 @@ export default function ReceiptScanner({
   const [scanId, setScanId] = useState<string | null>(null);
   const [editData, setEditData] = useState<ExtractionResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-const cameraRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   // An earlier reading opens on its review. Keyed on the id, so a parent
   // re-render does not throw away what the owner has already corrected.
   useEffect(() => {
     if (!initialScan) return;
-    setExtracted(initialScan.data as ExtractionResult);
-    setEditData(initialScan.data as ExtractionResult);
+    const reading = initialScan.data as ExtractionResult;
     setScanId(initialScan.scanId);
+    const issues = reading.type === 'cost_receipt' ? reading.checks?.issues ?? [] : [];
+    if (issues.length > 0) setDoubtful({ reading, issues });
+    else showReading(reading);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialScan?.scanId]);
 
@@ -196,6 +208,9 @@ const cameraRef = useRef<HTMLInputElement>(null);
   const [captured, setCaptured] = useState<{ frame: HTMLCanvasElement; corners: any } | null>(null);
   /** Every page of the document on screen, in order. Empty for a single file. */
   const [docPages, setDocPages] = useState<Array<{ dataUrl: string; qrText: string | null }>>([]);
+  /** Documents being read in the background, while the next is photographed. */
+  const [runs, setRuns] = useState<CaptureRun[]>([]);
+  const [reading, setReading] = useState(false);
   /** The next photograph is another page of the document just read. */
   const [addingPage, setAddingPage] = useState(false);
   /** A reading that cannot be trusted, waiting for the owner to decide. */
@@ -386,9 +401,68 @@ const cameraRef = useRef<HTMLInputElement>(null);
     setDocuments([]);
     setCurrentPages([]);
     setStage('idle');
+    // Invoices are read behind the owner's back while they photograph the
+    // next one: nobody waits, and what cannot be vouched for waits for them.
+    if (scanType === 'COST_RECEIPT' && !attachTarget) {
+      setRuns((was) => [...was, ...docs.map((doc): CaptureRun => ({ doc, status: 'waiting' }))]);
+      return;
+    }
     // The first document is read now; the rest wait their turn.
     setQueue(docs.slice(1));
     openDocument(docs[0]);
+  };
+
+  /** One document at a time, in the order photographed. */
+  useEffect(() => {
+    if (reading || !runs.some((r) => r.status === 'waiting')) return;
+    const run = runs.find((r) => r.status === 'waiting');
+    if (!run) return;
+    setReading(true);
+    const update = (patch: Partial<CaptureRun>) =>
+      setRuns((was) => was.map((r) => (r.doc.id === run.doc.id ? { ...r, ...patch } : r)));
+    update({ status: 'reading' });
+
+    void (async () => {
+      try {
+        const [first, ...rest] = run.doc.pages;
+        const res = await fetch('/api/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: first.split(',')[1],
+            mediaType: 'image/jpeg',
+            scanType: 'COST_RECEIPT',
+            queued: true,
+            extraPages: rest.map((page) => ({ imageBase64: page.split(',')[1], mediaType: 'image/jpeg' })),
+            qrTexts: (run.doc.qrTexts ?? []).filter((text): text is string => !!text),
+          }),
+        });
+        const result = await res.json();
+        if (!result.success) { update({ status: 'failed' }); return; }
+
+        const data = result.data as CostReceiptData;
+        const id = typeof result.scanId === 'string' ? result.scanId : null;
+        const trusted = canSaveUnseen({ vendor: data.vendor, lines: data.items.length, checks: data.checks });
+        const saved = trusted && await handleConfirmSave(undefined, { data, scanId: id, quiet: true });
+        if (saved) { update({ status: 'saved', label: data.vendor }); return; }
+        const issues = data.checks?.issues ?? [];
+        update({ status: issues.length > 0 ? 'retake' : 'review', label: data.vendor, data, scanId: id, issues });
+      } catch {
+        update({ status: 'failed' });
+      } finally {
+        setReading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runs, reading]);
+
+  /** Opens a document that needs a better photograph, while the paper is in hand. */
+  const openRun = (run: CaptureRun) => {
+    if (!run.data) return;
+    openDocument(run.doc);
+    setScanId(run.scanId ?? null);
+    setRuns((was) => was.filter((r) => r.doc.id !== run.doc.id));
+    setDoubtful({ reading: run.data, issues: run.issues ?? [] });
   };
 
   /** Brings a document up to be read, every page of it. */
@@ -492,6 +566,12 @@ const cameraRef = useRef<HTMLInputElement>(null);
     setScanning(false);
   };
 
+  /** The reading on screen gives way to a better one. */
+  const replaceReading = () => {
+    if (scanId) void dismissQueuedScan(scanId);
+    setScanId(null);
+  };
+
   const showReading = (reading: ExtractionResult) => {
     setExtracted(reading);
     setEditData(reading);
@@ -504,10 +584,11 @@ const cameraRef = useRef<HTMLInputElement>(null);
    */
   const handleConfirmSave = async (
     targetOverride?: AttachTarget,
-    unseen?: { data: CostReceiptData; scanId: string | null },
-  ) => {
+    unseen?: { data: CostReceiptData; scanId: string | null; quiet?: boolean },
+  ): Promise<boolean> => {
+    const quiet = !!unseen?.quiet;
     const draft = unseen?.data ?? editData;
-    if (!draft) return;
+    if (!draft) return false;
     const usedScanId = unseen ? unseen.scanId : scanId;
     const target = targetOverride ?? attachTarget;
     // Asked, never assumed — except when attaching, where the cost already
@@ -527,7 +608,7 @@ const cameraRef = useRef<HTMLInputElement>(null);
       setSaving(false);
       if ('error' in credit) {
         toast.error(translateError(language, credit.error ?? 'credit.errors.save'));
-        return;
+        return false;
       }
       toast.success(
         credit.data.matched
@@ -536,12 +617,12 @@ const cameraRef = useRef<HTMLInputElement>(null);
       );
       resetState();
       onSaved?.();
-      return;
+      return false;
     }
     const answer = paymentFromDraft(payment);
     if (draft.type === 'cost_receipt' && !target && !unseen && 'error' in answer) {
       toast.error(t(answer.error));
-      return;
+      return false;
     }
     setSaving(true);
 
@@ -583,10 +664,12 @@ const cameraRef = useRef<HTMLInputElement>(null);
         const found = 'data' in existing ? existing.data : null;
         const joiningTyped = !!found?.attachable && found.attachable.costEntryId === target?.costEntryId;
         if (found && !joiningTyped) {
+          // In the background it simply stays in the queue for the owner.
+          if (quiet) { setSaving(false); return false; }
           if (unseen) showReading(d);
           setDuplicate(found);
           setSaving(false);
-          return;
+          return false;
         }
 
         const result = target
@@ -617,7 +700,7 @@ const cameraRef = useRef<HTMLInputElement>(null);
           const linkTo = entryId ?? target?.costEntryId;
           if (usedScanId && linkTo) linkScanToCost({ scanId: usedScanId, costEntryId: linkTo }).catch(() => undefined);
 
-          toast.success(unseen ? t('scanner.savedUnseen') : target ? t('payments.attached') : t('scanner.costSaved'));
+          if (!quiet) toast.success(unseen ? t('scanner.savedUnseen') : target ? t('payments.attached') : t('scanner.costSaved'));
 
           // The lines go in with the money. What nobody has explained yet
           // waits in "Precisa de ti": no one is held up at the door.
@@ -649,7 +732,7 @@ const cameraRef = useRef<HTMLInputElement>(null);
               toast.error(t('scanner.saveFailed'));
             } else if (lines.data.settledCredit) {
               toast.info(t('credit.settledByInvoice').replace('{note}', lines.data.settledCredit));
-            } else if (lines.data.pending > 0) {
+            } else if (lines.data.pending > 0 && !quiet) {
               toast.info(
                 t(lines.data.pending === 1 ? 'lineSetup.pendingOne' : 'lineSetup.pendingMany')
                   .replace('{count}', String(lines.data.pending)),
@@ -659,19 +742,23 @@ const cameraRef = useRef<HTMLInputElement>(null);
             if (attachTarget && !attachTo) setAttachTarget(null);
           }
 
+          if (quiet) { setSaving(false); onSaved?.(); return true; }
           resetState();
           onSaved?.();
         } else {
+          if (quiet) { setSaving(false); return false; }
           if (unseen) showReading(d);
           toast.error(result.error ? t(result.error) : t('scanner.saveFailed'));
         }
       }
     } catch {
+      if (quiet) { setSaving(false); return false; }
       if (unseen) showReading(unseen.data);
       toast.error(t('scanner.saveFailed'));
     }
 
     setSaving(false);
+    return false;
   };
 
   /**
@@ -796,6 +883,32 @@ const cameraRef = useRef<HTMLInputElement>(null);
         </div>
       )}
 
+      {runs.length > 0 && (
+        <ul className="mb-4 divide-y divide-border-subtle rounded-xl border border-border-subtle" aria-live="polite">
+          {runs.map((run, i) => (
+            <li key={run.doc.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+              <span className="min-w-0 text-sm text-foreground truncate">
+                {run.label ?? t('scanner.runDocument').replace('{n}', String(i + 1))}
+              </span>
+              {run.status === 'retake' ? (
+                <button type="button" onClick={() => openRun(run)} className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-warning hover:underline">
+                  <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
+                  {t('scanner.runRetake')}
+                </button>
+              ) : (
+                <span className={`shrink-0 inline-flex items-center gap-1 text-xs font-medium ${
+                  run.status === 'saved' ? 'text-success' : run.status === 'failed' ? 'text-danger' : 'text-muted-foreground'}`}
+                >
+                  {(run.status === 'reading' || run.status === 'waiting') && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />}
+                  {run.status === 'saved' && <Check className="w-3.5 h-3.5" aria-hidden="true" />}
+                  {t(`scanner.run_${run.status}`)}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
       {/* Camera / upload */}
       {/* Nothing to capture while reviewing a reading made earlier. */}
       {!imagePreview && !extracted && (
@@ -847,9 +960,33 @@ const cameraRef = useRef<HTMLInputElement>(null);
         <ScanIssues
           issues={doubtful.issues}
           picture={imagePreview && !imagePreview.startsWith('data:application/pdf') ? imagePreview : null}
-          onRetake={() => { setDoubtful(null); resetState(); openCamera(); }}
-          onAddPage={() => {
-            setDocPages((pages) => (pages.length || !imagePreview ? pages : [{ dataUrl: imagePreview, qrText: null }]));
+          onRetake={() => {
+            replaceReading();
+            setDoubtful(null);
+            setDocPages([]);
+            setImagePreview(null);
+            openCamera();
+          }}
+          onAddPage={async () => {
+            // A reading from the queue has its pages on the server, not in memory.
+            let first = imagePreview;
+            const stored = initialScan?.pages ?? [];
+            const known = await Promise.all(stored.map(async (path) => {
+              const blob = await (await fetch(`/api/images/${path}`)).blob();
+              return new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result));
+                reader.readAsDataURL(blob);
+              });
+            }));
+            if (known.length > 0) {
+              first = known[0];
+              setImagePreview(first);
+              setDocPages(known.map((dataUrl) => ({ dataUrl, qrText: null })));
+            } else {
+              setDocPages((pages) => (pages.length || !first ? pages : [{ dataUrl: first, qrText: null }]));
+            }
+            replaceReading();
             setDoubtful(null);
             setAddingPage(true);
             openCamera();

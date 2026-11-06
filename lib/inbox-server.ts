@@ -81,6 +81,12 @@ export async function readInboxCounts(restaurantId: string): Promise<InboxCounts
   });
   const wordings = new Set(waiting.map((w) => `${w.vendorId ?? ''}|${w.productName.trim().toLowerCase()}`));
 
+  const toReview = await prisma.receiptScan.findMany({
+    where: { restaurantId, queued: true, reviewedAt: null, linkedEntryId: null },
+    select: { extractedData: true },
+    take: 200,
+  });
+
   const unproved = await prisma.receiptScan.findMany({
     where: { restaurantId, proofStatus: 'failed', proofResolvedAt: null, linkedEntryId: { not: null } },
     select: { extractedData: true },
@@ -121,6 +127,13 @@ export async function readInboxCounts(restaurantId: string): Promise<InboxCounts
   return {
     overdue: { count: overdueCount, total: cents(overdueTotal) },
     paymentsToConfirm: { count: toConfirmCount, total: cents(toConfirmTotal) },
+    scansToReview: {
+      count: toReview.length,
+      total: cents(toReview.reduce((s, e) => {
+        const total = (e.extractedData as { grandTotal?: unknown } | null)?.grandTotal;
+        return s + (typeof total === 'number' ? total : 0);
+      }, 0)),
+    },
     duplicateCosts: {
       count: duplicates.length,
       total: cents(duplicates.reduce((s, d) => s + d.amount, 0)),

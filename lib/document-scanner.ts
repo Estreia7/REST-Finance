@@ -114,6 +114,8 @@ export interface ScanChecks {
   printedTotal?: number | null;
   /** Why this reading cannot be trusted as it stands. See lib/invoice-checks.ts. */
   issues?: DocumentIssue[];
+  /** Lines priced far from what this product usually costs. */
+  oddPrices?: number;
 }
 
 export interface DailyReportResult {

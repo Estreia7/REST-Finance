@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 });
     }
 
-    const { imageBase64, mediaType, scanType, extraPages, qrTexts } = parsed.data;
+    const { imageBase64, mediaType, scanType, extraPages, qrTexts, queued } = parsed.data;
     const { data, scanId } = await processScan({
       restaurantId: membership.restaurantId,
       userId: membership.userId,
@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
       source: 'APP',
       extraPages: extraPages?.map((page) => ({ base64: page.imageBase64, mediaType: page.mediaType })),
       qrTexts,
+      queued,
     });
 
     return NextResponse.json({
