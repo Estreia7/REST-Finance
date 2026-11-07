@@ -35,9 +35,20 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.06.06';
+export const CHANGELOG_VERSION = '2026.11.07.01';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.07.01',
+    date: '2026-11-07',
+    entries: [
+      {
+        kind: 'fix',
+        title: 'Faturas da Makro com taxa da cerveja e com Leve Mais Pague Menos',
+        detail: 'A nota da taxa incluída no preço da cerveja já não baralha a linha seguinte. O desconto Leve Mais Pague Menos sai sozinho do produto a que pertence, e esse produto fica com o preço que realmente pagou.',
+      },
+    ],
+  },
   {
     version: '2026.11.06.06',
     date: '2026-11-06',

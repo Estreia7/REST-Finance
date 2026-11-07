@@ -40,7 +40,7 @@ export const SCANNER_RETRY_MODEL = 'claude-opus-5-5';
  * prompt change rather than guessed at. Date-stamped rather than numbered:
  * the question asked later is always "what were we sending in September?".
  */
-export const PROMPT_VERSION = '2026-11-06.2';
+export const PROMPT_VERSION = '2026-11-07.1';
 
 /**
  * Room for the answer. A long cash-and-carry invoice runs to forty lines, and
@@ -100,7 +100,9 @@ Rules that matter for Portuguese documents:
 - Every line has a VAT rate: a "%IVA" column, or a letter or code explained in a legend at the foot. Report it as a number: 6, 13, 23 on the mainland; 4, 12, 22 in Madeira; 4, 9, 16 in the Azores; 0 if exempt.
 - On Makro invoices the last columns of each line hold a VAT code ("IvaCD"), not a percentage: code 2 is 23%, code 4 is 6%, code 5 is 13%. Read it from that line, never from the lines around it.
 - Copy the VAT table at the foot of the invoice into vatSummary, one entry per rate with its base ("Incidência") and tax ("Imposto"/"Valor IVA").
-- Do not skip lines. A deposit ("tara", "vasilhame"), an eco-tax, a delivery fee, or a discount printed as its own row among the products, is still a line.
+- Do not skip lines. A deposit ("tara", "vasilhame"), an eco-tax or a delivery fee is still a line. So is a discount printed as its own row among the products that belongs to no product in particular: report it with a negative total.
+- A row saying a charge is already inside a price is NOT a line. Makro prints one under beers and soft drinks, with no pack, quantity or VAT columns: "94 TAXA IEC INCL. PREÇO U.V 1,528 * 1 = 1,53". Leave it out altogether. The product above it keeps its own figures, and the product below it starts afresh: read that line only from its own row, and never let the numbers of this row move into it.
+- A discount row tied to a product is NOT a line either. Makro prints a row with no description, only a value, a VAT code and a promotion number, for example "4,41 5 44907", and "Leve Mais Pague Menos" beneath the products. The product with the same promotion number at the end of its row ("58,77 5 44907") is the one discounted. Report that product exactly as printed and put the 4.41 in its lineDiscount. Report "Leve Mais Pague Menos" nowhere as a line. If the row is tied to no product you can find, leave it out of the lines and count it in discountTotal.
 - "Desconto total", "Total descontos" and the like in the totals block at the foot are NOT lines. Never report them as a line: report the figure in discountTotal.
 - When a line has a discount of its own printed beside or beneath it, the line's total is the value AFTER that discount, so the lines add up to "Total s/ IVA".
 - "Transporte", "A transportar" and "Saldo transportado" are a running subtotal carried to the next page, never the invoice's total. If the final total is not on what you were given, set totalVisible to false and do not work one out from the lines.
@@ -172,6 +174,11 @@ const COST_RECEIPT_SCHEMA = {
           grossTotal: {
             type: 'number',
             description: 'The line value WITH VAT ("Preço c/IVA"), if the invoice prints it. Omit it otherwise.',
+          },
+          lineDiscount: {
+            type: 'number',
+            description:
+              'A discount printed on a row of its own and tied to this line, as a positive number: the row "4,41 5 44907" belongs to the line ending in the same promotion number 44907. Omit it otherwise. quantity, unitPrice and total stay as printed on the line itself.',
           },
           packAmount: {
             type: 'number',

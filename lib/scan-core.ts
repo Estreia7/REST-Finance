@@ -3,7 +3,7 @@ import { scanDocument, type ScanPage, type ScanResult, type MediaType, type Scan
 import { readInvoiceQr, applyQrTruth, parseInvoiceQr, type InvoiceQrData } from '@/lib/pt-invoice-qr';
 import { checkVendorReading, looksLikeCustomer, type CustomerIdentity } from '@/lib/vendor-reading';
 import { saveImage, saveDocument, resolveStoredPath } from '@/lib/uploads';
-import { betterProof, checkReading, documentIssues, isDiscountNote, rereadHint, settleFigures, type CheckedReading, type Proof } from '@/lib/invoice-checks';
+import { betterProof, checkReading, documentIssues, foldNotes, isDiscountNote, rereadHint, settleFigures, type CheckedReading, type Proof } from '@/lib/invoice-checks';
 import { isCreditNoteNumber } from '@/lib/credit-notes';
 import { cleanTaxId, readerNote, rulesFor } from '@/lib/supplier-knowledge';
 import { invoiceUnit, unusualPrice } from '@/lib/line-setup';
@@ -148,7 +148,7 @@ async function readDocument(input: {
 
   const firstRead = await scanDocument(base64, mediaType, scanType, { ...options, hint: known });
   let printedTotal = firstRead.type === 'cost_receipt' ? firstRead.grandTotal : null;
-  let reading = withQrTruth(firstRead, qr);
+  let reading = withQrTruth(asPaid(firstRead), qr);
   let proof = proofOf(reading.data, qr);
 
   ({ reading, proof } = tidied(reading, proof, qr));
@@ -164,7 +164,7 @@ async function readDocument(input: {
         model: SCANNER_RETRY_MODEL,
         hint: note + rereadHint(proof, reading.data as unknown as CheckedReading),
       });
-      const again = withQrTruth(secondRead, qr);
+      const again = withQrTruth(asPaid(secondRead), qr);
       const second = proofOf(again.data, qr);
       if (second && betterProof(proof, second) === 'second') {
         reading = again;
@@ -338,6 +338,11 @@ async function decodeQr(imageBase64: string, mediaType: string): Promise<Invoice
   } catch {
     return null;
   }
+}
+
+/** A reading with its explanatory rows gone and tied discounts on their products. */
+function asPaid(data: ScanResult): ScanResult {
+  return data.type === 'cost_receipt' ? { ...data, ...foldNotes(data.items, data.discountTotal) } : data;
 }
 
 /** A reading with the QR's fields taking the place of what was read. */

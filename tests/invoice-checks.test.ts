@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { checkReading,
-  canSaveUnseen, betterProof, rereadHint, type CheckedReading, settleVat, settleFigures, isDiscountNote, documentIssues } from '@/lib/invoice-checks';
+  canSaveUnseen, betterProof, rereadHint, type CheckedReading, settleVat, settleFigures, isDiscountNote, isIncludedNote, foldNotes, documentIssues } from '@/lib/invoice-checks';
 import { parseInvoiceQr } from '@/lib/pt-invoice-qr';
 
 // A wholesale invoice with fictional identifiers: 0,905 kg of mushrooms at 3,69 the kilo.
@@ -162,6 +162,7 @@ describe('isDiscountNote', () => {
     expect(isDiscountNote('Desconto total')).toBe(true);
     expect(isDiscountNote('Total de descontos')).toBe(true);
     expect(isDiscountNote('DESCONTO')).toBe(true);
+    expect(isDiscountNote('Leve Mais Pague Menos')).toBe(true);
   });
 
   it('leaves a product alone', () => {
@@ -357,6 +358,81 @@ describe('documentIssues', () => {
   it('will not call anything verified with no figures to go on', () => {
     const reading = { ...clean.reading, qrVisible: false, vatSummary: [], items: [{ quantity: 1, unitPrice: 10, total: 10, vatRate: null }] };
     expect(kinds({ ...clean, reading, qrRead: false, qrTotal: null, proof: null })).toEqual(['cannotVerify']);
+  });
+});
+
+describe('a Makro invoice with a tax note and a promotion', () => {
+  const row = (product: string, quantity: number, unitPrice: number, total: number, vatRate: number, lineDiscount?: number) =>
+    ({ product, quantity, unitPrice, total, vatRate, lineDiscount });
+  // FAC 06001202501/015053: 140,87 before VAT, 162,77 to pay.
+  const lines = [
+    row('MC BACON FATIAS 500G', 4, 4.44, 17.76, 23),
+    row('COSTELINHA/PIANOS PORCO', 3.955, 5.49, 21.71, 6),
+    row('MC ALFACE ICEBERG', 2, 1.08, 2.16, 6),
+    row('MC OLEO ALTO RENDIMENTO 10LT', 3, 19.59, 58.77, 13, 4.41),
+    row('MC MAIONESE 5LT', 1, 10.09, 10.09, 23),
+    row('CERV.SUPER BOCK 24X33CL', 24, 0.52, 12.48, 23),
+    row('TAXA IEC INCL. PREÇO U.V', 1, 1.53, 1.53, 23),
+    row('AGUA PED.SALGADAS 24X25CL', 24, 0.42, 10.08, 13),
+    row('ARO PAPEL FORNO 50MX30CM', 1, 3.89, 3.89, 23),
+    row('MPRO DESENGORDURANTE QUENTE 5L', 3, 2.78, 8.34, 23),
+  ];
+  const taxes = [{ rate: 23, base: 52.56, tax: 12.09 }, { rate: 6, base: 23.87, tax: 1.43 }, { rate: 13, base: 64.44, tax: 8.38 }];
+
+  it('adds up to the cent once the rows are folded in', () => {
+    const { items, discountTotal } = foldNotes(lines, 4.41);
+    expect(items).toHaveLength(9);
+    expect(discountTotal).toBe(0);
+    const proof = checkReading({ items, grandTotal: 162.77 }, { taxes });
+    expect(proof.status).toBe('proved');
+    expect(proof.gap).toBe(0);
+  });
+
+  it('leaves the discounted product at what it really cost', () => {
+    const oil = foldNotes(lines, 4.41).items.find((l) => l.product.includes('OLEO'));
+    expect(oil).toMatchObject({ quantity: 3, unitPrice: 18.12, total: 54.36 });
+    expect(oil).not.toHaveProperty('lineDiscount');
+  });
+
+  it('still lands on the rates when the reader did not tie the discount to a product', () => {
+    const { items } = foldNotes(lines.map(({ lineDiscount: _, ...l }) => l));
+    const named = items.map((l) => ({ ...l, productName: l.product }));
+    const settled = settleFigures(named, taxes, 4.41);
+    expect(settled?.discounted).toBe(true);
+    const band = items.reduce((sum, l, i) => sum + (l.vatRate === 13 ? settled?.totals[i] ?? 0 : 0), 0);
+    expect(band).toBeCloseTo(64.44, 2);
+  });
+});
+
+describe('foldNotes', () => {
+  const row = (product: string, total: number, lineDiscount?: number) =>
+    ({ product, quantity: 2, unitPrice: total / 2, total, lineDiscount });
+
+  it('does not believe a discount larger than its line', () => {
+    const { items, discountTotal } = foldNotes([row('A', 5, 9)], 9);
+    expect(items[0].total).toBe(5);
+    expect(discountTotal).toBe(9);
+  });
+
+  it('keeps what is left of a discount not tied to a line', () => {
+    expect(foldNotes([row('A', 10, 2)], 3).discountTotal).toBe(1);
+  });
+
+  it('never empties a reading', () => {
+    expect(foldNotes([row('TAXA IEC INCL. PRECO', 1)]).items).toHaveLength(1);
+  });
+});
+
+describe('isIncludedNote', () => {
+  it('knows a charge already inside a price', () => {
+    expect(isIncludedNote('94 TAXA IEC INCL. PREÇO U.V')).toBe(true);
+    expect(isIncludedNote('Ecovalor incluído no preço')).toBe(true);
+  });
+
+  it('leaves real charges and products alone', () => {
+    expect(isIncludedNote('TAXA IEC')).toBe(false);
+    expect(isIncludedNote('CERV.SUPER BOCK 24X33CL')).toBe(false);
+    expect(isIncludedNote('PRECO FIXO')).toBe(false);
   });
 });
 

@@ -175,7 +175,49 @@ export function checkReading(reading: CheckedReading, qr: Pick<InvoiceQrData, 't
  * printed among the products can be a real line.
  */
 export function isDiscountNote(productName: string): boolean {
-  return /^\s*(total\s+(de\s+)?)?descontos?\b/i.test(productName);
+  return /^\s*((total\s+(de\s+)?)?descontos?\b|leve\s+mais\b|pague\s+menos\b)/i.test(productName);
+}
+
+/**
+ * Whether a row only explains what is already inside the line above it.
+ *
+ * Makro prints "TAXA IEC INCL. PREÇO U.V 1,528 * 1 = 1,53" under a beer: the
+ * excise duty is in the beer's price, so as a line it would be paid twice.
+ */
+export function isIncludedNote(productName: string): boolean {
+  return /\bincl(\.|u[ií]d[oa]s?)?\s*(n[oa]\s+|em\s+)?pre[çc]o/i.test(productName);
+}
+
+/**
+ * The lines as they were paid for, whatever rows the page used to say so.
+ *
+ * A row that only explains a price goes. A discount tied to one product ("Leve
+ * Mais Pague Menos": 3 oils at 19,59, 4,41 off) comes off that product, so its
+ * price is what it really cost, and no longer counts as a discount left to share
+ * out. A discount larger than its line is not believed and stays where it was.
+ */
+export function foldNotes<T extends CheckedLine & { product: string; lineDiscount?: number }>(
+  items: T[],
+  discountTotal = 0,
+): { items: T[]; discountTotal: number } {
+  const kept = items.filter((item) => !isIncludedNote(item.product));
+  let taken = 0;
+  const folded = (kept.length > 0 ? kept : items).map((item) => {
+    const { lineDiscount, ...line } = item;
+    const discount = lineDiscount ?? 0;
+    if (discount <= 0 || discount >= line.total) return line as T;
+    taken += discount;
+    const total = cents(line.total - discount);
+    return {
+      ...line,
+      total,
+      unitPrice: line.quantity > 0 ? Math.round((total / line.quantity) * 10000) / 10000 : line.unitPrice,
+      grossTotal: line.grossTotal != null && line.vatRate != null
+        ? cents(total * (1 + line.vatRate / 100))
+        : line.grossTotal,
+    } as T;
+  });
+  return { items: folded, discountTotal: Math.max(0, cents(discountTotal - taken)) };
 }
 
 /**
