@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Sparkles, X, ArrowUp, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 import { translateError } from '@/lib/error-messages';
+import { HandoffBeam, createSimulatedVoice, type BeamPhase } from '@/components/ui/handoff-beam';
 
 /**
  * "Pergunta": a round button on every dashboard screen that opens a chat about
@@ -17,6 +18,10 @@ interface Turn { role: 'user' | 'assistant'; content: string }
 
 const SUGGESTIONS = ['assistant.suggest1', 'assistant.suggest2', 'assistant.suggest3'] as const;
 
+/** How long the light under the box keeps "speaking" after an answer lands. */
+const SPEAKING_MS = 2600;
+const answerVoice = createSimulatedVoice(29);
+
 export default function AssistantLauncher({ raised = false }: {
   /** Sits higher on a phone when the dashboard's own "+" button is showing. */
   raised?: boolean;
@@ -29,6 +34,21 @@ export default function AssistantLauncher({ raised = false }: {
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const [answered, setAnswered] = useState(false);
+  // Opening the chat and each keystroke kick the light, and it settles by itself.
+  const pulse = useRef(0);
+  const typingLevel = useCallback(() => {
+    pulse.current *= 0.975;
+    return pulse.current;
+  }, []);
+
+  const beamPhase: BeamPhase = busy ? 'thinking' : answered ? 'speaking' : 'listening';
+
+  useEffect(() => {
+    if (!answered) return;
+    const timer = setTimeout(() => setAnswered(false), SPEAKING_MS);
+    return () => clearTimeout(timer);
+  }, [answered]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -39,7 +59,11 @@ export default function AssistantLauncher({ raised = false }: {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    inputRef.current?.focus();
+    pulse.current = 1;
+  }, [open]);
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' }); }, [turns, busy]);
 
   const ask = useCallback(async (question: string) => {
@@ -62,6 +86,7 @@ export default function AssistantLauncher({ raised = false }: {
         setError(translateError(language, data.error ?? 'assistant.failed'));
       } else {
         setTurns([...next, { role: 'assistant', content: data.answer }]);
+        setAnswered(true);
       }
     } catch {
       setError(t('assistant.failed'));
@@ -147,27 +172,29 @@ export default function AssistantLauncher({ raised = false }: {
             className="border-t border-border p-3"
             onSubmit={(e) => { e.preventDefault(); ask(draft); }}
           >
-            <div className="flex items-end gap-2 rounded-2xl border border-border bg-input px-3 py-2 focus-within:ring-2 focus-within:ring-primary/40">
-              <textarea
-                ref={inputRef}
-                rows={1}
-                value={draft}
-                maxLength={1000}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(draft); } }}
-                placeholder={t('assistant.placeholder')}
-                aria-label={t('assistant.placeholder')}
-                className="max-h-32 flex-1 resize-none bg-transparent py-1 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-              />
-              <button
-                type="submit"
-                disabled={busy || !draft.trim()}
-                aria-label={t('assistant.send')}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40"
-              >
-                <ArrowUp className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
+            <HandoffBeam phase={beamPhase} level={beamPhase === 'speaking' ? answerVoice : typingLevel} radius={16}>
+              <div className="flex items-end gap-2 rounded-2xl border border-border bg-input px-3 py-2 focus-within:ring-1 focus-within:ring-inset focus-within:ring-primary/60">
+                <textarea
+                  ref={inputRef}
+                  rows={1}
+                  value={draft}
+                  maxLength={1000}
+                  onChange={(e) => { setDraft(e.target.value); pulse.current = 0.8; }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(draft); } }}
+                  placeholder={t('assistant.placeholder')}
+                  aria-label={t('assistant.placeholder')}
+                  className="max-h-32 flex-1 resize-none bg-transparent py-1 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={busy || !draft.trim()}
+                  aria-label={t('assistant.send')}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40"
+                >
+                  <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            </HandoffBeam>
           </form>
         </section>
       )}
