@@ -16,6 +16,7 @@ import { enabledModules } from '@/lib/modules';
 import { isDemoAccount } from '@/lib/demo';
 import { findMunicipality } from '@/lib/derrama';
 import { isValidNif } from '@/lib/pt-validation';
+import { validateNifChange } from '@/lib/restaurant-nif';
 import { calculateKpis, toPercent, safeDivide, percentChange } from '@/lib/kpi';
 // Keep these in sync with the Prisma enums in schema.prisma
 type CostType = 'COGS' | 'OPEX';
@@ -1109,6 +1110,12 @@ export async function updateRestaurantSettings(data: {
    */
   taxId?: string | null;
   /**
+   * The business changed NIF (a sole trader opening a company): the new one
+   * and the first day invoices are made out to it, as YYYY-MM-DD. `changed`
+   * false clears both.
+   */
+  nifChange?: { changed: boolean; newTaxId: string; from: string };
+  /**
    * The dining room, for RevPASH and the per-seat figures. Null clears; these
    * are validated by the caller with lib/onboarding.ts validateRoom.
    */
@@ -1134,6 +1141,16 @@ export async function updateRestaurantSettings(data: {
     const nif = data.taxId === undefined ? undefined : (data.taxId ?? '').replace(/\D/g, '');
     if (nif && !isValidNif(nif)) return { error: 'settings.taxIdInvalid' };
 
+    let change: { newTaxId: string | null; newTaxIdFrom: Date | null } | undefined;
+    if (data.nifChange) {
+      const current = nif !== undefined
+        ? nif || null
+        : (await prisma.restaurant.findUnique({ where: { id: owner.restaurantId }, select: { taxId: true } }))?.taxId ?? null;
+      const checked = validateNifChange({ ...data.nifChange, taxId: current });
+      if (!checked.ok) return { error: checked.error };
+      change = { newTaxId: checked.newTaxId, newTaxIdFrom: checked.newTaxIdFrom };
+    }
+
     // Only a code the Tax Authority's list knows: anything else would leave
     // the tax estimate pointing at a council with no rates.
     if (data.municipalityCode && !findMunicipality(data.municipalityCode)) {
@@ -1148,6 +1165,7 @@ export async function updateRestaurantSettings(data: {
         ...(data.currency && { currency: data.currency }),
         ...(data.municipalityCode !== undefined && { municipalityCode: data.municipalityCode }),
         ...(nif !== undefined && { taxId: nif || null }),
+        ...(change && change),
         ...(data.seats !== undefined && { seats: data.seats }),
         ...(data.serviceHoursPerDay !== undefined && { serviceHoursPerDay: data.serviceHoursPerDay }),
         ...(data.monthlyRevenueTarget !== undefined && { monthlyRevenueTarget: data.monthlyRevenueTarget }),

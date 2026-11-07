@@ -42,7 +42,8 @@ export async function listRecurringCosts() {
   if (isAuthError(owner)) return fail(owner.error);
 
   const rows = await prisma.recurringCost.findMany({
-    where: { restaurantId: owner.restaurantId, active: true },
+    // Pay is set per person in Equipa and changed only there.
+    where: { restaurantId: owner.restaurantId, active: true, employeeId: null },
     include: { category: { select: { name: true } } },
   });
 
@@ -53,6 +54,7 @@ export async function listRecurringCosts() {
         dayOfMonth: r.dayOfMonth,
         endDate: key(r.endDate),
         lastGeneratedDate: key(r.lastGeneratedDate),
+        months: r.months,
       };
       return {
         id: r.id,
@@ -82,7 +84,7 @@ export async function updateRecurringCostAmount(id: string, amount: number) {
   if (!Number.isFinite(amount) || amount < 0.01 || amount > 999999) return fail('recurring.invalidAmount');
 
   const { count } = await prisma.recurringCost.updateMany({
-    where: { id, restaurantId: owner.restaurantId, active: true },
+    where: { id, restaurantId: owner.restaurantId, active: true, employeeId: null },
     data: { amount: Math.round(amount * 100) / 100 },
   });
   if (count === 0) return fail('recurring.notFound');
@@ -98,7 +100,7 @@ export async function stopRecurringCost(id: string) {
   if (isAuthError(owner)) return fail(owner.error);
 
   const existing = await prisma.recurringCost.findFirst({
-    where: { id, restaurantId: owner.restaurantId, active: true },
+    where: { id, restaurantId: owner.restaurantId, active: true, employeeId: null },
     select: { id: true, lastGeneratedDate: true, startDate: true },
   });
   if (!existing) return fail('recurring.notFound');
@@ -121,7 +123,7 @@ export async function setRecurringCostPayment(id: string, method: PaymentMethodK
   if (method !== null && !PAYMENT_METHODS.includes(method)) return fail('payments.invalidMethod');
 
   const { count } = await prisma.recurringCost.updateMany({
-    where: { id, restaurantId: owner.restaurantId, active: true },
+    where: { id, restaurantId: owner.restaurantId, active: true, employeeId: null },
     data: { paymentMethod: method },
   });
   if (count === 0) return fail('recurring.notFound');

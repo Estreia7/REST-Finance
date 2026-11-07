@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { Clock, KeyRound, Palmtree } from 'lucide-react';
+import { Clock, KeyRound, Palmtree, Wallet } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 import LeavePanel from './LeavePanel';
 import ClockPanel from './ClockPanel';
+import PayPanel from './PayPanel';
 
 /**
  * The Equipa tab: holidays and the time clock for the people on the rota, and
@@ -13,17 +14,19 @@ import ClockPanel from './ClockPanel';
  *
  * Holidays first: they are the thing an owner comes back to every few weeks,
  * whereas access is set once when someone is hired. The clock is an extra
- * module (lib/modules.ts): without it, its view is not offered.
+ * module (lib/modules.ts): without it, its view is not offered. Colaboradores
+ * holds each person's salary, which the app books as a monthly cost.
  */
 export default function TeamTab({ access, clock }: { access: ReactNode; clock: boolean }) {
   const { t } = useLanguage();
-  const [view, setView] = useState<'leave' | 'clock' | 'access'>('leave');
+  const [view, setView] = useState<'leave' | 'pay' | 'clock' | 'access'>('leave');
 
   return (
     <div className="space-y-4">
-      <div role="group" aria-label={t('teamTab.viewLabel')} className="inline-flex rounded-xl bg-muted p-1">
+      <div role="group" aria-label={t('teamTab.viewLabel')} className="inline-flex flex-wrap rounded-xl bg-muted p-1">
         {([
           ['leave', Palmtree, t('teamTab.leave')],
+          ['pay', Wallet, t('teamTab.pay')],
           ['clock', Clock, t('teamTab.clock')],
           ['access', KeyRound, t('teamTab.access')],
         ] as const).filter(([value]) => clock || value !== 'clock').map(([value, Icon, label]) => (
@@ -42,7 +45,7 @@ export default function TeamTab({ access, clock }: { access: ReactNode; clock: b
         ))}
       </div>
 
-      {view === 'leave' ? <LeavePanel /> : view === 'clock' && clock ? <ClockPanel /> : access}
+      {view === 'leave' ? <LeavePanel /> : view === 'pay' ? <PayPanel /> : view === 'clock' && clock ? <ClockPanel /> : access}
     </div>
   );
 }

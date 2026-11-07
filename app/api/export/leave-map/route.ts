@@ -4,6 +4,7 @@ import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { getServerLanguage } from '@/lib/server-language';
 import { getTranslation } from '@/lib/translations';
 import { dateKey } from '@/lib/schedule';
+import { nifOn } from '@/lib/restaurant-nif';
 import { logoDataUri } from '@/lib/logo-data-uri';
 import { buildLeaveMapPages, LEAVE_MAP_COPY_KEYS, type LeaveMapCopy } from '@/lib/leave-map';
 import { leaveMapPdf, rasterisePage, PREVIEW_SCALE } from '@/lib/leave-map-render';
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
   const [restaurant, employees, leaves] = await Promise.all([
     prisma.restaurant.findUnique({
       where: { id: owner.restaurantId },
-      select: { name: true, logoPath: true, taxId: true },
+      select: { name: true, logoPath: true, taxId: true, newTaxId: true, newTaxIdFrom: true },
     }),
     prisma.scheduleEmployee.findMany({
       where: { restaurantId: owner.restaurantId, deletedAt: null },
@@ -78,7 +79,7 @@ export async function GET(request: NextRequest) {
   try {
     const { pages, width, height } = buildLeaveMapPages({
       restaurantName: restaurant?.name ?? '',
-      taxId: restaurant?.taxId ?? null,
+      taxId: restaurant ? nifOn(restaurant, new Date()) : null,
       logo: await logoDataUri(restaurant?.logoPath, 256),
       year,
       employees,

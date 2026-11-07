@@ -339,7 +339,7 @@ export async function getMonthProgress() {
       }),
       prisma.recurringCost.findMany({
         where: { restaurantId: owner.restaurantId, active: true },
-        select: { amount: true, dayOfMonth: true, startDate: true, endDate: true, lastGeneratedDate: true },
+        select: { amount: true, dayOfMonth: true, startDate: true, endDate: true, lastGeneratedDate: true, months: true },
       }),
     ]);
 
@@ -362,6 +362,7 @@ export async function getMonthProgress() {
         dayOfMonth: r.dayOfMonth,
         endDate: key(r.endDate),
         lastGeneratedDate: key(r.lastGeneratedDate),
+        months: r.months,
       });
       return next && next > todayKey && next <= endKey ? sum + Number(r.amount) : sum;
     }, 0);

@@ -21,6 +21,11 @@ function parts(key: string): { year: number; month: number } {
   return { year: Number(key.slice(0, 4)), month: Number(key.slice(5, 7)) - 1 };
 }
 
+/** Whether a cost that books only in some months (1–12) books in this date's. Empty is every month. */
+function inMonths(key: string, months: readonly number[] | undefined): boolean {
+  return !months?.length || months.includes(parts(key).month + 1);
+}
+
 /**
  * The last date a contract of `months` months books, counting the first.
  * Twelve months from October 2026 ends in September 2027.
@@ -45,14 +50,16 @@ export function dueOccurrences(input: {
   endDate: string | null;
   lastGeneratedDate: string | null;
   today: string;
+  /** Books only in these months, 1–12; empty or missing is every month. */
+  months?: readonly number[];
 }): string[] {
-  const { startDate, dayOfMonth, endDate, lastGeneratedDate, today } = input;
+  const { startDate, dayOfMonth, endDate, lastGeneratedDate, today, months } = input;
   const limit = endDate && endDate < today ? endDate : today;
   const out: string[] = [];
 
   if (!lastGeneratedDate) {
     if (startDate > limit) return out;
-    out.push(startDate);
+    if (inMonths(startDate, months)) out.push(startDate);
   }
 
   const from = parts(lastGeneratedDate ?? startDate);
@@ -62,7 +69,7 @@ export function dueOccurrences(input: {
     const m = from.month + i;
     const date = occurrenceIn(from.year + Math.floor(m / 12), m % 12, dayOfMonth);
     if (date > limit) break;
-    out.push(date);
+    if (inMonths(date, months)) out.push(date);
   }
   return out;
 }
@@ -73,13 +80,19 @@ export function nextOccurrence(input: {
   dayOfMonth: number;
   endDate: string | null;
   lastGeneratedDate: string | null;
+  months?: readonly number[];
 }): string | null {
-  const { startDate, dayOfMonth, endDate, lastGeneratedDate } = input;
+  const { startDate, dayOfMonth, endDate, lastGeneratedDate, months } = input;
   let next: string;
   if (!lastGeneratedDate) {
     next = startDate;
   } else {
     const { year, month } = parts(lastGeneratedDate);
+    next = occurrenceIn(year + Math.floor((month + 1) / 12), (month + 1) % 12, dayOfMonth);
+  }
+  // A cost booked only in some months waits for the next of them.
+  for (let i = 0; i < 12 && !inMonths(next, months); i++) {
+    const { year, month } = parts(next);
     next = occurrenceIn(year + Math.floor((month + 1) / 12), (month + 1) % 12, dayOfMonth);
   }
   return endDate && next > endDate ? null : next;

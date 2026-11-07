@@ -50,6 +50,12 @@ export default function SettingsPanel({
   const [currency, setCurrency] = useState(restaurant?.currency || 'EUR');
   const [municipalityCode, setMunicipalityCode] = useState<string | null>(restaurant?.municipalityCode ?? null);
   const [restaurantNif, setRestaurantNif] = useState<string>(restaurant?.taxId ?? '');
+  // The business changed NIF (a sole trader opening a company) on a given day.
+  const [nifChanged, setNifChanged] = useState<boolean>(!!restaurant?.newTaxId);
+  const [newNif, setNewNif] = useState<string>(restaurant?.newTaxId ?? '');
+  const [newNifFrom, setNewNifFrom] = useState<string>(
+    restaurant?.newTaxIdFrom ? new Date(restaurant.newTaxIdFrom).toISOString().slice(0, 10) : '',
+  );
   // The dining room, for RevPASH and the per-seat figures.
   const [seats, setSeats] = useState<string>(restaurant?.seats ? String(restaurant.seats) : '');
   const [serviceHours, setServiceHours] = useState<string>(restaurant?.serviceHoursPerDay ? String(Number(restaurant.serviceHoursPerDay)) : '');
@@ -82,6 +88,7 @@ export default function SettingsPanel({
     setSavingRestaurant(true);
     const result = await updateRestaurantSettings({
       name: restaurantName, timezone, currency, municipalityCode, taxId: restaurantNif,
+      nifChange: { changed: nifChanged, newTaxId: newNif, from: newNifFrom },
       seats: room.seats, serviceHoursPerDay: room.serviceHoursPerDay, monthlyRevenueTarget: room.monthlyRevenueTarget,
     });
     if (result.success) { toast.success(t('settings.restaurantUpdated')); onUpdate?.(); }
@@ -191,6 +198,41 @@ export default function SettingsPanel({
               <label htmlFor="settings-nif" className="text-xs font-medium text-muted-foreground block mb-2">{t('settings.taxId')}</label>
               <input id="settings-nif" type="text" inputMode="numeric" maxLength={11} value={restaurantNif} onChange={e => setRestaurantNif(e.target.value)} className="input-field tabular-nums" />
               <p className="text-[11px] text-muted-foreground mt-1.5">{t('settings.taxIdHint')}</p>
+
+              <div className="mt-3 rounded-xl border border-border-subtle bg-surface p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p id="settings-nif-change" className="text-sm font-medium text-foreground">{t('settings.nifChange.question')}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{t('settings.nifChange.hint')}</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={nifChanged}
+                    aria-labelledby="settings-nif-change"
+                    onClick={() => setNifChanged((was) => !was)}
+                    className={`relative mt-0.5 shrink-0 w-9 h-5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${nifChanged ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${nifChanged ? 'translate-x-4' : ''}`}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </div>
+                {nifChanged && (
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="settings-nif-from" className="text-xs font-medium text-muted-foreground block mb-2">{t('settings.nifChange.from')}</label>
+                      <input id="settings-nif-from" type="date" value={newNifFrom} onChange={e => setNewNifFrom(e.target.value)} className="input-field tabular-nums" />
+                    </div>
+                    <div>
+                      <label htmlFor="settings-nif-new" className="text-xs font-medium text-muted-foreground block mb-2">{t('settings.nifChange.newTaxId')}</label>
+                      <input id="settings-nif-new" type="text" inputMode="numeric" maxLength={11} value={newNif} onChange={e => setNewNif(e.target.value)} className="input-field tabular-nums" />
+                    </div>
+                    <p className="sm:col-span-2 -mt-2 text-[11px] text-muted-foreground">{t('settings.nifChange.both')}</p>
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label htmlFor="settings-municipality" className="text-xs font-medium text-muted-foreground block mb-2">{t('settings.municipality')}</label>

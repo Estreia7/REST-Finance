@@ -96,6 +96,12 @@ model Restaurant {
   currency String  @default("EUR")
   taxId    String? @map("tax_id") // NIF for accountant reports
 
+  /// The NIF the business changed to (a sole trader opening a company), and
+  /// the first day invoices are made out to it. The restaurant is the same:
+  /// both NIFs are the customer when an invoice is read. See lib/restaurant-nif.ts.
+  newTaxId     String?   @map("new_tax_id")
+  newTaxIdFrom DateTime? @map("new_tax_id_from") @db.Date
+
   /// The council the restaurant pays its derrama to, by the Tax Authority's
   /// district/council code ("0813" is Silves). See lib/derrama.ts.
   municipalityCode String? @map("municipality_code")
@@ -470,7 +476,19 @@ model RecurringCost {
 
   entries CostEntry[]
 
+  /// Months it books in, 1–12. Empty is every month; a subsidy paid whole is
+  /// [6, 11].
+  months Int[] @default([])
+
+  /// Set when the cost is someone's pay, booked from their salary in Equipa
+  /// and changed only there. payrollKind says which part: salary,
+  /// socialSecurity, subsidy or subsidySocialSecurity.
+  employee    ScheduleEmployee? @relation(fields: [employeeId], references: [id])
+  employeeId  String?           @map("employee_id")
+  payrollKind String?           @map("payroll_kind")
+
   @@index([restaurantId, active])
+  @@index([employeeId])
   @@map("recurring_costs")
 }
 
@@ -835,10 +853,21 @@ model ScheduleEmployee {
   /// Unique per restaurant: one PIN is one person. Null until the owner sets one.
   pinHash String? @map("pin_hash")
 
+  /// Monthly gross salary, as on the contract. Null until the owner fills it
+  /// in; once set, the app books the salary and the employer's Social
+  /// Security as fixed monthly costs (lib/payroll.ts).
+  grossSalary     Decimal? @map("gross_salary") @db.Decimal(10, 2)
+  /// Holiday and Christmas subsidies paid a twelfth every month (true), or
+  /// whole in June and November (false).
+  subsidiesSpread Boolean  @default(true) @map("subsidies_spread")
+  /// The day of the month the salary is paid; 31 is the last day.
+  payDay          Int      @default(31) @map("pay_day")
+
   shifts      Shift[]
   daysOff     ScheduleDayOff[]
   leaves      EmployeeLeave[]
   timeEntries TimeEntry[]
+  payroll     RecurringCost[]
 
   @@unique([restaurantId, pinHash])
   @@index([restaurantId, active, sortOrder])

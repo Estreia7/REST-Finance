@@ -30,6 +30,7 @@ export async function bookDueRecurringCosts(restaurantId: string, now: Date = ne
       dayOfMonth: t.dayOfMonth,
       endDate: key(t.endDate),
       lastGeneratedDate: key(t.lastGeneratedDate),
+      months: t.months,
     };
     const due = dueOccurrences({ ...schedule, today });
 

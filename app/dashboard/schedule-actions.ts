@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { startOfWeek, addWeeks, addDays, dateKey, parseDateKey, breakLength, monthlyMinutes, MAX_SAVED_SHIFTS } from '@/lib/schedule';
 import { EMPLOYEE_COLORS } from '@/lib/schedule';
+import { getServerLanguage } from '@/lib/server-language';
+import { syncPayroll } from '@/lib/payroll-server';
 
 /**
  * The rota's server side.
@@ -258,6 +260,10 @@ export async function updateEmployee(
   if (input.active !== undefined) data.active = input.active;
 
   await prisma.scheduleEmployee.update({ where: { id }, data });
+  // Someone switched off stops being paid from here on, and back on, again.
+  if (input.active !== undefined) {
+    await syncPayroll({ restaurantId: owner.restaurantId, employeeId: id, userId: owner.userId, language: await getServerLanguage() });
+  }
   return { success: true as const };
 }
 
@@ -294,6 +300,8 @@ export async function removeEmployee(id: string) {
       data: { deletedAt: new Date(), active: false },
     }),
   ]);
+  // Their pay stops: nothing more is booked, what was paid stays.
+  await syncPayroll({ restaurantId: owner.restaurantId, employeeId: id, userId: owner.userId, language: await getServerLanguage() });
 
   return { success: true as const };
 }

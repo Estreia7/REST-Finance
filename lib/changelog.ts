@@ -35,9 +35,31 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.07.10';
+export const CHANGELOG_VERSION = '2026.11.07.12';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.07.12',
+    date: '2026-11-07',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Os salários da equipa entram sozinhos nas despesas',
+        detail: 'Em Equipa › Colaboradores, abra cada pessoa e indique o salário bruto, como recebe os subsídios e o dia em que se paga. Todos os meses entram o ordenado e a Segurança Social a cargo do restaurante.',
+      },
+    ],
+  },
+  {
+    version: '2026.11.07.11',
+    date: '2026-11-07',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Se o negócio mudou de NIF, diga a partir de quando',
+        detail: 'Em Definições › Restaurante, por baixo do NIF da empresa, indique o NIF novo e a data. As faturas passadas a qualquer um dos dois NIFs são reconhecidas como do restaurante e nunca confundidas com o fornecedor.',
+      },
+    ],
+  },
   {
     version: '2026.11.07.10',
     date: '2026-11-07',

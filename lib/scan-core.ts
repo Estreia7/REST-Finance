@@ -10,6 +10,7 @@ import { cleanTaxId, readerNote, rulesFor } from '@/lib/supplier-knowledge';
 import { invoiceUnit, unusualPrice } from '@/lib/line-setup';
 import { withoutBatch } from '@/lib/invoice-categories';
 import { normalizeProductName } from '@/lib/price-tracking';
+import { ourNifs } from '@/lib/restaurant-nif';
 import { readFile } from 'node:fs/promises';
 
 /**
@@ -419,19 +420,20 @@ function proofOf(data: ScanResult, qr: InvoiceQrData | null): Proof | null {
   return checkReading(data, qr);
 }
 
-/** The restaurant's name and NIF, and the names of its owners. */
+/** The restaurant's name and NIFs (old and new, after a change), and the names of its owners. */
 async function customerOf(restaurantId: string): Promise<CustomerIdentity> {
   const restaurant = await prisma.restaurant.findUnique({
     where: { id: restaurantId },
     select: {
       name: true,
       taxId: true,
+      newTaxId: true,
       memberships: { where: { role: 'OWNER' }, select: { user: { select: { name: true } } } },
     },
   });
   return {
     names: [restaurant?.name ?? '', ...(restaurant?.memberships ?? []).map((m) => m.user.name ?? '')].filter(Boolean),
-    taxIds: restaurant?.taxId ? [restaurant.taxId] : [],
+    taxIds: restaurant ? ourNifs(restaurant) : [],
   };
 }
 
