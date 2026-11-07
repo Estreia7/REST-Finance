@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { X, Loader2, Trash2, FileText, AlertTriangle, Building2, FileSearch } from 'lucide-react';
-import { getInvoiceImage, deleteInvoice } from '../accounting-actions';
+import { getInvoiceImage, deleteInvoice, getWholeInvoice, setWholeInvoiceCategory } from '../accounting-actions';
+import { formatMoney } from '@/lib/format';
 import { useLanguage } from '@/lib/language-context';
 import ZoomableImage from './ZoomableImage';
 import VendorFixDialog from './VendorFixDialog';
@@ -51,6 +52,12 @@ export default function InvoicePreview({
   const [fixing, setFixing] = useState(false);
   // Checking its lines against the page, and correcting them.
   const [checking, setChecking] = useState(false);
+  // A repair and the like: one total in one category, with no lines to go through.
+  const [whole, setWhole] = useState<{
+    amount: number;
+    categoryId: string | null;
+    categories: Array<{ id: string; name: string; type: string }>;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,8 +65,27 @@ export default function InvoicePreview({
       if (cancelled) return;
       setImage('data' in result && result.data ? result.data : null);
     });
+    getWholeInvoice(invoiceNumber).then((result) => {
+      if (!cancelled) setWhole('data' in result ? result.data ?? null : null);
+    });
     return () => { cancelled = true; };
   }, [invoiceNumber]);
+
+  const moveTo = async (categoryId: string) => {
+    if (!whole) return;
+    const was = whole;
+    setWhole({ ...whole, categoryId });
+    const result = await setWholeInvoiceCategory({ invoiceNumber, categoryId });
+    if ('error' in result) {
+      setWhole(was);
+      toast.error(t('errors.write'));
+      return;
+    }
+    toast.success(t('wholeInvoice.moved'));
+    const fresh = await getWholeInvoice(invoiceNumber);
+    setWhole('data' in fresh ? fresh.data ?? null : null);
+    onChanged?.();
+  };
 
   // Escape closes, as it does everywhere else a layer opens over the page.
   useEffect(() => {
@@ -151,6 +177,34 @@ export default function InvoicePreview({
           )}
         </div>
 
+        {whole && (
+          <div className="px-5 py-3 border-t border-border-subtle space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <p className="text-sm text-foreground">
+                {t('wholeInvoice.total')}{' '}
+                <span className="font-semibold tabular-nums">{formatMoney(whole.amount, { decimals: 2 })}</span>
+              </p>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                {t('wholeInvoice.category')}
+                <select
+                  value={whole.categoryId ?? ''}
+                  onChange={(e) => { if (e.target.value) moveTo(e.target.value); }}
+                  className="input-field !w-auto !py-1.5 !text-xs"
+                >
+                  {!whole.categoryId && <option value="">—</option>}
+                  <optgroup label={t('wholeInvoice.running')}>
+                    {whole.categories.filter((c) => c.type === 'OPEX').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </optgroup>
+                  <optgroup label={t('wholeInvoice.sold')}>
+                    {whole.categories.filter((c) => c.type === 'COGS').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </optgroup>
+                </select>
+              </label>
+            </div>
+            <p className="text-xs text-muted-foreground">{t('wholeInvoice.note')}</p>
+          </div>
+        )}
+
         <div className="px-5 py-4 border-t border-border-subtle">
           {confirming ? (
             <div className="space-y-3">
@@ -192,16 +246,18 @@ export default function InvoicePreview({
                 <Building2 className="w-3.5 h-3.5" aria-hidden="true" />
                 {t('vendorFix.title')}
               </button>
-              <button
-                type="button"
-                onClick={() => setChecking(true)}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground
-                           hover:underline underline-offset-2 focus-visible:outline-none
-                           focus-visible:ring-2 focus-visible:ring-ring rounded"
-              >
-                <FileSearch className="w-3.5 h-3.5" aria-hidden="true" />
-                {t('lineSetup.checkInvoice')}
-              </button>
+              {!whole && (
+                <button
+                  type="button"
+                  onClick={() => setChecking(true)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground
+                             hover:underline underline-offset-2 focus-visible:outline-none
+                             focus-visible:ring-2 focus-visible:ring-ring rounded"
+                >
+                  <FileSearch className="w-3.5 h-3.5" aria-hidden="true" />
+                  {t('lineSetup.checkInvoice')}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setConfirming(true)}

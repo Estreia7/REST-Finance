@@ -35,9 +35,55 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.07.06';
+export const CHANGELOG_VERSION = '2026.11.07.08';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.07.08',
+    date: '2026-11-07',
+    entries: [
+      {
+        kind: 'new',
+        title: 'A app avisa quando fotografa uma fatura que já tem',
+        detail: 'Se já estiver nas despesas, diz-lhe e mostra a fatura. Se estiver na lista de espera, compare as fotografias lado a lado e escolha a que fica.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Reparações e outras despesas gerais já não têm linhas para tratar',
+        detail: 'Uma fatura sem comida nem bebida conta pelo total, numa só categoria, que pode mudar ao abrir a fatura. Estas linhas também deixam de aparecer nos produtos comprados.',
+      },
+      {
+        kind: 'improvement',
+        title: 'As Faturas por rever dizem qual é a fatura e o que falta resolver',
+        detail: 'Em Precisa de ti cada fatura mostra o fornecedor, o número e o valor. Se os valores não batem, pode verificá-los e corrigi-los ali mesmo, antes de guardar. Nova fotografia ou página seguinte só são pedidas quando fazem falta. As faturas estão num baralho: atire uma para o lado para a deixar para depois.',
+      },
+      {
+        kind: 'fix',
+        title: 'Cancelar uma nova fotografia já não faz desaparecer a fatura por rever',
+      },
+    ],
+  },
+  {
+    version: '2026.11.07.07',
+    date: '2026-11-07',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'No Historial de Despesas vê a que fatura pertence cada valor',
+        detail: 'Uma fatura com várias categorias aparece em várias linhas. Agora ficam juntas e cada uma diz o número da fatura, a parte e o total. As despesas sem documento dizem Sem fatura.',
+      },
+      {
+        kind: 'fix',
+        title: 'A mesma fatura já não aparece repetida em Faturas por rever',
+        detail: 'As fotografias de uma fatura ficam juntas, e as de uma fatura já guardada saem da lista.',
+      },
+      {
+        kind: 'improvement',
+        title: 'Quando uma fatura não bate certo, a mensagem diz que valores estão a ser comparados',
+        detail: 'Por exemplo: as linhas digitalizadas somam 132,27 € sem IVA, mas o total sem IVA na fatura é 131,19 €.',
+      },
+    ],
+  },
   {
     version: '2026.11.07.06',
     date: '2026-11-07',

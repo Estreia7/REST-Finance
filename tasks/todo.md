@@ -563,3 +563,33 @@ Plan: ~/.claude/plans/https-app-mytinz-com-onboarding-regiao-o-nifty-leaf.md (Ti
 - Mês = mês de calendário, como em Equipa › Ponto. Abrem as 4 a 6 semanas que tocam o mês; os dias de meses vizinhos ficam mais claros e não contam, para os subtotais somarem o número.
 - Quem saiu continua a aparecer enquanto tiver horas no ano.
 - Verificado em PGlite + next dev: desktop, telemóvel, inglês, sem erros de consola; subtotais = número em 3 casos (mês partido, férias, pessoa que saiu).
+
+# Fotografias repetidas e faturas sem linhas (2026-11-07)
+
+Aprovado e feito. Tudo num commit no fim, com o trabalho do Historial de Despesas e das leituras Makro.
+
+## A. Mesma fatura fotografada de novo
+- [x] Depois de ler, procurar a fatura por fornecedor + numero: nas despesas e na lista de espera
+- [x] Ja nas despesas: avisar na bandeja, com atalho para a fatura; a fotografia nova nao fica na lista
+- [x] Na lista de espera: avisar na bandeja, com botao Comparar
+- [x] Ecra Comparar: todas as fotografias da fatura lado a lado (no telefone, uma por baixo da outra), com imagem ampliavel, total e se bate certo; Ficar com esta
+- [x] A escolhida fica, as outras saem da lista (nada e apagado)
+- [x] Em Faturas por rever, a mesma fatura aparece uma vez, com o mesmo Comparar
+- [x] Trocar a escolha automatica da melhor leitura pela escolha manual; manter so a saida automatica das copias de uma fatura ja guardada
+- [x] Corrigir a entrada do changelog que fala da melhor leitura
+
+## B. Faturas que nao sao comida
+- [x] Regra: leitor diz OPEX e nenhuma linha e comida ou bebida; faturas mistas continuam como hoje
+- [x] Sem perguntas por linha, sem divisao por categorias: total inteiro numa categoria
+- [x] Ecra de confirmacao so com fornecedor, data, numero, total e categoria
+- [x] Linhas guardadas em segundo plano (IVA, duplicados), fora de Precisa de ti, produtos comprados e stock
+- [x] Na fatura guardada: resumo sem linhas e escolha da categoria para a fatura toda
+- [x] Nestas faturas, o que manda sao os totais e o QR: uma linha mal lida nao obriga a nova fotografia
+- [x] Testes, pt e en, changelog; sem passo no tour nem alteracao na apresentacao
+
+## Review
+
+- Visto no browser, desktop e telefone: Comparar, escolher uma, fatura de reparacao na lista e guardada, mudar a categoria. Sem erros na consola.
+- Base local: saida das copias de fatura guardada e filtro das linhas confirmados.
+- Nao visto: o aviso na bandeja ao fotografar, porque precisa de uma leitura real; so o tsc e os testes o cobrem.
+- Por fazer, por decisao: retencao na fonte.

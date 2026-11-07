@@ -991,6 +991,84 @@ export async function getCostCategories() {
   }
 }
 
+/** The cost behind an invoice that counts by its total, or null for any other. */
+async function wholeInvoiceEntry(restaurantId: string, invoiceNumber: string) {
+  const item = await prisma.invoiceItem.findFirst({
+    where: { restaurantId, invoiceNumber, costEntry: { deletedAt: null } },
+    select: {
+      costEntry: {
+        select: {
+          id: true, type: true, amount: true, categoryId: true, splitFromId: true,
+          _count: { select: { splitParts: true } },
+        },
+      },
+    },
+  });
+  const entry = item?.costEntry;
+  return entry && entry.type === 'OPEX' && !entry.splitFromId && entry._count.splitParts === 0 ? entry : null;
+}
+
+/** What the invoice preview shows instead of lines, or null when lines are what it has. */
+export async function getWholeInvoice(invoiceNumber: string) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const entry = await wholeInvoiceEntry(owner.restaurantId, invoiceNumber.trim());
+    if (!entry) return { success: true as const, data: null };
+
+    const categories = await prisma.category.findMany({
+      where: { restaurantId: owner.restaurantId, isActive: true, type: { in: ['COGS', 'OPEX'] } },
+      orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }],
+      select: { id: true, name: true, type: true },
+    });
+    return {
+      success: true as const,
+      data: { amount: Number(entry.amount), categoryId: entry.categoryId, categories },
+    };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to read the invoice', error, 'read') };
+  }
+}
+
+/**
+ * Moves a whole invoice to another category: one choice, for all of it.
+ *
+ * A category that goes into what is sold makes it an ordinary invoice again, with
+ * its lines showing, for the rare reading that took food for a running cost.
+ */
+export async function setWholeInvoiceCategory(input: { invoiceNumber: string; categoryId: string }) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const [entry, category] = await Promise.all([
+      wholeInvoiceEntry(owner.restaurantId, input.invoiceNumber.trim()),
+      prisma.category.findFirst({
+        where: { id: input.categoryId, restaurantId: owner.restaurantId, isActive: true, type: { in: ['COGS', 'OPEX'] } },
+        select: { id: true, type: true },
+      }),
+    ]);
+    if (!entry) return { error: 'errors.write' };
+    if (!category) return { error: 'accounting.categoryNotFound' };
+
+    await prisma.$transaction(async (tx) => {
+      await tx.invoiceItem.updateMany({
+        where: { restaurantId: owner.restaurantId, costEntryId: entry.id },
+        data: { categoryId: category.id, categorySource: 'OWNER' },
+      });
+      await tx.costEntry.update({
+        where: { id: entry.id },
+        data: { categoryId: category.id, type: category.type === 'COGS' ? 'COGS' : 'OPEX' },
+      });
+      await rebalanceInvoice(tx, { restaurantId: owner.restaurantId, costEntryId: entry.id, userId: owner.userId });
+    });
+    return { success: true as const };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to move the invoice to another category', error, 'write') };
+  }
+}
+
 /**
  * Moves one invoice line to another cost category.
  *

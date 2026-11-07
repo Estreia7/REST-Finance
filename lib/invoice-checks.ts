@@ -35,6 +35,7 @@ export type IssueKind =
   | 'cutOff'
   | 'noTotal'
   | 'doesNotAddUp'
+  | 'linesOverTotal'
   | 'cannotVerify';
 
 export interface DocumentIssue {
@@ -44,8 +45,24 @@ export interface DocumentIssue {
   found?: number;
 }
 
+/** What a doubtful reading needs first: the answer the owner is pointed to. */
+export type IssueFocus = 'pages' | 'photo' | 'figures';
+
+const PHOTO_ISSUES: IssueKind[] = ['covered', 'cutOff', 'qrUnread', 'noTotal', 'totalVsQr'];
+
+/**
+ * A missing page explains everything after it, and a bad photograph explains
+ * figures read from it. Only what is left is really about the figures, and then
+ * another photograph of a good picture solves nothing.
+ */
+export function issueFocus(issues: Pick<DocumentIssue, 'kind'>[]): IssueFocus {
+  if (issues.some((i) => i.kind === 'missingPages')) return 'pages';
+  if (issues.some((i) => PHOTO_ISSUES.includes(i.kind))) return 'photo';
+  return 'figures';
+}
+
 export interface CheckedReading {
-  items: CheckedLine[];
+  items: Array<CheckedLine & { product?: string }>;
   grandTotal: number;
   /** The VAT table printed on the document, when the reader found one. */
   vatSummary?: Array<{ rate: number; base: number; tax: number }> | null;
@@ -313,11 +330,12 @@ export function documentIssues(input: {
 
   const linesNet = cents(reading.items.reduce((sum, l) => sum + l.total, 0));
   if (proof?.status === 'failed' || linesNet > reading.grandTotal + 0.05) {
-    issues.push({
-      kind: 'doesNotAddUp',
-      expected: proof?.expectedNet ?? reading.grandTotal,
-      found: linesNet,
-    });
+    // Before VAT against before VAT where the document says it; otherwise all there
+    // is to compare with is what was paid, and the words have to say so.
+    const expectedNet = proof?.expectedNet ?? null;
+    issues.push(expectedNet !== null
+      ? { kind: 'doesNotAddUp', expected: expectedNet, found: linesNet }
+      : { kind: 'linesOverTotal', expected: reading.grandTotal, found: linesNet });
   } else if (!qrRead && table.length === 0 && reading.items.some((l) => l.vatRate == null)) {
     issues.push({ kind: 'cannotVerify' });
   }
@@ -648,6 +666,9 @@ export function canSaveUnseen(input: {
   lines: number;
   checks?: {
     proof?: Pick<Proof, 'status'>;
+    qrRead?: boolean;
+    /** Counts by its total alone: see lib/whole-invoice.ts. */
+    wholeInvoice?: boolean;
     doubt?: string | null;
     creditNote?: boolean;
     knownVendorIsCustomer?: boolean;
@@ -657,7 +678,8 @@ export function canSaveUnseen(input: {
   };
 }): boolean {
   const { vendor, lines, checks } = input;
-  return checks?.proof?.status === 'proved'
+  const vouched = checks?.proof?.status === 'proved' || (!!checks?.wholeInvoice && !!checks.qrRead);
+  return !!checks && vouched
     && (checks.issues ?? []).length === 0
     && !!checks.knownVendorId
     && !checks.oddPrices
@@ -681,6 +703,19 @@ export function betterProof(first: Proof, second: Proof): 'first' | 'second' {
   return Math.abs(second.gap) < Math.abs(first.gap) ? 'second' : 'first';
 }
 
+/**
+ * Neighbouring lines read with one description: the mark of rows that slipped.
+ *
+ * On FAC 06001202501/017420 the figures moved down a row from the lettuce on, and
+ * the shallots' figures became a second beer. Each line still multiplied out, so
+ * only the repeated name gave it away. A real repeat is possible, so this only
+ * ever points the second reader at the place, and only on a reading that failed.
+ */
+function repeatedNeighbours(items: CheckedReading['items']): number[] {
+  const name = (i: number) => items[i].product?.trim().toLowerCase();
+  return items.flatMap((_, i) => (i > 0 && !!name(i) && name(i) === name(i - 1) ? [i] : []));
+}
+
 /** The figures a second reader is told, so it knows what must add up. */
 export function rereadHint(proof: Proof, reading: CheckedReading): string {
   const bands = proof.truth
@@ -693,10 +728,12 @@ export function rereadHint(proof: Proof, reading: CheckedReading): string {
       return `line ${i + 1} read as ${l.quantity} x ${l.unitPrice} = ${l.total}`;
     })
     .join('; ');
+  const repeats = repeatedNeighbours(reading.items).map((i) => `${i} and ${i + 1}`).join('; ');
   return [
     '\n\nA first reading of this page did not add up, so read every column again with care.',
     bands ? `The document's own tax record states: ${bands}, total payable ${reading.grandTotal.toFixed(2)}.` : '',
     lines ? `These lines do not multiply out: ${lines}.` : '',
+    repeats ? `Lines ${repeats} came back with the same description, which usually means the rows of figures slipped against the descriptions. Each article code has exactly one row of figures: count them again from the top, taking care around any row with no product of its own, such as a tax note.` : '',
     proof.gap ? `The lines read so far are ${Math.abs(proof.gap).toFixed(2)} ${proof.gap > 0 ? 'short of' : 'over'} the total before VAT, so a line may be missing or misread.` : '',
     'Report only what is printed. Never adjust a figure to make the sum work: if it still does not add up, report what you see.',
   ].filter(Boolean).join(' ');

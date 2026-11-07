@@ -52,7 +52,7 @@ export interface ScanItem {
    * 2,5K" is 2,5 kg. Lets a bag's price become a price per kilo.
    */
   packAmount?: number;
-  packUnit?: 'kg' | 'L';
+  packUnit?: 'kg' | 'L' | 'un';
 }
 
 /** A cost category the reader may choose from. */
@@ -123,6 +123,8 @@ export interface ScanChecks {
   issues?: DocumentIssue[];
   /** Lines priced far from what this product usually costs. */
   oddPrices?: number;
+  /** A running cost with nothing to sell in it: only the total matters. */
+  wholeInvoice?: boolean;
 }
 
 export interface DailyReportResult {

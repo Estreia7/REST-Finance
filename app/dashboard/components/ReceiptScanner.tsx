@@ -10,6 +10,7 @@ import { saveInvoiceLines } from '../reconcile-actions';
 import { saveCreditNote } from '../credit-note-actions';
 import { canSaveUnseen, type DocumentIssue } from '@/lib/invoice-checks';
 import ScanIssues, { IssueList } from './ScanIssues';
+import InvoiceProofEditor from './InvoiceProofEditor';
 import { measureImage, type QualityCheck } from '@/lib/image-quality';
 import { findExistingInvoice } from '../reconcile-actions';
 import DocumentCamera from './DocumentCamera';
@@ -23,9 +24,11 @@ import { attachScannedInvoice, getPaymentVendors } from '../payment-actions';
 import { formatMoney } from '@/lib/format';
 import VendorFixDialog from './VendorFixDialog';
 import { getVendorFixContext } from '../vendor-fix-actions';
-import { linkScanToCost, dismissQueuedScan } from '../invoice-email-actions';
+import { linkScanToCost, dismissQueuedScan, getQueuedCopies, type InvoiceToReview } from '../invoice-email-actions';
+import CompareCopies from './CompareCopies';
+import InvoicePreview from './InvoicePreview';
 import { normaliseName } from '@/lib/vendor-reading';
-import type { ScanChecks } from '@/lib/document-scanner';
+import type { CostReceiptResult, ScanChecks } from '@/lib/document-scanner';
 
 type ScanType = 'COST_RECEIPT' | 'DAILY_REPORT';
 
@@ -42,7 +45,7 @@ interface CostReceiptData {
     product: string; quantity: number; unit?: string; unitPrice: number; total: number; category?: string;
     vatRate?: number; grossTotal?: number; discount?: number; discountLabel?: string;
     /** What one billed unit holds, as the reader read the description. */
-    packAmount?: number; packUnit?: 'kg' | 'L';
+    packAmount?: number; packUnit?: 'kg' | 'L' | 'un';
   }>;
   grandTotal: number;
   suggestedType: 'COGS' | 'OPEX';
@@ -101,16 +104,24 @@ interface ReceiptScannerProps {
   initialScan?: { scanId: string; data: unknown; pages?: string[] } | null;
   /** Called when the review is over (saved, line by line included, or cancelled). */
   onFinished?: () => void;
+  /** True while something here must not be taken away: figures being corrected, a photo being read. */
+  onBusy?: (busy: boolean) => void;
+  /** The owner corrected the figures of `initialScan`, which is stored now. */
+  onCorrected?: () => void;
 }
 
 /** A document read in the background, and how it came out. */
 interface CaptureRun {
   doc: ScannedDocument;
-  status: 'waiting' | 'reading' | 'saved' | 'review' | 'retake' | 'failed';
+  status: 'waiting' | 'reading' | 'saved' | 'review' | 'retake' | 'failed' | 'copy' | 'already';
   label?: string;
   data?: CostReceiptData;
   scanId?: string | null;
   issues?: DocumentIssue[];
+  /** Other photographs of this invoice in the list, to choose between. */
+  copies?: InvoiceToReview[];
+  /** The number of the invoice this photograph repeats, already saved. */
+  savedNumber?: string;
 }
 
 export interface AttachTarget {
@@ -130,6 +141,8 @@ export default function ReceiptScanner({
   attachTo = null,
   initialScan = null,
   onFinished,
+  onBusy,
+  onCorrected,
 }: ReceiptScannerProps) {
   const { t, language } = useLanguage();
   // Where the tab decides the type, it is the type — not just the starting
@@ -191,6 +204,19 @@ export default function ReceiptScanner({
   }, [initialScan?.scanId]);
 
   const reviewingCost = editData?.type === 'cost_receipt';
+  // A repair and the like: only the total and where it goes matter.
+  const wholeInvoice = reviewingCost
+    && !!(editData as CostReceiptData).checks?.wholeInvoice
+    && (editData as CostReceiptData).suggestedType === 'OPEX';
+  const [runningCategories, setRunningCategories] = useState<string[]>([]);
+  useEffect(() => {
+    if (!wholeInvoice) return;
+    getCategories('OPEX').then((result) => {
+      setRunningCategories(((result.data ?? []) as Array<{ name: string }>).map((c) => c.name));
+    });
+  }, [wholeInvoice]);
+  const [comparing, setComparing] = useState<CaptureRun | null>(null);
+  const [viewingSaved, setViewingSaved] = useState<string | null>(null);
   useEffect(() => {
     if (!reviewingCost || vendors.length > 0) return;
     getPaymentVendors().then((r) => {
@@ -215,6 +241,10 @@ export default function ReceiptScanner({
   const [addingPage, setAddingPage] = useState(false);
   /** A reading that cannot be trusted, waiting for the owner to decide. */
   const [doubtful, setDoubtful] = useState<{ reading: ExtractionResult; issues: DocumentIssue[] } | null>(null);
+  /** The doubtful reading's figures are open for correcting. */
+  const [fixing, setFixing] = useState(false);
+  /** The stored reading a new one takes over from, once it has really arrived. */
+  const replacing = useRef<string | null>(null);
   const [currentPages, setCurrentPages] = useState<ScannedPage[]>([]);
   const [documents, setDocuments] = useState<ScannedDocument[]>([]);
   const [queue, setQueue] = useState<ScannedDocument[]>([]);
@@ -222,6 +252,9 @@ export default function ReceiptScanner({
   const [pickingSource, setPickingSource] = useState(false);
   /** Detecting the document in a photograph that was chosen, not taken. */
   const [readingFile, setReadingFile] = useState(false);
+
+  const busy = fixing || runs.length > 0;
+  useEffect(() => { onBusy?.(busy); }, [busy, onBusy]);
 
   /**
    * Opens the camera straight away when that is what was already chosen.
@@ -369,6 +402,8 @@ export default function ReceiptScanner({
     // The next page of a document already read: it joins it, to be read together.
     if (addingPage) {
       setDocPages((pages) => [...pages, { dataUrl: page.dataUrl, qrText: page.qrText ?? null }]);
+      replaceReading();
+      setDoubtful(null);
       setAddingPage(false);
       setCaptured(null);
       setStage('idle');
@@ -398,6 +433,13 @@ export default function ReceiptScanner({
    */
   const handleTrayFinish = (docs: ScannedDocument[]) => {
     if (docs.length === 0) { resetCapture(); return; }
+    // Up to here it could still be cancelled, and the doubtful reading stands.
+    if (doubtful) {
+      replaceReading();
+      setDoubtful(null);
+      setDocPages([]);
+      setImagePreview(null);
+    }
     setDocuments([]);
     setCurrentPages([]);
     setStage('idle');
@@ -421,6 +463,11 @@ export default function ReceiptScanner({
     const update = (patch: Partial<CaptureRun>) =>
       setRuns((was) => was.map((r) => (r.doc.id === run.doc.id ? { ...r, ...patch } : r)));
     update({ status: 'reading' });
+    const failed = () => {
+      update({ status: 'failed' });
+      // In the queue the list below is about to go: the reading it replaces comes back.
+      if (initialScan) toast.error(t('scanner.scanFailed'));
+    };
 
     void (async () => {
       try {
@@ -438,19 +485,40 @@ export default function ReceiptScanner({
           }),
         });
         const result = await res.json();
-        if (!result.success) { update({ status: 'failed' }); return; }
+        if (!result.success) { failed(); return; }
+        replaced();
 
         const data = result.data as CostReceiptData;
         const id = typeof result.scanId === 'string' ? result.scanId : null;
+        if (id && !data.checks?.creditNote) {
+          // Before anything else: nobody should deal with one invoice twice.
+          const existing = await findExistingInvoice({ vendorName: data.vendor, invoiceNumber: data.invoiceNumber ?? null });
+          const saved = 'data' in existing ? existing.data : null;
+          // The number alone matches other suppliers' invoices: a photo is only
+          // dropped when the supplier agrees too.
+          if (saved && !saved.attachable
+            && normaliseName(data.checks?.knownVendor ?? data.vendor) === normaliseName(saved.vendorName)) {
+            await dismissQueuedScan(id);
+            update({ status: 'already', label: data.vendor, savedNumber: saved.invoiceNumber });
+            return;
+          }
+          const copies = await getQueuedCopies(id);
+          if ('data' in copies && copies.data.length > 1) {
+            update({ status: 'copy', label: data.vendor, scanId: id, copies: copies.data });
+            return;
+          }
+        }
         const trusted = canSaveUnseen({ vendor: data.vendor, lines: data.items.length, checks: data.checks });
         const saved = trusted && await handleConfirmSave(undefined, { data, scanId: id, quiet: true });
         if (saved) { update({ status: 'saved', label: data.vendor }); return; }
         const issues = data.checks?.issues ?? [];
         update({ status: issues.length > 0 ? 'retake' : 'review', label: data.vendor, data, scanId: id, issues });
       } catch {
-        update({ status: 'failed' });
+        failed();
       } finally {
         setReading(false);
+        // What came of it is in the queue now, as a card of its own.
+        if (initialScan && !runs.some((r) => r.status === 'waiting' && r.doc.id !== run.doc.id)) onFinished?.();
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -534,6 +602,7 @@ export default function ReceiptScanner({
 
       const result = await res.json();
       if (result.success) {
+        replaced();
         const reading = result.data as ExtractionResult;
         const readId = typeof result.scanId === 'string' ? result.scanId : null;
         setScanId(readId);
@@ -566,10 +635,16 @@ export default function ReceiptScanner({
     setScanning(false);
   };
 
-  /** The reading on screen gives way to a better one. */
+  /** The reading on screen gives way to a better one, when that one arrives. */
   const replaceReading = () => {
-    if (scanId) void dismissQueuedScan(scanId);
+    replacing.current = scanId;
     setScanId(null);
+  };
+
+  /** The better reading is here: only now can the old one go. */
+  const replaced = () => {
+    if (replacing.current) void dismissQueuedScan(replacing.current);
+    replacing.current = null;
   };
 
   const showReading = (reading: ExtractionResult) => {
@@ -714,6 +789,7 @@ export default function ReceiptScanner({
               invoiceDate: d.date,
               invoiceNumber: d.invoiceNumber ?? null,
               scanId: usedScanId,
+              wholeInvoice: !!d.checks?.wholeInvoice && d.suggestedType === 'OPEX',
               lines: d.items.map((item) => ({
                 productName: item.product,
                 quantity: item.quantity,
@@ -788,19 +864,39 @@ export default function ReceiptScanner({
     onFinished?.();
   };
 
+  // A reading under review is about one invoice: the heading says which.
+  const shown = doubtful?.reading ?? editData ?? (initialScan?.data as ExtractionResult | undefined);
+  const identity = shown?.type === 'cost_receipt' && (doubtful || initialScan)
+    ? {
+        vendor: shown.checks?.knownVendor ?? (shown.vendor || null),
+        number: shown.invoiceNumber ?? null,
+        date: shown.date ? new Date(shown.date).toLocaleDateString(language === 'pt' ? 'pt-PT' : 'en-GB') : null,
+        total: shown.grandTotal ?? null,
+      }
+    : null;
+
   return (
     <div className="card-glass p-6">
       {/* With the selector gone, the heading is what says which document
           this screen expects. */}
-      <h2 className="text-xl font-bold text-foreground mb-6">
-        {attachTarget
-          ? t('payments.attachTitle')
-          : allowTypeChange
-          ? t('scanner.title')
-          : scanType === 'DAILY_REPORT'
-            ? t('scanner.titleDailyReport')
-            : t('scanner.titleCostReceipt')}
-      </h2>
+      {identity ? (
+        <header className="mb-5">
+          <h2 className="text-xl font-bold text-foreground [overflow-wrap:anywhere]">{identity.vendor ?? t('paymentCard.noVendor')}</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground tabular-nums [overflow-wrap:anywhere]">
+            {[identity.number, identity.date, identity.total === null ? null : formatMoney(identity.total, { decimals: 2 })].filter(Boolean).join(' · ')}
+          </p>
+        </header>
+      ) : (
+        <h2 className="text-xl font-bold text-foreground mb-6">
+          {attachTarget
+            ? t('payments.attachTitle')
+            : allowTypeChange
+            ? t('scanner.title')
+            : scanType === 'DAILY_REPORT'
+              ? t('scanner.titleDailyReport')
+              : t('scanner.titleCostReceipt')}
+        </h2>
+      )}
 
       {/* Already recorded. Shown rather than silently refused, because the
           owner may be holding a second genuine invoice that the supplier
@@ -885,6 +981,19 @@ export default function ReceiptScanner({
         </div>
       )}
 
+      {comparing?.copies && (
+        <CompareCopies
+          copies={comparing.copies}
+          onClose={() => setComparing(null)}
+          onKept={() => {
+            setRuns((was) => was.map((r) => (r.doc.id === comparing.doc.id ? { ...r, status: 'review', copies: undefined } : r)));
+            setComparing(null);
+            onCorrected?.();
+          }}
+        />
+      )}
+      {viewingSaved && <InvoicePreview invoiceNumber={viewingSaved} onClose={() => setViewingSaved(null)} />}
+
       {runs.length > 0 && (
         <ul className="mb-4 divide-y divide-border-subtle rounded-xl border border-border-subtle" aria-live="polite">
           {runs.map((run, i) => (
@@ -892,7 +1001,17 @@ export default function ReceiptScanner({
               <span className="min-w-0 text-sm text-foreground truncate">
                 {run.label ?? t('scanner.runDocument').replace('{n}', String(i + 1))}
               </span>
-              {run.status === 'retake' ? (
+              {run.status === 'copy' ? (
+                <button type="button" onClick={() => setComparing(run)} className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-warning hover:underline">
+                  <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
+                  {t('scanner.run_copy')}
+                </button>
+              ) : run.status === 'already' ? (
+                <button type="button" onClick={() => setViewingSaved(run.savedNumber ?? null)} className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-foreground hover:underline">
+                  <Check className="w-3.5 h-3.5" aria-hidden="true" />
+                  {t('scanner.run_already')}
+                </button>
+              ) : run.status === 'retake' ? (
                 <button type="button" onClick={() => openRun(run)} className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-warning hover:underline">
                   <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
                   {t('scanner.runRetake')}
@@ -913,7 +1032,7 @@ export default function ReceiptScanner({
 
       {/* Camera / upload */}
       {/* Nothing to capture while reviewing a reading made earlier. */}
-      {!imagePreview && !extracted && (
+      {!imagePreview && !extracted && !doubtful && !initialScan && (
         <button
           type="button"
           onClick={() => setPickingSource(true)}
@@ -958,15 +1077,33 @@ export default function ReceiptScanner({
       />
 
 
-      {doubtful && (
+      {doubtful && fixing && scanId && (
+        <InvoiceProofEditor
+          draft={{
+            scanId,
+            reading: doubtful.reading as CostReceiptResult,
+            pictures: imagePreview && !imagePreview.startsWith('data:application/pdf') ? [imagePreview] : [],
+            onCancel: () => setFixing(false),
+            onCorrected: (reading) => {
+              setFixing(false);
+              setDoubtful(null);
+              showReading(reading as ExtractionResult);
+              onCorrected?.();
+            },
+          }}
+        />
+      )}
+
+      {doubtful && !fixing && (
         <ScanIssues
           issues={doubtful.issues}
+          invoice={{
+            number: doubtful.reading.type === 'cost_receipt' ? doubtful.reading.invoiceNumber : null,
+            vendor: identity?.vendor,
+          }}
           picture={imagePreview && !imagePreview.startsWith('data:application/pdf') ? imagePreview : null}
           onRetake={() => {
-            replaceReading();
-            setDoubtful(null);
-            setDocPages([]);
-            setImagePreview(null);
+            setAddingPage(false);
             openCamera();
           }}
           onAddPage={async () => {
@@ -988,12 +1125,14 @@ export default function ReceiptScanner({
             } else {
               setDocPages((pages) => (pages.length || !first ? pages : [{ dataUrl: first, qrText: null }]));
             }
-            replaceReading();
-            setDoubtful(null);
             setAddingPage(true);
             openCamera();
           }}
-          onContinue={() => { showReading(doubtful.reading); setDoubtful(null); }}
+          onFix={() => {
+            // A reading that could not be stored has nothing to correct: it goes on as read.
+            if (scanId) setFixing(true);
+            else { showReading(doubtful.reading); setDoubtful(null); }
+          }}
         />
       )}
 
@@ -1174,6 +1313,23 @@ export default function ReceiptScanner({
                       <IssueList issues={(editData as CostReceiptData).checks?.issues ?? []} />
                     </div>
                   )}
+                  {wholeInvoice ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">{t('wholeInvoice.note')}</p>
+                      <label className="block text-xs text-muted-foreground">
+                        <span className="block mb-1">{t('wholeInvoice.category')}</span>
+                        <select
+                          value={(editData as CostReceiptData).suggestedCategory}
+                          onChange={(e) => setEditData({ ...editData, suggestedCategory: e.target.value } as ExtractionResult)}
+                          className="input-field !py-1.5 !text-xs"
+                        >
+                          {[...new Set([(editData as CostReceiptData).suggestedCategory, ...runningCategories])].map((name) => (
+                            <option key={name} value={name}>{name}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  ) : <>
                   <div className="text-xs text-muted-foreground">{t('scanner.items')}</div>
                   {(editData as CostReceiptData).items.map((item, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs bg-muted rounded-lg p-2">
@@ -1188,6 +1344,7 @@ export default function ReceiptScanner({
                       <span className="font-semibold text-foreground tabular-nums shrink-0">€{item.total.toFixed(2)}</span>
                     </div>
                   ))}
+                  </>}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>

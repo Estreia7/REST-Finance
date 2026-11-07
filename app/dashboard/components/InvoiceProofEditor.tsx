@@ -19,10 +19,13 @@ import { INVOICE_UNITS, invoiceUnit,
 import { limitSize, toDataUrl } from '@/lib/scan-image';
 import { readQrText } from '@/lib/browser-qr';
 import { loadFrameFromFile } from '@/lib/detect-in-file';
+import { linesOfReading } from '@/lib/reading-corrections';
+import type { CostReceiptResult } from '@/lib/document-scanner';
 import ZoomableImage from './ZoomableImage';
 import { IssueList } from './ScanIssues';
 import {
   adoptDocumentTotal,
+  correctReading,
   getInvoiceForProof,
   rereadInvoice,
   saveInvoiceProof,
@@ -83,6 +86,22 @@ function settledRows(rows: Row[], truth: TaxTruth[], discount: number) {
   };
 }
 
+/** A reading not saved yet, seen the way a saved invoice is. */
+function invoiceOfReading(reading: CostReceiptResult): InvoiceForProof {
+  return {
+    invoiceNumber: reading.invoiceNumber ?? '',
+    vendorName: reading.checks?.knownVendor ?? reading.vendor,
+    date: reading.date,
+    imagePath: null,
+    pagePaths: [],
+    issues: [],
+    discountTotal: reading.discountTotal ?? 0,
+    grandTotal: reading.grandTotal,
+    truth: reading.checks?.proof?.truth ?? [],
+    lines: linesOfReading(reading.items),
+  };
+}
+
 const INVOICE_UNIT_KEYS: Record<(typeof INVOICE_UNITS)[number], string> = {
   un: 'lineSetup.unitUn', kg: 'lineSetup.unitKg', L: 'lineSetup.unitL', cx: 'lineSetup.unitCx',
 };
@@ -125,11 +144,22 @@ function toLine(row: Row): ProofLine {
   };
 }
 
+/** Checking a reading before it is saved, instead of an invoice already in the books. */
+export interface ProofDraft {
+  scanId: string;
+  reading: CostReceiptResult;
+  /** The pages, when nothing beside this editor is showing them. */
+  pictures: string[];
+  onCorrected: (reading: CostReceiptResult) => void;
+  onCancel: () => void;
+}
+
 export default function InvoiceProofEditor({
-  invoiceNumber, onDone, onLater,
+  invoiceNumber = '', draft, onDone, onLater,
 }: {
-  invoiceNumber: string;
-  onDone: () => void;
+  invoiceNumber?: string;
+  draft?: ProofDraft;
+  onDone?: () => void;
   onLater?: () => void;
 }) {
   const { t, language } = useLanguage();
@@ -138,6 +168,8 @@ export default function InvoiceProofEditor({
   const [truth, setTruth] = useState<TaxTruth[]>([]);
   const [saving, setSaving] = useState(false);
   const [rereading, setRereading] = useState(false);
+  /** A draft takes the document's total when it is saved, not before. */
+  const [adoptedTotal, setAdoptedTotal] = useState(false);
 
   const tell = (result: { changed: number; dropped: boolean; vatIncluded: boolean; discounted: boolean }) => {
     if (result.vatIncluded) toast.info(t('proof.vatIncluded'));
@@ -164,13 +196,20 @@ export default function InvoiceProofEditor({
   done.current = onDone;
 
   useEffect(() => {
+    if (draft) {
+      const opened = invoiceOfReading(draft.reading);
+      setInvoice(opened);
+      setTruth(opened.truth);
+      setRows(openSettled(opened.lines.map(toRow), opened.truth, opened.discountTotal));
+      return;
+    }
     let stale = false;
     setInvoice(null);
     getInvoiceForProof(invoiceNumber).then((result) => {
       if (stale) return;
       if ('error' in result) {
         toast.error(translateError(language, result.error ?? 'proof.errors.save'));
-        done.current();
+        done.current?.();
         return;
       }
       setInvoice(result.data);
@@ -178,7 +217,8 @@ export default function InvoiceProofEditor({
       setRows(openSettled(result.data.lines.map(toRow), result.data.truth, result.data.discountTotal));
     });
     return () => { stale = true; };
-  }, [invoiceNumber, language]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoiceNumber, draft?.scanId, language]);
 
   const proof = useMemo(
     () => checkReading({ items: rows.map(toLine), grandTotal: invoice?.grandTotal ?? 0, vatSummary: truth }, null),
@@ -254,6 +294,11 @@ export default function InvoiceProofEditor({
 
   /** Takes the document's own total, on the owner's word. */
   const adoptTotal = async () => {
+    if (draft) {
+      setAdoptedTotal(true);
+      setInvoice((was) => was && { ...was, grandTotal: documentTotal });
+      return;
+    }
     setSaving(true);
     const result = await adoptDocumentTotal({ invoiceNumber, truth });
     setSaving(false);
@@ -267,6 +312,13 @@ export default function InvoiceProofEditor({
 
   const save = async (accept: boolean) => {
     setSaving(true);
+    if (draft) {
+      const result = await correctReading({ scanId: draft.scanId, lines: rows.map(toLine), adoptTotal: adoptedTotal, accept });
+      setSaving(false);
+      if ('error' in result) toast.error(translateError(language, result.error ?? 'proof.errors.save'));
+      else draft.onCorrected(result.data);
+      return;
+    }
     const result = await saveInvoiceProof({ invoiceNumber, lines: rows.map(toLine), truth, accept });
     setSaving(false);
     if ('error' in result) {
@@ -274,7 +326,7 @@ export default function InvoiceProofEditor({
       return;
     }
     toast.success(t('proof.saved'));
-    onDone();
+    onDone?.();
   };
 
   if (!invoice) {
@@ -324,8 +376,11 @@ export default function InvoiceProofEditor({
   const field = 'input-field !py-1.5 !px-2 !text-xs tabular-nums w-full';
 
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
-      <div className="min-w-0">
+    <div className={draft ? 'space-y-5' : 'grid gap-5 lg:grid-cols-2'}>
+      {draft && draft.pictures.map((src) => (
+        <ZoomableImage key={src} src={src} alt={t('scanIssues.pictureAlt')} className="w-full max-h-[50vh] object-contain rounded-xl border border-border-subtle" />
+      ))}
+      {!draft && <div className="min-w-0">
         {invoice.imagePath && !invoice.imagePath.endsWith('.pdf') ? (
           <div className="space-y-3">
             {[invoice.imagePath, ...invoice.pagePaths].map((path) => (
@@ -344,15 +399,15 @@ export default function InvoiceProofEditor({
         ) : (
           <p className="text-sm text-muted-foreground">{t('proof.noImage')}</p>
         )}
-      </div>
+      </div>}
 
       <div className="min-w-0 space-y-3">
-        <header>
+        {!draft && <header>
           <h2 className="text-base font-bold text-foreground">{invoice.vendorName ?? invoice.invoiceNumber}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
             {invoice.invoiceNumber}{invoice.date ? ` · ${invoice.date}` : ''} · {t('proof.total').replace('{amount}', formatMoney(invoice.grandTotal))}
           </p>
-        </header>
+        </header>}
 
         <div
           role="status"
@@ -601,8 +656,13 @@ export default function InvoiceProofEditor({
             {saving
               ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
               : <Check className="w-4 h-4" aria-hidden="true" />}
-            {t('proof.confirm')}
+            {draft ? t('scanIssues.fixDone') : t('proof.confirm')}
           </button>
+          {draft && (
+            <button type="button" onClick={draft.onCancel} className="cta-button-secondary !py-2.5 !px-4 !text-sm">
+              {t('common.back')}
+            </button>
+          )}
           {invoice.imagePath && (
             <button
               type="button"

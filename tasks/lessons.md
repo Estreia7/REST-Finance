@@ -1,5 +1,17 @@
 # Lessons
 
+## Ask for what solves the problem, and name the document
+
+**What happened:** the review screen said "Esta fotografia não chega" over a sharp photo, offered another photo and a next page with every article in view, and had no way to correct a figure. The owner did not even know which invoice the buttons meant.
+
+**Rule:** the way out follows from what is wrong: a figure that does not add up opens the figures, a page is asked for only when one is missing, a new photo only when the photo is at fault. A screen about one document says which document. Two actions at most, the first one being the likely answer.
+
+## A figure in a message says what it is
+
+**What happened:** a scanned invoice was refused with "As linhas somam 132,27 e a fatura diz 131,19". Neither figure said whether it had VAT, or which total on the paper it was, so the owner could not check it and suspected the wrong line. The fallback path also compared a figure before VAT with one after it, under the same words.
+
+**Rule:** every amount shown to an owner names what it is (sem IVA, com IVA, a pagar), so it can be found on the paper. Two code paths comparing different things get different messages. Before explaining a mismatch, read the stored reading line by line: this gap was a row shift, not the tax note it looked like.
+
 ## On a phone, the answer goes above the picture
 
 **What happened:** the 'better photo' screen put a tall picture first, so its reason and main button sat behind the bottom bar. On an installed iPhone app the bar had also moved up after the native camera, and the owner could not go on. It also refused an invoice whose figures all agreed, over a QR or a cut margin.

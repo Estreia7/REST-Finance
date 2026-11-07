@@ -3,6 +3,7 @@ import { scanDocument, type ScanPage, type ScanResult, type MediaType, type Scan
 import { readInvoiceQr, applyQrTruth, parseInvoiceQr, type InvoiceQrData } from '@/lib/pt-invoice-qr';
 import { checkVendorReading, looksLikeCustomer, type CustomerIdentity } from '@/lib/vendor-reading';
 import { saveImage, saveDocument, resolveStoredPath } from '@/lib/uploads';
+import { isWholeInvoice, issuesOfWholeInvoice } from '@/lib/whole-invoice';
 import { betterProof, checkReading, documentIssues, foldNotes, isDiscountNote, rereadHint, settleFigures, type CheckedReading, type Proof } from '@/lib/invoice-checks';
 import { isCreditNoteNumber } from '@/lib/credit-notes';
 import { cleanTaxId, readerNote, rulesFor } from '@/lib/supplier-knowledge';
@@ -185,7 +186,7 @@ async function readDocument(input: {
   const number = checked.invoiceNumber?.trim() ?? '';
   const creditNote = !!qr?.isCreditNote || isCreditNoteNumber(number);
   // Money coming back has its own screen and its own rules.
-  const issues = creditNote ? [] : documentIssues({
+  const found = creditNote ? [] : documentIssues({
     reading: checked,
     proof,
     qrRead: !!qr,
@@ -194,8 +195,19 @@ async function readDocument(input: {
     pages: 1 + extraPages.length,
     isPdf: mediaType === 'application/pdf',
   });
+  // A repair is only its total: its lines need not reach anything, as long as
+  // the QR or the VAT table says what that total is.
+  const categoryType = new Map(categories.map((c) => [c.name, c.type]));
+  const wholeInvoice = !creditNote && isWholeInvoice({
+    type: checked.suggestedType,
+    lines: checked.items.map((item) => ({ type: item.category ? categoryType.get(item.category) : null })),
+  });
+  const totalVouched = wholeInvoice && (!!qr || !!checked.vatSummary?.length);
+  const issues = totalVouched ? issuesOfWholeInvoice(found, true) : found;
+  const standing = totalVouched && proof?.status === 'failed' ? null : proof;
+
   return {
-    proof,
+    proof: standing,
     data: {
       ...checked,
       checks: {
@@ -207,11 +219,12 @@ async function readDocument(input: {
         knownVendorId: null,
         knownVendorIsCustomer: false,
         ...checked.checks,
-        ...(proof ? { proof } : {}),
+        ...(standing ? { proof: standing } : {}),
         creditNote,
+        wholeInvoice,
         printedTotal,
         issues,
-        oddPrices: await oddPrices(restaurantId, checked.items),
+        oddPrices: wholeInvoice ? 0 : await oddPrices(restaurantId, checked.items),
       },
     },
   };

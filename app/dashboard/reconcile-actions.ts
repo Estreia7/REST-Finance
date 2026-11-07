@@ -2,6 +2,7 @@
 
 import { ensureVendor, findVendor } from '@/lib/vendors-server';
 import { prisma } from '@/lib/prisma';
+import { isWholeInvoice } from '@/lib/whole-invoice';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { toClientError } from '@/lib/errors';
 import { normalizeProductName } from '@/lib/price-tracking';
@@ -568,6 +569,8 @@ export async function saveInvoiceLines(input: {
   invoiceDate: string;
   invoiceNumber: string | null;
   scanId?: string | null;
+  /** The reading took this for a running cost that counts by its total. */
+  wholeInvoice?: boolean;
   lines: ScannedLine[];
 }) {
   const preview = await previewReconciliation({
@@ -581,7 +584,7 @@ export async function saveInvoiceLines(input: {
   const { lines, categories } = preview.data;
   const opex = new Set(categories.filter((c) => c.type === 'OPEX').map((c) => c.id));
 
-  const resolved = lines.map((line): LineResolution => {
+  const answered = lines.map((line): LineResolution => {
     const pack = line.packChoice;
     const settled = !!pack?.settled;
     const runningCost = !!line.category.id && opex.has(line.category.id);
@@ -624,6 +627,22 @@ export async function saveInvoiceLines(input: {
         : { skip: !needsSetup }),
     };
   });
+
+  // Checked again on what this restaurant knows: a wording it remembers as food,
+  // or one feeding an ingredient, keeps the invoice line by line.
+  const whole = !!input.wholeInvoice && isWholeInvoice({
+    type: 'OPEX',
+    lines: lines.map((line) => {
+      const runningCost = !!line.category.id && opex.has(line.category.id);
+      return { type: line.category.id && !runningCost ? 'COGS' : null, linked: line.decision.kind === 'linked' && !runningCost };
+    }),
+  });
+  // Every line stays with the invoice's category: nothing to split, nothing to ask.
+  const resolved = whole
+    ? answered.map(({ ingredientIds: _ingredients, ...line }) => ({
+        ...line, categoryId: null, categorySource: undefined, needsSetup: false, skip: true,
+      }))
+    : answered;
 
   const saved = await commitReconciliation({
     costEntryId: input.costEntryId,

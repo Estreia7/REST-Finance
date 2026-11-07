@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
+import { retireSupersededScans } from '@/lib/review-queue-server';
+import { groupCopies, type QueuedData } from '@/lib/review-queue';
 import { requireOwner, requireMember, isAuthError } from '@/lib/auth-helpers';
 import { toClientError } from '@/lib/errors';
 import { newInboxToken, invoiceAddress } from '@/lib/invoice-email';
@@ -71,7 +73,27 @@ export interface InvoiceToReview {
   id: string;
   /** Every page, in order. */
   pages: string[];
-  data: unknown;
+  data: QueuedData;
+  proofStatus: string | null;
+  /** Every photograph of this invoice waiting, this one included, best first. */
+  copies?: InvoiceToReview[];
+}
+
+/** What is waiting, with the photographs of one invoice together. */
+async function queuedInvoices(restaurantId: string): Promise<InvoiceToReview[][]> {
+  await retireSupersededScans(restaurantId);
+  const scans = await prisma.receiptScan.findMany({
+    where: { restaurantId, queued: true, reviewedAt: null, linkedEntryId: null },
+    orderBy: { createdAt: 'asc' },
+    take: 50,
+    select: { id: true, imageUrl: true, pageUrls: true, extractedData: true, proofStatus: true },
+  });
+  return groupCopies(scans.map((s): InvoiceToReview => ({
+    id: s.id,
+    pages: [s.imageUrl, ...s.pageUrls].filter((path) => path && !path.endsWith('.pdf')),
+    data: s.extractedData as QueuedData,
+    proofStatus: s.proofStatus,
+  })));
 }
 
 /** Invoices photographed to deal with later that the app would not vouch for. */
@@ -79,22 +101,44 @@ export async function getInvoicesToReview() {
   try {
     const owner = await requireOwner();
     if (isAuthError(owner)) return fail(owner.error);
-    const scans = await prisma.receiptScan.findMany({
-      where: { restaurantId: owner.restaurantId, queued: true, reviewedAt: null, linkedEntryId: null },
-      orderBy: { createdAt: 'asc' },
-      take: 50,
-      select: { id: true, imageUrl: true, pageUrls: true, extractedData: true },
-    });
+    const groups = await queuedInvoices(owner.restaurantId);
     return {
       success: true as const,
-      data: scans.map((s): InvoiceToReview => ({
-        id: s.id,
-        pages: [s.imageUrl, ...s.pageUrls].filter((path) => path && !path.endsWith('.pdf')),
-        data: s.extractedData,
-      })),
+      data: groups.map(([lead, ...rest]): InvoiceToReview => ({ ...lead, copies: rest.length > 0 ? [lead, ...rest] : undefined })),
     };
   } catch (error: unknown) {
     return fail(toClientError('Failed to list the invoices to review', error, 'read'));
+  }
+}
+
+/** Every photograph waiting of the invoice this one shows, itself included. */
+export async function getQueuedCopies(scanId: string) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return fail(owner.error);
+    const groups = await queuedInvoices(owner.restaurantId);
+    return { success: true as const, data: groups.find((group) => group.some((s) => s.id === scanId)) ?? [] };
+  } catch (error: unknown) {
+    return fail(toClientError('Failed to look for copies of the invoice', error, 'read'));
+  }
+}
+
+/** The owner chose this photograph: the others of the same invoice leave the list. */
+export async function keepQueuedCopy(scanId: string) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return fail(owner.error);
+    const groups = await queuedInvoices(owner.restaurantId);
+    const others = (groups.find((group) => group.some((s) => s.id === scanId)) ?? [])
+      .map((s) => s.id)
+      .filter((id) => id !== scanId);
+    await prisma.receiptScan.updateMany({
+      where: { id: { in: others }, restaurantId: owner.restaurantId, queued: true, linkedEntryId: null },
+      data: { reviewedAt: new Date() },
+    });
+    return { success: true as const };
+  } catch (error: unknown) {
+    return fail(toClientError('Failed to keep the chosen photo', error, 'write'));
   }
 }
 

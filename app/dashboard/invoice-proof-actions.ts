@@ -14,6 +14,8 @@ import { PACK_UNITS, asPrinted, fromPrinted, lineFigures, packOfLine, takesPack,
 import { formatPack } from '@/lib/scan-corrections';
 import { checkReading, type DocumentIssue, type Proof, type TaxTruth } from '@/lib/invoice-checks';
 import { settleSavedFigures } from '@/lib/invoice-sweep-server';
+import { changedLines, correctedItems } from '@/lib/reading-corrections';
+import type { CostReceiptResult } from '@/lib/document-scanner';
 
 /**
  * Confirming an invoice whose lines do not add up.
@@ -302,6 +304,98 @@ export async function adoptDocumentTotal(input: { invoiceNumber: string; truth: 
     return { success: true as const, data: { total } };
   } catch (error: unknown) {
     return { error: toClientError('Failed to correct the invoice total', error, 'write') };
+  }
+}
+
+/**
+ * Puts the owner's figures on a reading that has not been saved yet.
+ *
+ * Nothing reaches the books here: the invoice still goes through its confirmation.
+ * What changes is that the owner has compared it with the paper, so it no longer
+ * waits for that question, now or after it is saved.
+ */
+export async function correctReading(input: {
+  scanId: string;
+  lines: ProofLine[];
+  /** Take the total the document's tax table adds up to. */
+  adoptTotal: boolean;
+  /** Keep it even though it does not add up. */
+  accept: boolean;
+}) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+    const { restaurantId } = owner;
+
+    const scan = await prisma.receiptScan.findFirst({
+      where: { id: input.scanId, restaurantId, linkedEntryId: null },
+      select: { extractedData: true },
+    });
+    const reading = scan?.extractedData as unknown as CostReceiptResult | null | undefined;
+    if (reading?.type !== 'cost_receipt') return { error: 'accounting.lineNotFound' };
+
+    if (input.lines.length === 0) return { error: 'proof.errors.noLines' };
+    const usable = input.lines.every((l) =>
+      l.productName.trim() && Number.isFinite(l.quantity) && Number.isFinite(l.unitPrice) && Number.isFinite(l.total));
+    if (!usable) return { error: 'proof.errors.badLine' };
+    if (input.lines.some((l) => l.pack && (!PACK_UNITS.includes(l.pack.unit) || !toPack(l.pack)))) {
+      return { error: 'lineSetup.errors.pack' };
+    }
+
+    const was = reading.checks?.proof;
+    const truth = was?.truth ?? [];
+    const grandTotal = input.adoptTotal && truth.length
+      ? cents(truth.reduce((sum, b) => sum + b.base + b.tax, 0))
+      : reading.grandTotal;
+    const items = correctedItems(reading.items, input.lines);
+    const proof = checkReading(
+      { items, grandTotal, vatSummary: truth },
+      was?.source === 'qr' ? { taxes: truth } : null,
+    );
+    if (proof.status === 'failed' && !input.accept) return { error: 'proof.errors.doesNotAddUp' };
+
+    const vendorId = reading.checks?.knownVendorId ?? null;
+    const corrected: CostReceiptResult = {
+      ...reading,
+      items,
+      grandTotal,
+      // The owner has looked at it beside the paper: there is nothing left to warn about.
+      checks: reading.checks && { ...reading.checks, proof, issues: [] },
+    };
+    await prisma.$transaction([
+      prisma.receiptScan.update({
+        where: { id: input.scanId },
+        data: {
+          extractedData: JSON.parse(JSON.stringify(corrected)),
+          proofStatus: proof.status === 'failed' ? 'accepted' : proof.status,
+          proofResolvedAt: new Date(),
+        },
+      }),
+      prisma.scanCorrection.createMany({
+        data: changedLines(reading.items, input.lines).map((change) => ({
+          restaurantId,
+          receiptScanId: input.scanId,
+          vendorId,
+          field: 'line',
+          fixedBy: 'owner',
+          ...change,
+        })),
+      }),
+    ]);
+
+    if (vendorId) {
+      for (const line of input.lines.filter((l) => l.packChanged)) {
+        await teachPack({
+          restaurantId,
+          vendorId,
+          sourceName: lineKey(line.productName),
+          pack: (line.pack && toPack(line.pack)) ?? 'packages',
+        });
+      }
+    }
+    return { success: true as const, data: corrected };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to correct the reading', error, 'write') };
   }
 }
 

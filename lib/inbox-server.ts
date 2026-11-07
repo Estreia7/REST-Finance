@@ -4,6 +4,8 @@ import { dueDateFor, paymentState, toDayKey } from '@/lib/payments';
 import { statusFor } from '@/lib/compliance';
 import { findDuplicateCosts } from '@/lib/duplicate-costs-server';
 import { findDuplicateVendorGroups } from '@/lib/duplicate-vendors-server';
+import { retireSupersededScans } from '@/lib/review-queue-server';
+import { groupCopies, type QueuedData } from '@/lib/review-queue';
 import type { InboxCounts } from '@/lib/inbox';
 
 /**
@@ -81,11 +83,16 @@ export async function readInboxCounts(restaurantId: string): Promise<InboxCounts
   });
   const wordings = new Set(waiting.map((w) => `${w.vendorId ?? ''}|${w.productName.trim().toLowerCase()}`));
 
-  const toReview = await prisma.receiptScan.findMany({
+  await retireSupersededScans(restaurantId);
+  const queued = await prisma.receiptScan.findMany({
     where: { restaurantId, queued: true, reviewedAt: null, linkedEntryId: null },
-    select: { extractedData: true },
+    select: { id: true, proofStatus: true, extractedData: true },
+    orderBy: { createdAt: 'asc' },
     take: 200,
   });
+  // Two photographs of one invoice are one invoice to deal with.
+  const toReview = groupCopies(queued.map((s) => ({ id: s.id, proofStatus: s.proofStatus, data: s.extractedData as QueuedData })))
+    .map(([lead]) => lead);
 
   const unproved = await prisma.receiptScan.findMany({
     where: { restaurantId, proofStatus: 'failed', proofResolvedAt: null, linkedEntryId: { not: null } },
@@ -130,7 +137,7 @@ export async function readInboxCounts(restaurantId: string): Promise<InboxCounts
     scansToReview: {
       count: toReview.length,
       total: cents(toReview.reduce((s, e) => {
-        const total = (e.extractedData as { grandTotal?: unknown } | null)?.grandTotal;
+        const total = e.data?.grandTotal;
         return s + (typeof total === 'number' ? total : 0);
       }, 0)),
     },

@@ -152,7 +152,13 @@ function Viewer({ src, alt, onClose }: { src: string; alt: string; onClose: () =
   );
 }
 
-export default function ZoomableImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
+export default function ZoomableImage({ src, alt, className, fill = false }: {
+  src: string;
+  alt: string;
+  className?: string;
+  /** Takes the height of what holds it, for a picture inside a card. */
+  fill?: boolean;
+}) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -196,7 +202,7 @@ export default function ZoomableImage({ src, alt, className }: { src: string; al
         type="button"
         onClick={() => setOpen(true)}
         aria-label={t('zoom.open')}
-        className="group relative block w-full cursor-zoom-in rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={`group relative block w-full cursor-zoom-in rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${fill ? 'h-full' : ''}`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element -- an authenticated file, not a static asset */}
         <img ref={imageRef} src={src} alt={alt} className={className} onError={() => setFailed(true)} />

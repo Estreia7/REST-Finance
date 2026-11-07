@@ -1,5 +1,6 @@
 'use server';
 
+import { byInvoice, invoiceParts } from '@/lib/cost-parts';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import {
@@ -703,10 +704,25 @@ export async function getCostHistory(dateFrom: Date, dateTo: Date, type?: CostTy
       },
     });
 
-    const data = entries.map(e => ({
+    // Every part of these invoices, even one the dates or a filter left out:
+    // "part 2 of 5" and the total are about the invoice, not about this list.
+    const roots = [...new Set(entries.map((e) => e.splitFromId ?? e.id))];
+    const family = await prisma.costEntry.findMany({
+      where: {
+        restaurantId: member.restaurantId,
+        deletedAt: null,
+        OR: [{ id: { in: roots } }, { splitFromId: { in: roots } }],
+      },
+      select: { id: true, splitFromId: true, amount: true },
+    });
+    const parts = invoiceParts(family.map((e) => ({ ...e, amount: Number(e.amount) })));
+    const ordered = byInvoice(entries.map((e) => ({ ...e, amount: Number(e.amount) })));
+
+    const data = ordered.map(e => ({
       id: e.id,
       date: e.date,
       type: e.type,
+      invoicePart: parts.get(e.id) ?? null,
       categoryName: e.category?.name || '—',
       categoryType: e.category?.type || e.type,
       amount: Number(e.amount),

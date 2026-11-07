@@ -345,7 +345,7 @@ describe('documentIssues', () => {
       covered: true,
     };
     const found = kinds({ ...clean, reading, qrRead: false, qrTotal: null, printedTotal: 45.98, proof: null });
-    expect(found).toEqual(['missingPages', 'covered', 'doesNotAddUp']);
+    expect(found).toEqual(['missingPages', 'covered', 'linesOverTotal']);
   });
 
   it('counts the pages it was given', () => {
@@ -594,5 +594,45 @@ describe('settleFigures with a discount', () => {
   it('will not invent a discount the figures do not show', () => {
     const lines = [line('A', 60, 6), line('C', 100, 23)];
     expect(settleFigures(lines, truth, 15)?.discounted).toBeFalsy();
+  });
+});
+
+describe('rows that slipped on a Makro invoice', () => {
+  // FAC 06001202501/017420, as first read: 132,27 against 131,19 before VAT.
+  const row = (product: string, quantity: number, unitPrice: number, total: number, vatRate: number) =>
+    ({ product, quantity, unitPrice, total, vatRate });
+  const slipped = [
+    row('MC ALFACE ICEBERG', 1, 1.08, 1.08, 6),
+    row('MC ECHALOTE', 3, 1.08, 3.24, 6),
+    row('CERV.SUPER BOCK 24X33CL TP*', 1, 2.28, 2.28, 6),
+    row('CERV.SUPER BOCK 24X33CL TP*', 24, 0.56, 13.44, 23),
+  ];
+  const taxes = [{ rate: 6, base: 5.52, tax: 0.33 }, { rate: 23, base: 13.44, tax: 3.09 }];
+
+  it('points the second reader at the repeated description', () => {
+    const reading = { items: slipped, grandTotal: 22.38 };
+    const hint = rereadHint(checkReading(reading, { taxes }), reading);
+    expect(hint).toContain('Lines 3 and 4 came back with the same description');
+  });
+
+  it('says nothing of the kind when no description repeats', () => {
+    const reading = { items: slipped.slice(0, 3), grandTotal: 22.38 };
+    expect(rereadHint(checkReading(reading, { taxes }), reading)).not.toContain('same description');
+  });
+});
+
+describe('what a reading that does not add up is compared with', () => {
+  const clean = { qrRead: false, qrTotal: null, printedTotal: null, pages: 1, isPdf: false };
+
+  it('sets before VAT against before VAT where the document states it', () => {
+    const reading = { items: [{ quantity: 1, unitPrice: 12, total: 12, vatRate: 23 }], grandTotal: 12.3 };
+    const proof = checkReading(reading, { taxes: [{ rate: 23, base: 10, tax: 2.3 }] });
+    expect(documentIssues({ ...clean, reading, proof })).toContainEqual({ kind: 'doesNotAddUp', expected: 10, found: 12 });
+  });
+
+  it('says it is the amount paid when nothing states the value before VAT', () => {
+    const reading = { items: [{ quantity: 1, unitPrice: 12, total: 12, vatRate: 23 }], grandTotal: 10 };
+    const proof = checkReading(reading, null);
+    expect(documentIssues({ ...clean, reading, proof })).toContainEqual({ kind: 'linesOverTotal', expected: 10, found: 12 });
   });
 });

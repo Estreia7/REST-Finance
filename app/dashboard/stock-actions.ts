@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
+import { notWholeInvoice } from '@/lib/whole-invoice';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { toClientError } from '@/lib/errors';
 import { moduleOff } from '@/lib/modules-server';
@@ -30,7 +31,7 @@ async function purchases(restaurantId: string, since: Date): Promise<PurchaseLin
     where: {
       restaurantId,
       OR: [{ invoiceDate: { gte: since } }, { invoiceDate: null, createdAt: { gte: since } }],
-      AND: [{ OR: [{ costEntryId: null }, { costEntry: { deletedAt: null } }] }],
+      AND: [{ OR: [{ costEntryId: null }, { costEntry: { deletedAt: null } }] }, notWholeInvoice],
     },
     select: {
       normalizedName: true, productName: true, unit: true, quantity: true, unitPrice: true, totalPrice: true,

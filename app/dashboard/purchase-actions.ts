@@ -1,6 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { notWholeInvoice } from '@/lib/whole-invoice';
 import { cheapestToDate } from '@/lib/price-increases';
 import { normalizeProductName } from '@/lib/price-tracking';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
@@ -64,7 +65,7 @@ export async function getPurchasedProducts() {
 
     const rows = await prisma.invoiceItem.findMany({
       // A discount is money off, not a product bought.
-      where: { restaurantId: owner.restaurantId, totalPrice: { gte: 0 }, AND: [notDeleted] },
+      where: { restaurantId: owner.restaurantId, totalPrice: { gte: 0 }, AND: [notDeleted, notWholeInvoice] },
       select,
     });
 

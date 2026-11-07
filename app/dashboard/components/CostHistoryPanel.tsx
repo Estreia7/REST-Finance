@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { Fragment, useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Pencil, Trash2, Loader2, X, Check, Calendar, Filter, Download, Repeat, Eye, Paperclip } from 'lucide-react';
 import { getCostHistory, updateCostEntry, deleteCostEntry, getCategories } from '../actions';
@@ -29,6 +29,8 @@ interface CostEntry {
   /** Entered without its invoice, which can still be added. */
   canAttach?: boolean;
   hasVendor?: boolean;
+  /** One category's share of an invoice split across several. */
+  invoicePart?: { part: number; parts: number; total: number } | null;
 }
 
 interface Category {
@@ -161,6 +163,31 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
   const fmt = (n: number) => `€${n.toLocaleString(locale, { minimumFractionDigits: 2 })}`;
   const fmtDate = (d: Date) => new Date(d).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
 
+  /** Which document a cost belongs to, or that it has none. */
+  const documentNote = (entry: CostEntry) => {
+    if (entry.invoiceNumber) {
+      const number = entry.invoiceNumber;
+      return (
+        <button
+          type="button"
+          onClick={() => setPreviewing(number)}
+          className="block max-w-full text-left text-[11px] font-medium text-primary-ink hover:underline [overflow-wrap:anywhere]"
+        >
+          {entry.invoicePart
+            ? t('costHistory.invoicePart')
+                .replace('{number}', number)
+                .replace('{part}', String(entry.invoicePart.part))
+                .replace('{parts}', String(entry.invoicePart.parts))
+                .replace('{total}', fmt(entry.invoicePart.total))
+            : t('costHistory.invoiceWhole').replace('{number}', number)}
+        </button>
+      );
+    }
+    if (entry.reference) return <span className="block text-[11px] text-muted-foreground [overflow-wrap:anywhere]">{entry.reference}</span>;
+    if (entry.recurring) return null;
+    return <span className="block text-[11px] text-muted-foreground">{t('costHistory.noInvoice')}</span>;
+  };
+
   return (
     <div className="space-y-4">
       {/* Summary cards */}
@@ -248,7 +275,10 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
               </thead>
               <tbody>
                 {shown.map(entry => (
-                  <tr key={entry.id} className="border-b border-border-subtle hover:bg-muted transition-colors">
+                  <Fragment key={entry.id}>
+                  <tr className={`max-md:border-b-0 border-b hover:bg-muted transition-colors ${
+                    entry.invoicePart && entry.invoicePart.part < entry.invoicePart.parts ? 'border-border-subtle/40' : 'border-border-subtle'
+                  }`}>
                     {editingId === entry.id ? (
                       <>
                         <td className="py-3 text-foreground font-medium">{fmtDate(entry.date)}</td>
@@ -277,7 +307,7 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
                       </>
                     ) : (
                       <>
-                        <td className="py-3 text-foreground font-medium">
+                        <td className={`py-3 text-foreground font-medium ${entry.invoicePart ? 'border-l-2 border-primary/50 pl-2' : ''}`}>
                           <span className="inline-flex items-center gap-1.5">
                             {fmtDate(entry.date)}
                             {/* A fixed monthly cost, booked by the app: marked so it
@@ -293,9 +323,9 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
                           </span>
                         </td>
                         <td className="py-3 text-muted-foreground hidden sm:table-cell">{entry.categoryName}</td>
-                        <td className="py-3 text-muted-foreground text-xs hidden md:table-cell truncate max-w-[200px]">
-                          {entry.description || '—'}
-                          {entry.reference && <span className="block opacity-70">{entry.reference}</span>}
+                        <td className="py-3 text-muted-foreground text-xs hidden md:table-cell max-w-[320px]">
+                          <span className="block truncate">{entry.description || '—'}</span>
+                          {documentNote(entry)}
                         </td>
                         <td className="py-3 text-right font-semibold text-foreground">{fmt(entry.amount)}</td>
                         <td className="py-3 text-right">
@@ -334,6 +364,16 @@ export default function CostHistoryPanel({ onDataChange }: { onDataChange?: () =
                       </>
                     )}
                   </tr>
+                  {/* On a phone the description column is not there, and the
+                      columns that are left are too narrow to hold this. */}
+                  {editingId !== entry.id && (
+                    <tr className="md:hidden border-b border-border-subtle">
+                      <td colSpan={6} className={`pb-2.5 ${entry.invoicePart ? 'border-l-2 border-primary/50 pl-2' : ''}`}>
+                        {documentNote(entry)}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
               <tfoot>
