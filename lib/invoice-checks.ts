@@ -300,7 +300,10 @@ export function documentIssues(input: {
     }
   }
 
-  if (!proved && (reading.continuesOnNextPage || (reading.pagesTotal ?? 0) > pages)) {
+  // Lines that reach the document's own figures are all there, whatever the
+  // reader made of the page count. Page two alone would fall short of its table.
+  const complete = proved || (proof?.status === 'partial' && proof.truth.length > 0);
+  if (!complete && (reading.continuesOnNextPage || (reading.pagesTotal ?? 0) > pages)) {
     issues.push({ kind: 'missingPages' });
   }
   if (reading.totalVisible === false && !qrRead) issues.push({ kind: 'noTotal' });
@@ -545,6 +548,36 @@ function takeOutDiscount(
   };
 }
 
+/**
+ * A discount on lines where a rate was also misread.
+ *
+ * Each problem hides the other: the rates cannot reach the table while the
+ * discount is in the lines, and the discount cannot be shared out while a line sits
+ * under the wrong rate. So each rate in turn is tried as the one that carried the
+ * discount, and the answer that changes the fewest lines wins.
+ */
+function settleRatesAndDiscount(
+  lines: Array<CheckedLine & { productName: string }>,
+  truth: TaxTruth[],
+  discount: number,
+): SettledFigures | null {
+  const options = truth
+    .flatMap((band) => {
+      const settled = settleVat(lines, truth.map((b) => (b === band ? { ...b, base: cents(b.base + discount) } : b)));
+      return settled && settled.drop.length === 0 ? [settled] : [];
+    })
+    .sort((a, b) => a.changed - b.changed);
+
+  for (const option of options) {
+    const rated = lines.map((line, i) => ({ ...line, vatRate: option.rates[i] }));
+    const shared = takeOutDiscount(rated, truth, discount);
+    if (shared) {
+      return { ...shared, changed: lines.filter((l, i) => l.vatRate !== shared.rates[i] || l.total !== shared.totals[i]).length };
+    }
+  }
+  return null;
+}
+
 /** Makro prints a VAT code on each line, and its legend says what each one means. */
 const MAKRO_VAT_CODES: Record<number, number> = { 2: 23, 4: 6, 5: 13 };
 
@@ -578,7 +611,7 @@ export function settleFigures(
   if (truth.length === 0 || read.length === 0) return null;
   const lines = ratesFromCodes(read, truth);
   if (discount > 0) {
-    const plain = takeOutDiscount(lines, truth, discount);
+    const plain = takeOutDiscount(lines, truth, discount) ?? settleRatesAndDiscount(lines, truth, discount);
     if (plain) return plain;
   }
   const kept = lines.filter((l) => !isDiscountNote(l.productName));

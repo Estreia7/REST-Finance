@@ -467,6 +467,34 @@ describe('a Makro reread with VAT codes as rates and two promotions', () => {
     expect(sum(23)).toBeCloseTo(69.61, 2);
   });
 
+  it('settles a misread rate and the discount together', () => {
+    // As reread: the 8,86 line under 13%, and the 2,64 still inside the 6% lines.
+    const reread = [line('PAO', 10.14, 6), line('CHEDDAR', 43.74, 6), line('RESTO', 27.39, 6),
+      line('AGUA', 1.54, 13), line('DESENGORDURANTE', 8.86, 13), line('FRITOS', 60.75, 23)];
+    const settled = settleFigures(reread, truth, 2.64);
+    expect(settled?.rates).toEqual([6, 6, 6, 13, 23, 23]);
+    expect(settled?.discounted).toBe(true);
+    const items = reread.map((l, i) => ({ ...l, total: settled?.totals[i] ?? 0, unitPrice: settled?.unitPrices[i] ?? 0, vatRate: settled?.rates[i] }));
+    const proof = checkReading({ items, grandTotal: 170.71 }, { taxes: truth });
+    expect(proof.status).toBe('proved');
+  });
+
+  it('does not take a discount the rates cannot explain', () => {
+    expect(settleFigures([line('A', 50, 6), line('B', 50, 23)], truth, 2.64)).toBeNull();
+  });
+
+  it('does not ask for a page when the lines reach the figures', () => {
+    const reading = { items: [{ quantity: 1, unitPrice: 10, total: 10, vatRate: 6 }], grandTotal: 10.6, pagesTotal: 3, vatSummary: [{ rate: 6, base: 10, tax: 0.6 }] };
+    const issues = documentIssues({ reading, proof: checkReading(reading, null), qrRead: false, qrTotal: null, printedTotal: 10.6, pages: 1, isPdf: false });
+    expect(issues.map((i) => i.kind)).not.toContain('missingPages');
+  });
+
+  it('still asks for it when they fall short', () => {
+    const reading = { items: [{ quantity: 1, unitPrice: 4, total: 4, vatRate: 6 }], grandTotal: 10.6, pagesTotal: 2, vatSummary: [{ rate: 6, base: 10, tax: 0.6 }] };
+    const issues = documentIssues({ reading, proof: checkReading(reading, null), qrRead: false, qrTotal: null, printedTotal: 10.6, pages: 1, isPdf: false });
+    expect(issues.map((i) => i.kind)).toContain('missingPages');
+  });
+
   it('leaves 4% alone where it is a real rate', () => {
     const azores = [{ rate: 4, base: 10, tax: 0.4 }, { rate: 16, base: 20, tax: 3.2 }];
     expect(settleFigures([line('A', 10, 4), line('B', 20, 16)], azores)?.rates).toEqual([4, 16]);
