@@ -35,9 +35,25 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.07.02';
+export const CHANGELOG_VERSION = '2026.11.07.03';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.07.03',
+    date: '2026-11-07',
+    entries: [
+      {
+        kind: 'fix',
+        title: 'Faturas em PDF já não aparecem com a imagem partida',
+        detail: 'Ao abrir uma fatura que chegou em PDF, aparece agora um botão para abrir o documento.',
+      },
+      {
+        kind: 'fix',
+        title: 'Faturas do Recheio lidas com mais cuidado',
+        detail: 'A última coluna é o preço por unidade com IVA e já não é confundida com o valor da linha. As fotografias tortas também deixam de trocar os valores entre produtos, e o custo destas faturas passa a repartir-se bem pelas categorias.',
+      },
+    ],
+  },
   {
     version: '2026.11.07.02',
     date: '2026-11-07',

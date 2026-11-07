@@ -1,3 +1,4 @@
+import { isUnitGross } from './invoice-checks';
 import type { Prisma, CostType } from '@prisma/client';
 import { splitInvoiceTotal } from './invoice-categories';
 
@@ -41,7 +42,7 @@ export async function rebalanceInvoice(
 
   const items = await tx.invoiceItem.findMany({
     where: { costEntryId: { in: entries.map((e) => e.id) }, restaurantId: input.restaurantId },
-    select: { id: true, categoryId: true, totalPrice: true, grossTotal: true },
+    select: { id: true, categoryId: true, unitPrice: true, totalPrice: true, vatRate: true, grossTotal: true },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   });
   if (items.length === 0) return { parts: entries.length };
@@ -50,7 +51,17 @@ export async function rebalanceInvoice(
   const parts = splitInvoiceTotal(
     // With VAT where known: the total shared out includes it, and a 23% line
     // carries more of it than a 6% one.
-    items.map((i) => ({ categoryId: i.categoryId, total: Number(i.grossTotal ?? i.totalPrice) })),
+    items.map((i) => {
+      const line = {
+        unitPrice: Number(i.unitPrice),
+        total: Number(i.totalPrice),
+        vatRate: i.vatRate === null ? null : Number(i.vatRate),
+        grossTotal: i.grossTotal === null ? null : Number(i.grossTotal),
+      };
+      // Older lines may hold a unit price here, read before that was caught.
+      const gross = isUnitGross(line) ? line.total * (1 + (line.vatRate ?? 0) / 100) : line.grossTotal;
+      return { categoryId: i.categoryId, total: gross ?? line.total };
+    }),
     grandTotal,
   );
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { checkReading,
-  canSaveUnseen, betterProof, rereadHint, type CheckedReading, settleVat, settleFigures, isDiscountNote, isIncludedNote, foldNotes, documentIssues } from '@/lib/invoice-checks';
+  canSaveUnseen, betterProof, rereadHint, type CheckedReading, settleVat, settleFigures, isDiscountNote, isIncludedNote, isUnitGross, foldNotes, documentIssues } from '@/lib/invoice-checks';
 import { parseInvoiceQr } from '@/lib/pt-invoice-qr';
 
 // A wholesale invoice with fictional identifiers: 0,905 kg of mushrooms at 3,69 the kilo.
@@ -401,6 +401,49 @@ describe('a Makro invoice with a tax note and a promotion', () => {
     expect(settled?.discounted).toBe(true);
     const band = items.reduce((sum, l, i) => sum + (l.vatRate === 13 ? settled?.totals[i] ?? 0 : 0), 0);
     expect(band).toBeCloseTo(64.44, 2);
+  });
+});
+
+describe('a Recheio invoice whose last column is the unit price with VAT', () => {
+  const row = (product: string, quantity: number, unitPrice: number, total: number, vatRate: number, grossTotal: number) =>
+    ({ product, quantity, unitPrice, total, vatRate, grossTotal });
+  // FR 26202904/0000088787, page 1: the lines reach TRANSPORTE 54,96.
+  const lines = [
+    row('ACUCAR AMANH AMAR 1KG', 4, 0.94, 3.76, 23, 1.16),
+    row('PAO HAMBURGER BIMBO', 2, 1.39, 2.78, 6, 1.47),
+    row('LIMAO CAL.3/4', 1.3, 1.44, 1.87, 6, 1.53),
+    row('ALFACE ICEBERG RCH', 1.78, 2.59, 4.61, 6, 2.75),
+    row('TOMATE BBB 82/102 1 CAM', 2.72, 2.59, 7.04, 6, 2.75),
+    row('CHALOTTE ROXO RCH', 0.78, 3.99, 3.11, 6, 4.23),
+    row('ALHO SECO INT DESCASCAD 500GR', 1, 3.19, 3.19, 6, 3.38),
+    row('BAT DOCE MCCAIN 2,5K', 1, 12.99, 12.99, 23, 15.98),
+    row('GEL.CAT NATA GOURM 4,5LT', 1, 6.89, 6.89, 23, 8.47),
+    row('AGUA CALDAS PENACOVA PET 5L', 4, 0.74, 2.96, 13, 0.84),
+    row('AGUA PENACOVA 50C SDR', 24, 0.14, 3.36, 13, 0.16),
+    row('VALOR DEPOSITO UNIDADE', 24, 0.1, 2.4, 0, 0.1),
+  ];
+
+  it('does not fail a right line over that column', () => {
+    const proof = checkReading({ items: lines, grandTotal: 62.58 }, null);
+    expect(proof.problems).toEqual([]);
+    expect(proof.linesNet).toBe(54.96);
+  });
+
+  it('keeps a unit price out of the line value', () => {
+    const { items } = foldNotes(lines);
+    expect(items[0].grossTotal).toBeUndefined();
+    expect(items[4].grossTotal).toBeUndefined();
+    expect(items[7].grossTotal).toBe(15.98);
+  });
+
+  it('still catches a value with VAT that is simply wrong', () => {
+    const wrong = { quantity: 2, unitPrice: 5, total: 10, vatRate: 23, grossTotal: 9 };
+    expect(isUnitGross(wrong)).toBe(false);
+    expect(checkReading({ items: [wrong], grandTotal: 12.3 }, null).problems.some((p) => p.kind === 'lineVat')).toBe(true);
+  });
+
+  it('keeps a real line value with VAT', () => {
+    expect(isUnitGross({ unitPrice: 3.69, total: 3.34, vatRate: 6, grossTotal: 3.54 })).toBe(false);
   });
 });
 

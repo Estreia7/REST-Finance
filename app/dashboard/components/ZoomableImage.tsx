@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Minus, Plus, X, ZoomIn } from 'lucide-react';
+import { FileText, Minus, Plus, X, ZoomIn } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 import { CLOSE_UP, FIT, panBy, zoomAt, type ZoomView } from '@/lib/zoom';
 
@@ -155,7 +155,40 @@ function Viewer({ src, alt, onClose }: { src: string; alt: string; onClose: () =
 export default function ZoomableImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
+  const [failed, setFailed] = useState(false);
   const close = useCallback(() => setOpen(false), []);
+
+  // A picture that failed before React was listening never fires onError.
+  const imageRef = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    const image = imageRef.current;
+    if (image?.complete && image.naturalWidth === 0) setFailed(true);
+  }, [src]);
+
+  // Invoices that arrive as PDFs are kept as PDFs, and an <img> cannot show one.
+  // They open as a download, on purpose: see the route that serves them.
+  if (src.toLowerCase().endsWith('.pdf')) {
+    return (
+      <a
+        href={src}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center justify-center gap-2 rounded-xl border border-border-subtle px-4 py-10 text-sm font-semibold text-primary-ink hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <FileText className="w-5 h-5 shrink-0" aria-hidden="true" />
+        {t('proof.openPdf')}
+      </a>
+    );
+  }
+
+  if (failed) {
+    return (
+      <p className="flex items-center justify-center gap-2 rounded-xl border border-border-subtle px-4 py-10 text-center text-sm text-muted-foreground">
+        <FileText className="w-5 h-5 shrink-0" aria-hidden="true" />
+        {t('zoom.unavailable')}
+      </p>
+    );
+  }
 
   return (
     <>
@@ -166,7 +199,7 @@ export default function ZoomableImage({ src, alt, className }: { src: string; al
         className="group relative block w-full cursor-zoom-in rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {/* eslint-disable-next-line @next/next/no-img-element -- an authenticated file, not a static asset */}
-        <img src={src} alt={alt} className={className} />
+        <img ref={imageRef} src={src} alt={alt} className={className} onError={() => setFailed(true)} />
         <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-medium text-white">
           <ZoomIn className="w-3.5 h-3.5" aria-hidden="true" />
           {t('zoom.hint')}

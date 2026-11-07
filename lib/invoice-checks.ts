@@ -99,6 +99,20 @@ function sumTolerance(lines: number): number {
   return 0.02 + lines * 0.01;
 }
 
+/**
+ * Whether the "value with VAT" read for a line is really its unit price with VAT.
+ *
+ * Recheio's last column is "Preço Uni. c/IVA": 4 sugars at 0,94 print 1,16, not
+ * 4,62. Taken for the line's value it fails a right line, and it weighs the line
+ * at a fraction of what it cost. On a single unit the two are the same figure.
+ */
+export function isUnitGross(line: Pick<CheckedLine, 'unitPrice' | 'total' | 'vatRate' | 'grossTotal'>): boolean {
+  if (line.vatRate == null || line.grossTotal == null) return false;
+  const factor = 1 + line.vatRate / 100;
+  return Math.abs(line.grossTotal - line.unitPrice * factor) <= 0.011
+    && Math.abs(line.grossTotal - line.total * factor) > 0.03;
+}
+
 /** The bases to prove against: the QR if there is one, or what was printed. */
 export function taxTruth(
   reading: Pick<CheckedReading, 'vatSummary'>,
@@ -124,7 +138,7 @@ export function checkReading(reading: CheckedReading, qr: Pick<InvoiceQrData, 't
     if (Math.abs(expected - line.total) > lineTolerance(line.quantity)) {
       problems.push({ kind: 'line', index, expected: cents(expected), found: line.total });
     }
-    if (line.vatRate != null && line.grossTotal != null) {
+    if (line.vatRate != null && line.grossTotal != null && !isUnitGross(line)) {
       const gross = line.total * (1 + line.vatRate / 100);
       if (Math.abs(gross - line.grossTotal) > 0.03) {
         problems.push({ kind: 'lineVat', index, expected: cents(gross), found: line.grossTotal });
@@ -195,6 +209,7 @@ export function isIncludedNote(productName: string): boolean {
  * Mais Pague Menos": 3 oils at 19,59, 4,41 off) comes off that product, so its
  * price is what it really cost, and no longer counts as a discount left to share
  * out. A discount larger than its line is not believed and stays where it was.
+ * A unit price read as the line's value with VAT is dropped.
  */
 export function foldNotes<T extends CheckedLine & { product: string; lineDiscount?: number }>(
   items: T[],
@@ -203,7 +218,8 @@ export function foldNotes<T extends CheckedLine & { product: string; lineDiscoun
   const kept = items.filter((item) => !isIncludedNote(item.product));
   let taken = 0;
   const folded = (kept.length > 0 ? kept : items).map((item) => {
-    const { lineDiscount, ...line } = item;
+    const { lineDiscount, ...read } = item;
+    const line = isUnitGross(read) ? { ...read, grossTotal: undefined } : read;
     const discount = lineDiscount ?? 0;
     if (discount <= 0 || discount >= line.total) return line as T;
     taken += discount;

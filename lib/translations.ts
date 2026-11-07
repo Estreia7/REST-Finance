@@ -3318,6 +3318,7 @@ export const translations = {
       in: 'Aproximar',
       out: 'Afastar',
       close: 'Fechar a fatura',
+      unavailable: 'Não foi possível mostrar esta imagem da fatura.',
     },
     camera: {
       title: 'Digitalizar documento',
@@ -7323,6 +7324,7 @@ export const translations = {
       in: 'Zoom in',
       out: 'Zoom out',
       close: 'Close the invoice',
+      unavailable: 'This invoice image could not be shown.',
     },
     camera: {
       title: 'Scan document',

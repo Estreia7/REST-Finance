@@ -1,5 +1,16 @@
 # Lessons
 
+## A reader rule learned from one invoice must be checked on the figures of another
+
+**What happened:** the reader prompt said Recheio's last column was the line's value with VAT, from a
+single example. On FR 26202904/0000088787 all twelve lines show it is the unit price with VAT (4 at 0,94
+prints 1,16). Right lines failed the check, and the wrong value was stored and weighed the cost split.
+
+**Rule:** before writing what a column means into the prompt, compute it across several rows, including
+rows with a quantity other than 1, where the candidates differ. Where a meaning can be tested from the
+figures, also test it in code: a prompt is a suggestion, arithmetic is not. And ask where a read value is
+stored and who uses it, because the damage is usually downstream of the screen that showed it.
+
 ## Long lists are searched, never scrolled — dropdowns included
 
 **What happened:** after the owner asked for a search box over every list that
