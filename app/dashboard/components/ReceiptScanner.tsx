@@ -31,6 +31,9 @@ import CompareCopies from './CompareCopies';
 import InvoicePreview from './InvoicePreview';
 import { normaliseName } from '@/lib/vendor-reading';
 import type { CostReceiptResult, ScanChecks } from '@/lib/document-scanner';
+import type { PackInput } from '@/lib/line-setup';
+import ReadingLines from './ReadingLines';
+import { rememberedPacks } from '../invoice-proof-actions';
 
 type ScanType = 'COST_RECEIPT' | 'DAILY_REPORT';
 
@@ -48,6 +51,8 @@ interface CostReceiptData {
     vatRate?: number; grossTotal?: number; discount?: number; discountLabel?: string;
     /** What one billed unit holds, as the reader read the description. */
     packAmount?: number; packUnit?: 'kg' | 'L' | 'un';
+    /** What the owner says one unit holds, only once they said it. */
+    taughtPack?: PackInput | null;
   }>;
   grandTotal: number;
   suggestedType: 'COGS' | 'OPEX';
@@ -193,6 +198,19 @@ export default function ReceiptScanner({
   /** The stored reading behind `extracted`, kept to the end of the review. */
   const [scanId, setScanId] = useState<string | null>(null);
   const [editData, setEditData] = useState<ExtractionResult | null>(null);
+  /** What the restaurant already answered for the lines on screen. */
+  const [knownPacks, setKnownPacks] = useState<Record<string, PackInput>>({});
+  const reviewing = editData?.type === 'cost_receipt' ? (editData as CostReceiptData) : null;
+  const reviewedLines = reviewing?.items.map((item) => item.product).join('\n') ?? '';
+  useEffect(() => {
+    if (!reviewedLines) return;
+    let current = true;
+    rememberedPacks({ products: reviewedLines.split('\n'), vendorId: reviewing?.checks?.knownVendorId ?? null }).then((result) => {
+      if (current && 'data' in result && result.data) setKnownPacks(result.data);
+    });
+    return () => { current = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewedLines]);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
@@ -839,6 +857,7 @@ export default function ReceiptScanner({
                 packSize: item.packAmount && item.packUnit
                   ? { amount: item.packAmount, unit: item.packUnit }
                   : null,
+                taughtPack: item.taughtPack ?? null,
               })),
             });
             if ('error' in lines) {
@@ -1267,6 +1286,7 @@ export default function ReceiptScanner({
               </div>
             ) : (
               <div className="space-y-3">
+                <div className="grid items-start gap-3 lg:grid-cols-2">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground block mb-1">{t('scanner.date')}</label>
@@ -1325,6 +1345,7 @@ export default function ReceiptScanner({
                     </div>
                   );
                 })()}
+                </div>
                 {/* Items list */}
                 <div className="space-y-2">
                   {(editData as CostReceiptData).checks?.creditNote ? (
@@ -1366,21 +1387,16 @@ export default function ReceiptScanner({
                     </div>
                   ) : <>
                   <div className="text-xs text-muted-foreground">{t('scanner.items')}</div>
-                  {(editData as CostReceiptData).items.map((item, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs bg-muted rounded-lg p-2">
-                      <span className="flex-1 text-foreground [overflow-wrap:anywhere]">{item.product}</span>
-                      {/* The unit price is the figure an ingredient cost
-                          is built from, and it was being hidden: the
-                          model extracts it, the screen showed only the
-                          quantity and the total. */}
-                      <span className="text-muted-foreground tabular-nums shrink-0 whitespace-nowrap">
-                        {item.quantity}{item.unit ? ` ${item.unit}` : ''} × €{item.unitPrice.toFixed(2)}
-                      </span>
-                      <span className="font-semibold text-foreground tabular-nums shrink-0">€{item.total.toFixed(2)}</span>
-                    </div>
-                  ))}
+                  <ReadingLines
+                    items={(editData as CostReceiptData).items}
+                    known={knownPacks}
+                    onTeach={(index, pack) => setEditData((was) => (was?.type === 'cost_receipt'
+                      ? { ...was, items: (was as CostReceiptData).items.map((item, i) => (i === index ? { ...item, taughtPack: pack } : item)) } as ExtractionResult
+                      : was))}
+                  />
                   </>}
                 </div>
+                <div className="grid items-start gap-3 lg:grid-cols-2">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground block mb-1">{t('scanner.type')}</label>
@@ -1423,6 +1439,7 @@ export default function ReceiptScanner({
                     idPrefix="scan-pay"
                   />
                 )}
+                </div>
               </div>
             )}
           </div>

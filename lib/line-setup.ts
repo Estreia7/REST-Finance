@@ -65,6 +65,12 @@ export function toPackInput(pack: RememberedPack | null): PackInput | null {
   return { amount: pack.amount, unit: pack.unit };
 }
 
+/** "6 boxes of 18": what one purchased unit holds, as it reads on the description. */
+export function packFromParts(count: number, each: number, unit: PackUnit): PackInput | null {
+  if (!Number.isFinite(count) || !Number.isFinite(each) || count <= 0 || each <= 0) return null;
+  return { amount: round3(count * each), unit };
+}
+
 /** The unit an ingredient is measured in, for what a package holds. */
 export function ingredientUnitFor(unit: PackUnit): 'un' | 'kg' | 'L' {
   if (unit === 'g' || unit === 'kg') return 'kg';

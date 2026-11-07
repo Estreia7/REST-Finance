@@ -401,7 +401,7 @@ function DashboardPageInner() {
   const pageWidth: PageWidth =
     (activeTab === 'revenue' && revenueSubView !== 'history') || (activeTab === 'costs' && costSubView !== 'history')
       ? 'narrow'
-      : activeTab === 'settings' || activeTab === 'billing' || activeTab === 'users' || activeTab === 'inbox'
+      : activeTab === 'settings' || activeTab === 'billing' || activeTab === 'users'
         ? 'medium'
         : 'wide';
 

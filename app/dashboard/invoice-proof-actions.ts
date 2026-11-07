@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireOwner, isAuthError } from '@/lib/auth-helpers';
 import { toClientError } from '@/lib/errors';
 import { normalizeProductName } from '@/lib/price-tracking';
-import { lineKey } from '@/lib/invoice-categories';
+import { lineKey, withoutBatch } from '@/lib/invoice-categories';
 import { rememberedPack, type RememberedPack } from '@/lib/invoice-matching';
 import { teachPack } from '@/lib/invoice-memory-server';
 import { rebalanceInvoice } from '@/lib/invoice-split-server';
@@ -198,6 +198,29 @@ export async function getInvoiceForProof(invoiceNumber: string) {
  * it beside the page and decides. This is how an invoice read badly in the
  * past gets put right.
  */
+export async function rememberedPacks(input: { products: string[]; vendorId: string | null }) {
+  try {
+    const owner = await requireOwner();
+    if (isAuthError(owner)) return { error: owner.error };
+
+    const keys = [...new Set(input.products.map((product) => lineKey(withoutBatch(product))))];
+    const memories = await prisma.invoiceLineMemory.findMany({
+      where: { restaurantId: owner.restaurantId, sourceName: { in: keys }, packUnit: { not: null } },
+      select: { sourceName: true, vendorId: true, packAmount: true, packUnit: true },
+    });
+    const known: Record<string, PackInput> = {};
+    for (const key of keys) {
+      const memory = memories.find((m) => m.sourceName === key && m.vendorId === input.vendorId)
+        ?? memories.find((m) => m.sourceName === key);
+      const pack = memory ? toPackInput(rememberedPack(memory)) : null;
+      if (pack) known[key] = pack;
+    }
+    return { success: true as const, data: known };
+  } catch (error: unknown) {
+    return { error: toClientError('Failed to read what each unit holds', error, 'read') };
+  }
+}
+
 export async function rereadInvoice(invoiceNumber: string, qrText?: string | null) {
   try {
     const owner = await requireOwner();

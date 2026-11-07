@@ -66,9 +66,10 @@ export default function ReviewQueuePanel({ onChanged }: { onChanged: () => void 
   };
 
   return (
-    <div className={`grid items-start gap-4 ${busy ? 'lg:grid-cols-[2fr_3fr]' : 'lg:grid-cols-2'}`}>
-      {/* While correcting, the page comes first even on a phone: it is what is being copied. */}
-      <div className={`min-w-0 space-y-3 ${busy ? '' : 'order-2 lg:order-1'}`}>
+    <div className="grid items-start gap-4 lg:grid-cols-[2fr_3fr]">
+      {/* While correcting, the page comes first even on a phone: it is what is being copied.
+          It stays in view on a wide screen, however long the list beside it runs. */}
+      <div className={`min-w-0 space-y-3 lg:sticky lg:top-20 ${busy ? '' : 'order-2 lg:order-1'}`}>
         {busy ? (
           item.pages.map((path) => (
             <ZoomableImage

@@ -55,6 +55,23 @@ export interface CategoryGuess {
   notIngredient: boolean | null;
 }
 
+/**
+ * A line's wording without what belongs to this one delivery.
+ *
+ * Some suppliers print the delivery note, batch and expiry into the description:
+ * "Nº Guia Remessa GRV325003770: Tortilha Cx. 6 L: 4625180 Qtd: 1,00 Val:
+ * 26/12/2025". The wording is what everything learned about a product hangs on,
+ * so a batch in it means the same product is new on every invoice.
+ */
+export function withoutBatch(productName: string): string {
+  return productName
+    .replace(/^\s*N\s*[ºo°.]*\s*Guia\s+(?:de\s+)?Remessa\s+\S+:\s*/i, '')
+    .replace(/\s+L:\s*\S+/gi, '')
+    .replace(/\s+Qtd:\s*[\d.,]+/gi, '')
+    .replace(/\s+Val:\s*\d{1,2}[/-]\d{1,2}[/-]\d{2,4}/gi, '')
+    .trim();
+}
+
 /** The memory's key for a wording — the same one InvoiceItemLink uses. */
 export function lineKey(productName: string): string {
   return productName.trim().toLowerCase();

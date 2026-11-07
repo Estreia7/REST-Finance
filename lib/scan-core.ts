@@ -8,6 +8,7 @@ import { betterProof, checkReading, documentIssues, foldNotes, isDiscountNote, r
 import { isCreditNoteNumber } from '@/lib/credit-notes';
 import { cleanTaxId, readerNote, rulesFor } from '@/lib/supplier-knowledge';
 import { invoiceUnit, unusualPrice } from '@/lib/line-setup';
+import { withoutBatch } from '@/lib/invoice-categories';
 import { normalizeProductName } from '@/lib/price-tracking';
 import { readFile } from 'node:fs/promises';
 
@@ -357,7 +358,9 @@ async function decodeQr(imageBase64: string, mediaType: string): Promise<Invoice
 
 /** A reading with its explanatory rows gone and tied discounts on their products. */
 function asPaid(data: ScanResult): ScanResult {
-  return data.type === 'cost_receipt' ? { ...data, ...foldNotes(data.items, data.discountTotal) } : data;
+  if (data.type !== 'cost_receipt') return data;
+  const items = data.items.map((item) => ({ ...item, product: withoutBatch(item.product) }));
+  return { ...data, ...foldNotes(items, data.discountTotal) };
 }
 
 /** A reading with the QR's fields taking the place of what was read. */

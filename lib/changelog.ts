@@ -35,9 +35,29 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.07.09';
+export const CHANGELOG_VERSION = '2026.11.07.10';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.07.10',
+    date: '2026-11-07',
+    entries: [
+      {
+        kind: 'improvement',
+        title: 'Ao rever uma fatura, pode ensinar o que vem em cada unidade',
+        detail: 'Em Precisa de ti › Faturas por rever, abra "O que vem em cada unidade?" por baixo do artigo: por exemplo, 6 embalagens de 18 unidades. O custo por unidade fica certo, e a app lembra-se nas próximas compras desse artigo.',
+      },
+      {
+        kind: 'improvement',
+        title: 'As Faturas por rever usam mais largura e a fatura fica sempre ao lado',
+        detail: 'Com muitos artigos, a lista faz scroll e a fatura continua à vista para conferir.',
+      },
+      {
+        kind: 'fix',
+        title: 'Artigos com lote e validade na descrição já são reconhecidos de uma compra para a outra',
+      },
+    ],
+  },
   {
     version: '2026.11.07.09',
     date: '2026-11-07',

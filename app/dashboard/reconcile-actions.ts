@@ -23,11 +23,13 @@ import {
 import {
   guessLineCategory,
   lineKey,
+  withoutBatch,
   type CategoryOrigin,
   type CostCategory,
 } from '@/lib/invoice-categories';
 import { rebalanceInvoice } from '@/lib/invoice-split-server';
-import { rememberLine } from '@/lib/invoice-memory-server';
+import { rememberLine, teachPack } from '@/lib/invoice-memory-server';
+import { PACK_UNITS, toPack, type PackInput } from '@/lib/line-setup';
 import { repriceIngredients } from '@/lib/ingredient-costs-server';
 import { diffReading, type FixedBy, type Reading } from '@/lib/scan-corrections';
 import { lineNeedsSetup, isDiscountLine } from '@/lib/line-setup';
@@ -94,7 +96,11 @@ export interface ReconcilePreview {
 }
 
 /** An invoice line as read, with the reader's guess at its category. */
-export type ScannedLine = InvoiceLine & { category?: string };
+export type ScannedLine = InvoiceLine & {
+  category?: string;
+  /** What the owner said one unit holds, on the screen where the invoice was saved. */
+  taughtPack?: PackInput | null;
+};
 
 /**
  * Reads the scan against what the restaurant already knows.
@@ -573,10 +579,12 @@ export async function saveInvoiceLines(input: {
   wholeInvoice?: boolean;
   lines: ScannedLine[];
 }) {
+  // A reading already waiting may still carry the batch: see `asPaid`.
+  const scanned = input.lines.map((line) => ({ ...line, productName: withoutBatch(line.productName) }));
   const preview = await previewReconciliation({
     vendorName: input.vendorName,
     vendorTaxId: input.vendorTaxId,
-    lines: input.lines,
+    lines: scanned,
   });
   if (!('data' in preview) || !preview.data) {
     return { error: ('error' in preview && preview.error) || 'reconcile.noLines' };
@@ -659,12 +667,15 @@ export async function saveInvoiceLines(input: {
 
   // A credit note may have got here first, waiting for this very invoice.
   const owner = await requireOwner();
-  const settledCredit = isAuthError(owner)
-    ? null
-    : await settleWaitingCredits(
-        owner.restaurantId,
-        (await ensureVendor(owner.restaurantId, input.vendorName, input.vendorTaxId)).id,
-      );
+  if (isAuthError(owner)) return { success: true as const, data: { pending: pending.size, settledCredit: null } };
+  const vendorId = (await ensureVendor(owner.restaurantId, input.vendorName, input.vendorTaxId)).id;
+  const settledCredit = await settleWaitingCredits(owner.restaurantId, vendorId);
+
+  // After the lines exist, so it restates this invoice along with the earlier ones.
+  for (const line of scanned) {
+    const pack = line.taughtPack && PACK_UNITS.includes(line.taughtPack.unit) ? toPack(line.taughtPack) : null;
+    if (pack) await teachPack({ restaurantId: owner.restaurantId, vendorId, sourceName: lineKey(line.productName), pack });
+  }
 
   return { success: true as const, data: { pending: pending.size, settledCredit } };
 }

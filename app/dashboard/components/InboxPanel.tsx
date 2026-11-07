@@ -78,7 +78,8 @@ export default function InboxPanel({
     t(`inbox.kinds.${item.kind}.${item.count === 1 ? 'one' : 'other'}`).replace('{count}', String(item.count));
 
   return (
-    <div className="space-y-6">
+    // A reading width, unless there are invoices to read beside their figures.
+    <div className={`mx-auto space-y-6 ${reviewCards ? 'max-w-6xl' : 'max-w-3xl'}`}>
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('inbox.title')}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
