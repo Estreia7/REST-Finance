@@ -60,7 +60,7 @@ export default function ReviewQueuePanel({ onChanged }: { onChanged: () => void 
       );
     }
     return isTop
-      ? <ZoomableImage fill src={src} alt={t('scanIssues.pictureAlt')} className="h-full w-full object-contain" />
+      ? <ZoomableImage key={src} fill src={src} alt={t('scanIssues.pictureAlt')} className="h-full w-full object-contain" />
       // eslint-disable-next-line @next/next/no-img-element -- an authenticated file, not a static asset
       : <img src={src} alt="" className="h-full w-full object-contain" />;
   };

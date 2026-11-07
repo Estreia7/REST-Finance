@@ -80,6 +80,31 @@ export function rotateCanvas(source: HTMLCanvasElement, rotation: Rotation): HTM
 }
 
 /**
+ * A stored picture turned for reading, as a temporary address for an <img>.
+ *
+ * Drawn again rather than turned with CSS, because a CSS turn keeps the old
+ * shape on the page: a sideways invoice would spill out of its frame, and the
+ * zoom's arithmetic would no longer match what is on screen. The file itself is
+ * not touched. Whoever asks for this revokes the address.
+ */
+export async function turnedPicture(src: string, rotation: Rotation): Promise<string> {
+  const image = new Image();
+  image.src = src;
+  await image.decode();
+
+  const page = document.createElement('canvas');
+  page.width = image.naturalWidth;
+  page.height = image.naturalHeight;
+  page.getContext('2d')?.drawImage(image, 0, 0);
+
+  const blob = await new Promise<Blob | null>((done) => {
+    rotateCanvas(page, rotation).toBlob(done, 'image/jpeg', 0.95);
+  });
+  if (!blob) throw new Error('The picture could not be turned');
+  return URL.createObjectURL(blob);
+}
+
+/**
  * The paper, without what is printed on it: per channel, on a coarse grid.
  *
  * The same idea as the shadow removal every serious scanner app does (the

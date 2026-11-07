@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FileText, Minus, Plus, X, ZoomIn } from 'lucide-react';
+import { FileText, Minus, Plus, RotateCw, X, ZoomIn } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
+import { nextRotation, turnedPicture, type Rotation } from '@/lib/scan-image';
 import { CLOSE_UP, FIT, panBy, zoomAt, type ZoomView } from '@/lib/zoom';
 
 /**
@@ -12,11 +13,19 @@ import { CLOSE_UP, FIT, panBy, zoomAt, type ZoomView } from '@/lib/zoom';
  * Tapping it opens the page over the whole screen, because a pinch inside a
  * scrolling dialog fights the scroll. Pinch and drag on a phone; wheel, drag and
  * double click with a mouse, and the buttons for anyone who wants neither.
+ *
+ * A page photographed sideways can be turned, here or enlarged. The turn is only
+ * for reading: the stored file stays exactly as it was received.
  */
 
 const BUTTON_STEP = 1.5;
 
-function Viewer({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+function Viewer({ src, alt, onClose, onRotate }: {
+  src: string;
+  alt: string;
+  onClose: () => void;
+  onRotate: () => void;
+}) {
   const { t } = useLanguage();
   const boxRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -30,6 +39,9 @@ function Viewer({ src, alt, onClose }: { src: string; alt: string; onClose: () =
     const box = boxRef.current?.getBoundingClientRect();
     return { left: box?.left ?? 0, top: box?.top ?? 0, width: box?.width ?? 1, height: box?.height ?? 1 };
   };
+
+  // A turned page has another shape, so where it sat no longer means anything.
+  useEffect(() => setView(FIT), [src]);
 
   const zoomCentre = (factor: number) => {
     const box = size();
@@ -146,6 +158,9 @@ function Viewer({ src, alt, onClose }: { src: string; alt: string; onClose: () =
         >
           <Minus className="w-5 h-5" aria-hidden="true" />
         </button>
+        <button type="button" onClick={onRotate} aria-label={t('zoom.rotate')} title={t('zoom.rotate')} className={control}>
+          <RotateCw className="w-5 h-5" aria-hidden="true" />
+        </button>
       </div>
     </div>,
     document.body,
@@ -162,7 +177,35 @@ export default function ZoomableImage({ src, alt, className, fill = false }: {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [rotation, setRotation] = useState<Rotation>(0);
+  const [turned, setTurned] = useState<string | null>(null);
   const close = useCallback(() => setOpen(false), []);
+  const rotate = useCallback(() => setRotation(nextRotation), []);
+
+  useEffect(() => {
+    if (rotation === 0) {
+      setTurned(null);
+      return;
+    }
+    let current = true;
+    turnedPicture(src, rotation).then(
+      (address) => {
+        if (current) setTurned(address);
+        else URL.revokeObjectURL(address);
+      },
+      () => {
+        if (current) setRotation(0);
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [src, rotation]);
+
+  // Released only once the next picture is on screen, so a turn never flashes empty.
+  useEffect(() => () => {
+    if (turned) URL.revokeObjectURL(turned);
+  }, [turned]);
 
   // A picture that failed before React was listening never fires onError.
   const imageRef = useRef<HTMLImageElement>(null);
@@ -197,21 +240,33 @@ export default function ZoomableImage({ src, alt, className, fill = false }: {
   }
 
   return (
-    <>
+    <div className={`relative ${fill ? 'h-full' : ''}`}>
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label={t('zoom.open')}
-        className={`group relative block w-full cursor-zoom-in rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${fill ? 'h-full' : ''}`}
+        className={`group block w-full cursor-zoom-in rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${fill ? 'h-full' : ''}`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element -- an authenticated file, not a static asset */}
-        <img ref={imageRef} src={src} alt={alt} className={className} onError={() => setFailed(true)} />
-        <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-medium text-white">
+        <img ref={imageRef} src={turned ?? src} alt={alt} className={className} onError={() => setFailed(true)} />
+      </button>
+      {/* Beside the button, not in it: a button cannot hold another. */}
+      <div className="pointer-events-none absolute inset-x-2 top-2 flex flex-wrap items-center justify-end gap-1.5">
+        <button
+          type="button"
+          onClick={rotate}
+          aria-label={t('zoom.rotate')}
+          title={t('zoom.rotate')}
+          className="pointer-events-auto relative flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white after:absolute after:-inset-2 after:content-[''] hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+        >
+          <RotateCw className="w-3.5 h-3.5" aria-hidden="true" />
+        </button>
+        <span className="inline-flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-medium text-white">
           <ZoomIn className="w-3.5 h-3.5" aria-hidden="true" />
           {t('zoom.hint')}
         </span>
-      </button>
-      {open && <Viewer src={src} alt={alt} onClose={close} />}
-    </>
+      </div>
+      {open && <Viewer src={turned ?? src} alt={alt} onClose={close} onRotate={rotate} />}
+    </div>
   );
 }
