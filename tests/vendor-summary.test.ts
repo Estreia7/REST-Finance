@@ -1,9 +1,34 @@
 import { describe, it, expect } from 'vitest';
-import { vendorSummary, type VendorEntry } from '@/lib/vendor-summary';
+import { supplierDiscounts, vendorSummary, type VendorEntry } from '@/lib/vendor-summary';
 import { shareWithin, type ProductTotals } from '@/lib/products';
 
 const entry = (id: string, date: string, amount: number, paid = true, splitFromId: string | null = null): VendorEntry =>
   ({ id, date, amount, paid, splitFromId });
+
+describe('supplierDiscounts', () => {
+  const negative = (productName: string, total: number) => ({ productName, total, discount: null, discountLabel: null });
+
+  it('adds up a promotion however it reached the invoice', () => {
+    const groups = supplierDiscounts([
+      negative('Desconto total (Leve Mais Pague Menos)', -0.25),
+      { productName: 'MC OLEO 10LT', total: 54.36, discount: 4.41, discountLabel: 'LEVE MAIS PAGUE MENOS' },
+    ]);
+    expect(groups).toEqual([{ label: 'Leve Mais Pague Menos', amount: 4.66, times: 2 }]);
+  });
+
+  it('keeps promotions apart, the largest first', () => {
+    const groups = supplierDiscounts([negative('Oferta', -1), negative('Desconto Campanha Verão', -3)]);
+    expect(groups.map((g) => g.label)).toEqual(['Campanha Verão', 'Oferta']);
+  });
+
+  it('says so when the invoice names no promotion', () => {
+    expect(supplierDiscounts([negative('Desconto total', -2)])).toEqual([{ label: null, amount: 2, times: 1 }]);
+  });
+
+  it('counts nothing for a line with no money off', () => {
+    expect(supplierDiscounts([{ productName: 'A', total: 5, discount: null, discountLabel: null }])).toEqual([]);
+  });
+});
 
 describe('vendorSummary', () => {
   const today = '2026-11-06';

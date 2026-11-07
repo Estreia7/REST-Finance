@@ -35,9 +35,30 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.07.03';
+export const CHANGELOG_VERSION = '2026.11.07.04';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.07.04',
+    date: '2026-11-07',
+    entries: [
+      {
+        kind: 'new',
+        title: 'Descontos de cada fornecedor',
+        detail: 'Na janela do fornecedor, em Contabilidade › Fornecedores, vê quanto já poupou em cada promoção, como o Leve Mais Pague Menos.',
+      },
+      {
+        kind: 'fix',
+        title: 'Um desconto já não é tratado como uma compra',
+        detail: 'As linhas com valor negativo deixam de aparecer em Precisa de ti, nos produtos comprados e nos alertas de preço.',
+      },
+      {
+        kind: 'fix',
+        title: 'Faturas da Makro relidas sem códigos nem taxas trocadas',
+        detail: 'As descrições já não trazem o código do artigo, o código de IVA passa a ser a taxa certa, e os descontos Leve Mais Pague Menos entram nas contas mesmo quando são vários.',
+      },
+    ],
+  },
   {
     version: '2026.11.07.03',
     date: '2026-11-07',

@@ -751,6 +751,11 @@ model InvoiceItem {
   vatRate    Decimal? @map("vat_rate") @db.Decimal(5, 2)
   grossTotal Decimal? @map("gross_total") @db.Decimal(12, 2)
 
+  /// A supplier's discount already taken off this line, and the promotion it
+  /// came from. `totalPrice` is after it, so this is only to say how much was saved.
+  discount      Decimal? @db.Decimal(12, 2)
+  discountLabel String?  @map("discount_label")
+
   /// Saved before anyone said what this wording is. Waits in "Precisa de ti".
   needsSetup Boolean @default(false) @map("needs_setup")
 

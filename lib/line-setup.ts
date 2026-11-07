@@ -242,6 +242,11 @@ export function lineNeedsSetup(line: {
   return !line.ingredientUnits.every((u) => u === 'un');
 }
 
+/** A negative line is money off, not something bought: nobody has to say what it is. */
+export function isDiscountLine(total: number): boolean {
+  return total < 0;
+}
+
 /**
  * The usual price, when this one looks wrong against it.
  *

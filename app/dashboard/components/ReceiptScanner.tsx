@@ -40,7 +40,7 @@ interface CostReceiptData {
   /** `category` is the reader's guess, from the restaurant's own list. */
   items: Array<{
     product: string; quantity: number; unit?: string; unitPrice: number; total: number; category?: string;
-    vatRate?: number; grossTotal?: number;
+    vatRate?: number; grossTotal?: number; discount?: number; discountLabel?: string;
     /** What one billed unit holds, as the reader read the description. */
     packAmount?: number; packUnit?: 'kg' | 'L';
   }>;
@@ -722,6 +722,8 @@ export default function ReceiptScanner({
                 total: item.total,
                 vatRate: item.vatRate ?? null,
                 grossTotal: item.grossTotal ?? null,
+                discount: item.discount ?? null,
+                discountLabel: item.discountLabel ?? null,
                 category: item.category,
                 packSize: item.packAmount && item.packUnit
                   ? { amount: item.packAmount, unit: item.packUnit }

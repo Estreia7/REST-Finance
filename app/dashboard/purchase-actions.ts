@@ -63,7 +63,8 @@ export async function getPurchasedProducts() {
     if (isAuthError(owner)) return { error: owner.error };
 
     const rows = await prisma.invoiceItem.findMany({
-      where: { restaurantId: owner.restaurantId, AND: [notDeleted] },
+      // A discount is money off, not a product bought.
+      where: { restaurantId: owner.restaurantId, totalPrice: { gte: 0 }, AND: [notDeleted] },
       select,
     });
 

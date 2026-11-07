@@ -65,6 +65,28 @@ export default function VendorDialog({ vendorId, vendorName, onClose }: {
             ))}
           </dl>
 
+          {summary.discounts.length > 0 && (
+            <section aria-labelledby="vendor-discounts" className="rounded-xl border border-border-subtle px-3 py-2.5">
+              <div className="flex items-baseline justify-between gap-3">
+                <h3 id="vendor-discounts" className="text-xs font-semibold text-foreground">{t('accounting.vendorDiscounts')}</h3>
+                <p className="text-[11px] text-muted-foreground">{t('accounting.vendorDiscountsNote')}</p>
+              </div>
+              <ul className="mt-1.5 space-y-1">
+                {summary.discounts.map((discount) => (
+                  <li key={discount.label ?? ''} className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="min-w-0 text-foreground">
+                      {discount.label ?? t('accounting.vendorDiscountOther')}
+                      <span className="ml-2 text-xs text-muted-foreground tabular-nums">
+                        {t('accounting.vendorDiscountTimes').replace('{count}', String(discount.times))}
+                      </span>
+                    </span>
+                    <span className="shrink-0 font-bold text-success tabular-nums">{formatMoney(discount.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {invoices.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">{t('accounting.vendorEmpty')}</p>
           ) : (

@@ -202,6 +202,11 @@ export function isIncludedNote(productName: string): boolean {
   return /\bincl(\.|u[ií]d[oa]s?)?\s*(n[oa]\s+|em\s+)?pre[çc]o/i.test(productName);
 }
 
+/** A description without the article code a wholesaler prints in front of it. */
+export function withoutArticleCode(product: string): string {
+  return product.replace(/^\s*\d{6,14}(\.\d)?\s+(?=\S)/, '');
+}
+
 /**
  * The lines as they were paid for, whatever rows the page used to say so.
  *
@@ -209,17 +214,25 @@ export function isIncludedNote(productName: string): boolean {
  * Mais Pague Menos": 3 oils at 19,59, 4,41 off) comes off that product, so its
  * price is what it really cost, and no longer counts as a discount left to share
  * out. A discount larger than its line is not believed and stays where it was.
- * A unit price read as the line's value with VAT is dropped.
+ * A unit price read as the line's value with VAT is dropped, and so is an article
+ * code read into the description.
  */
-export function foldNotes<T extends CheckedLine & { product: string; lineDiscount?: number }>(
+export function foldNotes<T extends CheckedLine & {
+  product: string;
+  lineDiscount?: number;
+  lineDiscountName?: string;
+  discount?: number;
+  discountLabel?: string;
+}>(
   items: T[],
   discountTotal = 0,
 ): { items: T[]; discountTotal: number } {
   const kept = items.filter((item) => !isIncludedNote(item.product));
   let taken = 0;
   const folded = (kept.length > 0 ? kept : items).map((item) => {
-    const { lineDiscount, ...read } = item;
-    const line = isUnitGross(read) ? { ...read, grossTotal: undefined } : read;
+    const { lineDiscount, lineDiscountName, ...read } = item;
+    const named = { ...read, product: withoutArticleCode(read.product) };
+    const line = isUnitGross(named) ? { ...named, grossTotal: undefined } : named;
     const discount = lineDiscount ?? 0;
     if (discount <= 0 || discount >= line.total) return line as T;
     taken += discount;
@@ -227,6 +240,8 @@ export function foldNotes<T extends CheckedLine & { product: string; lineDiscoun
     return {
       ...line,
       total,
+      discount,
+      discountLabel: lineDiscountName,
       unitPrice: line.quantity > 0 ? Math.round((total / line.quantity) * 10000) / 10000 : line.unitPrice,
       grossTotal: line.grossTotal != null && line.vatRate != null
         ? cents(total * (1 + line.vatRate / 100))
@@ -530,6 +545,25 @@ function takeOutDiscount(
   };
 }
 
+/** Makro prints a VAT code on each line, and its legend says what each one means. */
+const MAKRO_VAT_CODES: Record<number, number> = { 2: 23, 4: 6, 5: 13 };
+
+/**
+ * Lines whose "rate" is really Makro's VAT code, with the rate it stands for.
+ *
+ * Only where the invoice has no such rate and does have the one the code means:
+ * in the Azores 4% is a real rate, and stays.
+ */
+function ratesFromCodes<T extends Pick<CheckedLine, 'vatRate'>>(lines: T[], truth: TaxTruth[]): T[] {
+  const stated = new Set(truth.map((b) => b.rate));
+  return lines.map((line) => {
+    const meant = line.vatRate == null ? undefined : MAKRO_VAT_CODES[line.vatRate];
+    return line.vatRate != null && meant !== undefined && !stated.has(line.vatRate) && stated.has(meant)
+      ? { ...line, vatRate: meant }
+      : line;
+  });
+}
+
 /**
  * Everything the invoice's own figures can settle about its lines: their VAT
  * rates, whether their values include VAT, and a discount taken off the whole
@@ -537,11 +571,12 @@ function takeOutDiscount(
  * can sort out.
  */
 export function settleFigures(
-  lines: Array<CheckedLine & { productName: string }>,
+  read: Array<CheckedLine & { productName: string }>,
   truth: TaxTruth[],
   discount = 0,
 ): SettledFigures | null {
-  if (truth.length === 0 || lines.length === 0) return null;
+  if (truth.length === 0 || read.length === 0) return null;
+  const lines = ratesFromCodes(read, truth);
   if (discount > 0) {
     const plain = takeOutDiscount(lines, truth, discount);
     if (plain) return plain;

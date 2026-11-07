@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { checkReading,
-  canSaveUnseen, betterProof, rereadHint, type CheckedReading, settleVat, settleFigures, isDiscountNote, isIncludedNote, isUnitGross, foldNotes, documentIssues } from '@/lib/invoice-checks';
+  canSaveUnseen, betterProof, rereadHint, type CheckedReading, settleVat, settleFigures, isDiscountNote, isIncludedNote, isUnitGross, foldNotes, withoutArticleCode, documentIssues } from '@/lib/invoice-checks';
 import { parseInvoiceQr } from '@/lib/pt-invoice-qr';
 
 // A wholesale invoice with fictional identifiers: 0,905 kg of mushrooms at 3,69 the kilo.
@@ -369,7 +369,7 @@ describe('a Makro invoice with a tax note and a promotion', () => {
     row('MC BACON FATIAS 500G', 4, 4.44, 17.76, 23),
     row('COSTELINHA/PIANOS PORCO', 3.955, 5.49, 21.71, 6),
     row('MC ALFACE ICEBERG', 2, 1.08, 2.16, 6),
-    row('MC OLEO ALTO RENDIMENTO 10LT', 3, 19.59, 58.77, 13, 4.41),
+    { ...row('MC OLEO ALTO RENDIMENTO 10LT', 3, 19.59, 58.77, 13, 4.41), lineDiscountName: 'Leve Mais Pague Menos' },
     row('MC MAIONESE 5LT', 1, 10.09, 10.09, 23),
     row('CERV.SUPER BOCK 24X33CL', 24, 0.52, 12.48, 23),
     row('TAXA IEC INCL. PREÇO U.V', 1, 1.53, 1.53, 23),
@@ -390,8 +390,11 @@ describe('a Makro invoice with a tax note and a promotion', () => {
 
   it('leaves the discounted product at what it really cost', () => {
     const oil = foldNotes(lines, 4.41).items.find((l) => l.product.includes('OLEO'));
-    expect(oil).toMatchObject({ quantity: 3, unitPrice: 18.12, total: 54.36 });
+    expect(oil).toMatchObject({
+      quantity: 3, unitPrice: 18.12, total: 54.36, discount: 4.41, discountLabel: 'Leve Mais Pague Menos',
+    });
     expect(oil).not.toHaveProperty('lineDiscount');
+    expect(oil).not.toHaveProperty('lineDiscountName');
   });
 
   it('still lands on the rates when the reader did not tie the discount to a product', () => {
@@ -444,6 +447,47 @@ describe('a Recheio invoice whose last column is the unit price with VAT', () =>
 
   it('keeps a real line value with VAT', () => {
     expect(isUnitGross({ unitPrice: 3.69, total: 3.34, vatRate: 6, grossTotal: 3.54 })).toBe(false);
+  });
+});
+
+describe('a Makro reread with VAT codes as rates and two promotions', () => {
+  const line = (productName: string, total: number, vatRate: number) =>
+    ({ productName, quantity: 1, unitPrice: total, total, vatRate });
+  // FAC 06004202501/026078: lines of 152,42, Desconto total 2,64, 149,78 before VAT.
+  const truth = [{ rate: 6, base: 78.63, tax: 4.72 }, { rate: 13, base: 1.54, tax: 0.2 }, { rate: 23, base: 69.61, tax: 16.01 }];
+  const lines = [line('PAO', 10.14, 4), line('CHEDDAR', 43.74, 4), line('RESTO', 27.39, 4), line('AGUA', 1.54, 5), line('FRITOS', 69.61, 2)];
+
+  it('reads the codes as rates and lands every rate on the invoice', () => {
+    const settled = settleFigures(lines, truth, 2.64);
+    expect(settled?.rates).toEqual([6, 6, 6, 13, 23]);
+    expect(settled?.discounted).toBe(true);
+    const sum = (rate: number) => settled?.totals.reduce((s, t, i) => s + (settled.rates[i] === rate ? t : 0), 0) ?? 0;
+    expect(sum(6)).toBeCloseTo(78.63, 2);
+    expect(sum(13)).toBeCloseTo(1.54, 2);
+    expect(sum(23)).toBeCloseTo(69.61, 2);
+  });
+
+  it('leaves 4% alone where it is a real rate', () => {
+    const azores = [{ rate: 4, base: 10, tax: 0.4 }, { rate: 16, base: 20, tax: 3.2 }];
+    expect(settleFigures([line('A', 10, 4), line('B', 20, 16)], azores)?.rates).toEqual([4, 16]);
+  });
+});
+
+describe('withoutArticleCode', () => {
+  it('takes the code off the description', () => {
+    expect(withoutArticleCode('8414892330664 MC PAO BURG BRIOCHE BAT. 300G')).toBe('MC PAO BURG BRIOCHE BAT. 300G');
+    expect(withoutArticleCode('110219.1 ACUCAR AMANH AMAR 1KG')).toBe('ACUCAR AMANH AMAR 1KG');
+  });
+
+  it('leaves a description that only starts with a number', () => {
+    expect(withoutArticleCode('7UP LATA 33CL')).toBe('7UP LATA 33CL');
+    expect(withoutArticleCode('24 OVOS')).toBe('24 OVOS');
+    expect(withoutArticleCode('5601234567890')).toBe('5601234567890');
+  });
+
+  it('is applied to what was read', () => {
+    const { items } = foldNotes([{ product: '5609707007999 QJ CHEDDAR FAT 1KG', quantity: 1, unitPrice: 2, total: 2 }]);
+    expect(items[0].product).toBe('QJ CHEDDAR FAT 1KG');
   });
 });
 

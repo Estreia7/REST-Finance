@@ -40,7 +40,7 @@ export const SCANNER_RETRY_MODEL = 'claude-opus-5-5';
  * prompt change rather than guessed at. Date-stamped rather than numbered:
  * the question asked later is always "what were we sending in September?".
  */
-export const PROMPT_VERSION = '2026-11-07.2';
+export const PROMPT_VERSION = '2026-11-07.4';
 
 /**
  * Room for the answer. A long cash-and-carry invoice runs to forty lines, and
@@ -97,18 +97,21 @@ Rules that matter for Portuguese documents:
 - Before reading any line, find the row of column headings and work out which column is which. On a cash-and-carry invoice the headings can sit far above the lines, with a QR code or a stamp between them, and they can be faint. A Recheio invoice reads: Vol. | Qt./Vol. | Qt.Total | Preço Uni. | Valor Mercadoria | %IVA | Preço Uni. c/IVA. So the line "1 | 1 | 2,720 | 2,59 | 7,04 | 6,0 | 2,75" is quantity 2,720 (Qt.Total), unit kg, unitPrice 2,59, total 7,04 before VAT, vatRate 6. A quantity with three decimals other than ,000 is a weight, so the unit is kg; "4,000" is 4 units. Vol. and Qt./Vol. are packing counts and are never the quantity: "1 | 24 | 24,000 | 0,14 | 3,36" is 24 at 0,14.
 - A last column headed "Preço Uni. c/IVA" or "Preço c/IVA" is usually the price of ONE unit with VAT, not the line's value: in the line above 2,75 is 2,59 plus 6%. Test it: if it equals unitPrice plus VAT, leave grossTotal out. Report it as grossTotal only if it equals total plus VAT.
 - Photographs are often tilted, so a printed row runs on a slant and the figures of one line can sit level with the description of another. Never pair by height on the page. Follow each row along its slant, and count: the first row of figures belongs to the first article code, the second to the second, and there are as many rows of figures as there are article codes.
+- The product is the description alone. Leave out the article code printed before it: "8414892330664 MC PAO BURG BRIOCHE BAT. 300G" is "MC PAO BURG BRIOCHE BAT. 300G".
 - A row starting with an asterisk, such as "* CARRO No. 10" or "* CARRO No. 9901", is a heading between groups, never a line, and it has no figures of its own.
 - A letter in the VAT column, such as "c)", is explained in a note. Where the price with VAT equals the price without it, as on Recheio's "VALOR DEPOSITO UNIDADE" (24 at 0,10, 2,40), the VAT rate is 0.
 - Every line must satisfy quantity x unitPrice = total. If yours does not, you have shifted a column: read the row again against its headings. Never take the price for the total or the weight for the price.
 - "total" is the value BEFORE VAT ("Valor Mercadoria", "Valor Líquido", "Valor s/ IVA", "Incidência"). Report the VAT-inclusive value, where printed, in grossTotal. If a line prints only a VAT-inclusive value, compute the value before VAT from it and its rate, and use the unit price before VAT. A note such as "IVA incluído" or "Iva Incluído à Taxa Indicada" means every price and line value on the page includes VAT.
 - Every line has a VAT rate: a "%IVA" column, or a letter or code explained in a legend at the foot. Report it as a number: 6, 13, 23 on the mainland; 4, 12, 22 in Madeira; 4, 9, 16 in the Azores; 0 if exempt.
-- On Makro invoices the last columns of each line hold a VAT code ("IvaCD"), not a percentage: code 2 is 23%, code 4 is 6%, code 5 is 13%. Read it from that line, never from the lines around it.
+- On Makro invoices the last columns of each line hold a VAT code ("IvaCD"), not a percentage: code 2 is 23%, code 4 is 6%, code 5 is 13%. Read it from that line, never from the lines around it. vatRate is always the percentage: a line with code 4 has vatRate 6, never 4.
 - Copy the VAT table at the foot of the invoice into vatSummary, one entry per rate with its base ("Incidência") and tax ("Imposto"/"Valor IVA").
 - Do not skip lines. A deposit ("tara", "vasilhame"), an eco-tax or a delivery fee is still a line. So is a discount printed as its own row among the products that belongs to no product in particular: report it with a negative total.
 - A row saying a charge is already inside a price is NOT a line. Makro prints one under beers and soft drinks, with no pack, quantity or VAT columns: "94 TAXA IEC INCL. PREÇO U.V 1,528 * 1 = 1,53". Leave it out altogether. The product above it keeps its own figures, and the product below it starts afresh: read that line only from its own row, and never let the numbers of this row move into it.
-- A discount row tied to a product is NOT a line either. Makro prints a row with no description, only a value, a VAT code and a promotion number, for example "4,41 5 44907", and "Leve Mais Pague Menos" beneath the products. The product with the same promotion number at the end of its row ("58,77 5 44907") is the one discounted. Report that product exactly as printed and put the 4.41 in its lineDiscount. Report "Leve Mais Pague Menos" nowhere as a line. If the row is tied to no product you can find, leave it out of the lines and count it in discountTotal.
+- A discount row tied to a product is NOT a line either. Makro prints a row with no description, only a value, a VAT code and a promotion number, for example "4,41 5 44907", and "Leve Mais Pague Menos" beneath the products. The product with the same promotion number at the end of its row ("58,77 5 44907") is the one discounted. Keep that product's quantity, unitPrice and total as they are on its own row, put the 4.41 in its lineDiscount and the promotion's name in its lineDiscountName. There can be several such rows, one for each discounted product, each matched by its own number. Report "Leve Mais Pague Menos" nowhere as a line. If the row is tied to no product you can find, leave it out of the lines and count it in discountTotal.
 - "Desconto total", "Total descontos" and the like in the totals block at the foot are NOT lines. Never report them as a line: report the figure in discountTotal.
 - When a line has a discount of its own printed beside or beneath it, the line's total is the value AFTER that discount, so the lines add up to "Total s/ IVA".
+- "Início de transporte" in the header is the date the goods left, and says nothing about pages. "Pág. 1/1" means the document is complete.
+- Handwriting, a stamp, a punched hole or a fold mark does not make a document covered. It is covered only if printed figures or words are hidden.
 - "Transporte", "A transportar" and "Saldo transportado" are a running subtotal carried to the next page, never the invoice's total. If the final total is not on what you were given, set totalVisible to false and do not work one out from the lines.
 - EVERY Portuguese invoice carries a document number, by law. Find it. It sits near the top, after a label like "Fatura", "Fatura Simplificada", "FT", "FS", "FR", "Documento n." or "Nº", and usually looks like PREFIX SERIES/NUMBER — for example "FS 4055TPV2/260014357" or "FR U005/267376". Copy the whole thing, exactly as printed. Do not drop the prefix, do not drop the series in the middle, and do not return only the digits after the slash. If the label and the number are on different lines, they still belong together.
 
@@ -151,7 +154,7 @@ const COST_RECEIPT_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          product: { type: 'string', description: 'Description as printed.' },
+          product: { type: 'string', description: 'Description as printed, without the article code in front of it.' },
           quantity: {
             type: 'number',
             description:
@@ -173,7 +176,7 @@ const COST_RECEIPT_SCHEMA = {
           },
           vatRate: {
             type: 'number',
-            description: 'The VAT percentage of this line as a number: 6, 13, 23. From the %IVA column or the legend of its tax code.',
+            description: 'The VAT percentage of this line as a number: 6, 13, 23. From the %IVA column or the legend of its tax code. Never the code itself: Makro code 4 is 6, code 2 is 23, code 5 is 13.',
           },
           grossTotal: {
             type: 'number',
@@ -183,6 +186,10 @@ const COST_RECEIPT_SCHEMA = {
             type: 'number',
             description:
               'A discount printed on a row of its own and tied to this line, as a positive number: the row "4,41 5 44907" belongs to the line ending in the same promotion number 44907. Omit it otherwise. quantity, unitPrice and total stay as printed on the line itself.',
+          },
+          lineDiscountName: {
+            type: 'string',
+            description: 'The name of the promotion behind lineDiscount, as printed: "Leve Mais Pague Menos". Omit it when none is printed.',
           },
           packAmount: {
             type: 'number',
@@ -221,12 +228,12 @@ const COST_RECEIPT_SCHEMA = {
     },
     continuesOnNextPage: {
       type: 'boolean',
-      description: 'The last page shown ends in "Transporte", "A transportar" or similar with no final totals: pages are missing.',
+      description: 'The last page shown ends in "Transporte", "A transportar" or similar with no final totals: pages are missing. False when the final total is printed. "Início de transporte" in the header does not count.',
     },
     totalVisible: { type: 'boolean', description: 'The amount payable is printed and legible on what you were given.' },
     covered: {
       type: 'boolean',
-      description: 'Something lies over the document and hides print: a payment slip, a finger, a fold.',
+      description: 'Something lies over the document and hides printed figures or words: a payment slip, a finger. Handwriting, stamps and punched holes do not count.',
     },
     cutOff: { type: 'boolean', description: 'Part of the document is outside the photograph.' },
     discountTotal: {

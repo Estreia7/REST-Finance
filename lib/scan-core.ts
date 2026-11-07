@@ -230,6 +230,8 @@ async function oddPrices(
       take: 2000,
     });
     return items.filter((item, i) => {
+      // Money off varies with what was bought: it has no usual price.
+      if (item.unitPrice < 0) return false;
       const history = past
         .filter((p) => p.normalizedName === names[i] && invoiceUnit(p.unit) === invoiceUnit(item.unit))
         .map((p) => Number(p.unitPrice));

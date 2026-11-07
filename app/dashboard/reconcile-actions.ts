@@ -29,7 +29,7 @@ import { rebalanceInvoice } from '@/lib/invoice-split-server';
 import { rememberLine } from '@/lib/invoice-memory-server';
 import { repriceIngredients } from '@/lib/ingredient-costs-server';
 import { diffReading, type FixedBy, type Reading } from '@/lib/scan-corrections';
-import { lineNeedsSetup } from '@/lib/line-setup';
+import { lineNeedsSetup, isDiscountLine } from '@/lib/line-setup';
 import { settleWaitingCredits } from '@/lib/credit-notes-server';
 
 /**
@@ -283,6 +283,9 @@ export interface LineResolution {
   /** The VAT percentage, and the value with VAT. `total` is before VAT. */
   vatRate?: number | null;
   grossTotal?: number | null;
+  /** A supplier's discount already taken off `total`, and its promotion. */
+  discount?: number | null;
+  discountLabel?: string | null;
 }
 
 /**
@@ -456,6 +459,8 @@ export async function commitReconciliation(input: {
               packFactor: line.packFactor ?? null,
               needsSetup: !!line.needsSetup,
               vatRate: line.vatRate ?? null,
+              discount: line.discount ?? null,
+              discountLabel: line.discountLabel ?? null,
               grossTotal: line.grossTotal
                 ?? (line.vatRate != null ? Math.round(line.total * (100 + line.vatRate)) / 100 : null),
               // Nobody said: it stays with the invoice's category, and is
@@ -580,8 +585,9 @@ export async function saveInvoiceLines(input: {
     const pack = line.packChoice;
     const settled = !!pack?.settled;
     const runningCost = !!line.category.id && opex.has(line.category.id);
-    const linked = line.decision.kind === 'linked';
-    const needsSetup = lineNeedsSetup({
+    const discount = isDiscountLine(line.total);
+    const linked = line.decision.kind === 'linked' && !discount;
+    const needsSetup = !discount && lineNeedsSetup({
       linked,
       notIngredient: line.notIngredient,
       runningCost,
@@ -601,6 +607,8 @@ export async function saveInvoiceLines(input: {
       total: line.total,
       vatRate: line.vatRate ?? null,
       grossTotal: line.grossTotal ?? null,
+      discount: line.discount ?? null,
+      discountLabel: line.discountLabel ?? null,
       categoryId: line.category.id,
       categorySource: !line.category.id ? undefined : line.category.origin === 'memory' ? 'MEMORY' : 'SUGGESTED',
       ...(settled

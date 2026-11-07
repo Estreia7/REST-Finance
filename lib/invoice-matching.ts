@@ -212,6 +212,9 @@ export interface InvoiceLine {
   /** The line's VAT percentage, and its value with VAT, as read. */
   vatRate?: number | null;
   grossTotal?: number | null;
+  /** A supplier's discount already taken off `total`, and its promotion. */
+  discount?: number | null;
+  discountLabel?: string | null;
 }
 
 export interface ReconciledLine extends InvoiceLine {

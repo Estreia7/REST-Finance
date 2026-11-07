@@ -36,6 +36,11 @@ export interface ScanItem {
   grossTotal?: number;
   /** A discount printed on a row of its own but tied to this line. Folded in before checking. */
   lineDiscount?: number;
+  /** The promotion that discount came from, as printed. */
+  lineDiscountName?: string;
+  /** What was folded in: `total` is already after it. */
+  discount?: number;
+  discountLabel?: string;
   /**
    * Which of the restaurant's cost categories the reader thinks this line
    * belongs to, by name. Only a suggestion: the restaurant's own memory of

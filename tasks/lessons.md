@@ -1,5 +1,16 @@
 # Lessons
 
+## Words in the reader prompt are taken literally, and a new rule can undo an old one
+
+**What happened:** to teach Makro's promotion rows I wrote "report that product exactly as printed". On the
+next reread the reader copied whole rows: article codes in the descriptions and the VAT code as the rate.
+The discount sharing then gave up, because it trusted the rates, and 2,64 stayed on top of the lines.
+
+**Rule:** never write "exactly as printed" about a whole line. Name the fields. Anything the reader can get
+wrong in a known way gets a check in code too, and a step that depends on another (discounts on rates) must
+repair what it needs instead of giving up. After changing the prompt, reread a real invoice before calling
+it done: unit tests with hand-made readings cannot show what the reader will do.
+
 ## A reader rule learned from one invoice must be checked on the figures of another
 
 **What happened:** the reader prompt said Recheio's last column was the line's value with VAT, from a

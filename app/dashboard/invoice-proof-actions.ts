@@ -10,7 +10,7 @@ import { teachPack } from '@/lib/invoice-memory-server';
 import { rebalanceInvoice } from '@/lib/invoice-split-server';
 import { repriceIngredients } from '@/lib/ingredient-costs-server';
 import { rereadStoredDocument } from '@/lib/scan-core';
-import { PACK_UNITS, asPrinted, fromPrinted, lineFigures, packOfLine, takesPack, toPack, toPackInput, type PackInput } from '@/lib/line-setup';
+import { PACK_UNITS, asPrinted, fromPrinted, lineFigures, packOfLine, takesPack, toPack, toPackInput, type PackInput, isDiscountLine } from '@/lib/line-setup';
 import { formatPack } from '@/lib/scan-corrections';
 import { checkReading, type DocumentIssue, type Proof, type TaxTruth } from '@/lib/invoice-checks';
 import { settleSavedFigures } from '@/lib/invoice-sweep-server';
@@ -424,7 +424,7 @@ export async function saveInvoiceProof(input: {
             invoiceNumber: input.invoiceNumber,
             categoryId: memory?.categoryId ?? first.categoryId,
             categorySource: memory?.categoryId ? 'MEMORY' : first.categoryId ? 'INHERITED' : null,
-            needsSetup: !linked.has(key) && !memory?.notIngredient,
+            needsSetup: !isDiscountLine(line.total) && !linked.has(key) && !memory?.notIngredient,
           },
         });
       }

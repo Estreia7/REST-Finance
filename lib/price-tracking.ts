@@ -19,6 +19,8 @@ export async function detectPriceChanges(restaurantId: string): Promise<PriceInc
   const items = await prisma.invoiceItem.findMany({
     where: {
       restaurantId,
+      // Money off has no price to go up.
+      totalPrice: { gte: 0 },
       // Lines whose cost was deleted are not purchases the owner made.
       OR: [{ costEntryId: null }, { costEntry: { deletedAt: null } }],
     },

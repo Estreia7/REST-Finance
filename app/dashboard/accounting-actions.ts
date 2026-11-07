@@ -572,6 +572,15 @@ export async function getVendorSummary(vendorId: string) {
       where: { restaurantId: owner.restaurantId, vendorId, deletedAt: null },
       select: { id: true, splitFromId: true, date: true, amount: true, paidAt: true, paymentMethod: true },
     });
+    const discountLines = await prisma.invoiceItem.findMany({
+      where: {
+        restaurantId: owner.restaurantId,
+        vendorId,
+        OR: [{ totalPrice: { lt: 0 } }, { discount: { not: null } }],
+        AND: [{ OR: [{ costEntryId: null }, { costEntry: { deletedAt: null } }] }],
+      },
+      select: { productName: true, totalPrice: true, discount: true, discountLabel: true },
+    });
     const summary = vendorSummary(
       entries.map((e) => ({
         id: e.id,
@@ -582,6 +591,12 @@ export async function getVendorSummary(vendorId: string) {
         paid: e.paidAt !== null || e.paymentMethod === 'DIRECT_DEBIT',
       })),
       new Date().toISOString().slice(0, 10),
+      discountLines.map((l) => ({
+        productName: l.productName,
+        total: Number(l.totalPrice),
+        discount: l.discount === null ? null : Number(l.discount),
+        discountLabel: l.discountLabel,
+      })),
     );
     return { success: true as const, data: summary };
   } catch (error: unknown) {
