@@ -15,6 +15,8 @@ import { measureImage, type QualityCheck } from '@/lib/image-quality';
 import { findExistingInvoice } from '../reconcile-actions';
 import DocumentCamera from './DocumentCamera';
 import ScanPageEditor, { type ScannedPage } from './ScanPageEditor';
+import NextInvoiceToast from './NextInvoiceToast';
+import { scanOutcome } from '@/lib/scan-outcome';
 import ScanTray, { type ScannedDocument, newDocumentId } from './ScanTray';
 import SourcePickerSheet, { type PhotoSource } from './SourcePickerSheet';
 import { loadFrameFromFile } from '@/lib/detect-in-file';
@@ -106,6 +108,8 @@ interface ReceiptScannerProps {
   onFinished?: () => void;
   /** True while something here must not be taken away: figures being corrected, a photo being read. */
   onBusy?: (busy: boolean) => void;
+  /** The owner has no more invoices to photograph. Without it, nothing is asked. */
+  onLeave?: () => void;
   /** The owner corrected the figures of `initialScan`, which is stored now. */
   onCorrected?: () => void;
 }
@@ -142,6 +146,7 @@ export default function ReceiptScanner({
   initialScan = null,
   onFinished,
   onBusy,
+  onLeave,
   onCorrected,
 }: ReceiptScannerProps) {
   const { t, language } = useLanguage();
@@ -283,14 +288,32 @@ export default function ReceiptScanner({
     setCurrentPages([]);
     setDocuments([]);
     // Possibly no longer inside the tap that brought us here, in which case
-    // the phone refuses to open its camera without a word. The choice stays
-    // underneath so the owner is never left looking at nothing.
-    if (phoneCamera()) setPickingSource(true);
+    // the phone refuses to open its camera without a word. The button to
+    // photograph is on screen underneath, so one more tap gets there.
     openCamera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart, onAutoStarted]);
 
   const phoneCamera = () => usesPhoneCamera(navigator.userAgent, navigator.maxTouchPoints);
+  /** The same answer for what is drawn, which the server cannot know. */
+  const [onPhone, setOnPhone] = useState(false);
+  useEffect(() => setOnPhone(phoneCamera()), []);
+
+  /** An invoice was finished on a phone: say how it went and ask about the next. */
+  const [askingNext, setAskingNext] = useState(false);
+  /** No more invoices: leaving as soon as the last one has its answer. */
+  const [leaving, setLeaving] = useState(false);
+  // A reading that could not be stored is not waiting anywhere, whatever it found.
+  const outcome = scanOutcome(runs.map((r) => ((r.status === 'review' || r.status === 'retake') && !r.scanId ? 'failed' : r.status)));
+  useEffect(() => {
+    if (!leaving || !outcome || outcome === 'reading') return;
+    setLeaving(false);
+    setAskingNext(false);
+    const say = outcome === 'saved' || outcome === 'already' ? toast.success : toast.error;
+    say(t(`scanner.outcome.${outcome}`));
+    onLeave?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leaving, outcome]);
 
   /**
    * Takes the next photograph: the phone's own camera, or ours on a computer.
@@ -397,8 +420,14 @@ export default function ReceiptScanner({
     setStage('editing');
   };
 
-  /** The owner accepted a page: it joins the document being built. */
-  const handlePageDone = (page: ScannedPage) => {
+  /**
+   * The owner accepted a page: it joins the document being built.
+   *
+   * On a phone `more` says what comes next. No: the document is finished and goes
+   * to be read. Yes: the camera opens, with the tray underneath for a camera
+   * that is cancelled, so the pages already taken are not lost.
+   */
+  const handlePageDone = (page: ScannedPage, more?: boolean) => {
     // The next page of a document already read: it joins it, to be read together.
     if (addingPage) {
       setDocPages((pages) => [...pages, { dataUrl: page.dataUrl, qrText: page.qrText ?? null }]);
@@ -409,9 +438,15 @@ export default function ReceiptScanner({
       setStage('idle');
       return;
     }
-    setCurrentPages((pages) => [...pages, page]);
     setCaptured(null);
+    if (more === false) {
+      handleTrayFinish(foldCurrent(documents, [...currentPages, page]));
+      if (onLeave && scanType === 'COST_RECEIPT' && !attachTarget) setAskingNext(true);
+      return;
+    }
+    setCurrentPages((pages) => [...pages, page]);
     setStage('tray');
+    if (more) openCamera();
   };
 
   /** Closes off the document being built, if it has anything in it. */
@@ -1035,7 +1070,7 @@ export default function ReceiptScanner({
       {!imagePreview && !extracted && !doubtful && !initialScan && (
         <button
           type="button"
-          onClick={() => setPickingSource(true)}
+          onClick={() => (phoneCamera() ? handleSource('camera') : setPickingSource(true))}
           disabled={readingFile}
           className="w-full flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-border rounded-2xl hover:border-primary transition-colors"
         >
@@ -1048,7 +1083,7 @@ export default function ReceiptScanner({
                 ? t('scanner.photographDailyReport')
                 : t('scanner.photographReceipt')}
             </div>
-            <div className="text-xs text-muted-foreground mt-1">{t('scanner.tapToOpenCamera')}</div>
+            <div className="text-xs text-muted-foreground mt-1">{t(onPhone ? 'scanner.tapToPhotograph' : 'scanner.tapToOpenCamera')}</div>
           </div>
         </button>
       )}
@@ -1439,6 +1474,7 @@ export default function ReceiptScanner({
           detectedCorners={captured.corners}
           onDone={handlePageDone}
           onCancel={retake}
+          ask={onPhone && !addingPage ? { page: currentPages.length + 1 } : undefined}
         />
       )}
 
@@ -1463,17 +1499,33 @@ export default function ReceiptScanner({
         />
       )}
 
-      {stage === 'tray' && (
-        <ScanTray
-          currentPages={currentPages}
-          documents={documents}
-          onAddPageToCurrent={openCamera}
-          onStartNewDocument={startNewDocument}
-          onRemovePage={(i) => setCurrentPages((pages) => pages.filter((_, idx) => idx !== i))}
-          onRemoveDocument={(id) => setDocuments((docs) => docs.filter((d) => d.id !== id))}
-          onFinish={handleTrayFinish}
-          onCancel={resetCapture}
+      {askingNext && outcome && stage === 'idle' && !doubtful && !imagePreview && (
+        <NextInvoiceToast
+          outcome={outcome}
+          leaving={leaving}
+          onMore={() => handleSource('camera')}
+          onDone={() => setLeaving(true)}
         />
+      )}
+
+      {stage === 'tray' && (
+        // Over the whole screen on a phone, so finishing never means scrolling
+        // down past the page for it. Under the "reading the photo" overlay.
+        <div
+          className={onPhone ? 'fixed inset-0 z-[80] flex flex-col justify-end overflow-y-auto bg-background p-4' : ''}
+          style={onPhone ? { paddingTop: 'calc(1rem + env(safe-area-inset-top))' } : undefined}
+        >
+          <ScanTray
+            currentPages={currentPages}
+            documents={documents}
+            onAddPageToCurrent={openCamera}
+            onStartNewDocument={startNewDocument}
+            onRemovePage={(i) => setCurrentPages((pages) => pages.filter((_, idx) => idx !== i))}
+            onRemoveDocument={(id) => setDocuments((docs) => docs.filter((d) => d.id !== id))}
+            onFinish={handleTrayFinish}
+            onCancel={resetCapture}
+          />
+        </div>
       )}
     </div>
   );

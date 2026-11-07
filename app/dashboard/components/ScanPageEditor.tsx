@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Crop, Loader2, RotateCw, X } from 'lucide-react';
+import { Camera, Check, Crop, Loader2, RotateCw, X } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 import {
   SCAN_FILTERS,
@@ -55,8 +55,15 @@ export interface ScanPageEditorProps {
   frame: HTMLCanvasElement;
   /** Corners the camera found, in frame coordinates. Null when it found none. */
   detectedCorners: Corners | null;
-  onDone: (page: ScannedPage) => void;
+  /** `more` is the answer to the question, when one was asked. */
+  onDone: (page: ScannedPage, more?: boolean) => void;
   onCancel: () => void;
+  /**
+   * On a phone the camera has already shown the photograph and had it accepted,
+   * so this screen does not ask for that again. It asks the one thing still
+   * unknown, whether the document goes on, and the answer is the confirmation.
+   */
+  ask?: { page: number };
 }
 
 /** Longest edge of the live preview. Big enough to judge a filter by, small
@@ -65,6 +72,10 @@ const PREVIEW_EDGE = 900;
 
 /** Longest edge of a page-strip thumbnail. */
 const THUMBNAIL_EDGE = 200;
+
+const headerButton = 'flex h-11 w-11 items-center justify-center rounded-xl text-muted-foreground '
+  + 'hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 '
+  + 'focus-visible:ring-ring disabled:opacity-50';
 
 /**
  * Where the default quad sits when detection found nothing.
@@ -99,6 +110,7 @@ export default function ScanPageEditor({
   detectedCorners,
   onDone,
   onCancel,
+  ask,
 }: ScanPageEditorProps) {
   const { t } = useLanguage();
 
@@ -115,7 +127,12 @@ export default function ScanPageEditor({
   const previewRef = useRef<HTMLImageElement>(null);
   /** Started at once on the untouched photograph, so it is done by the time the page is. */
   const qrRef = useRef<Promise<string | null>>(Promise.resolve(null));
-  useEffect(() => { qrRef.current = readQrText(frame); }, [frame]);
+  /** What it said, once known. "Sim" needs it at hand: see `handleMore`. */
+  const [qrText, setQrText] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    qrRef.current = readQrText(frame);
+    qrRef.current.then(setQrText, () => setQrText(null));
+  }, [frame]);
 
   /** The downscaled, unfiltered copy every preview is drawn from. */
   const previewSourceRef = useRef<HTMLCanvasElement | null>(null);
@@ -307,6 +324,29 @@ export default function ScanPageEditor({
   }, []);
 
   /** The one place the full-resolution filter runs. */
+  const finished = useCallback(() => {
+    const dataUrl = finishPage(page, rotation, filter);
+    const small = limitSize(rotateCanvas(page, rotation), THUMBNAIL_EDGE);
+    return { dataUrl, thumbnail: toDataUrl(filterCanvas(small, filter), 0.7) };
+  }, [page, rotation, filter]);
+
+  /**
+   * "Sim": the next photograph.
+   *
+   * Everything happens inside the tap, with no spinner and nothing awaited,
+   * because a phone refuses without a word to open its camera from anywhere else.
+   * That is also why the button waits for the QR: this page has to be finished
+   * before the camera opens, or it would land on top of the next one.
+   */
+  const handleMore = useCallback(() => {
+    setError(null);
+    try {
+      onDone({ ...finished(), qrText: qrText ?? null }, true);
+    } catch {
+      setError(t('scanEditor.saveFailed'));
+    }
+  }, [finished, qrText, onDone, t]);
+
   const handleConfirm = useCallback(() => {
     setBusy(true);
     setError(null);
@@ -316,16 +356,13 @@ export default function ScanPageEditor({
     // thread disappears into a multi-megapixel filter pass.
     requestAnimationFrame(async () => {
       try {
-        const dataUrl = finishPage(page, rotation, filter);
-        const small = limitSize(rotateCanvas(page, rotation), THUMBNAIL_EDGE);
-        const thumbnail = toDataUrl(filterCanvas(small, filter), 0.7);
-        onDone({ dataUrl, thumbnail, qrText: await qr });
+        onDone({ ...finished(), qrText: await qr }, ask ? false : undefined);
       } catch {
         setError(t('scanEditor.saveFailed'));
         setBusy(false);
       }
     });
-  }, [page, rotation, filter, onDone, t]);
+  }, [finished, ask, onDone, t]);
 
   return (
     <div
@@ -345,8 +382,33 @@ export default function ScanPageEditor({
         >
           <X className="h-5 w-5" aria-hidden="true" />
         </button>
-        <h2 className="truncate text-sm font-semibold text-foreground">{t('scanEditor.title')}</h2>
-        <span className="w-11" aria-hidden="true" />
+        <h2 className="truncate text-sm font-semibold text-foreground">
+          {ask ? t('scanEditor.pageNumber').replace('{n}', String(ask.page)) : t('scanEditor.title')}
+        </h2>
+        {ask ? (
+          <div className="flex shrink-0">
+            <button
+              type="button"
+              onClick={() => setCropping(true)}
+              disabled={busy || cropping}
+              aria-label={t('scanEditor.adjustCrop')}
+              className={headerButton}
+            >
+              <Crop className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={handleRotate}
+              disabled={busy || cropping}
+              aria-label={t('scanEditor.rotate')}
+              className={headerButton}
+            >
+              <RotateCw className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+        ) : (
+          <span className="w-11" aria-hidden="true" />
+        )}
       </header>
 
       {/* The page itself. min-h-0 so the preview shrinks rather than pushing
@@ -382,6 +444,34 @@ export default function ScanPageEditor({
         className="card-glass shrink-0 rounded-b-none border-x-0 border-b-0 px-3 pt-3"
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
       >
+        {ask ? (
+          <>
+            <h3 className="mb-3 text-center text-base font-semibold text-foreground">{t('scanEditor.morePages')}</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handleMore}
+                disabled={busy || cropping || qrText === undefined}
+                className="cta-button-secondary min-h-[52px] !px-3 !py-2 disabled:opacity-50"
+              >
+                {qrText === undefined
+                  ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  : <Camera className="h-4 w-4" aria-hidden="true" />}
+                <span className="truncate">{t('scanEditor.moreYes')}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirm}
+                disabled={busy || cropping}
+                className="cta-button min-h-[52px] !px-3 !py-2 disabled:opacity-50"
+              >
+                <Check className="h-4 w-4" aria-hidden="true" />
+                <span className="truncate">{t('scanEditor.moreNo')}</span>
+              </button>
+            </div>
+          </>
+        ) : (
+        <>
         <fieldset className="mb-3">
           <legend className="section-label mb-2">{t('scanEditor.filter')}</legend>
           {/* Scrolls rather than wraps: four labels at 380px would otherwise
@@ -447,6 +537,8 @@ export default function ScanPageEditor({
             <span className="truncate">{t('scanEditor.usePage')}</span>
           </button>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

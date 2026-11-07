@@ -832,6 +832,7 @@ function DashboardPageInner() {
                       defaultScanType="COST_RECEIPT"
                       autoStart={autoStartCamera}
                       onAutoStarted={() => setAutoStartCamera(false)}
+                      onLeave={() => handleTabChange('dashboard')}
                     />
                   </EmailedInvoices>
                 </div>

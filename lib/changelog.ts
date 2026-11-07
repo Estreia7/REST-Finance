@@ -44,6 +44,11 @@ export const CHANGELOG: Release[] = [
     entries: [
       {
         kind: 'improvement',
+        title: 'No telemóvel, fotografar uma fatura tem muito menos passos',
+        detail: 'Um toque abre logo a câmara. Depois da fotografia só pergunta se o documento tem mais páginas. Ao concluir diz se a fatura foi guardada e pergunta se quer adicionar mais. Para enviar PDFs ou fotografias já tiradas, use o computador.',
+      },
+      {
+        kind: 'improvement',
         title: 'Pode rodar a imagem de uma fatura que ficou de lado',
         detail: 'Toque na seta redonda no canto da imagem, ou no mesmo botão depois de a ampliar. Cada toque roda um quarto de volta.',
       },
