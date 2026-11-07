@@ -483,6 +483,26 @@ describe('a Makro reread with VAT codes as rates and two promotions', () => {
     expect(settleFigures([line('A', 50, 6), line('B', 50, 23)], truth, 2.64)).toBeNull();
   });
 
+  it('does not ask for a better photo when every figure already agrees', () => {
+    const reading = {
+      items: [{ quantity: 1, unitPrice: 10, total: 10, vatRate: 6 }], grandTotal: 10.6,
+      vatSummary: [{ rate: 6, base: 10, tax: 0.6 }], qrVisible: true, cutOff: true, covered: true,
+    };
+    const proof = checkReading(reading, null);
+    expect(proof.status).toBe('partial');
+    expect(documentIssues({ reading, proof, qrRead: false, qrTotal: null, printedTotal: 10.6, pages: 1, isPdf: false })).toEqual([]);
+    expect(canSaveUnseen({ vendor: 'Makro', lines: 1, checks: { proof, knownVendorId: 'v', issues: [] } })).toBe(false);
+  });
+
+  it('still asks when the figures do not agree', () => {
+    const reading = {
+      items: [{ quantity: 1, unitPrice: 4, total: 4, vatRate: 6 }], grandTotal: 10.6,
+      vatSummary: [{ rate: 6, base: 10, tax: 0.6 }], qrVisible: true, cutOff: true,
+    };
+    const kinds = documentIssues({ reading, proof: checkReading(reading, null), qrRead: false, qrTotal: null, printedTotal: 10.6, pages: 1, isPdf: false }).map((i) => i.kind);
+    expect(kinds).toEqual(expect.arrayContaining(['qrUnread', 'cutOff', 'doesNotAddUp']));
+  });
+
   it('does not ask for a page when the lines reach the figures', () => {
     const reading = { items: [{ quantity: 1, unitPrice: 10, total: 10, vatRate: 6 }], grandTotal: 10.6, pagesTotal: 3, vatSummary: [{ rate: 6, base: 10, tax: 0.6 }] };
     const issues = documentIssues({ reading, proof: checkReading(reading, null), qrRead: false, qrTotal: null, printedTotal: 10.6, pages: 1, isPdf: false });

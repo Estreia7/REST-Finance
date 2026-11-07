@@ -259,8 +259,10 @@ export function foldNotes<T extends CheckedLine & {
  * here, so it can be put right while the paper is still in hand. Empty is the only
  * answer that lets an invoice in unseen.
  *
- * What the QR proved stays proved: a corner under a payment slip does not matter
- * when the till's own figures match every line.
+ * What the figures settle stays settled: a corner under a payment slip, or a QR
+ * that would not read, does not matter when every line reaches the document's own
+ * table and total. A better photo would change nothing. Without the QR such an
+ * invoice is still only `partial`, so a person looks at it before it is saved.
  */
 export function documentIssues(input: {
   reading: CheckedReading & {
@@ -283,6 +285,8 @@ export function documentIssues(input: {
   const { reading, proof, qrRead, qrTotal, printedTotal, pages, isPdf } = input;
   const issues: DocumentIssue[] = [];
   const proved = proof?.status === 'proved';
+  // Page two alone, or a page with lines hidden, would fall short of its table.
+  const complete = proved || (proof?.status === 'partial' && proof.truth.length > 0);
   const table = reading.vatSummary ?? [];
 
   // The owner's rule: the print and the QR must say the same thing.
@@ -291,7 +295,7 @@ export function documentIssues(input: {
     issues.push({ kind: 'totalVsQr', expected: qrTotal, found: printedTotal });
   }
 
-  if (!qrRead && reading.qrVisible && !isPdf) issues.push({ kind: 'qrUnread' });
+  if (!complete && !qrRead && reading.qrVisible && !isPdf) issues.push({ kind: 'qrUnread' });
 
   if (!qrRead && table.length > 0) {
     const stated = cents(table.reduce((sum, b) => sum + b.base + b.tax, 0));
@@ -300,15 +304,12 @@ export function documentIssues(input: {
     }
   }
 
-  // Lines that reach the document's own figures are all there, whatever the
-  // reader made of the page count. Page two alone would fall short of its table.
-  const complete = proved || (proof?.status === 'partial' && proof.truth.length > 0);
   if (!complete && (reading.continuesOnNextPage || (reading.pagesTotal ?? 0) > pages)) {
     issues.push({ kind: 'missingPages' });
   }
   if (reading.totalVisible === false && !qrRead) issues.push({ kind: 'noTotal' });
-  if (!proved && reading.covered) issues.push({ kind: 'covered' });
-  if (!proved && reading.cutOff) issues.push({ kind: 'cutOff' });
+  if (!complete && reading.covered) issues.push({ kind: 'covered' });
+  if (!complete && reading.cutOff) issues.push({ kind: 'cutOff' });
 
   const linesNet = cents(reading.items.reduce((sum, l) => sum + l.total, 0));
   if (proof?.status === 'failed' || linesNet > reading.grandTotal + 0.05) {

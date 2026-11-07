@@ -8,7 +8,7 @@ import type { ProductDetail } from '@/lib/purchased-products';
 import type { CheapestOffer } from '@/lib/price-increases';
 import { useChartTheme } from '@/lib/chart-theme';
 import { useLanguage } from '@/lib/language-context';
-import { formatMoney } from '@/lib/format';
+import { axisDecimals, formatMoney, priceDecimals } from '@/lib/format';
 import { ChartLegend, TooltipCard, TooltipRow, useDismissableTooltip } from './chart-parts';
 import InvoicePreview from './InvoicePreview';
 
@@ -59,6 +59,9 @@ export default function PurchasedProductDialog({
   const perUnit = (unit: string | null) => (unit ? `/${unit}` : '');
 
   const ready = detail !== 'loading' && detail !== null ? detail : null;
+  const decimals = priceDecimals(ready
+    ? [...ready.history.map((h) => h.unitPrice), ...(ready.cheapest ? [ready.cheapest.unitPrice] : [])]
+    : []);
 
   return (
     <>
@@ -123,7 +126,7 @@ export default function PurchasedProductDialog({
                     <p className="mt-0.5 text-sm font-bold text-foreground tabular-nums">
                       {detail.cheapest.vendorName ?? t('purchases.unknownSupplier')}
                       {' · '}
-                      {formatMoney(detail.cheapest.unitPrice)}
+                      {formatMoney(detail.cheapest.unitPrice, { decimals })}
                       {detail.unit ? `/${detail.unit}` : ''}
                     </p>
                     <p className="text-xs text-muted-foreground tabular-nums">
@@ -132,7 +135,7 @@ export default function PurchasedProductDialog({
                       {detail.cheapest.suppliers === 1
                         ? t('purchases.cheapestOnly')
                         : detail.cheapest.saving > 0
-                          ? t('purchases.cheapestSaving').replace('{amount}', formatMoney(detail.cheapest.saving))
+                          ? t('purchases.cheapestSaving').replace('{amount}', formatMoney(detail.cheapest.saving, { decimals }))
                           : t('purchases.cheapestAlready').replace('{count}', String(detail.cheapest.suppliers))}
                     </p>
                   </div>
@@ -150,8 +153,8 @@ export default function PurchasedProductDialog({
                       detail.minPrice === null || detail.maxPrice === null
                         ? '—'
                         : detail.minPrice === detail.maxPrice
-                          ? formatMoney(detail.minPrice, { decimals: 2 })
-                          : `${formatMoney(detail.minPrice, { decimals: 2 })} – ${formatMoney(detail.maxPrice, { decimals: 2 })}`
+                          ? formatMoney(detail.minPrice, { decimals })
+                          : `${formatMoney(detail.minPrice, { decimals })} – ${formatMoney(detail.maxPrice, { decimals })}`
                     }
                     sub={detail.unit ? t('purchases.perUnit').replace('{unit}', detail.unit) : undefined}
                   />
@@ -188,7 +191,7 @@ export default function PurchasedProductDialog({
                             <span className="block text-xs font-medium text-foreground truncate">{s.vendorName ?? t('purchases.unknownSupplier')}</span>
                             <span className="block text-[11px] text-muted-foreground">
                               {t(s.purchases === 1 ? 'purchases.onePurchase' : 'purchases.nPurchases').replace('{n}', String(s.purchases))}
-                              {s.lastUnitPrice !== null && ` · ${t('purchases.lastPrice')} ${formatMoney(s.lastUnitPrice, { decimals: 2 })}${perUnit(detail.unit)}`}
+                              {s.lastUnitPrice !== null && ` · ${t('purchases.lastPrice')} ${formatMoney(s.lastUnitPrice, { decimals })}${perUnit(detail.unit)}`}
                             </span>
                           </span>
                           <span className="text-xs font-semibold text-foreground tabular-nums shrink-0">
@@ -244,7 +247,7 @@ export default function PurchasedProductDialog({
                                 {formatMoney(h.total, { decimals: 2 })}
                               </span>
                               <span className="block text-[11px] text-muted-foreground tabular-nums">
-                                {h.quantity.toLocaleString(locale)}{h.unit ? ` ${h.unit}` : ''} × {formatMoney(h.unitPrice, { decimals: 2 })}
+                                {h.quantity.toLocaleString(locale)}{h.unit ? ` ${h.unit}` : ''} × {formatMoney(h.unitPrice, { decimals })}
                               </span>
                             </span>
                           </Row>
@@ -302,6 +305,7 @@ function PriceChart({
   }
 
   const short = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+  const prices = points.map((p) => p.unitPrice);
   const series = points.map((p, i) => ({ ...p, i }));
   const several = suppliers.length > 1;
   const palette = chart.data.categories;
@@ -342,7 +346,7 @@ function PriceChart({
             tickLine={false}
             width={52}
             domain={['auto', 'auto']}
-            tickFormatter={(v: number) => formatMoney(v, { decimals: 2 })}
+            tickFormatter={(v: number) => formatMoney(v, { decimals: axisDecimals(prices) })}
           />
           <Tooltip
             {...tooltipProps}
@@ -355,7 +359,7 @@ function PriceChart({
                   <TooltipRow
                     color={colorOf(p.vendorName)}
                     label={p.vendorName ?? t('purchases.unknownSupplier')}
-                    value={`${formatMoney(p.unitPrice, { decimals: 2 })}${unit ? `/${unit}` : ''}`}
+                    value={`${formatMoney(p.unitPrice, { decimals: priceDecimals(prices) })}${unit ? `/${unit}` : ''}`}
                   />
                 </TooltipCard>
               );

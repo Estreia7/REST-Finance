@@ -24,6 +24,32 @@ export function formatMoney(
   })}`;
 }
 
+/**
+ * How many decimals a set of unit prices needs to be told apart and read true.
+ *
+ * Two is enough for most, but a bin bag at 0,0976 and then 0,1037 would both read
+ * €0,10: a real rise that looks like no change. Prices under a euro keep what they
+ * have, so quantity times price still reaches the line. Stored to four decimals.
+ */
+export function priceDecimals(prices: number[]): number {
+  const known = prices.filter(Number.isFinite);
+  const apart = new Set(known.map((p) => p.toFixed(4))).size;
+  for (const decimals of [2, 3]) {
+    const told = new Set(known.map((p) => p.toFixed(decimals))).size === apart;
+    const whole = known.every((p) => Math.abs(p) >= 1 || Number(p.toFixed(decimals)) === Number(p.toFixed(4)));
+    if (told && whole) return decimals;
+  }
+  return 4;
+}
+
+/** The decimals for a price axis: its ticks sit closer together than the prices do. */
+export function axisDecimals(prices: number[]): number {
+  const known = prices.filter(Number.isFinite);
+  const spread = known.length > 0 ? Math.max(...known) - Math.min(...known) : 0;
+  const ticks = spread > 0 ? Math.ceil(-Math.log10(spread / 4)) : 2;
+  return Math.min(4, Math.max(priceDecimals(known), ticks));
+}
+
 /** Euros with cents, for statements and tables where the exact figure matters. */
 export function formatMoneyExact(value: number): string {
   return formatMoney(value, { decimals: 2 });

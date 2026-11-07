@@ -1,5 +1,11 @@
 # Lessons
 
+## On a phone, the answer goes above the picture
+
+**What happened:** the 'better photo' screen put a tall picture first, so its reason and main button sat behind the bottom bar. On an installed iPhone app the bar had also moved up after the native camera, and the owner could not go on. It also refused an invoice whose figures all agreed, over a QR or a cut margin.
+
+**Rule:** a screen that blocks the owner shows its reason and actions first, and is checked at phone size with the bottom bar on. Test a mobile screen by reading where its buttons land against the bar, not by clicking them from a script, which reaches them anyway. A photo problem only stops anyone when the figures do not agree.
+
 ## Words in the reader prompt are taken literally, and a new rule can undo an old one
 
 **What happened:** to teach Makro's promotion rows I wrote "report that product exactly as printed". On the

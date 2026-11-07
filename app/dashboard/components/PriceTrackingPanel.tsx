@@ -6,7 +6,7 @@ import { getPriceAlerts } from '../price-actions';
 import PurchasedProductDialog from './PurchasedProductDialog';
 import InfoHint from '@/app/components/InfoHint';
 import { useLanguage } from '@/lib/language-context';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, priceDecimals } from '@/lib/format';
 import type { PriceIncrease } from '@/lib/price-increases';
 
 
@@ -83,7 +83,7 @@ export default function PriceTrackingPanel() {
                   <div className="text-right shrink-0 tabular-nums">
                     <div className="text-sm font-bold text-danger">+{alert.changePercent.toLocaleString(locale)}%</div>
                     <div className="text-[10px] text-muted-foreground">
-                      {formatMoney(alert.previousPrice)} → {formatMoney(alert.newPrice)}{alert.unit ? `/${alert.unit}` : ''}
+                      {formatMoney(alert.previousPrice, { decimals: priceDecimals([alert.previousPrice, alert.newPrice]) })} → {formatMoney(alert.newPrice, { decimals: priceDecimals([alert.previousPrice, alert.newPrice]) })}{alert.unit ? `/${alert.unit}` : ''}
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />

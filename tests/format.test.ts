@@ -4,10 +4,49 @@ import {
   formatMoneyExact,
   formatMoneyCompact,
   formatPercent,
+  priceDecimals,
+  axisDecimals,
 } from '@/lib/format';
 
 /** pt-PT groups thousands with a narrow no-break space (U+202F). */
 const strip = (s: string) => s.replace(/[\u202F\u00A0\s]/g, '');
+
+describe('priceDecimals', () => {
+  it('stays at cents for ordinary prices', () => {
+    expect(priceDecimals([4.44, 21.71])).toBe(2);
+    expect(priceDecimals([0.52, 0.5])).toBe(2);
+    expect(priceDecimals([])).toBe(2);
+  });
+
+  it('shows a rise that cents would hide', () => {
+    expect(priceDecimals([0.0976, 0.1037])).toBe(4);
+    expect(priceDecimals([12.346, 12.35])).toBe(3);
+  });
+
+  it('keeps quantity times price true under a euro', () => {
+    expect(priceDecimals([0.0976])).toBe(4);
+  });
+
+  it('does not add noise to a price over a euro', () => {
+    expect(priceDecimals([18.12])).toBe(2);
+    expect(priceDecimals([3.1234])).toBe(2);
+  });
+});
+
+describe('axisDecimals', () => {
+  it('gives close ticks different labels', () => {
+    expect(axisDecimals([0.0976, 0.1037])).toBe(4);
+    expect(axisDecimals([10.1, 10.11])).toBe(3);
+  });
+
+  it('stays at cents when prices are far apart', () => {
+    expect(axisDecimals([2, 30])).toBe(2);
+  });
+
+  it('copes with a single price', () => {
+    expect(axisDecimals([7.29])).toBe(2);
+  });
+});
 
 describe('formatMoney', () => {
   it('never leaves stray decimals that read as thousands', () => {

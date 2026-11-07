@@ -35,9 +35,25 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.07.05';
+export const CHANGELOG_VERSION = '2026.11.07.06';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.07.06',
+    date: '2026-11-07',
+    entries: [
+      {
+        kind: 'fix',
+        title: 'Preços de cêntimos mostrados com os decimais que precisam',
+        detail: 'Produtos baratos, como sacos a €0,0976, já não aparecem todos como €0,10. Nos gráficos e nos alertas vê a subida real.',
+      },
+      {
+        kind: 'fix',
+        title: 'Menos pedidos de outra fotografia sem razão',
+        detail: 'Quando as linhas, as taxas e o total batem certo, a fatura segue para Precisa de ti mesmo com o QR ilegível ou uma margem cortada. Quando é mesmo preciso repetir, o motivo aparece logo no topo.',
+      },
+    ],
+  },
   {
     version: '2026.11.07.05',
     date: '2026-11-07',

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { AlertTriangle, Camera, FilePlus2 } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 import { formatMoney } from '@/lib/format';
@@ -44,17 +45,18 @@ export default function ScanIssues({
   const { t } = useLanguage();
   const pageMissing = issues.some((i) => i.kind === 'missingPages');
 
+  // This usually appears just after the phone's own camera closes, which can leave
+  // an installed iPhone app with its fixed bars out of place until something
+  // scrolls. Going to the top shows the reason and makes the phone measure again.
+  const top = useRef<HTMLDivElement>(null);
+  useEffect(() => { top.current?.scrollIntoView({ block: 'start' }); }, []);
+
   return (
-    <div className="space-y-4">
+    <div ref={top} className="space-y-4 scroll-mt-20">
       <div>
         <h3 className="text-base font-bold text-foreground">{t('scanIssues.title')}</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">{t('scanIssues.lead')}</p>
       </div>
-
-      {picture && (
-        // eslint-disable-next-line @next/next/no-img-element -- a data URL held in memory
-        <img src={picture} alt={t('scanIssues.pictureAlt')} className="w-full max-h-[320px] object-contain rounded-xl border border-border bg-black/20" />
-      )}
 
       <IssueList issues={issues} />
 
@@ -85,11 +87,17 @@ export default function ScanIssues({
         <button
           type="button"
           onClick={onContinue}
-          className="text-xs font-semibold text-muted-foreground hover:text-foreground underline"
+          className="min-h-11 px-2 text-sm font-semibold text-muted-foreground hover:text-foreground underline"
         >
           {t('scanIssues.continue')}
         </button>
       </div>
+
+      {/* Below the answer: on a phone the reason must not sit under the navigation. */}
+      {picture && (
+        // eslint-disable-next-line @next/next/no-img-element -- a data URL held in memory
+        <img src={picture} alt={t('scanIssues.pictureAlt')} className="w-full max-h-[320px] object-contain rounded-xl border border-border bg-black/20" />
+      )}
     </div>
   );
 }
