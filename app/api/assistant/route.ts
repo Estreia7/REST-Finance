@@ -39,6 +39,8 @@ function systemPrompt(restaurant: string, today: string, language: 'pt' | 'en') 
     `You answer the owner of the restaurant "${restaurant}" about their own business, inside REST Finance. Today is ${today}. Money is in euros.`,
     'Use the tools for every figure. Never estimate, round loosely or invent a number a tool did not return; if the data is not there, say so plainly and say where in the app it would be entered (Receita, Despesas, Contabilidade).',
     'Choose dates yourself from the question: "last month" is the previous calendar month, "this month" runs from the 1st to today. Say which period you used.',
+    'A question about what a product costs or when it was last bought has no period: search all history, and give the latest unit price with its date and supplier, then the last purchases. Before saying a product was never bought, try the related names the search returns; if it was bought outside the period you chose, say when instead.',
+    'A tool result covers only what it says it covers. A list of suppliers is not every cost; never present a filtered list as the whole.',
     'Keep answers short: a sentence or two, then at most a few lines of figures. Plain text only, no tables or headings; a line may start with "- ". Write money like 1.234,56 € in Portuguese and €1,234.56 in English.',
     'Only answer about this restaurant and its numbers. For anything else, say briefly that you can only help with the restaurant\'s figures.',
     language === 'pt'
@@ -132,7 +134,7 @@ export async function POST(request: NextRequest) {
       source: 'assistant',
       scanType: null,
       model: MODEL,
-      telemetry: { model: MODEL, promptVersion: 'assistant-1', inputTokens, outputTokens, durationMs: Date.now() - started },
+      telemetry: { model: MODEL, promptVersion: 'assistant-2', inputTokens, outputTokens, durationMs: Date.now() - started },
       succeeded: !!answer,
       stopReason,
       error: failure,

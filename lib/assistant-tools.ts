@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { prisma } from '@/lib/prisma';
 import { dayKey } from '@/lib/ai-usage';
 import { dueDateFor, paymentState, toDayKey } from '@/lib/payments';
+import { matchesProduct, relatedProducts } from '@/lib/product-match';
 
 /**
  * What the assistant can look up, and how.
@@ -38,7 +39,7 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'supplier_spend',
     description:
-      'What was bought from each supplier in a period, with the number of invoices and what is still unpaid. Optionally only suppliers whose name contains a word.',
+      'What was bought from each supplier in a period, with the number of invoices and what is still unpaid. Optionally only suppliers whose name contains a word. Costs with no supplier (wages, utilities, costs typed by hand) are counted apart in costsWithoutSupplier: the supplier list is not every cost.',
     input_schema: {
       type: 'object',
       properties: { ...range, supplier: { type: ['string', 'null'], description: 'Part of a supplier name, or null for all.' } },
@@ -50,10 +51,14 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'item_purchases',
     description:
-      'Invoice lines for a product in a period (e.g. "azeite", "bacalhau"): quantity, unit, total spent, average and latest unit price, by supplier. Use for "how much X did I buy" and "what do I pay for X".',
+      'Invoice lines for a product (e.g. "azeite", "super bock"): quantity, unit, total spent, average and latest unit price by supplier, and the latest purchases. Suppliers abbreviate ("CERV S BOCK", "CERV.SUPER BOCK"); the search allows for that, so pass the product as the owner says it. For "what do I pay for X", "how much does X cost" or "last purchases", leave from and to null: that searches all history. When nothing matches, related product names are returned: try them before saying it was never bought.',
     input_schema: {
       type: 'object',
-      properties: { ...range, product: { type: 'string', description: 'A word from the product name.' } },
+      properties: {
+        from: { type: ['string', 'null'], description: 'First day, inclusive, as YYYY-MM-DD, or null for all history.' },
+        to: { type: ['string', 'null'], description: 'Last day, inclusive, as YYYY-MM-DD, or null for all history.' },
+        product: { type: 'string', description: 'The product as the owner names it.' },
+      },
       required: ['from', 'to', 'product'],
       additionalProperties: false,
     },
@@ -166,14 +171,22 @@ export async function runAssistantTool(name: string, input: Record<string, unkno
     case 'supplier_spend': {
       const { from, to } = dates(input);
       const term = words(input.supplier);
-      const costs = await prisma.costEntry.findMany({
-        where: { restaurantId, deletedAt: null, splitFromId: null, vendorId: { not: null }, date: { gte: from, lte: to } },
-        select: {
-          amount: true, paidAt: true, paymentMethod: true,
-          vendor: { select: { name: true } },
-          splitParts: { where: { deletedAt: null }, select: { amount: true } },
-        },
-      });
+      const [costs, unsupplied] = await Promise.all([
+        prisma.costEntry.findMany({
+          where: { restaurantId, deletedAt: null, splitFromId: null, vendorId: { not: null }, date: { gte: from, lte: to } },
+          select: {
+            amount: true, paidAt: true, paymentMethod: true,
+            vendor: { select: { name: true } },
+            splitParts: { where: { deletedAt: null }, select: { amount: true } },
+          },
+        }),
+        // So a list of suppliers is never read as every cost there is.
+        prisma.costEntry.aggregate({
+          where: { restaurantId, deletedAt: null, splitFromId: null, vendorId: null, date: { gte: from, lte: to } },
+          _sum: { amount: true },
+          _count: { _all: true },
+        }),
+      ]);
       const by = new Map<string, { supplier: string; total: number; invoices: number; unpaid: number }>();
       for (const c of costs) {
         const name = c.vendor!.name;
@@ -185,44 +198,60 @@ export async function runAssistantTool(name: string, input: Record<string, unkno
         if (!c.paidAt && c.paymentMethod !== 'DIRECT_DEBIT') row.unpaid += amount;
         by.set(name, row);
       }
-      return JSON.stringify(
-        [...by.values()]
+      return JSON.stringify({
+        suppliers: [...by.values()]
           .map((r) => ({ ...r, total: cents(r.total), unpaid: cents(r.unpaid) }))
           .sort((a, b) => b.total - a.total)
           .slice(0, 40),
-      );
+        costsWithoutSupplier: { entries: unsupplied._count._all, total: cents(Number(unsupplied._sum.amount ?? 0)) },
+      });
     }
 
     case 'item_purchases': {
-      const { from, to } = dates(input);
-      const term = words(input.product);
-      if (term.length < 2) throw new ToolInputError('product must have at least 2 letters');
-      const lines = await prisma.invoiceItem.findMany({
-        where: {
-          restaurantId,
-          invoiceDate: { gte: from, lte: to },
-          AND: [
-            // As typed ("açúcar") or without accents ("acucar"): names keep theirs.
-            { OR: [
-              { productName: { contains: String(input.product).trim().slice(0, 60), mode: 'insensitive' } },
-              { normalizedName: { contains: term } },
-            ] },
-            { OR: [{ costEntryId: null }, { costEntry: { deletedAt: null } }] },
-          ],
+      const product = typeof input.product === 'string' ? input.product.trim().slice(0, 60) : '';
+      if (words(product).length < 2) throw new ToolInputError('product must have at least 2 letters');
+      // Null dates search all history: "what do I pay for X" has no period.
+      const period = input.from == null && input.to == null ? null : dates(input);
+      const live = { OR: [{ costEntryId: null }, { costEntry: { deletedAt: null } }] };
+
+      // Matched in code, not by a substring in SQL: suppliers abbreviate, and
+      // "super bock" has to find "CERV S BOCK" too (lib/product-match.ts).
+      const names = (await prisma.invoiceItem.findMany({
+        where: { restaurantId, ...live },
+        distinct: ['productName'],
+        select: { productName: true },
+        take: 20000,
+      })).map((n) => n.productName);
+      const matched = names.filter((n) => matchesProduct(product, n));
+      if (matched.length === 0) {
+        return JSON.stringify({ matches: [], linesFound: 0, relatedProducts: relatedProducts(product, names) });
+      }
+
+      const all = await prisma.invoiceItem.findMany({
+        where: { restaurantId, productName: { in: matched.slice(0, 500) }, ...live },
+        take: 5000,
+        select: {
+          productName: true, quantity: true, unit: true, unitPrice: true, totalPrice: true, invoiceDate: true,
+          vendor: { select: { name: true } }, costEntry: { select: { date: true } },
         },
-        orderBy: { invoiceDate: 'asc' },
-        take: 500,
-        select: { productName: true, quantity: true, unit: true, unitPrice: true, totalPrice: true, invoiceDate: true, vendor: { select: { name: true } } },
       });
-      const by = new Map<string, { product: string; supplier: string | null; unit: string | null; quantity: number; total: number; purchases: number; latestUnitPrice: number; latestDate: string }>();
+      // A line without its own invoice date is dated by the cost it belongs to.
+      const dated = all
+        .map((l) => ({ ...l, day: (l.invoiceDate ?? l.costEntry?.date) ? toDayKey((l.invoiceDate ?? l.costEntry!.date)!) : null }))
+        .sort((a, b) => (a.day ?? '').localeCompare(b.day ?? ''));
+      const fromKey = period ? toDayKey(period.from) : null;
+      const toKey = period ? toDayKey(period.to) : null;
+      const lines = period ? dated.filter((l) => l.day && l.day >= fromKey! && l.day <= toKey!) : dated;
+
+      const by = new Map<string, { product: string; supplier: string | null; unit: string | null; quantity: number; total: number; purchases: number; latestUnitPrice: number; latestDate: string | null }>();
       for (const l of lines) {
         const key = `${l.productName}|${l.vendor?.name ?? ''}|${l.unit ?? ''}`;
-        const row = by.get(key) ?? { product: l.productName, supplier: l.vendor?.name ?? null, unit: l.unit, quantity: 0, total: 0, purchases: 0, latestUnitPrice: 0, latestDate: '' };
+        const row = by.get(key) ?? { product: l.productName, supplier: l.vendor?.name ?? null, unit: l.unit, quantity: 0, total: 0, purchases: 0, latestUnitPrice: 0, latestDate: null };
         row.quantity += Number(l.quantity);
         row.total += Number(l.totalPrice);
         row.purchases++;
         row.latestUnitPrice = Number(l.unitPrice);
-        row.latestDate = l.invoiceDate ? toDayKey(l.invoiceDate) : row.latestDate;
+        row.latestDate = l.day ?? row.latestDate;
         by.set(key, row);
       }
       const rows = [...by.values()].map((r) => ({
@@ -231,7 +260,20 @@ export async function runAssistantTool(name: string, input: Record<string, unkno
         total: cents(r.total),
         averageUnitPrice: r.quantity > 0 ? Math.round((r.total / r.quantity) * 10000) / 10000 : null,
       }));
-      return JSON.stringify({ matches: rows.sort((a, b) => b.total - a.total).slice(0, 30), linesFound: lines.length });
+      const latest = lines.slice(-8).reverse().map((l) => ({
+        date: l.day, product: l.productName, supplier: l.vendor?.name ?? null,
+        quantity: Number(l.quantity), unit: l.unit, unitPrice: Number(l.unitPrice), total: cents(Number(l.totalPrice)),
+      }));
+      return JSON.stringify({
+        period: period ? { from: fromKey, to: toKey } : 'all history',
+        matches: rows.sort((a, b) => b.total - a.total).slice(0, 30),
+        latestPurchases: latest,
+        linesFound: lines.length,
+        // Bought, just not in the period asked: say when, never "never bought".
+        ...(period && lines.length === 0 && dated.length > 0
+          ? { outsidePeriod: { purchases: dated.length, latestDate: dated[dated.length - 1].day } }
+          : {}),
+      });
     }
 
     case 'price_changes': {

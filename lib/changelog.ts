@@ -35,9 +35,20 @@ export interface Release {
  * Bumped on every release below. Stored per browser once the reader opens the
  * panel, which is what clears the unread dot.
  */
-export const CHANGELOG_VERSION = '2026.11.07.12';
+export const CHANGELOG_VERSION = '2026.11.11.01';
 
 export const CHANGELOG: Release[] = [
+  {
+    version: '2026.11.11.01',
+    date: '2026-11-11',
+    entries: [
+      {
+        kind: 'fix',
+        title: 'O assistente encontra os produtos mesmo com o nome abreviado na fatura',
+        detail: 'Pergunte "quanto custa a Super Bock?" e ele encontra "CERV S BOCK" e "CERV.SUPER BOCK". Procura em todo o histórico, diz o último preço, quando e a quem comprou, e já não responde que nunca comprou o que foi comprado há mais tempo.',
+      },
+    ],
+  },
   {
     version: '2026.11.07.12',
     date: '2026-11-07',
